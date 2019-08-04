@@ -7,4 +7,4 @@ RUN cd /src && \
 
 FROM alpine
 COPY --from=build /naok /usr/bin/naok
-CMD ["/usr/bin/naok"]
+ENTRYPOINT ["/usr/bin/naok"]
