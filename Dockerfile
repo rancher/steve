@@ -6,5 +6,6 @@ RUN cd /src && \
     CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /naok -mod=vendor
 
 FROM alpine
+RUN apk -U --no-cache add ca-certificates
 COPY --from=build /naok /usr/bin/naok
 ENTRYPOINT ["/usr/bin/naok"]
