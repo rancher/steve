@@ -1,15 +1,7 @@
 package server
 
 import (
-	"context"
-	"fmt"
 	"net/http"
-	"sync"
-
-	"golang.org/x/sync/semaphore"
-
-	"github.com/rancher/norman/pkg/types/values"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/gorilla/mux"
 	"github.com/rancher/naok/pkg/accesscontrol"
@@ -51,67 +43,9 @@ func (a *apiServer) newSchemas() (*types.Schemas, error) {
 		return nil, err
 	}
 
-	sSchema := schemas.Schema("schema")
-	sSchema.CollectionFormatter = a.schemaCollectionFormatter(sSchema.CollectionFormatter)
-
 	schemas.DefaultMapper = newDefaultMapper
 	subscribe.Register(schemas)
 	return schemas, nil
-}
-
-func (a *apiServer) schemaCollectionFormatter(next types.CollectionFormatter) types.CollectionFormatter {
-	return func(request *types.APIRequest, collection *types.GenericCollection) {
-		if next != nil {
-			next(request, collection)
-		}
-
-		wg := sync.WaitGroup{}
-		sem := semaphore.NewWeighted(100)
-
-		for _, item := range collection.Data {
-			resource, ok := item.(*types.RawResource)
-			if !ok {
-				continue
-			}
-
-			schema := request.Schemas.Schema(resource.ID)
-			if schema == nil {
-				continue
-			}
-
-			access := accesscontrol.GetAccessListMap(schema)
-			if !access.Grants("list", "*", "*") {
-				continue
-			}
-
-			wg.Add(1)
-			if err := sem.Acquire(context.TODO(), 1); err != nil {
-				panic(err)
-			}
-			go func() {
-				defer func() {
-					sem.Release(1)
-					wg.Done()
-				}()
-
-				client, err := a.cf.Client(request, schema)
-				if err != nil {
-					return
-				}
-
-				fmt.Println("listing", attributes.GVK(schema))
-				resp, err := client.List(v1.ListOptions{})
-				if err != nil {
-					return
-				}
-				if len(resp.Items) > 0 {
-					values.PutValue(resource.Values, len(resp.Items), "attributes", "count")
-				}
-			}()
-		}
-
-		wg.Wait()
-	}
 }
 
 func (a *apiServer) common(rw http.ResponseWriter, req *http.Request) (*types.APIRequest, bool) {
