@@ -146,11 +146,11 @@ func (a *apiServer) Schema(base string, schema *types.Schema) string {
 	gvr := attributes.GVR(schema)
 
 	if gvr.Group == "" && gvr.Version != "" && gvr.Resource != "" {
-		return urlbuilder.ConstructBasicURL(base, "api", gvr.Version, gvr.Resource)
+		return urlbuilder.ConstructBasicURL(base, gvr.Version, gvr.Resource)
 	}
 
 	if gvr.Resource != "" {
-		return urlbuilder.ConstructBasicURL(base, "apis", gvr.Group, gvr.Version, gvr.Resource)
+		return urlbuilder.ConstructBasicURL(base, "v1", "apis", gvr.Group, gvr.Version, gvr.Resource)
 	}
 
 	return urlbuilder.ConstructBasicURL(base, "v1", schema.PluralName)

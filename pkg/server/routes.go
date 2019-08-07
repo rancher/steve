@@ -13,16 +13,16 @@ import (
 type APIFunc func(*types.APIRequest)
 
 func (a *apiServer) routes() {
-	a.Path("/api/{version}/{resource}").Handler(a.handle(a.k8sAPI))
-	a.Path("/api/{version}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
-	a.Path("/api/{version}/{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
+	a.Path("/v1/{type:schemas}").Handler(a.handle(nil))
+	a.Path("/v1/{type:schemas}/{name}").Handler(a.handle(nil))
+	a.Path("/v1/{type:subscribe}").Handler(a.handle(nil))
 
-	a.Path("/apis/{group}/{version}/{resource}").Handler(a.handle(a.k8sAPI))
-	a.Path("/apis/{group}/{version}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
-	a.Path("/apis/{group}/{version}/{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
+	a.Path("/{version:v1}/{resource}").Handler(a.handle(a.k8sAPI))
+	a.Path("/{version:v1}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
+	a.Path("/{version:v1}/{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
 
-	a.Path("/v1/{type}").Handler(a.handle(nil))
-	a.Path("/v1/{type}/{name}").Handler(a.handle(nil))
+	a.Path("/v1/apis/{group}/{version}/{resource}").Handler(a.handle(a.k8sAPI))
+	a.Path("/v1/apis/{group}/{version}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
 }
 
 func (a *apiServer) handle(apiFunc APIFunc) http.Handler {

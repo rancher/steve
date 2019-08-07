@@ -8,10 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rancher/naok/pkg/attributes"
-
 	openapi_v2 "github.com/googleapis/gnostic/OpenAPIv2"
 	"github.com/rancher/naok/pkg/accesscontrol"
+	"github.com/rancher/naok/pkg/attributes"
 	"github.com/rancher/norman/pkg/store/proxy"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/types/convert"
