@@ -34,7 +34,7 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.Schema, id string) (
 	return types.APIObject{}, httperror.NewAPIError(httperror.NotFound, "no such schema")
 }
 
-func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIObject, error) {
+func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIEvent, error) {
 	return nil, nil
 }
 

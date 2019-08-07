@@ -16,7 +16,6 @@ require (
 	github.com/rancher/wrangler-api v0.1.5-0.20190619170228-c3525df45215
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.20.0
-	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	google.golang.org/appengine v1.5.0 // indirect
 	k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
 	k8s.io/apiextensions-apiserver v0.0.0-20190409022649-727a075fdec8

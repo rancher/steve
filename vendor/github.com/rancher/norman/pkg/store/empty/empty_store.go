@@ -27,6 +27,6 @@ func (e *Store) Update(apiOp *types.APIRequest, schema *types.Schema, data types
 	return types.APIObject{}, nil
 }
 
-func (e *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIObject, error) {
+func (e *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIEvent, error) {
 	return nil, nil
 }

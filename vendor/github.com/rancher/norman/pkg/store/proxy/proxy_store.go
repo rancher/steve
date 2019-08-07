@@ -108,8 +108,13 @@ func (s *Store) listNamespace(namespace string, apiOp types.APIRequest, schema *
 	return k8sClient.List(metav1.ListOptions{})
 }
 
-func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIObject, error) {
+func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIEvent, error) {
 	k8sClient, err := s.clientGetter.Client(apiOp, schema)
+	if err != nil {
+		return nil, err
+	}
+
+	list, err := k8sClient.List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +123,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.
 	watcher, err := k8sClient.Watch(metav1.ListOptions{
 		Watch:           true,
 		TimeoutSeconds:  &timeout,
-		ResourceVersion: "0",
+		ResourceVersion: list.GetResourceVersion(),
 	})
 	if err != nil {
 		return nil, err
@@ -131,15 +136,14 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.
 		watcher.Stop()
 	}()
 
-	result := make(chan types.APIObject)
+	result := make(chan types.APIEvent)
 	go func() {
+		for i, obj := range list.Items {
+			result <- s.toAPIEvent(apiOp, schema, i, len(list.Items), false, &obj)
+		}
 		for event := range watcher.ResultChan() {
 			data := event.Object.(*unstructured.Unstructured)
-			s.fromInternal(apiOp, schema, data.Object)
-			if event.Type == watch.Deleted && data.Object != nil {
-				data.Object[".removed"] = true
-			}
-			result <- types.ToAPI(data.Object)
+			result <- s.toAPIEvent(apiOp, schema, 0, 0, event.Type == watch.Deleted, data)
 		}
 		logrus.Debugf("closing watcher for %s", schema.ID)
 		close(result)
@@ -147,6 +151,22 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.
 	}()
 
 	return result, nil
+}
+
+func (s *Store) toAPIEvent(apiOp *types.APIRequest, schema *types.Schema, index, count int, remove bool, obj *unstructured.Unstructured) types.APIEvent {
+	name := "resource.change"
+	if remove && obj.Object != nil {
+		name = "resource.remove"
+	}
+
+	s.fromInternal(apiOp, schema, obj.Object)
+
+	return types.APIEvent{
+		Name:   name,
+		Count:  count,
+		Index:  index,
+		Object: types.ToAPI(obj.Object),
+	}
 }
 
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.Schema, params types.APIObject) (types.APIObject, error) {

@@ -1,9 +1,10 @@
 package subscribe
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -75,7 +76,7 @@ func handler(apiOp *types.APIRequest) error {
 		}
 	}()
 
-	events := make(chan types.APIObject)
+	events := make(chan types.APIEvent)
 	for _, schema := range schemas {
 		if apiOp.AccessControl.CanWatch(apiOp, schema) == nil {
 			streamStore(ctx, readerGroup, apiOp, schema, events)
@@ -87,9 +88,10 @@ func handler(apiOp *types.APIRequest) error {
 		close(events)
 	}()
 
-	jsonWriter := writer.EncodingResponseWriter{
+	capture := &Capture{}
+	captureWriter := writer.EncodingResponseWriter{
 		ContentType: "application/json",
-		Encoder:     types.JSONEncoder,
+		Encoder:     capture.Encoder,
 	}
 	t := time.NewTicker(60 * time.Second)
 	defer t.Stop()
@@ -103,24 +105,20 @@ func handler(apiOp *types.APIRequest) error {
 				break
 			}
 
-			header := `{"name":"resource.change","data":`
-			if item.Map()[".removed"] == true {
-				header = `{"name":"resource.remove","data":`
-			}
-			schema := apiOp.Schemas.Schema(convert.ToString(item.Map()["type"]))
+			schema := apiOp.Schemas.Schema(convert.ToString(item.Object.Map()["type"]))
 			if schema != nil {
-				buffer := &bytes.Buffer{}
-				if err := jsonWriter.VersionBody(apiOp, buffer, item); err != nil {
+				if err := captureWriter.VersionBody(apiOp, nil, item.Object); err != nil {
 					cancel()
 					continue
 				}
 
-				if err := writeData(c, header, buffer.Bytes()); err != nil {
+				item.Object = types.ToAPI(capture.Object)
+				if err := writeData(c, item); err != nil {
 					cancel()
 				}
 			}
 		case <-t.C:
-			if err := writeData(c, `{"name":"ping","data":`, []byte("{}")); err != nil {
+			if err := writeData(c, types.APIEvent{Name: "ping"}); err != nil {
 				cancel()
 			}
 		}
@@ -130,35 +128,29 @@ func handler(apiOp *types.APIRequest) error {
 	return nil
 }
 
-func writeData(c *websocket.Conn, header string, buf []byte) error {
+func writeData(c *websocket.Conn, event types.APIEvent) error {
+	event.Data = event.Object.Raw()
 	messageWriter, err := c.NextWriter(websocket.TextMessage)
 	if err != nil {
 		return err
 	}
+	defer messageWriter.Close()
 
-	if _, err := messageWriter.Write([]byte(header)); err != nil {
-		return err
-	}
-	if _, err := messageWriter.Write(buf); err != nil {
-		return err
-	}
-	if _, err := messageWriter.Write([]byte(`}`)); err != nil {
-		return err
-	}
-	return messageWriter.Close()
+	return json.NewEncoder(messageWriter).Encode(event)
 }
 
-func watch(apiOp *types.APIRequest, schema *types.Schema, opts *types.QueryOptions) (chan types.APIObject, error) {
+func watch(apiOp *types.APIRequest, schema *types.Schema, opts *types.QueryOptions) (chan types.APIEvent, error) {
 	c, err := schema.Store.Watch(apiOp, schema, opts)
 	if err != nil {
 		return nil, err
 	}
-	return types.APIChan(c, func(data types.APIObject) types.APIObject {
-		return apiOp.FilterObject(nil, schema, data)
+	return types.APIChan(c, func(data types.APIEvent) types.APIEvent {
+		data.Object = apiOp.FilterObject(nil, schema, data.Object)
+		return data
 	}), nil
 }
 
-func streamStore(ctx context.Context, eg *errgroup.Group, apiOp *types.APIRequest, schema *types.Schema, result chan types.APIObject) {
+func streamStore(ctx context.Context, eg *errgroup.Group, apiOp *types.APIRequest, schema *types.Schema, result chan types.APIEvent) {
 	eg.Go(func() error {
 		opts := parse.QueryOptions(apiOp, schema)
 		events, err := watch(apiOp, schema, &opts)
@@ -184,4 +176,13 @@ func matches(items []string, item string) bool {
 		return true
 	}
 	return slice.ContainsString(items, item)
+}
+
+type Capture struct {
+	Object interface{}
+}
+
+func (c *Capture) Encoder(w io.Writer, obj interface{}) error {
+	c.Object = obj
+	return nil
 }

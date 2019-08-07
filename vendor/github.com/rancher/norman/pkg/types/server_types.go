@@ -189,11 +189,20 @@ type Store interface {
 	Create(apiOp *APIRequest, schema *Schema, data APIObject) (APIObject, error)
 	Update(apiOp *APIRequest, schema *Schema, data APIObject, id string) (APIObject, error)
 	Delete(apiOp *APIRequest, schema *Schema, id string) (APIObject, error)
-	Watch(apiOp *APIRequest, schema *Schema, opt *QueryOptions) (chan APIObject, error)
+	Watch(apiOp *APIRequest, schema *Schema, opt *QueryOptions) (chan APIEvent, error)
+}
+
+type APIEvent struct {
+	Name   string    `json:"name,omitempty"`
+	Count  int       `json:"count,omitempty"`
+	Index  int       `json:"index,omitempty"`
+	Object APIObject `json:"-"`
+	// Data should be used
+	Data interface{} `json:"data,omitempty"`
 }
 
 type APIObject struct {
-	Object interface{} `json:",embed"`
+	Object interface{} `json:",inline"`
 }
 
 func ToAPI(data interface{}) APIObject {
@@ -277,11 +286,11 @@ func Namespace(data map[string]interface{}) string {
 	return convert.ToString(values.GetValueN(data, "metadata", "namespace"))
 }
 
-func APIChan(c <-chan APIObject, f func(APIObject) APIObject) chan APIObject {
+func APIChan(c <-chan APIEvent, f func(APIEvent) APIEvent) chan APIEvent {
 	if c == nil {
 		return nil
 	}
-	result := make(chan APIObject)
+	result := make(chan APIEvent)
 	go func() {
 		for data := range c {
 			modified := f(data)
