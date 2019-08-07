@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/norman/pkg/types"
+	"github.com/rancher/norman/pkg/types/convert"
 	"github.com/rancher/norman/pkg/types/values"
 )
 
@@ -20,8 +21,8 @@ func (d *defaultMapper) FromInternal(data map[string]interface{}) {
 		return
 	}
 
-	name := values.GetValueN(data, "metadata", "name")
-	namespace := values.GetValueN(data, "metadata", "namespace")
+	name := convert.ToString(values.GetValueN(data, "metadata", "name"))
+	namespace := convert.ToString(values.GetValueN(data, "metadata", "namespace"))
 
 	if namespace == "" {
 		data["id"] = name
