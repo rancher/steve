@@ -3,9 +3,8 @@ package schemas
 import (
 	"net/http"
 
-	"github.com/rancher/naok/pkg/attributes"
-
 	"github.com/rancher/naok/pkg/accesscontrol"
+	"github.com/rancher/naok/pkg/attributes"
 	"github.com/rancher/norman/pkg/api/builtin"
 	"github.com/rancher/norman/pkg/types"
 )

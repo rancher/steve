@@ -11,6 +11,7 @@ import (
 	openapi_v2 "github.com/googleapis/gnostic/OpenAPIv2"
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/attributes"
+	"github.com/rancher/naok/pkg/resources"
 	"github.com/rancher/norman/pkg/store/proxy"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/types/convert"
@@ -32,6 +33,7 @@ type SchemaFactory interface {
 }
 
 type handler struct {
+	formatter   types.Formatter
 	schemas     *schemas
 	schemaStore types.Store
 	client      discovery.DiscoveryInterface
@@ -69,6 +71,7 @@ func Register(ctx context.Context, clientGetter proxy.ClientGetter, discovery di
 	apiService v1.APIServiceController) SchemaFactory {
 
 	h := &handler{
+		formatter:   resources.Formatter,
 		client:      discovery,
 		schemas:     &schemas{},
 		schemaStore: proxy.NewProxyStore(clientGetter),
@@ -182,6 +185,7 @@ func (h *handler) refresh(gv schema.GroupVersion, resources *metav1.APIResourceL
 		schema.PluralName = resource.Name
 		attributes.SetAPIResource(schema, resource)
 		schema.Store = h.schemaStore
+		schema.Formatter = h.formatter
 
 		h.schemas.schemas[schema.ID] = schema
 		h.schemas.gvkToName[gvk] = schema.ID
