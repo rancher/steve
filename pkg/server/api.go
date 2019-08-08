@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/attributes"
+	k8sproxy "github.com/rancher/naok/pkg/proxy"
 	"github.com/rancher/naok/pkg/schemas"
 	"github.com/rancher/norman/pkg/api"
 	"github.com/rancher/norman/pkg/store/proxy"
@@ -13,9 +14,14 @@ import (
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/urlbuilder"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/client-go/rest"
 )
 
-func newAPIServer(cf proxy.ClientGetter, as *accesscontrol.AccessStore, sf schemas.SchemaFactory) http.Handler {
+func newAPIServer(cfg *rest.Config, cf proxy.ClientGetter, as *accesscontrol.AccessStore, sf schemas.SchemaFactory) (http.Handler, error) {
+	var (
+		err error
+	)
+
 	a := &apiServer{
 		Router: mux.NewRouter(),
 		cf:     cf,
@@ -23,10 +29,15 @@ func newAPIServer(cf proxy.ClientGetter, as *accesscontrol.AccessStore, sf schem
 		sf:     sf,
 		server: api.NewAPIServer(),
 	}
+
+	a.Router.NotFoundHandler, err = k8sproxy.Handler("/", cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	a.Router.StrictSlash(true)
 	a.server.AccessControl = accesscontrol.NewAccessControl()
-	a.routes()
-	return a
+	return a, a.routes()
 }
 
 type apiServer struct {

@@ -3,16 +3,15 @@ package server
 import (
 	"net/http"
 
-	"github.com/rancher/naok/pkg/attributes"
-
 	"github.com/gorilla/mux"
+	"github.com/rancher/naok/pkg/attributes"
 	"github.com/rancher/norman/pkg/types"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type APIFunc func(*types.APIRequest)
 
-func (a *apiServer) routes() {
+func (a *apiServer) routes() error {
 	a.Path("/v1/{type:schemas}").Handler(a.handle(nil))
 	a.Path("/v1/{type:schemas}/{name}").Handler(a.handle(nil))
 	a.Path("/v1/{type:subscribe}").Handler(a.handle(nil))
@@ -23,6 +22,8 @@ func (a *apiServer) routes() {
 
 	a.Path("/v1/apis/{group}/{version}/{resource}").Handler(a.handle(a.k8sAPI))
 	a.Path("/v1/apis/{group}/{version}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
+
+	return nil
 }
 
 func (a *apiServer) handle(apiFunc APIFunc) http.Handler {
