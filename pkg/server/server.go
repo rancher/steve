@@ -4,8 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rancher/norman/pkg/store/proxy"
-
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/client"
 	"github.com/rancher/naok/pkg/schemas"
@@ -20,8 +18,9 @@ import (
 )
 
 type Config struct {
-	Kubeconfig string
-	Namespace  string
+	Kubeconfig    string
+	Namespace     string
+	ListenAddress string
 }
 
 func Run(ctx context.Context, cfg Config) error {
@@ -50,7 +49,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	starter, err := startAPI(ctx, restConfig, k8s, crd, api, rbac)
+	starter, err := startAPI(ctx, cfg.ListenAddress, restConfig, k8s, crd, api, rbac)
 	if err != nil {
 		return err
 	}
@@ -67,7 +66,7 @@ func Run(ctx context.Context, cfg Config) error {
 	return nil
 }
 
-func startAPI(ctx context.Context, restConfig *rest.Config, k8s *kubernetes.Clientset, crd *apiextensions.Factory,
+func startAPI(ctx context.Context, listenAddress string, restConfig *rest.Config, k8s *kubernetes.Clientset, crd *apiextensions.Factory,
 	api *apiregistration.Factory, rbac *rbaccontroller.Factory) (func() error, error) {
 
 	cf, err := client.NewFactory(restConfig)
@@ -82,14 +81,14 @@ func startAPI(ctx context.Context, restConfig *rest.Config, k8s *kubernetes.Clie
 		api.Apiregistration().V1().APIService(),
 	)
 
-	accessStore := accesscontrol.NewAccessStore(rbac.Rbac().V1())
+	as := accesscontrol.NewAccessStore(rbac.Rbac().V1())
 
 	return func() error {
-		return serve(cf, accessStore, sf)
+		handler, err := newAPIServer(restConfig, cf, as, sf)
+		if err != nil {
+			return err
+		}
+		logrus.Infof("listening on %s", listenAddress)
+		return http.ListenAndServe(listenAddress, handler)
 	}, nil
-}
-
-func serve(cf proxy.ClientGetter, as *accesscontrol.AccessStore, sf schemas.SchemaFactory) error {
-	logrus.Infof("listening on :8989")
-	return http.ListenAndServe(":8989", newAPIServer(cf, as, sf))
 }

@@ -33,6 +33,12 @@ func main() {
 			Value:       "default",
 			Destination: &config.Namespace,
 		},
+		cli.StringFlag{
+			Name:        "listen-address",
+			EnvVar:      "LISTEN_ADDRESS",
+			Value:       ":8080",
+			Destination: &config.ListenAddress,
+		},
 		cli.BoolFlag{Name: "debug"},
 	}
 	app.Action = run
