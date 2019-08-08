@@ -90,10 +90,6 @@ func (t *typeMapper) FromInternal(data map[string]interface{}) {
 		}
 	}
 
-	if _, ok := data["type"]; !ok && data != nil {
-		data["type"] = t.typeName
-	}
-
 	Mappers(t.Mappers).FromInternal(data)
 }
 
