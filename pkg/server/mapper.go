@@ -17,6 +17,10 @@ type defaultMapper struct {
 }
 
 func (d *defaultMapper) FromInternal(data map[string]interface{}) {
+	if t, ok := data["type"]; ok {
+		data["_type"] = t
+	}
+
 	if _, ok := data["id"]; ok || data == nil {
 		return
 	}
