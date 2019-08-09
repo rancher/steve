@@ -91,7 +91,7 @@ func (t *typeMapper) FromInternal(data map[string]interface{}) {
 	}
 
 	if t.root {
-		if _, ok := data["type"]; ok {
+		if _, ok := data["type"]; !ok {
 			data["type"] = t.typeName
 		}
 	}
