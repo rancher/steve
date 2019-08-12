@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"strconv"
 	"sync"
 
 	errors2 "github.com/pkg/errors"
@@ -51,12 +52,24 @@ func (s *Store) byID(apiOp *types.APIRequest, schema *types.Schema, id string) (
 	return s.singleResult(apiOp, schema, resp)
 }
 
+func max(old int, newInt string) int {
+	v, err := strconv.Atoi(newInt)
+	if err != nil {
+		return old
+	}
+	if v > old {
+		return v
+	}
+	return old
+}
+
 func (s *Store) List(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (types.APIObject, error) {
 	resultList := &unstructured.UnstructuredList{}
 
 	var (
 		errGroup errgroup.Group
 		mux      sync.Mutex
+		revision int
 	)
 
 	if len(apiOp.Namespaces) <= 1 {
@@ -69,6 +82,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.Schema, opt *types.Q
 		if err != nil {
 			return types.APIObject{}, err
 		}
+		revision = max(revision, resultList.GetResourceVersion())
 	} else {
 		allNS := apiOp.Namespaces
 		for _, ns := range allNS {
@@ -81,6 +95,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.Schema, opt *types.Q
 
 				mux.Lock()
 				resultList.Items = append(resultList.Items, list.Items...)
+				revision = max(revision, list.GetResourceVersion())
 				mux.Unlock()
 
 				return nil
@@ -96,7 +111,11 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.Schema, opt *types.Q
 		result = append(result, s.fromInternal(apiOp, schema, obj.Object))
 	}
 
-	return types.ToAPI(result), nil
+	apiObject := types.ToAPI(result)
+	if revision > 0 {
+		apiObject.ListRevision = strconv.Itoa(revision)
+	}
+	return apiObject, nil
 }
 
 func (s *Store) listNamespace(namespace string, apiOp types.APIRequest, schema *types.Schema) (*unstructured.UnstructuredList, error) {

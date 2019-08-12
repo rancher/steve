@@ -35,11 +35,15 @@ func (j *EncodingResponseWriter) Body(apiOp *types.APIRequest, writer io.Writer,
 }
 
 func (j *EncodingResponseWriter) VersionBody(apiOp *types.APIRequest, writer io.Writer, obj interface{}) error {
-	var output interface{}
+	var (
+		output   interface{}
+		revision string
+	)
 
 	builder := builder.NewBuilder(apiOp)
 	if apiObject, ok := obj.(types.APIObject); ok {
 		obj = apiObject.Raw()
+		revision = apiObject.ListRevision
 	}
 
 	switch v := obj.(type) {
@@ -57,6 +61,10 @@ func (j *EncodingResponseWriter) VersionBody(apiOp *types.APIRequest, writer io.
 		output = v
 	default:
 		output = v
+	}
+
+	if list, ok := output.(*types.GenericCollection); ok && revision != "" {
+		list.Revision = revision
 	}
 
 	if output != nil {

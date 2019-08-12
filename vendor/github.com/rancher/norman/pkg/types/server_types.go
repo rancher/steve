@@ -214,7 +214,8 @@ type APIEvent struct {
 }
 
 type APIObject struct {
-	Object interface{} `json:",inline"`
+	ListRevision string      `json:"-"`
+	Object       interface{} `json:",inline"`
 }
 
 func ToAPI(data interface{}) APIObject {

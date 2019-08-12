@@ -13,6 +13,7 @@ type Collection struct {
 	Sort         *Sort                  `json:"sort,omitempty"`
 	Filters      map[string][]Condition `json:"filters,omitempty"`
 	ResourceType string                 `json:"resourceType"`
+	Revision     string                 `json:"revision,omitempty"`
 }
 
 type GenericCollection struct {

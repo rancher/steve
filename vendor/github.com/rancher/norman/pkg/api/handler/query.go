@@ -11,7 +11,9 @@ func QueryFilter(opts *types.QueryOptions, schema *types.Schema, data types.APIO
 	if opts == nil {
 		opts = &types.QueryOptions{}
 	}
-	return ApplyQueryOptions(opts, schema, data)
+	result := ApplyQueryOptions(opts, schema, data)
+	result.ListRevision = data.ListRevision
+	return result
 }
 
 func ApplyQueryOptions(options *types.QueryOptions, schema *types.Schema, data types.APIObject) types.APIObject {
