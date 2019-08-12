@@ -146,6 +146,9 @@ func (a Access) nameOK(name string) bool {
 }
 
 func GetAccessListMap(s *types.Schema) AccessListMap {
+	if s == nil {
+		return nil
+	}
 	v, _ := attributes.Access(s).(AccessListMap)
 	return v
 }
