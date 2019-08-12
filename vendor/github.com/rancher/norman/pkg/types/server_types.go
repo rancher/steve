@@ -119,6 +119,10 @@ func (r *APIRequest) WithContext(ctx context.Context) *APIRequest {
 	return &result
 }
 
+func (r *APIRequest) Context() context.Context {
+	return r.Request.Context()
+}
+
 func (r *APIRequest) GetUser() string {
 	user, ok := request.UserFrom(r.Request.Context())
 	if ok {
@@ -152,7 +156,7 @@ func (r *APIRequest) FilterObject(opts *QueryOptions, schema *Schema, obj APIObj
 }
 
 func (r *APIRequest) Filter(opts *QueryOptions, schema *Schema, obj APIObject) APIObject {
-	if _, ok := obj.ListCheck(); ok {
+	if obj.IsList() {
 		return r.FilterList(opts, schema, obj)
 	}
 	return r.FilterObject(opts, schema, obj)
@@ -258,15 +262,40 @@ func (a *APIObject) List() data.List {
 	return result
 }
 
+func (a *APIObject) IsList() bool {
+	_, ret := a.listCheck(false)
+	return ret
+}
+
 func (a *APIObject) ListCheck() (data.List, bool) {
+	return a.listCheck(true)
+}
+
+func (a *APIObject) listCheck(doConvert bool) (data.List, bool) {
 	if a == nil {
 		return nil, false
 	}
 	if result, ok := a.Object.(data.List); ok {
 		return result, true
 	}
-	result, ok := a.Object.([]map[string]interface{})
-	return result, ok
+	if result, ok := a.Object.([]map[string]interface{}); ok {
+		return result, true
+	}
+	if result, ok := a.Object.([]interface{}); ok {
+		if !doConvert {
+			return nil, true
+		}
+		mapResult := make(data.List, 0, len(result))
+		for _, obj := range result {
+			asMap, err := convert.EncodeToMap(obj)
+			if err != nil {
+				return nil, false
+			}
+			mapResult = append(mapResult, asMap)
+		}
+		return mapResult, true
+	}
+	return nil, false
 }
 
 func (a *APIObject) First() APIObject {
