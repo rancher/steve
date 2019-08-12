@@ -3,6 +3,8 @@ package proxy
 import (
 	"sync"
 
+	errors2 "github.com/pkg/errors"
+
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/types/convert/merge"
 	"github.com/rancher/norman/pkg/types/values"
@@ -107,61 +109,78 @@ func (s *Store) listNamespace(namespace string, apiOp types.APIRequest, schema *
 	return k8sClient.List(metav1.ListOptions{})
 }
 
-func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIEvent, error) {
-	k8sClient, err := s.clientGetter.Client(apiOp, schema)
-	if err != nil {
-		return nil, err
+func returnErr(err error, c chan types.APIEvent) {
+	c <- types.APIEvent{
+		Name:  "resource.error",
+		Error: err,
+	}
+}
+
+func (s *Store) listAndWatch(apiOp *types.APIRequest, k8sClient dynamic.ResourceInterface, schema *types.Schema, w types.WatchRequest, result chan types.APIEvent) {
+	rev := w.Revision
+	if rev == "" {
+		list, err := k8sClient.List(metav1.ListOptions{
+			Limit: 1,
+		})
+		if err != nil {
+			returnErr(errors2.Wrapf(err, "failed to list %s", schema.ID), result)
+			return
+		}
+		rev = list.GetResourceVersion()
 	}
 
-	list, err := k8sClient.List(metav1.ListOptions{})
+	timeout := int64(60 * 30)
+	watcher, err := k8sClient.Watch(metav1.ListOptions{
+		Watch:           true,
+		TimeoutSeconds:  &timeout,
+		ResourceVersion: rev,
+	})
+	if err != nil {
+		returnErr(errors2.Wrapf(err, "stopping watch for %s: %v", schema.ID), result)
+		return
+	}
+	defer watcher.Stop()
+	logrus.Debugf("opening watcher for %s", schema.ID)
+
+	go func() {
+		<-apiOp.Request.Context().Done()
+		watcher.Stop()
+	}()
+
+	for event := range watcher.ResultChan() {
+		data := event.Object.(*unstructured.Unstructured)
+		result <- s.toAPIEvent(apiOp, schema, event.Type, data)
+	}
+}
+
+func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, w types.WatchRequest) (chan types.APIEvent, error) {
+	k8sClient, err := s.clientGetter.Client(apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
 
 	result := make(chan types.APIEvent)
 	go func() {
-		defer func() {
-			logrus.Debugf("closing watcher for %s", schema.ID)
-			close(result)
-		}()
-
-		for i, obj := range list.Items {
-			result <- s.toAPIEvent(apiOp, schema, i, len(list.Items), false, &obj)
-		}
-
-		timeout := int64(60 * 30)
-		watcher, err := k8sClient.Watch(metav1.ListOptions{
-			Watch:           true,
-			TimeoutSeconds:  &timeout,
-			ResourceVersion: list.GetResourceVersion(),
-		})
-		if err != nil {
-			logrus.Debugf("stopping watch for %s: %v", schema.ID, err)
-			return
-		}
-		defer watcher.Stop()
-
-		for event := range watcher.ResultChan() {
-			data := event.Object.(*unstructured.Unstructured)
-			result <- s.toAPIEvent(apiOp, schema, 0, 0, event.Type == watch.Deleted, data)
-		}
+		s.listAndWatch(apiOp, k8sClient, schema, w, result)
+		logrus.Debugf("closing watcher for %s", schema.ID)
+		close(result)
 	}()
-
 	return result, nil
 }
 
-func (s *Store) toAPIEvent(apiOp *types.APIRequest, schema *types.Schema, index, count int, remove bool, obj *unstructured.Unstructured) types.APIEvent {
+func (s *Store) toAPIEvent(apiOp *types.APIRequest, schema *types.Schema, et watch.EventType, obj *unstructured.Unstructured) types.APIEvent {
 	name := "resource.change"
-	if remove && obj.Object != nil {
+	switch et {
+	case watch.Deleted:
 		name = "resource.remove"
+	case watch.Added:
+		name = "resource.create"
 	}
 
 	s.fromInternal(apiOp, schema, obj.Object)
 
 	return types.APIEvent{
 		Name:   name,
-		Count:  count,
-		Index:  index,
 		Object: types.ToAPI(obj.Object),
 	}
 }

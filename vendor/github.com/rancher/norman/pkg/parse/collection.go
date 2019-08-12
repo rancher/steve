@@ -19,7 +19,9 @@ func QueryOptions(apiOp *types.APIRequest, schema *types.Schema) types.QueryOpti
 		return types.QueryOptions{}
 	}
 
-	result := &types.QueryOptions{}
+	result := &types.QueryOptions{
+		Options: map[string]string{},
+	}
 
 	result.Sort = parseSort(schema, apiOp)
 	result.Pagination = parsePagination(apiOp)

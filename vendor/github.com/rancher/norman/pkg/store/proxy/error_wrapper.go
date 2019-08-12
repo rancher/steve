@@ -38,8 +38,8 @@ func (e *errorStore) Delete(apiOp *types.APIRequest, schema *types.Schema, id st
 
 }
 
-func (e *errorStore) Watch(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (chan types.APIEvent, error) {
-	data, err := e.Store.Watch(apiOp, schema, opt)
+func (e *errorStore) Watch(apiOp *types.APIRequest, schema *types.Schema, wr types.WatchRequest) (chan types.APIEvent, error) {
+	data, err := e.Store.Watch(apiOp, schema, wr)
 	return data, translateError(err)
 }
 

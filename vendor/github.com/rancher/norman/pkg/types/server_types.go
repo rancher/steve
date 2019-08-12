@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -112,6 +113,12 @@ type APIRequest struct {
 	Response http.ResponseWriter
 }
 
+func (r *APIRequest) WithContext(ctx context.Context) *APIRequest {
+	result := *r
+	result.Request = result.Request.WithContext(ctx)
+	return &result
+}
+
 func (r *APIRequest) GetUser() string {
 	user, ok := request.UserFrom(r.Request.Context())
 	if ok {
@@ -160,6 +167,7 @@ type QueryOptions struct {
 	Sort       Sort
 	Pagination *Pagination
 	Conditions []*QueryCondition
+	Options    map[string]string
 }
 
 type ReferenceValidator interface {
@@ -189,14 +197,18 @@ type Store interface {
 	Create(apiOp *APIRequest, schema *Schema, data APIObject) (APIObject, error)
 	Update(apiOp *APIRequest, schema *Schema, data APIObject, id string) (APIObject, error)
 	Delete(apiOp *APIRequest, schema *Schema, id string) (APIObject, error)
-	Watch(apiOp *APIRequest, schema *Schema, opt *QueryOptions) (chan APIEvent, error)
+	Watch(apiOp *APIRequest, schema *Schema, w WatchRequest) (chan APIEvent, error)
+}
+
+type WatchRequest struct {
+	Revision string
 }
 
 type APIEvent struct {
-	Name   string    `json:"name,omitempty"`
-	Count  int       `json:"count,omitempty"`
-	Index  int       `json:"index,omitempty"`
-	Object APIObject `json:"-"`
+	Name         string    `json:"name,omitempty"`
+	ResourceType string    `json:"resourceType,omitempty"`
+	Object       APIObject `json:"-"`
+	Error        error     `json:"-"`
 	// Data should be used
 	Data interface{} `json:"data,omitempty"`
 }
