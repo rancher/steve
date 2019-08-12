@@ -1,8 +1,6 @@
 package accesscontrol
 
 import (
-	"strings"
-
 	v1 "github.com/rancher/wrangler-api/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -118,27 +116,6 @@ func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) []r
 	}
 
 	return nil
-}
-
-func contains(parts []string, val string) bool {
-	for _, value := range parts {
-		if strings.EqualFold(value, val) {
-			return true
-		}
-	}
-	return false
-}
-
-func matches(parts []string, val string) bool {
-	for _, value := range parts {
-		if value == all {
-			return true
-		}
-		if strings.EqualFold(value, val) {
-			return true
-		}
-	}
-	return false
 }
 
 func (p *policyRuleIndex) getClusterRoleBindings(subjectName string) []*rbacv1.ClusterRoleBinding {
