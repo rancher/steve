@@ -15,6 +15,7 @@ func (a *apiServer) routes() error {
 	a.Path("/v1/{type:schemas}").Handler(a.handle(nil))
 	a.Path("/v1/{type:schemas}/{name}").Handler(a.handle(nil))
 	a.Path("/v1/{type:subscribe}").Handler(a.handle(nil))
+	a.Path("/v1/{type:counts}").Handler(a.handle(nil))
 
 	a.Path("/{version:v1}/{resource}").Handler(a.handle(a.k8sAPI))
 	a.Path("/{version:v1}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))

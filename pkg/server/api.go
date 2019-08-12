@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 
+	"github.com/rancher/naok/pkg/counts"
+
 	"github.com/gorilla/mux"
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/attributes"
@@ -23,12 +25,16 @@ func newAPIServer(cfg *rest.Config, cf proxy.ClientGetter, as *accesscontrol.Acc
 	)
 
 	a := &apiServer{
-		Router: mux.NewRouter(),
-		cf:     cf,
-		as:     as,
-		sf:     sf,
-		server: api.NewAPIServer(),
+		Router:      mux.NewRouter(),
+		cf:          cf,
+		as:          as,
+		sf:          sf,
+		server:      api.NewAPIServer(),
+		baseSchemas: types.EmptySchemas(),
 	}
+
+	counts.Register(a.baseSchemas)
+	subscribe.Register(a.baseSchemas)
 
 	a.Router.NotFoundHandler, err = k8sproxy.Handler("/", cfg)
 	if err != nil {
@@ -42,10 +48,11 @@ func newAPIServer(cfg *rest.Config, cf proxy.ClientGetter, as *accesscontrol.Acc
 
 type apiServer struct {
 	*mux.Router
-	cf     proxy.ClientGetter
-	as     *accesscontrol.AccessStore
-	sf     schemas.SchemaFactory
-	server *api.Server
+	cf          proxy.ClientGetter
+	as          *accesscontrol.AccessStore
+	sf          schemas.SchemaFactory
+	server      *api.Server
+	baseSchemas *types.Schemas
 }
 
 func (a *apiServer) newSchemas() (*types.Schemas, error) {
@@ -55,7 +62,7 @@ func (a *apiServer) newSchemas() (*types.Schemas, error) {
 	}
 
 	schemas.DefaultMapper = newDefaultMapper
-	subscribe.Register(schemas)
+	schemas.AddSchemas(a.baseSchemas)
 	return schemas, nil
 }
 
