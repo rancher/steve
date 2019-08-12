@@ -33,6 +33,11 @@ func (s *Schemas) getTypeName(t reflect.Type) string {
 	return convert.LowerTitle(t.Name())
 }
 
+func (s *Schemas) SchemaFor(t reflect.Type) *Schema {
+	name := s.getTypeName(t)
+	return s.Schema(name)
+}
+
 func (s *Schemas) AddMapperForType(obj interface{}, mapper ...Mapper) *Schemas {
 	if len(mapper) == 0 {
 		return s
@@ -79,6 +84,7 @@ func (s *Schemas) newSchemaFromType(t reflect.Type, typeName string) (*Schema, e
 		ResourceFields:    map[string]Field{},
 		ResourceActions:   map[string]Action{},
 		CollectionActions: map[string]Action{},
+		Attributes:        map[string]interface{}{},
 	}
 
 	s.processingTypes[t] = schema

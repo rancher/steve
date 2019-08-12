@@ -199,8 +199,9 @@ func (s *Store) toAPIEvent(apiOp *types.APIRequest, schema *types.Schema, et wat
 	s.fromInternal(apiOp, schema, obj.Object)
 
 	return types.APIEvent{
-		Name:   name,
-		Object: types.ToAPI(obj.Object),
+		Name:     name,
+		Revision: obj.GetResourceVersion(),
+		Object:   types.ToAPI(obj.Object),
 	}
 }
 

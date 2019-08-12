@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 
 	"github.com/rancher/norman/pkg/data"
 	"github.com/rancher/norman/pkg/parse"
 	"github.com/rancher/norman/pkg/parse/builder"
 	"github.com/rancher/norman/pkg/types"
+	"github.com/rancher/norman/pkg/types/convert"
 	"github.com/rancher/norman/pkg/types/definition"
 	"github.com/sirupsen/logrus"
 )
@@ -60,7 +62,15 @@ func (j *EncodingResponseWriter) VersionBody(apiOp *types.APIRequest, writer io.
 	case types.RawResource:
 		output = v
 	default:
-		output = v
+		mapData, err := convert.EncodeToMap(obj)
+		if err != nil {
+			return err
+		}
+		schema := apiOp.Schemas.SchemaFor(reflect.TypeOf(obj))
+		if schema != nil && mapData != nil {
+			mapData["type"] = schema.ID
+		}
+		output = j.convert(builder, apiOp, mapData)
 	}
 
 	if list, ok := output.(*types.GenericCollection); ok && revision != "" {

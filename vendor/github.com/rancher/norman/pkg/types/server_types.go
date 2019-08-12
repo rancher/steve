@@ -211,6 +211,7 @@ type WatchRequest struct {
 type APIEvent struct {
 	Name         string    `json:"name,omitempty"`
 	ResourceType string    `json:"resourceType,omitempty"`
+	Revision     string    `json:"revision,omitempty"`
 	Object       APIObject `json:"-"`
 	Error        error     `json:"-"`
 	// Data should be used
@@ -247,7 +248,8 @@ func (a APIObject) IsNil() bool {
 	if a.Object == nil {
 		return true
 	}
-	return reflect.ValueOf(a.Object).IsNil()
+	val := reflect.ValueOf(a.Object)
+	return val.Kind() == reflect.Ptr && val.IsNil()
 }
 
 func (a *APIObject) List() data.List {
