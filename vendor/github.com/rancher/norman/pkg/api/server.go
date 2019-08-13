@@ -100,6 +100,10 @@ func (s *Server) setDefaults(ctx *types.APIRequest) {
 	}
 
 	ctx.AccessControl = s.AccessControl
+
+	if ctx.Schemas == nil {
+		ctx.Schemas = s.Schemas
+	}
 }
 
 func (s *Server) AddSchemas(schemas *types.Schemas) error {
@@ -162,13 +166,14 @@ func (s *Server) Handle(apiOp *types.APIRequest) {
 }
 
 func (s *Server) handle(apiOp *types.APIRequest, rw http.ResponseWriter, req *http.Request, parser parse.Parser) {
-	if apiOp.Schemas == nil {
-		apiOp.Schemas = s.Schemas
-	}
 	if err := parser(apiOp, parse.MuxURLParser); err != nil {
+		// ensure defaults set so writer is assigned
+		s.setDefaults(apiOp)
 		s.handleError(apiOp, err)
 		return
 	}
+
+	s.setDefaults(apiOp)
 
 	if code, data, err := s.handleOp(apiOp); err != nil {
 		s.handleError(apiOp, err)
@@ -200,8 +205,6 @@ func determineVerb(apiOp *types.APIRequest) Verb {
 }
 
 func (s *Server) handleOp(apiOp *types.APIRequest) (int, interface{}, error) {
-	s.setDefaults(apiOp)
-
 	if err := CheckCSRF(apiOp); err != nil {
 		return 0, nil, err
 	}
@@ -261,10 +264,10 @@ func handleAction(action *types.Action, context *types.APIRequest) error {
 }
 
 func (s *Server) handleError(apiOp *types.APIRequest, err error) {
-	if apiOp.Schema == nil {
-		s.Defaults.ErrorHandler(apiOp, err)
-	} else if apiOp.Schema.ErrorHandler != nil {
+	if apiOp.Schema != nil && apiOp.Schema.ErrorHandler != nil {
 		apiOp.Schema.ErrorHandler(apiOp, err)
+	} else if s.Defaults.ErrorHandler != nil {
+		s.Defaults.ErrorHandler(apiOp, err)
 	}
 }
 

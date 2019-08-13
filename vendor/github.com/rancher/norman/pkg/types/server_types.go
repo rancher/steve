@@ -238,10 +238,14 @@ func (a *APIObject) Raw() interface{} {
 }
 
 func (a *APIObject) Map() data.Object {
-	if a == nil {
+	if a == nil || a.IsNil() {
 		return nil
 	}
-	return convert.ToMapInterface(a.Object)
+	data, err := convert.EncodeToMap(a.Object)
+	if err != nil {
+		return convert.ToMapInterface(a.Object)
+	}
+	return data
 }
 
 func (a APIObject) IsNil() bool {

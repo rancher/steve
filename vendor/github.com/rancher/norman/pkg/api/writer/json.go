@@ -62,15 +62,17 @@ func (j *EncodingResponseWriter) VersionBody(apiOp *types.APIRequest, writer io.
 	case types.RawResource:
 		output = v
 	default:
-		mapData, err := convert.EncodeToMap(obj)
-		if err != nil {
-			return err
+		if v != nil {
+			mapData, err := convert.EncodeToMap(obj)
+			if err != nil {
+				return err
+			}
+			schema := apiOp.Schemas.SchemaFor(reflect.TypeOf(obj))
+			if schema != nil && mapData != nil {
+				mapData["type"] = schema.ID
+			}
+			output = j.convert(builder, apiOp, mapData)
 		}
-		schema := apiOp.Schemas.SchemaFor(reflect.TypeOf(obj))
-		if schema != nil && mapData != nil {
-			mapData["type"] = schema.ID
-		}
-		output = j.convert(builder, apiOp, mapData)
 	}
 
 	if list, ok := output.(*types.GenericCollection); ok && revision != "" {
