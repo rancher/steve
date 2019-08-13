@@ -105,7 +105,7 @@ func Parse(apiOp *types.APIRequest, urlParser URLParser) error {
 		return err
 	}
 
-	if apiOp.Schema == nil {
+	if apiOp.Schema == nil && apiOp.Schemas != nil {
 		apiOp.Schema = apiOp.Schemas.Schema(apiOp.Type)
 	}
 

@@ -319,5 +319,6 @@ func (s *Store) fromInternal(apiOp *types.APIRequest, schema *types.Schema, data
 		schema.Mapper.FromInternal(data)
 	}
 
+	data["type"] = schema.ID
 	return data
 }
