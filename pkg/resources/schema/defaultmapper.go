@@ -1,4 +1,4 @@
-package server
+package schema
 
 import (
 	"fmt"
@@ -17,8 +17,10 @@ type defaultMapper struct {
 }
 
 func (d *defaultMapper) FromInternal(data map[string]interface{}) {
-	if t, ok := data["type"]; ok {
-		data["_type"] = t
+	if data["kind"] != "" && data["apiVersion"] != "" {
+		if t, ok := data["type"]; ok && data != nil {
+			data["_type"] = t
+		}
 	}
 
 	if _, ok := data["id"]; ok || data == nil {

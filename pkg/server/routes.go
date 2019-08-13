@@ -12,18 +12,12 @@ import (
 type APIFunc func(*types.APIRequest)
 
 func (a *apiServer) routes() error {
-	a.Path("/v1/{type:schemas}").Handler(a.handle(nil))
-	a.Path("/v1/{type:schemas}/{name}").Handler(a.handle(nil))
-	a.Path("/v1/{type:subscribe}").Handler(a.handle(nil))
-	a.Path("/v1/{type:counts}").Handler(a.handle(nil))
-	a.Path("/v1/{type:counts}/{name}").Handler(a.handle(nil))
-
-	a.Path("/{version:v1}/{resource}").Handler(a.handle(a.k8sAPI))
-	a.Path("/{version:v1}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
-	a.Path("/{version:v1}/{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
-
+	a.Path("/v1/{type}").Handler(a.handle(nil))
+	a.Path("/v1/{type:schemas}/{name:.*}").Handler(a.handle(nil))
+	a.Path("/v1/{type}/{name}").Handler(a.handle(nil))
 	a.Path("/v1/apis/{group}/{version}/{resource}").Handler(a.handle(a.k8sAPI))
 	a.Path("/v1/apis/{group}/{version}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
+	a.Path("/v1/apis/{group}/{version}/{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
 
 	return nil
 }
@@ -46,10 +40,15 @@ func (a *apiServer) api(rw http.ResponseWriter, req *http.Request, apiFunc APIFu
 
 func (a *apiServer) k8sAPI(apiOp *types.APIRequest) {
 	vars := mux.Vars(apiOp.Request)
+	group := vars["group"]
+	if group == "core" {
+		group = ""
+	}
+
 	apiOp.Name = vars["name"]
 	apiOp.Type = a.sf.ByGVR(schema.GroupVersionResource{
 		Version:  vars["version"],
-		Group:    vars["group"],
+		Group:    group,
 		Resource: vars["resource"],
 	})
 

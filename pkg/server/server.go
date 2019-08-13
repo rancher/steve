@@ -4,9 +4,12 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/rancher/naok/pkg/resources"
+
+	"github.com/rancher/naok/pkg/controllers/schema"
+
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/client"
-	"github.com/rancher/naok/pkg/schemas"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io"
 	rbaccontroller "github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
@@ -74,17 +77,17 @@ func startAPI(ctx context.Context, listenAddress string, restConfig *rest.Config
 		return nil, err
 	}
 
-	sf := schemas.Register(ctx,
-		cf,
+	as := accesscontrol.NewAccessStore(rbac.Rbac().V1())
+	sf := resources.SchemaFactory(cf, as)
+
+	schema.Register(ctx,
 		k8s.Discovery(),
 		crd.Apiextensions().V1beta1().CustomResourceDefinition(),
 		api.Apiregistration().V1().APIService(),
-	)
-
-	as := accesscontrol.NewAccessStore(rbac.Rbac().V1())
+		sf)
 
 	return func() error {
-		handler, err := newAPIServer(restConfig, cf, as, sf)
+		handler, err := newAPIServer(restConfig, sf)
 		if err != nil {
 			return err
 		}

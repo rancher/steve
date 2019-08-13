@@ -50,11 +50,35 @@ func Handler(prefix string, cfg *rest.Config) (http.Handler, error) {
 	proxy.UpgradeTransport = upgradeTransport
 	proxy.UseRequestLocation = true
 
-	if len(prefix) > 2 {
-		return stripLeaveSlash(prefix, proxy), nil
+	handler := setHost(target.Host, proxy)
+
+	if len(target.Path) > 1 {
+		handler = prependPath(target.Path[:len(target.Path)-1], handler)
 	}
 
-	return proxy, nil
+	if len(prefix) > 2 {
+		return stripLeaveSlash(prefix, handler), nil
+	}
+
+	return handler, nil
+}
+
+func setHost(host string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req.Host = host
+		h.ServeHTTP(w, req)
+	})
+}
+
+func prependPath(prefix string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if len(req.URL.Path) > 1 {
+			req.URL.Path = prefix + req.URL.Path
+		} else {
+			req.URL.Path = prefix
+		}
+		h.ServeHTTP(w, req)
+	})
 }
 
 // like http.StripPrefix, but always leaves an initial slash. (so that our
