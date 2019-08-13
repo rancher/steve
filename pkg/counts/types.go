@@ -15,8 +15,9 @@ import (
 
 var (
 	ignore = map[string]bool{
-		"count":  true,
-		"schema": true,
+		"count":   true,
+		"schema":  true,
+		"apiRoot": true,
 	}
 	slow = map[string]bool{
 		"io.k8s.api.management.cattle.io.v3.CatalogTemplateVersion": true,
@@ -28,7 +29,7 @@ var (
 func Register(schemas *types.Schemas) {
 	schemas.MustImportAndCustomize(Count{}, func(schema *types.Schema) {
 		schema.CollectionMethods = []string{http.MethodGet}
-		schema.ResourceMethods = []string{}
+		schema.ResourceMethods = []string{http.MethodGet}
 		schema.Attributes["access"] = accesscontrol.AccessListMap{
 			"watch": accesscontrol.AccessList{
 				{
@@ -47,8 +48,9 @@ type Count struct {
 }
 
 type ItemCount struct {
-	Count    int    `json:"count,omitempty"`
-	Revision string `json:"revision,omitempty"`
+	Count      int            `json:"count,omitempty"`
+	Namespaces map[string]int `json:"namespaces,omitempty"`
+	Revision   string         `json:"revision,omitempty"`
 }
 
 type Store struct {
@@ -78,7 +80,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, w types.Wat
 	for name, countItem := range c.Counts {
 		wg.Add(1)
 		go func() {
-			s.watchItem(apiOp.WithContext(ctx), name, countItem.Count, countItem.Revision, cancel, child)
+			s.watchItem(apiOp.WithContext(ctx), name, countItem, cancel, child)
 			wg.Done()
 		}()
 	}
@@ -114,7 +116,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, w types.Wat
 	return result, nil
 }
 
-func (s *Store) watchItem(apiOp *types.APIRequest, schemaID string, start int, revision string, cancel func(), counts chan Count) {
+func (s *Store) watchItem(apiOp *types.APIRequest, schemaID string, start ItemCount, cancel func(), counts chan Count) {
 	schema := apiOp.Schemas.Schema(schemaID)
 	if schema == nil || schema.Store == nil || apiOp.AccessControl.CanWatch(apiOp, schema) != nil {
 		return
@@ -122,31 +124,35 @@ func (s *Store) watchItem(apiOp *types.APIRequest, schemaID string, start int, r
 
 	defer cancel()
 
-	w, err := schema.Store.Watch(apiOp, schema, types.WatchRequest{Revision: revision})
+	w, err := schema.Store.Watch(apiOp, schema, types.WatchRequest{Revision: start.Revision})
 	if err != nil {
 		logrus.Errorf("failed to watch %s for counts: %v", schema.ID, err)
 		return
 	}
 
 	for event := range w {
-		if event.Revision == revision {
+		if event.Revision == start.Revision {
 			continue
 		}
 
+		ns := types.Namespace(event.Object.Map())
 		write := false
 		if event.Name == "resource.create" {
-			start++
+			start.Count++
 			write = true
+			if ns != "" {
+				start.Namespaces[ns]++
+			}
 		} else if event.Name == "resource.remove" {
-			start--
+			start.Count--
 			write = true
+			if ns != "" {
+				start.Namespaces[ns]--
+			}
 		}
 		if write {
 			counts <- Count{Counts: map[string]ItemCount{
-				schemaID: {
-					Count:    start,
-					Revision: event.Revision,
-				},
+				schemaID: start,
 			}}
 		}
 	}
@@ -187,11 +193,21 @@ func (s *Store) getCount(apiOp *types.APIRequest, timeout time.Duration, ignoreS
 				return nil
 			}
 
-			countLock.Lock()
-			counts[current.ID] = ItemCount{
-				Count:    len(list.List()),
-				Revision: list.ListRevision,
+			itemCount := ItemCount{
+				Namespaces: map[string]int{},
+				Revision:   list.ListRevision,
 			}
+
+			for _, item := range list.List() {
+				itemCount.Count++
+				ns := types.Namespace(item)
+				if ns != "" {
+					itemCount.Namespaces[ns]++
+				}
+			}
+
+			countLock.Lock()
+			counts[current.ID] = itemCount
 			countLock.Unlock()
 
 			return nil
