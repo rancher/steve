@@ -14,14 +14,16 @@ func (d *DefaultColumns) ModifySchema(schema *types.Schema, schemas *types.Schem
 	if attributes.Columns(schema) == nil {
 		attributes.SetColumns(schema, []table.Column{
 			{
-				Name:  "Name",
-				Field: "metadata.name",
-				Type:  "string",
+				Name:   "Name",
+				Field:  "metadata.name",
+				Type:   "string",
+				Format: "name",
 			},
 			{
-				Name:  "Created",
-				Field: "metadata.creationTimestamp",
-				Type:  "date",
+				Name:   "Created",
+				Field:  "metadata.creationTimestamp",
+				Type:   "string",
+				Format: "date",
 			},
 		})
 	}

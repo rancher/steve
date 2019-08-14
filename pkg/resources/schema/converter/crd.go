@@ -47,9 +47,10 @@ func forVersion(group, version, resource string, schemas map[string]*types.Schem
 	var versionColumns []table.Column
 	for _, col := range columnDefs {
 		versionColumns = append(versionColumns, table.Column{
-			Name:  col.Name,
-			Field: col.JSONPath,
-			Type:  col.Type,
+			Name:   col.Name,
+			Field:  col.JSONPath,
+			Type:   col.Type,
+			Format: col.Format,
 		})
 	}
 	if len(versionColumns) == 0 {

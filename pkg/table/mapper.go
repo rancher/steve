@@ -7,9 +7,10 @@ import (
 )
 
 type Column struct {
-	Name  string `json:"name,omitempty"`
-	Field string `json:"field,omitempty"`
-	Type  string `json:"type,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Field  string `json:"field,omitempty"`
+	Type   string `json:"type,omitempty"`
+	Format string `json:"format,omitempty"`
 }
 
 type Table struct {
