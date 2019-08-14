@@ -157,11 +157,11 @@ func (j *EncodingResponseWriter) convert(b builder.Builder, context *types.APIRe
 		ActionLinks: context.Request.Header.Get("X-API-Action-Links") != "",
 	}
 
-	j.addLinks(b, schema, context, input, rawResource)
-
 	if schema.Formatter != nil {
 		schema.Formatter(context, rawResource)
 	}
+
+	j.addLinks(b, schema, context, input, rawResource)
 
 	return rawResource
 }
@@ -172,12 +172,18 @@ func (j *EncodingResponseWriter) addLinks(b builder.Builder, schema *types.Schem
 	}
 
 	self := context.URLBuilder.ResourceLink(rawResource.Schema, rawResource.ID)
-	rawResource.Links["self"] = self
-	if context.AccessControl.CanUpdate(context, types.ToAPI(input), schema) == nil {
-		rawResource.Links["update"] = self
+	if _, ok := rawResource.Links["self"]; !ok {
+		rawResource.Links["self"] = self
 	}
-	if context.AccessControl.CanDelete(context, types.ToAPI(input), schema) == nil {
-		rawResource.Links["remove"] = self
+	if _, ok := rawResource.Links["update"]; !ok {
+		if context.AccessControl.CanUpdate(context, types.ToAPI(input), schema) == nil {
+			rawResource.Links["update"] = self
+		}
+	}
+	if _, ok := rawResource.Links["remove"]; !ok {
+		if context.AccessControl.CanDelete(context, types.ToAPI(input), schema) == nil {
+			rawResource.Links["remove"] = self
+		}
 	}
 }
 

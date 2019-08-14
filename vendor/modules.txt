@@ -44,10 +44,10 @@ github.com/rancher/norman/pkg/types
 github.com/rancher/norman/pkg/types/convert
 github.com/rancher/norman/pkg/store/proxy
 github.com/rancher/norman/pkg/subscribe
-github.com/rancher/norman/pkg/types/values
-github.com/rancher/norman/pkg/store/empty
-github.com/rancher/norman/pkg/api/builtin
 github.com/rancher/norman/pkg/data
+github.com/rancher/norman/pkg/store/empty
+github.com/rancher/norman/pkg/types/values
+github.com/rancher/norman/pkg/api/builtin
 github.com/rancher/norman/pkg/api
 github.com/rancher/norman/pkg/urlbuilder
 github.com/rancher/norman/pkg/httperror
@@ -237,8 +237,6 @@ k8s.io/client-go/util/cert
 k8s.io/client-go/util/flowcontrol
 k8s.io/client-go/kubernetes/scheme
 k8s.io/client-go/tools/clientcmd
-k8s.io/client-go/informers
-k8s.io/client-go/informers/rbac
 k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1
 k8s.io/client-go/kubernetes/typed/apps/v1
 k8s.io/client-go/kubernetes/typed/apps/v1beta1
@@ -274,6 +272,8 @@ k8s.io/client-go/kubernetes/typed/settings/v1alpha1
 k8s.io/client-go/kubernetes/typed/storage/v1
 k8s.io/client-go/kubernetes/typed/storage/v1alpha1
 k8s.io/client-go/kubernetes/typed/storage/v1beta1
+k8s.io/client-go/informers
+k8s.io/client-go/informers/rbac
 k8s.io/client-go/util/workqueue
 k8s.io/client-go/informers/internalinterfaces
 k8s.io/client-go/tools/pager
@@ -286,6 +286,7 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/tools/auth
 k8s.io/client-go/tools/clientcmd/api/latest
 k8s.io/client-go/util/homedir
+k8s.io/client-go/tools/reference
 k8s.io/client-go/informers/admissionregistration
 k8s.io/client-go/informers/apps
 k8s.io/client-go/informers/auditregistration
@@ -304,7 +305,6 @@ k8s.io/client-go/informers/settings
 k8s.io/client-go/informers/storage
 k8s.io/client-go/informers/rbac/v1alpha1
 k8s.io/client-go/informers/rbac/v1beta1
-k8s.io/client-go/tools/reference
 k8s.io/client-go/tools/clientcmd/api/v1
 k8s.io/client-go/informers/admissionregistration/v1beta1
 k8s.io/client-go/informers/apps/v1
