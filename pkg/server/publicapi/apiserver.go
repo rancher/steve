@@ -36,6 +36,7 @@ func NewHandler(cfg *rest.Config, sf schema.Factory) (http.Handler, error) {
 		K8sResource:     a.apiHandler(k8sAPI),
 		GenericResource: a.apiHandler(nil),
 		K8sProxy:        proxy,
+		APIRoot:         a.apiHandler(apiRoot),
 	}), nil
 }
 

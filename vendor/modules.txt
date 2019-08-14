@@ -42,6 +42,7 @@ github.com/pkg/errors
 github.com/rancher/norman/pkg/authorization
 github.com/rancher/norman/pkg/types
 github.com/rancher/norman/pkg/types/convert
+github.com/rancher/norman/pkg/store/apiroot
 github.com/rancher/norman/pkg/store/proxy
 github.com/rancher/norman/pkg/subscribe
 github.com/rancher/norman/pkg/data

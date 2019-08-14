@@ -1,4 +1,4 @@
-package builtin
+package apiroot
 
 import (
 	"net/http"
@@ -6,6 +6,20 @@ import (
 	"github.com/rancher/norman/pkg/store/empty"
 	"github.com/rancher/norman/pkg/types"
 )
+
+func Register(schemas *types.Schemas, versions, roots []string) {
+	schemas.MustAddSchema(types.Schema{
+		ID:                "apiRoot",
+		CollectionMethods: []string{"GET"},
+		ResourceMethods:   []string{"GET"},
+		ResourceFields: map[string]types.Field{
+			"apiVersion": {Type: "map[json]"},
+			"path":       {Type: "string"},
+		},
+		Formatter: APIRootFormatter,
+		Store:     NewAPIRootStore(versions, roots),
+	})
+}
 
 func APIRootFormatter(apiOp *types.APIRequest, resource *types.RawResource) {
 	path, _ := resource.Values["path"].(string)
@@ -86,10 +100,25 @@ func (a *APIRootStore) List(apiOp *types.APIRequest, schema *types.Schema, opt *
 
 func apiVersionToAPIRootMap(version string) map[string]interface{} {
 	return map[string]interface{}{
+		"id":   version,
 		"type": "apiRoot",
 		"apiVersion": map[string]interface{}{
 			"version": version,
 		},
 		"path": "/" + version,
 	}
+}
+
+func apiVersionFromMap(schemas *types.Schemas, apiVersion map[string]interface{}) string {
+	version, _ := apiVersion["version"].(string)
+	return version
+}
+
+func contains(list []string, needle string) bool {
+	for _, v := range list {
+		if v == needle {
+			return true
+		}
+	}
+	return false
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/rancher/naok/pkg/resources/common"
 	"github.com/rancher/naok/pkg/resources/counts"
 	"github.com/rancher/naok/pkg/resources/schema"
+	"github.com/rancher/norman/pkg/store/apiroot"
 	"github.com/rancher/norman/pkg/store/proxy"
 	"github.com/rancher/norman/pkg/subscribe"
 	"github.com/rancher/norman/pkg/types"
@@ -19,6 +20,7 @@ func SchemaFactory(getter proxy.ClientGetter, as *accesscontrol.AccessStore, k8s
 	counts.Register(baseSchema)
 	subscribe.Register(baseSchema)
 	apigroups.Register(baseSchema, k8s.Discovery())
+	apiroot.Register(baseSchema, []string{"v1"}, nil)
 
 	common.Register(collection, getter)
 

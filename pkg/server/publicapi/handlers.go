@@ -36,3 +36,7 @@ func k8sAPI(sf schema.Factory, apiOp *types.APIRequest) {
 		apiOp.Namespaces = []string{namespace}
 	}
 }
+
+func apiRoot(sf schema.Factory, apiOp *types.APIRequest) {
+	apiOp.Type = "apiRoot"
+}

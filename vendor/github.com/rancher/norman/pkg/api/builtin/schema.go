@@ -1,6 +1,8 @@
 package builtin
 
 import (
+	"net/http"
+
 	"github.com/rancher/norman/pkg/store/schema"
 	"github.com/rancher/norman/pkg/types"
 )
@@ -52,29 +54,11 @@ var (
 		},
 	}
 
-	APIRoot = types.Schema{
-		ID:                "apiRoot",
-		CollectionMethods: []string{"GET"},
-		ResourceMethods:   []string{"GET"},
-		ResourceFields: map[string]types.Field{
-			"apiVersion": {Type: "map[json]"},
-			"path":       {Type: "string"},
-		},
-		Formatter: APIRootFormatter,
-		Store:     NewAPIRootStore(nil, nil),
-	}
-
 	Schemas = types.EmptySchemas().
 		MustAddSchema(Schema).
 		MustAddSchema(Error).
-		MustAddSchema(Collection).
-		MustAddSchema(APIRoot)
+		MustAddSchema(Collection)
 )
-
-func apiVersionFromMap(schemas *types.Schemas, apiVersion map[string]interface{}) string {
-	version, _ := apiVersion["version"].(string)
-	return version
-}
 
 func SchemaFormatter(apiOp *types.APIRequest, resource *types.RawResource) {
 	schema := apiOp.Schemas.Schema(resource.ID)
@@ -86,6 +70,13 @@ func SchemaFormatter(apiOp *types.APIRequest, resource *types.RawResource) {
 	if collectionLink != "" {
 		resource.Links["collection"] = collectionLink
 	}
+}
+
+func getSchemaCollectionLink(apiOp *types.APIRequest, schema *types.Schema) string {
+	if schema != nil && contains(schema.CollectionMethods, http.MethodGet) {
+		return apiOp.URLBuilder.Collection(schema)
+	}
+	return ""
 }
 
 func contains(list []string, needle string) bool {

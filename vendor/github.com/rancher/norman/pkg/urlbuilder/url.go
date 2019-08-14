@@ -99,6 +99,9 @@ func (u *DefaultURLBuilder) Current() string {
 }
 
 func (u *DefaultURLBuilder) RelativeToRoot(path string) string {
+	if len(path) > 0 && path[0] != '/' {
+		return u.responseURLBase + "/" + path
+	}
 	return u.responseURLBase + path
 }
 
