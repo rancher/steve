@@ -12,12 +12,12 @@ import (
 type APIFunc func(*types.APIRequest)
 
 func (a *apiServer) routes() error {
-	a.Path("/v1/{type}").Handler(a.handle(nil))
 	a.Path("/v1/{type:schemas}/{name:.*}").Handler(a.handle(nil))
+	a.Path("/v1/{group}.{version}.{resource}").Handler(a.handle(a.k8sAPI))
+	a.Path("/v1/{group}.{version}.{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
+	a.Path("/v1/{group}.{version}.{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
+	a.Path("/v1/{type}").Handler(a.handle(nil))
 	a.Path("/v1/{type}/{name}").Handler(a.handle(nil))
-	a.Path("/v1/apis/{group}/{version}/{resource}").Handler(a.handle(a.k8sAPI))
-	a.Path("/v1/apis/{group}/{version}/{resource}/{nameorns}").Handler(a.handle(a.k8sAPI))
-	a.Path("/v1/apis/{group}/{version}/{resource}/{namespace}/{name}").Handler(a.handle(a.k8sAPI))
 
 	return nil
 }

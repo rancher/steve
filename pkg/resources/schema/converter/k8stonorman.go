@@ -10,16 +10,16 @@ import (
 
 func gvkToSchemaID(gvk schema.GroupVersionKind) string {
 	if gvk.Group == "" {
-		return fmt.Sprintf("apis/core/%s/%s", gvk.Version, gvk.Kind)
+		return fmt.Sprintf("core.%s.%s", gvk.Version, gvk.Kind)
 	}
-	return fmt.Sprintf("apis/%s/%s/%s", gvk.Group, gvk.Version, gvk.Kind)
+	return fmt.Sprintf("%s.%s.%s", gvk.Group, gvk.Version, gvk.Kind)
 }
 
 func GVRToSchemaID(gvk schema.GroupVersionResource) string {
 	if gvk.Group == "" {
-		return fmt.Sprintf("apis/core/%s/%s", gvk.Version, gvk.Resource)
+		return fmt.Sprintf("core.%s.%s", gvk.Version, gvk.Resource)
 	}
-	return fmt.Sprintf("apis/%s/%s/%s", gvk.Group, gvk.Version, gvk.Resource)
+	return fmt.Sprintf("%s.%s.%s", gvk.Group, gvk.Version, gvk.Resource)
 }
 
 func ToSchemas(client discovery.DiscoveryInterface) (map[string]*types.Schema, error) {
