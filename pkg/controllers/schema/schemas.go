@@ -22,6 +22,7 @@ type handler struct {
 	toSync  int32
 	schemas *schema2.Collection
 	client  discovery.DiscoveryInterface
+	crd     apiextcontrollerv1beta1.CustomResourceDefinitionClient
 }
 
 func Register(ctx context.Context,
@@ -33,6 +34,7 @@ func Register(ctx context.Context,
 	h := &handler{
 		client:  discovery,
 		schemas: schemas,
+		crd:     crd,
 	}
 
 	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
@@ -70,7 +72,7 @@ func (h *handler) refreshAll() error {
 	}
 
 	logrus.Info("Refreshing all schemas")
-	schemas, err := converter.ToSchemas(h.client)
+	schemas, err := converter.ToSchemas(h.crd, h.client)
 	if err != nil {
 		return err
 	}

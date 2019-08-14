@@ -38,6 +38,16 @@ func (c *Collection) schemasForSubject(subjectKey string, access *accesscontrol.
 		return nil, err
 	}
 
+	for _, template := range c.templates {
+		if template.RegisterType != nil {
+			s, err := result.Import(template.RegisterType)
+			if err != nil {
+				return nil, err
+			}
+			c.applyTemplates(result, s)
+		}
+	}
+
 	for _, s := range c.schemas {
 		gr := attributes.GR(s)
 
@@ -78,7 +88,7 @@ func (c *Collection) schemasForSubject(subjectKey string, access *accesscontrol.
 			s.CollectionMethods = append(s.CollectionMethods, http.MethodPost)
 		}
 
-		c.applyTemplates(s)
+		c.applyTemplates(result, s)
 
 		if err := result.AddSchema(*s); err != nil {
 			return nil, err
@@ -88,7 +98,7 @@ func (c *Collection) schemasForSubject(subjectKey string, access *accesscontrol.
 	return result, nil
 }
 
-func (c *Collection) applyTemplates(schema *types.Schema) {
+func (c *Collection) applyTemplates(schemas *types.Schemas, schema *types.Schema) {
 	templates := []*Template{
 		c.templates[schema.ID],
 		c.templates[fmt.Sprintf("%s/%s", attributes.Group(schema), attributes.Kind(schema))],
@@ -99,14 +109,17 @@ func (c *Collection) applyTemplates(schema *types.Schema) {
 		if t == nil {
 			continue
 		}
-		if schema.Mapper == nil {
-			schema.Mapper = t.Mapper
+		if t.Mapper != nil {
+			schemas.AddMapper(schema.ID, t.Mapper)
 		}
 		if schema.Formatter == nil {
 			schema.Formatter = t.Formatter
 		}
 		if schema.Store == nil {
 			schema.Store = t.Store
+		}
+		if t.Customize != nil {
+			t.Customize(schema)
 		}
 	}
 }

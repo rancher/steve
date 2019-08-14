@@ -12,6 +12,7 @@ func Register(collection *schema.Collection, clientGetter proxy.ClientGetter) {
 	collection.AddTemplate(&schema.Template{
 		Store:     proxy.NewProxyStore(clientGetter),
 		Formatter: Formatter,
+		Mapper:    &DefaultColumns{},
 	})
 }
 

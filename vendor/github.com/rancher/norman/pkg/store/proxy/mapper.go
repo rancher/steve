@@ -1,6 +1,9 @@
 package proxy
 
-import "github.com/rancher/norman/pkg/types"
+import (
+	"github.com/rancher/norman/pkg/data"
+	"github.com/rancher/norman/pkg/types"
+)
 
 type AddAPIVersionKind struct {
 	APIVersion string
@@ -8,24 +11,21 @@ type AddAPIVersionKind struct {
 	Next       types.Mapper
 }
 
-func (d AddAPIVersionKind) FromInternal(data map[string]interface{}) {
+func (d AddAPIVersionKind) FromInternal(data data.Object) {
 	if d.Next != nil {
 		d.Next.FromInternal(data)
 	}
 }
 
-func (d AddAPIVersionKind) ToInternal(data map[string]interface{}) error {
+func (d AddAPIVersionKind) ToInternal(data data.Object) error {
 	if d.Next != nil {
 		if err := d.Next.ToInternal(data); err != nil {
 			return err
 		}
 	}
 
-	if data == nil {
-		return nil
-	}
-	data["apiVersion"] = d.APIVersion
-	data["kind"] = d.Kind
+	data.Set("apiVersion", d.APIVersion)
+	data.Set("kind", d.Kind)
 	return nil
 }
 

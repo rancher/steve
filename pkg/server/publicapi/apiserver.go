@@ -1,14 +1,14 @@
-package server
+package publicapi
 
 import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/attributes"
 	k8sproxy "github.com/rancher/naok/pkg/proxy"
 	"github.com/rancher/naok/pkg/resources/schema"
+	"github.com/rancher/naok/pkg/server/router"
 	"github.com/rancher/norman/pkg/api"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/urlbuilder"
@@ -16,29 +16,30 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func newAPIServer(cfg *rest.Config, sf schema.Factory) (http.Handler, error) {
+func NewHandler(cfg *rest.Config, sf schema.Factory) (http.Handler, error) {
 	var (
 		err error
 	)
 
 	a := &apiServer{
-		Router: mux.NewRouter(),
 		sf:     sf,
-		server: api.NewAPIServer(),
+		server: api.DefaultAPIServer(),
 	}
+	a.server.AccessControl = accesscontrol.NewAccessControl()
 
-	a.Router.NotFoundHandler, err = k8sproxy.Handler("/", cfg)
+	proxy, err := k8sproxy.Handler("/", cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	a.Router.StrictSlash(true)
-	a.server.AccessControl = accesscontrol.NewAccessControl()
-	return a, a.routes()
+	return router.Routes(router.Handlers{
+		K8sResource:     a.apiHandler(k8sAPI),
+		GenericResource: a.apiHandler(nil),
+		K8sProxy:        proxy,
+	}), nil
 }
 
 type apiServer struct {
-	*mux.Router
 	sf     schema.Factory
 	server *api.Server
 }
@@ -76,4 +77,22 @@ func (a *apiServer) Schema(base string, schema *types.Schema) string {
 		return urlbuilder.ConstructBasicURL(base, "v1", schema.PluralName)
 	}
 	return urlbuilder.ConstructBasicURL(base, "v1", strings.ToLower(schema.ID))
+}
+
+type APIFunc func(schema.Factory, *types.APIRequest)
+
+func (a *apiServer) apiHandler(apiFunc APIFunc) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		a.api(rw, req, apiFunc)
+	})
+}
+
+func (a *apiServer) api(rw http.ResponseWriter, req *http.Request, apiFunc APIFunc) {
+	apiOp, ok := a.common(rw, req)
+	if ok {
+		if apiFunc != nil {
+			apiFunc(a.sf, apiOp)
+		}
+		a.server.Handle(apiOp)
+	}
 }

@@ -122,3 +122,14 @@ func SetAPIResource(s *types.Schema, resource v1.APIResource) {
 	SetVerbs(s, resource.Verbs)
 	SetNamespaced(s, resource.Namespaced)
 }
+
+func SetColumns(s *types.Schema, columns interface{}) {
+	if s.Attributes == nil {
+		s.Attributes = map[string]interface{}{}
+	}
+	s.Attributes["columns"] = columns
+}
+
+func Columns(s *types.Schema) interface{} {
+	return s.Attributes["columns"]
+}

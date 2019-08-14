@@ -26,12 +26,14 @@ type Collection struct {
 }
 
 type Template struct {
-	Group     string
-	Kind      string
-	ID        string
-	Formatter types.Formatter
-	Store     types.Store
-	Mapper    types.Mapper
+	Group        string
+	Kind         string
+	ID           string
+	RegisterType interface{}
+	Customize    func(*types.Schema)
+	Formatter    types.Formatter
+	Store        types.Store
+	Mapper       types.Mapper
 }
 
 func NewCollection(baseSchema *types.Schemas, access *accesscontrol.AccessStore) *Collection {

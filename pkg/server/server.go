@@ -4,12 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/rancher/naok/pkg/resources"
-
-	"github.com/rancher/naok/pkg/controllers/schema"
-
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/client"
+	"github.com/rancher/naok/pkg/controllers/schema"
+	"github.com/rancher/naok/pkg/resources"
+	"github.com/rancher/naok/pkg/server/publicapi"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io"
 	rbaccontroller "github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
@@ -17,7 +16,6 @@ import (
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 type Config struct {
@@ -52,7 +50,21 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	starter, err := startAPI(ctx, cfg.ListenAddress, restConfig, k8s, crd, api, rbac)
+	cf, err := client.NewFactory(restConfig)
+	if err != nil {
+		return err
+	}
+
+	sf := resources.SchemaFactory(cf,
+		accesscontrol.NewAccessStore(rbac.Rbac().V1()))
+
+	schema.Register(ctx,
+		k8s.Discovery(),
+		crd.Apiextensions().V1beta1().CustomResourceDefinition(),
+		api.Apiregistration().V1().APIService(),
+		sf)
+
+	handler, err := publicapi.NewHandler(restConfig, sf)
 	if err != nil {
 		return err
 	}
@@ -61,37 +73,6 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	if err := starter(); err != nil {
-		return err
-	}
-
-	<-ctx.Done()
-	return nil
-}
-
-func startAPI(ctx context.Context, listenAddress string, restConfig *rest.Config, k8s *kubernetes.Clientset, crd *apiextensions.Factory,
-	api *apiregistration.Factory, rbac *rbaccontroller.Factory) (func() error, error) {
-
-	cf, err := client.NewFactory(restConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	as := accesscontrol.NewAccessStore(rbac.Rbac().V1())
-	sf := resources.SchemaFactory(cf, as)
-
-	schema.Register(ctx,
-		k8s.Discovery(),
-		crd.Apiextensions().V1beta1().CustomResourceDefinition(),
-		api.Apiregistration().V1().APIService(),
-		sf)
-
-	return func() error {
-		handler, err := newAPIServer(restConfig, sf)
-		if err != nil {
-			return err
-		}
-		logrus.Infof("listening on %s", listenAddress)
-		return http.ListenAndServe(listenAddress, handler)
-	}, nil
+	logrus.Infof("listening on %s", cfg.ListenAddress)
+	return http.ListenAndServe(cfg.ListenAddress, handler)
 }

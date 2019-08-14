@@ -3,9 +3,8 @@ package schema
 import (
 	"fmt"
 
+	"github.com/rancher/norman/pkg/data"
 	"github.com/rancher/norman/pkg/types"
-	"github.com/rancher/norman/pkg/types/convert"
-	"github.com/rancher/norman/pkg/types/values"
 )
 
 func newDefaultMapper() types.Mapper {
@@ -16,7 +15,7 @@ type defaultMapper struct {
 	types.EmptyMapper
 }
 
-func (d *defaultMapper) FromInternal(data map[string]interface{}) {
+func (d *defaultMapper) FromInternal(data data.Object) {
 	if data["kind"] != "" && data["apiVersion"] != "" {
 		if t, ok := data["type"]; ok && data != nil {
 			data["_type"] = t
@@ -27,8 +26,8 @@ func (d *defaultMapper) FromInternal(data map[string]interface{}) {
 		return
 	}
 
-	name := convert.ToString(values.GetValueN(data, "metadata", "name"))
-	namespace := convert.ToString(values.GetValueN(data, "metadata", "namespace"))
+	name := types.Name(data)
+	namespace := types.Namespace(data)
 
 	if namespace == "" {
 		data["id"] = name

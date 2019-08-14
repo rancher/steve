@@ -348,3 +348,10 @@ func APIChan(c <-chan APIEvent, f func(APIEvent) APIEvent) chan APIEvent {
 	}()
 	return result
 }
+
+func FormatterChain(formatter Formatter, next Formatter) Formatter {
+	return func(request *APIRequest, resource *RawResource) {
+		formatter(request, resource)
+		next(request, resource)
+	}
+}

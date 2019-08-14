@@ -1,23 +1,23 @@
 package types
 
 import (
-	"github.com/rancher/norman/pkg/types/convert"
+	"github.com/rancher/norman/pkg/data"
 	"github.com/rancher/norman/pkg/types/definition"
 )
 
 type Mapper interface {
-	FromInternal(data map[string]interface{})
-	ToInternal(data map[string]interface{}) error
+	FromInternal(data data.Object)
+	ToInternal(data data.Object) error
 	ModifySchema(schema *Schema, schemas *Schemas) error
 }
 
 type EmptyMapper struct {
 }
 
-func (e *EmptyMapper) FromInternal(data map[string]interface{}) {
+func (e *EmptyMapper) FromInternal(data data.Object) {
 }
 
-func (e *EmptyMapper) ToInternal(data map[string]interface{}) error {
+func (e *EmptyMapper) ToInternal(data data.Object) error {
 	return nil
 }
 
@@ -27,13 +27,13 @@ func (e *EmptyMapper) ModifySchema(schema *Schema, schemas *Schemas) error {
 
 type Mappers []Mapper
 
-func (m Mappers) FromInternal(data map[string]interface{}) {
+func (m Mappers) FromInternal(data data.Object) {
 	for _, mapper := range m {
 		mapper.FromInternal(data)
 	}
 }
 
-func (m Mappers) ToInternal(data map[string]interface{}) error {
+func (m Mappers) ToInternal(data data.Object) error {
 	var errors []error
 	for i := len(m) - 1; i >= 0; i-- {
 		errors = append(errors, m[i].ToInternal(data))
@@ -59,23 +59,20 @@ type typeMapper struct {
 	subMapSchemas   map[string]*Schema
 }
 
-func (t *typeMapper) FromInternal(data map[string]interface{}) {
+func (t *typeMapper) FromInternal(data data.Object) {
 	for fieldName, schema := range t.subSchemas {
 		if schema.Mapper == nil {
 			continue
 		}
-		fieldData, _ := data[fieldName].(map[string]interface{})
-		schema.Mapper.FromInternal(fieldData)
+		schema.Mapper.FromInternal(data.Map(fieldName))
 	}
 
 	for fieldName, schema := range t.subMapSchemas {
 		if schema.Mapper == nil {
 			continue
 		}
-		datas, _ := data[fieldName].(map[string]interface{})
-		for _, fieldData := range datas {
-			mapFieldData, _ := fieldData.(map[string]interface{})
-			schema.Mapper.FromInternal(mapFieldData)
+		for _, fieldData := range data.Map(fieldName).Values() {
+			schema.Mapper.FromInternal(fieldData)
 		}
 	}
 
@@ -83,17 +80,15 @@ func (t *typeMapper) FromInternal(data map[string]interface{}) {
 		if schema.Mapper == nil {
 			continue
 		}
-		datas, _ := data[fieldName].([]interface{})
-		for _, fieldData := range datas {
-			mapFieldData, _ := fieldData.(map[string]interface{})
-			schema.Mapper.FromInternal(mapFieldData)
+		for _, fieldData := range data.Slice(fieldName) {
+			schema.Mapper.FromInternal(fieldData)
 		}
 	}
 
 	Mappers(t.Mappers).FromInternal(data)
 }
 
-func (t *typeMapper) ToInternal(data map[string]interface{}) error {
+func (t *typeMapper) ToInternal(data data.Object) error {
 	errors := Errors{}
 	errors.Add(Mappers(t.Mappers).ToInternal(data))
 
@@ -101,9 +96,8 @@ func (t *typeMapper) ToInternal(data map[string]interface{}) error {
 		if schema.Mapper == nil {
 			continue
 		}
-		datas, _ := data[fieldName].([]interface{})
-		for _, fieldData := range datas {
-			errors.Add(schema.Mapper.ToInternal(convert.ToMapInterface(fieldData)))
+		for _, fieldData := range data.Slice(fieldName) {
+			errors.Add(schema.Mapper.ToInternal(fieldData))
 		}
 	}
 
@@ -111,9 +105,8 @@ func (t *typeMapper) ToInternal(data map[string]interface{}) error {
 		if schema.Mapper == nil {
 			continue
 		}
-		datas, _ := data[fieldName].(map[string]interface{})
-		for _, fieldData := range datas {
-			errors.Add(schema.Mapper.ToInternal(convert.ToMapInterface(fieldData)))
+		for _, fieldData := range data.Slice(fieldName) {
+			errors.Add(schema.Mapper.ToInternal(fieldData))
 		}
 	}
 
@@ -121,8 +114,7 @@ func (t *typeMapper) ToInternal(data map[string]interface{}) error {
 		if schema.Mapper == nil {
 			continue
 		}
-		fieldData, _ := data[fieldName].(map[string]interface{})
-		errors.Add(schema.Mapper.ToInternal(fieldData))
+		errors.Add(schema.Mapper.ToInternal(data.Map(fieldName)))
 	}
 
 	return errors.Err()

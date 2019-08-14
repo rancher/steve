@@ -51,7 +51,7 @@ type Defaults struct {
 	ErrorHandler  types.ErrorHandler
 }
 
-func NewAPIServer() *Server {
+func DefaultAPIServer() *Server {
 	s := &Server{
 		DefaultNamespace: "default",
 		Schemas:          types.EmptySchemas(),
