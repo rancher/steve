@@ -56,7 +56,8 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	sf := resources.SchemaFactory(cf,
-		accesscontrol.NewAccessStore(rbac.Rbac().V1()))
+		accesscontrol.NewAccessStore(rbac.Rbac().V1()),
+		k8s)
 
 	schema.Register(ctx,
 		k8s.Discovery(),
