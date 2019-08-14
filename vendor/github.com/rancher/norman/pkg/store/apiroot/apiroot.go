@@ -2,6 +2,7 @@ package apiroot
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/rancher/norman/pkg/store/empty"
 	"github.com/rancher/norman/pkg/types"
@@ -26,19 +27,18 @@ func APIRootFormatter(apiOp *types.APIRequest, resource *types.RawResource) {
 	if path == "" {
 		return
 	}
-
 	delete(resource.Values, "path")
 
 	resource.Links["root"] = apiOp.URLBuilder.RelativeToRoot(path)
-	resource.Links["schemas"] = apiOp.URLBuilder.RelativeToRoot(path)
 
-	data, _ := resource.Values["apiVersion"].(map[string]interface{})
-	apiVersion := apiVersionFromMap(apiOp.Schemas, data)
+	if data, isAPIRoot := resource.Values["apiVersion"].(map[string]interface{}); isAPIRoot {
+		apiVersion := apiVersionFromMap(apiOp.Schemas, data)
+		resource.Links["self"] = apiOp.URLBuilder.RelativeToRoot(apiVersion)
 
-	resource.Links["self"] = apiOp.URLBuilder.RelativeToRoot(apiVersion)
-
-	for _, schema := range apiOp.Schemas.Schemas() {
-		addCollectionLink(apiOp, schema, resource.Links)
+		resource.Links["schemas"] = apiOp.URLBuilder.RelativeToRoot(path)
+		for _, schema := range apiOp.Schemas.Schemas() {
+			addCollectionLink(apiOp, schema, resource.Links)
+		}
 	}
 
 	return
@@ -72,11 +72,16 @@ func NewAPIRootStore(versions []string, roots []string) types.Store {
 }
 
 func (a *APIRootStore) ByID(apiOp *types.APIRequest, schema *types.Schema, id string) (types.APIObject, error) {
-	for _, version := range a.versions {
-		if version == id {
-			return types.ToAPI(apiVersionToAPIRootMap(version)), nil
+	list, err := a.List(apiOp, schema, nil)
+	if err != nil {
+		return types.APIObject{}, nil
+	}
+	for _, item := range list.List() {
+		if item["id"] == id {
+			return types.ToAPI(item), nil
 		}
 	}
+
 	return types.APIObject{}, nil
 }
 
@@ -90,9 +95,13 @@ func (a *APIRootStore) List(apiOp *types.APIRequest, schema *types.Schema, opt *
 	}
 
 	for _, root := range a.roots {
-		roots = append(roots, map[string]interface{}{
-			"path": root,
-		})
+		parts := strings.SplitN(root, ":", 2)
+		if len(parts) == 2 {
+			roots = append(roots, map[string]interface{}{
+				"id":   parts[0],
+				"path": parts[1],
+			})
+		}
 	}
 
 	return types.ToAPI(roots), nil

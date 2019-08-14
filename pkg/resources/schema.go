@@ -20,7 +20,7 @@ func SchemaFactory(getter proxy.ClientGetter, as *accesscontrol.AccessStore, k8s
 	counts.Register(baseSchema)
 	subscribe.Register(baseSchema)
 	apigroups.Register(baseSchema, k8s.Discovery())
-	apiroot.Register(baseSchema, []string{"v1"}, nil)
+	apiroot.Register(baseSchema, []string{"v1"}, []string{"proxy:/apis"})
 
 	common.Register(collection, getter)
 
