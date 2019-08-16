@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rancher/naok/pkg/attributes"
+
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/norman/pkg/store/empty"
 	"github.com/rancher/norman/pkg/types"
@@ -79,6 +81,8 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, w types.Wat
 	child := make(chan Count)
 	for name, countItem := range c.Counts {
 		wg.Add(1)
+		name := name
+		countItem := countItem
 		go func() {
 			s.watchItem(apiOp.WithContext(ctx), name, countItem, cancel, child)
 			wg.Done()
@@ -121,9 +125,10 @@ func (s *Store) watchItem(apiOp *types.APIRequest, schemaID string, start ItemCo
 	if schema == nil || schema.Store == nil || apiOp.AccessControl.CanWatch(apiOp, schema) != nil {
 		return
 	}
-
 	defer cancel()
 
+	logrus.Debugf("watching %s for count", schemaID)
+	defer logrus.Debugf("close watching %s for count", schemaID)
 	w, err := schema.Store.Watch(apiOp, schema, types.WatchRequest{Revision: start.Revision})
 	if err != nil {
 		logrus.Errorf("failed to watch %s for counts: %v", schema.ID, err)
@@ -168,6 +173,14 @@ func (s *Store) getCount(apiOp *types.APIRequest, timeout time.Duration, ignoreS
 
 	for _, schema := range apiOp.Schemas.Schemas() {
 		if ignore[schema.ID] {
+			continue
+		}
+
+		if attributes.PreferredVersion(schema) != "" {
+			continue
+		}
+
+		if attributes.PreferredGroup(schema) != "" {
 			continue
 		}
 

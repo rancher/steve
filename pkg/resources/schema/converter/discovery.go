@@ -12,13 +12,21 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
+var (
+	preferredGroups = map[string]string{
+		"extensions": "apps",
+	}
+)
+
 func AddDiscovery(client discovery.DiscoveryInterface, schemas map[string]*types.Schema) error {
 	logrus.Info("Refreshing all schemas")
 
-	_, resourceLists, err := client.ServerGroupsAndResources()
+	groups, resourceLists, err := client.ServerGroupsAndResources()
 	if err != nil {
 		return err
 	}
+
+	versions := indexVersions(groups)
 
 	var errs []error
 	for _, resourceList := range resourceLists {
@@ -27,7 +35,7 @@ func AddDiscovery(client discovery.DiscoveryInterface, schemas map[string]*types
 			errs = append(errs, err)
 		}
 
-		if err := refresh(gv, resourceList, schemas); err != nil {
+		if err := refresh(gv, versions, resourceList, schemas); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -35,7 +43,15 @@ func AddDiscovery(client discovery.DiscoveryInterface, schemas map[string]*types
 	return merr.NewErrors(errs...)
 }
 
-func refresh(gv schema.GroupVersion, resources *metav1.APIResourceList, schemas map[string]*types.Schema) error {
+func indexVersions(groups []*metav1.APIGroup) map[string]string {
+	result := map[string]string{}
+	for _, group := range groups {
+		result[group.Name] = group.PreferredVersion.Version
+	}
+	return result
+}
+
+func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, resources *metav1.APIResourceList, schemas map[string]*types.Schema) error {
 	for _, resource := range resources.APIResources {
 		if strings.Contains(resource.Name, "/") {
 			continue
@@ -62,6 +78,12 @@ func refresh(gv schema.GroupVersion, resources *metav1.APIResourceList, schemas 
 
 		schema.PluralName = resource.Name
 		attributes.SetAPIResource(schema, resource)
+		if preferredVersion := groupToPreferredVersion[gv.Group]; preferredVersion != "" && preferredVersion != gv.Version {
+			attributes.SetPreferredVersion(schema, preferredVersion)
+		}
+		if group := preferredGroups[gv.Group]; group != "" {
+			attributes.SetPreferredGroup(schema, group)
+		}
 
 		// switch ID to be GVR, not GVK
 		if schema.ID != "" {

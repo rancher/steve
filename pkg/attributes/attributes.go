@@ -133,3 +133,25 @@ func SetColumns(s *types.Schema, columns interface{}) {
 func Columns(s *types.Schema) interface{} {
 	return s.Attributes["columns"]
 }
+
+func PreferredVersion(s *types.Schema) string {
+	return convert.ToString(s.Attributes["preferredVersion"])
+}
+
+func SetPreferredVersion(s *types.Schema, ver string) {
+	if s.Attributes == nil {
+		s.Attributes = map[string]interface{}{}
+	}
+	s.Attributes["preferredVersion"] = ver
+}
+
+func PreferredGroup(s *types.Schema) string {
+	return convert.ToString(s.Attributes["preferredGroup"])
+}
+
+func SetPreferredGroup(s *types.Schema, ver string) {
+	if s.Attributes == nil {
+		s.Attributes = map[string]interface{}{}
+	}
+	s.Attributes["preferredGroup"] = ver
+}

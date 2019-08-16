@@ -67,5 +67,7 @@ func forVersion(group, version, resource string, schemas map[string]*types.Schem
 	if schema == nil {
 		return
 	}
-	attributes.SetColumns(schema, columns)
+	if len(columns) > 0 {
+		attributes.SetColumns(schema, columns)
+	}
 }
