@@ -33,6 +33,9 @@ func ListHandler(request *types.APIRequest) (types.APIObject, error) {
 		request.Pagination = opts.Pagination
 		data, err = store.List(request, request.Schema, &opts)
 		data = request.Filter(&opts, request.Schema, data)
+		if data.IsNil() {
+			data = types.ToAPI([]interface{}{})
+		}
 	} else if request.Link == "" {
 		data, err = store.ByID(request, request.Schema, request.Name)
 		data = request.Filter(nil, request.Schema, data)

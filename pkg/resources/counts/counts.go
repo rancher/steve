@@ -214,7 +214,6 @@ func (s *Store) getCount(apiOp *types.APIRequest) Count {
 
 		rev := 0
 		itemCount := ItemCount{
-			Count:      1,
 			Namespaces: map[string]int{},
 		}
 
