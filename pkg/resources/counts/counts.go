@@ -1,18 +1,19 @@
 package counts
 
 import (
-	"context"
 	"net/http"
+	"strconv"
 	"sync"
-	"time"
 
-	"github.com/rancher/naok/pkg/attributes"
+	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/rancher/naok/pkg/accesscontrol"
+	"github.com/rancher/naok/pkg/attributes"
+	"github.com/rancher/naok/pkg/clustercache"
 	"github.com/rancher/norman/pkg/store/empty"
 	"github.com/rancher/norman/pkg/types"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -21,14 +22,9 @@ var (
 		"schema":  true,
 		"apiRoot": true,
 	}
-	slow = map[string]bool{
-		"io.k8s.api.management.cattle.io.v3.CatalogTemplateVersion": true,
-		"io.k8s.api.management.cattle.io.v3.CatalogTemplate":        true,
-	}
-	listTimeout = 1750 * time.Millisecond
 )
 
-func Register(schemas *types.Schemas) {
+func Register(schemas *types.Schemas, ccache clustercache.ClusterCache) {
 	schemas.MustImportAndCustomize(Count{}, func(schema *types.Schema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
@@ -40,137 +36,126 @@ func Register(schemas *types.Schemas) {
 				},
 			},
 		}
-		schema.Store = &Store{}
+		schema.Store = &Store{
+			ccache: ccache,
+		}
 	})
 }
 
 type Count struct {
 	ID     string               `json:"id,omitempty"`
-	Counts map[string]ItemCount `json:"counts,omitempty"`
+	Counts map[string]ItemCount `json:"counts"`
 }
 
 type ItemCount struct {
 	Count      int            `json:"count,omitempty"`
 	Namespaces map[string]int `json:"namespaces,omitempty"`
-	Revision   string         `json:"revision,omitempty"`
+	Revision   int            `json:"revision,omitempty"`
 }
 
 type Store struct {
 	empty.Store
+	ccache clustercache.ClusterCache
 }
 
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.Schema, id string) (types.APIObject, error) {
-	c, err := s.getCount(apiOp, listTimeout, true)
-	return types.ToAPI(c), err
+	c := s.getCount(apiOp)
+	return types.ToAPI(c), nil
 }
 
 func (s *Store) List(apiOp *types.APIRequest, schema *types.Schema, opt *types.QueryOptions) (types.APIObject, error) {
-	c, err := s.getCount(apiOp, listTimeout, true)
-	return types.ToAPI([]interface{}{c}), err
+	c := s.getCount(apiOp)
+	return types.ToAPI([]interface{}{c}), nil
 }
 
 func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, w types.WatchRequest) (chan types.APIEvent, error) {
-	c, err := s.getCount(apiOp, listTimeout*10, false)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		result      = make(chan types.APIEvent, 100)
+		counts      map[string]ItemCount
+		gvrToSchema = map[schema2.GroupVersionResource]*types.Schema{}
+		countLock   sync.Mutex
+	)
 
-	wg := sync.WaitGroup{}
-	ctx, cancel := context.WithCancel(apiOp.Context())
+	counts = s.getCount(apiOp).Counts
+	for id := range counts {
+		schema := apiOp.Schemas.Schema(id)
+		if schema == nil {
+			continue
+		}
 
-	child := make(chan Count)
-	for name, countItem := range c.Counts {
-		wg.Add(1)
-		name := name
-		countItem := countItem
-		go func() {
-			s.watchItem(apiOp.WithContext(ctx), name, countItem, cancel, child)
-			wg.Done()
-		}()
+		gvrToSchema[attributes.GVR(schema)] = schema
 	}
 
 	go func() {
-		wg.Wait()
-		close(child)
+		<-apiOp.Context().Done()
+		close(result)
 	}()
 
-	result := make(chan types.APIEvent)
-	go func() {
-		defer close(result)
+	onChange := func(add bool, gvr schema2.GroupVersionResource, _ string, obj runtime.Object) error {
+		countLock.Lock()
+		defer countLock.Unlock()
+
+		schema := gvrToSchema[gvr]
+		if schema == nil {
+			return nil
+		}
+
+		apiObj := apiOp.Filter(nil, schema, types.ToAPI(obj))
+		if apiObj.IsNil() {
+			return nil
+		}
+
+		_, namespace, revision, ok := getInfo(obj)
+		if !ok {
+			return nil
+		}
+
+		itemCount := counts[schema.ID]
+		if revision <= itemCount.Revision {
+			return nil
+		}
+
+		if add {
+			itemCount.Count++
+			if namespace != "" {
+				itemCount.Namespaces[namespace]++
+			}
+		} else {
+			itemCount.Count--
+			if namespace != "" {
+				itemCount.Namespaces[namespace]--
+			}
+		}
+
+		counts[schema.ID] = itemCount
+		countsCopy := map[string]ItemCount{}
+		for k, v := range counts {
+			countsCopy[k] = v
+		}
 
 		result <- types.APIEvent{
-			Name:         "resource.create",
-			ResourceType: "count",
-			Object:       types.ToAPI(c),
+			Name:         "resource.change",
+			ResourceType: "counts",
+			Object: types.ToAPI(Count{
+				ID:     "count",
+				Counts: countsCopy,
+			}),
 		}
 
-		for change := range child {
-			for k, v := range change.Counts {
-				c.Counts[k] = v
-			}
+		return nil
+	}
 
-			result <- types.APIEvent{
-				Name:         "resource.change",
-				ResourceType: "count",
-				Object:       types.ToAPI(c),
-			}
-		}
-	}()
+	s.ccache.OnAdd(apiOp.Context(), func(gvr schema2.GroupVersionResource, key string, obj runtime.Object) error {
+		return onChange(true, gvr, key, obj)
+	})
+	s.ccache.OnRemove(apiOp.Context(), func(gvr schema2.GroupVersionResource, key string, obj runtime.Object) error {
+		return onChange(false, gvr, key, nil)
+	})
 
 	return result, nil
 }
 
-func (s *Store) watchItem(apiOp *types.APIRequest, schemaID string, start ItemCount, cancel func(), counts chan Count) {
-	schema := apiOp.Schemas.Schema(schemaID)
-	if schema == nil || schema.Store == nil || apiOp.AccessControl.CanWatch(apiOp, schema) != nil {
-		return
-	}
-	defer cancel()
-
-	logrus.Debugf("watching %s for count", schemaID)
-	defer logrus.Debugf("close watching %s for count", schemaID)
-	w, err := schema.Store.Watch(apiOp, schema, types.WatchRequest{Revision: start.Revision})
-	if err != nil {
-		logrus.Errorf("failed to watch %s for counts: %v", schema.ID, err)
-		return
-	}
-
-	for event := range w {
-		if event.Revision == start.Revision {
-			continue
-		}
-
-		ns := types.Namespace(event.Object.Map())
-		write := false
-		if event.Name == "resource.create" {
-			start.Count++
-			write = true
-			if ns != "" {
-				start.Namespaces[ns]++
-			}
-		} else if event.Name == "resource.remove" {
-			start.Count--
-			write = true
-			if ns != "" {
-				start.Namespaces[ns]--
-			}
-		}
-		if write {
-			counts <- Count{Counts: map[string]ItemCount{
-				schemaID: start,
-			}}
-		}
-	}
-}
-
-func (s *Store) getCount(apiOp *types.APIRequest, timeout time.Duration, ignoreSlow bool) (Count, error) {
-	var countLock sync.Mutex
-	counts := map[string]ItemCount{}
-
-	errCtx, cancel := context.WithTimeout(apiOp.Context(), timeout)
-	eg, errCtx := errgroup.WithContext(errCtx)
-	defer cancel()
-
+func (s *Store) schemasToWatch(apiOp *types.APIRequest) (result []*types.Schema) {
 	for _, schema := range apiOp.Schemas.Schemas() {
 		if ignore[schema.ID] {
 			continue
@@ -184,10 +169,6 @@ func (s *Store) getCount(apiOp *types.APIRequest, timeout time.Duration, ignoreS
 			continue
 		}
 
-		if ignoreSlow && slow[schema.ID] {
-			continue
-		}
-
 		if schema.Store == nil {
 			continue
 		}
@@ -196,73 +177,69 @@ func (s *Store) getCount(apiOp *types.APIRequest, timeout time.Duration, ignoreS
 			continue
 		}
 
-		current := schema
-		eg.Go(func() error {
-			list, err := current.Store.List(apiOp, current, nil)
-			if err != nil {
-				return err
-			}
-			if list.IsNil() {
-				return nil
-			}
+		if apiOp.AccessControl.CanWatch(apiOp, schema) != nil {
+			continue
+		}
 
-			itemCount := ItemCount{
-				Namespaces: map[string]int{},
-				Revision:   list.ListRevision,
-			}
-
-			for _, item := range list.List() {
-				itemCount.Count++
-				ns := types.Namespace(item)
-				if ns != "" {
-					itemCount.Namespaces[ns]++
-				}
-			}
-
-			countLock.Lock()
-			counts[current.ID] = itemCount
-			countLock.Unlock()
-
-			return nil
-		})
+		result = append(result, schema)
 	}
 
-	var (
-		err error
-	)
-
-	select {
-	case err = <-future(eg.Wait):
-	case <-errCtx.Done():
-		err = errCtx.Err()
-	}
-
-	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
-		return Count{}, err
-	}
-
-	// in the case of cancellation go routines could still be running so we copy the map
-	// to avoid returning a map that might get modified
-	countLock.Lock()
-	result := Count{
-		ID:     "count",
-		Counts: map[string]ItemCount{},
-	}
-	for k, v := range counts {
-		result.Counts[k] = v
-	}
-	countLock.Unlock()
-
-	return result, nil
+	return
 }
 
-func future(f func() error) chan error {
-	result := make(chan error, 1)
-	go func() {
-		defer close(result)
-		if err := f(); err != nil {
-			result <- err
+func getInfo(obj interface{}) (name string, namespace string, revision int, ok bool) {
+	r, ok := obj.(runtime.Object)
+	if !ok {
+		return "", "", 0, false
+	}
+
+	meta, err := meta.Accessor(r)
+	if err != nil {
+		return "", "", 0, false
+	}
+
+	revision, err = strconv.Atoi(meta.GetResourceVersion())
+	if err != nil {
+		return "", "", 0, false
+	}
+
+	return meta.GetName(), meta.GetNamespace(), revision, true
+}
+
+func (s *Store) getCount(apiOp *types.APIRequest) Count {
+	counts := map[string]ItemCount{}
+
+	for _, schema := range s.schemasToWatch(apiOp) {
+		gvr := attributes.GVR(schema)
+
+		rev := 0
+		itemCount := ItemCount{
+			Count:      1,
+			Namespaces: map[string]int{},
 		}
-	}()
-	return result
+
+		for _, obj := range s.ccache.List(gvr) {
+			_, ns, revision, ok := getInfo(obj)
+			if !ok {
+				continue
+			}
+
+			if revision > rev {
+				rev = revision
+			}
+
+			itemCount.Count++
+			if ns != "" {
+				itemCount.Namespaces[ns]++
+			}
+		}
+
+		itemCount.Revision = rev
+		counts[schema.ID] = itemCount
+	}
+
+	return Count{
+		ID:     "count",
+		Counts: counts,
+	}
 }

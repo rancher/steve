@@ -24,6 +24,10 @@ func NewFactory(cfg *rest.Config) (*Factory, error) {
 	}, nil
 }
 
+func (p *Factory) DynamicClient() dynamic.Interface {
+	return p.client
+}
+
 func (p *Factory) Client(ctx *types.APIRequest, s *types.Schema) (dynamic.ResourceInterface, error) {
 	gvr := attributes.GVR(s)
 	if len(ctx.Namespaces) > 0 {

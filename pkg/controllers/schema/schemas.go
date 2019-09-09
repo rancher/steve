@@ -16,6 +16,10 @@ import (
 	apiv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
+type SchemasHandler interface {
+	OnSchemas(schemas *schema2.Collection) error
+}
+
 type handler struct {
 	sync.Mutex
 
@@ -23,33 +27,43 @@ type handler struct {
 	schemas *schema2.Collection
 	client  discovery.DiscoveryInterface
 	crd     apiextcontrollerv1beta1.CustomResourceDefinitionClient
+	handler SchemasHandler
 }
 
 func Register(ctx context.Context,
 	discovery discovery.DiscoveryInterface,
 	crd apiextcontrollerv1beta1.CustomResourceDefinitionController,
 	apiService v1.APIServiceController,
-	schemas *schema2.Collection) {
+	schemasHandler SchemasHandler,
+	schemas *schema2.Collection) (init func() error) {
 
 	h := &handler{
 		client:  discovery,
 		schemas: schemas,
+		handler: schemasHandler,
 		crd:     crd,
 	}
 
 	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
 	crd.OnChange(ctx, "schema", h.OnChangeCRD)
+
+	return func() error {
+		h.queueRefresh()
+		return h.refreshAll()
+	}
 }
 
 func (h *handler) OnChangeCRD(key string, crd *v1beta1.CustomResourceDefinition) (*v1beta1.CustomResourceDefinition, error) {
-	return crd, h.queueRefresh()
+	h.queueRefresh()
+	return crd, nil
 }
 
 func (h *handler) OnChangeAPIService(key string, api *apiv1.APIService) (*apiv1.APIService, error) {
-	return api, h.queueRefresh()
+	h.queueRefresh()
+	return api, nil
 }
 
-func (h *handler) queueRefresh() error {
+func (h *handler) queueRefresh() {
 	atomic.StoreInt32(&h.toSync, 1)
 
 	go func() {
@@ -59,8 +73,6 @@ func (h *handler) queueRefresh() error {
 			atomic.StoreInt32(&h.toSync, 1)
 		}
 	}()
-
-	return nil
 }
 
 func (h *handler) refreshAll() error {
@@ -78,6 +90,9 @@ func (h *handler) refreshAll() error {
 	}
 
 	h.schemas.Reset(schemas)
+	if h.handler != nil {
+		return h.handler.OnSchemas(h.schemas)
+	}
 
 	return nil
 }

@@ -23,8 +23,16 @@ type ColumnMapper struct {
 	types.EmptyMapper
 }
 
+func NewColumns(computed func(data.Object), columns ...Column) *ColumnMapper {
+	return &ColumnMapper{
+		definition: Table{
+			Columns:  columns,
+			Computed: computed,
+		},
+	}
+}
+
 func (t *ColumnMapper) FromInternal(d data.Object) {
-	d.Map("metadata").Set("columns", t.definition.Columns)
 	if t.definition.Computed != nil {
 		t.definition.Computed(d)
 	}

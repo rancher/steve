@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 
 	"github.com/rancher/naok/pkg/server"
@@ -9,6 +10,7 @@ import (
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
+	"k8s.io/klog"
 )
 
 var (
@@ -49,8 +51,21 @@ func main() {
 }
 
 func run(c *cli.Context) error {
+	logging := flag.NewFlagSet("", flag.PanicOnError)
+	klog.InitFlags(logging)
 	if c.Bool("debug") {
 		logrus.SetLevel(logrus.DebugLevel)
+		if err := logging.Parse([]string{
+			"-v=7",
+		}); err != nil {
+			return err
+		}
+	} else {
+		if err := logging.Parse([]string{
+			"-v=0",
+		}); err != nil {
+			return err
+		}
 	}
 	ctx := signals.SetupSignalHandler(context.Background())
 	return server.Run(ctx, config)

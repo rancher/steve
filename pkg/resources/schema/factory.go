@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/rancher/naok/pkg/table"
+
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/attributes"
 	"github.com/rancher/norman/pkg/api/builtin"
@@ -120,6 +122,9 @@ func (c *Collection) applyTemplates(schemas *types.Schemas, schema *types.Schema
 		}
 		if t.Customize != nil {
 			t.Customize(schema)
+		}
+		if len(t.Columns) > 0 {
+			schemas.AddMapper(schema.ID, table.NewColumns(t.ComputedColumns, t.Columns...))
 		}
 	}
 }

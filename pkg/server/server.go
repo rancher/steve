@@ -4,6 +4,13 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/rancher/wrangler/pkg/generic"
+	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/rancher/naok/pkg/clustercache"
+
+	"github.com/rancher/wrangler-api/pkg/generated/controllers/core"
+
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/client"
 	"github.com/rancher/naok/pkg/controllers/schema"
@@ -35,6 +42,11 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	core, err := core.NewFactoryFromConfig(restConfig)
+	if err != nil {
+		return err
+	}
+
 	k8s, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return err
@@ -55,14 +67,20 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	ccache := clustercache.NewClusterCache(ctx, cf.DynamicClient())
+
 	sf := resources.SchemaFactory(cf,
 		accesscontrol.NewAccessStore(rbac.Rbac().V1()),
-		k8s)
+		k8s,
+		ccache,
+		core.Core().V1().ConfigMap(),
+		core.Core().V1().Secret())
 
-	schema.Register(ctx,
+	sync := schema.Register(ctx,
 		k8s.Discovery(),
 		crd.Apiextensions().V1beta1().CustomResourceDefinition(),
 		api.Apiregistration().V1().APIService(),
+		ccache,
 		sf)
 
 	handler, err := publicapi.NewHandler(restConfig, sf)
@@ -70,10 +88,24 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	for _, controllers := range []controllers{api, crd, rbac} {
+		for gvk, controller := range controllers.Controllers() {
+			ccache.AddController(gvk, controller.Informer())
+		}
+	}
+
 	if err := start.All(ctx, 5, api, crd, rbac); err != nil {
+		return err
+	}
+
+	if err := sync(); err != nil {
 		return err
 	}
 
 	logrus.Infof("listening on %s", cfg.ListenAddress)
 	return http.ListenAndServe(cfg.ListenAddress, handler)
+}
+
+type controllers interface {
+	Controllers() map[schema2.GroupVersionKind]*generic.Controller
 }

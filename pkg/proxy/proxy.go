@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -85,7 +84,6 @@ func prependPath(prefix string, h http.Handler) http.Handler {
 // regexps will work.)
 func stripLeaveSlash(prefix string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		fmt.Println(req.Method, req.URL.Path)
 		p := strings.TrimPrefix(req.URL.Path, prefix)
 		if len(p) >= len(req.URL.Path) {
 			http.NotFound(w, req)
