@@ -8,11 +8,6 @@ import (
 	"github.com/rancher/norman/pkg/types"
 )
 
-var (
-	defaultLimit = int64(1000)
-	maxLimit     = int64(3000)
-)
-
 func QueryOptions(apiOp *types.APIRequest, schema *types.Schema) types.QueryOptions {
 	req := apiOp.Request
 	if req.Method != http.MethodGet {
@@ -59,7 +54,6 @@ func parsePagination(apiOp *types.APIRequest) *types.Pagination {
 	marker := q.Get("marker")
 
 	result := &types.Pagination{
-		Limit:  &defaultLimit,
 		Marker: marker,
 	}
 
@@ -69,9 +63,7 @@ func parsePagination(apiOp *types.APIRequest) *types.Pagination {
 			return result
 		}
 
-		if limitInt > maxLimit {
-			result.Limit = &maxLimit
-		} else if limitInt >= 0 {
+		if limitInt >= 0 {
 			result.Limit = &limitInt
 		}
 	}

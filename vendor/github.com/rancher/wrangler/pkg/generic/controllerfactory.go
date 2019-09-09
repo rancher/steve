@@ -17,27 +17,60 @@ type ControllerManager struct {
 	handlers    map[schema.GroupVersionKind]*Handlers
 }
 
+func (g *ControllerManager) Controllers() map[schema.GroupVersionKind]*Controller {
+	return g.controllers
+}
+
+func (g *ControllerManager) EnsureStart(ctx context.Context, gvk schema.GroupVersionKind, threadiness int) error {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	return g.startController(ctx, gvk, threadiness)
+}
+
+func (g *ControllerManager) startController(ctx context.Context, gvk schema.GroupVersionKind, threadiness int) error {
+	if g.started[gvk] {
+		return nil
+	}
+
+	controller, ok := g.controllers[gvk]
+	if !ok {
+		return nil
+	}
+
+	if err := controller.Run(threadiness, ctx.Done()); err != nil {
+		return err
+	}
+
+	if g.started == nil {
+		g.started = map[schema.GroupVersionKind]bool{}
+	}
+	g.started[gvk] = true
+
+	go func() {
+		<-ctx.Done()
+		g.lock.Lock()
+		defer g.lock.Unlock()
+
+		delete(g.started, gvk)
+		delete(g.controllers, gvk)
+	}()
+
+	return nil
+}
+
 func (g *ControllerManager) Start(ctx context.Context, defaultThreadiness int, threadiness map[schema.GroupVersionKind]int) error {
 	g.lock.Lock()
 	defer g.lock.Unlock()
 
-	for gvk, controller := range g.controllers {
-		if g.started[gvk] {
-			continue
-		}
-
+	for gvk := range g.controllers {
 		threadiness, ok := threadiness[gvk]
 		if !ok {
 			threadiness = defaultThreadiness
 		}
-		if err := controller.Run(threadiness, ctx.Done()); err != nil {
+		if err := g.startController(ctx, gvk, threadiness); err != nil {
 			return err
 		}
-
-		if g.started == nil {
-			g.started = map[schema.GroupVersionKind]bool{}
-		}
-		g.started[gvk] = true
 	}
 
 	return nil

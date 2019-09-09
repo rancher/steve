@@ -236,7 +236,7 @@ func (s *Server) handleOp(apiOp *types.APIRequest) (int, interface{}, error) {
 		return http.StatusCreated, data, err
 	case Delete:
 		data, err := handle(apiOp, apiOp.Schema.DeleteHandler, s.Defaults.DeleteHandler)
-		if data == nil {
+		if err == nil && data.IsNil() {
 			return http.StatusNoContent, data, err
 		}
 		return http.StatusOK, data, err
@@ -245,13 +245,22 @@ func (s *Server) handleOp(apiOp *types.APIRequest) (int, interface{}, error) {
 	return http.StatusNotFound, nil, httperror.NewAPIError(httperror.NotFound, "")
 }
 
-func handle(apiOp *types.APIRequest, custom types.RequestHandler, handler types.RequestHandler) (interface{}, error) {
+func handle(apiOp *types.APIRequest, custom types.RequestHandler, handler types.RequestHandler) (types.APIObject, error) {
+	var (
+		obj types.APIObject
+		err error
+	)
 	if custom != nil {
-		return custom(apiOp)
+		obj, err = custom(apiOp)
 	} else if handler != nil {
-		return handler(apiOp)
+		obj, err = handler(apiOp)
 	}
-	return nil, httperror.NewAPIError(httperror.NotFound, "")
+
+	if err == nil && obj.IsNil() {
+		return types.APIObject{}, httperror.NewAPIError(httperror.NotFound, "")
+	}
+
+	return obj, err
 }
 
 func handleAction(action *types.Action, context *types.APIRequest) error {

@@ -253,7 +253,11 @@ func (a APIObject) IsNil() bool {
 		return true
 	}
 	val := reflect.ValueOf(a.Object)
-	return val.Kind() == reflect.Ptr && val.IsNil()
+	switch val.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return val.IsNil()
+	}
+	return false
 }
 
 func (a *APIObject) List() data.List {

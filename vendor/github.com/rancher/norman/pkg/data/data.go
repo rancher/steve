@@ -39,9 +39,22 @@ func (o Object) String(names ...string) string {
 	return convert.ToString(v)
 }
 
+func (o Object) StringSlice(names ...string) []string {
+	v := values.GetValueN(o, names...)
+	return convert.ToStringSlice(v)
+}
+
 func (o Object) Set(key string, obj interface{}) {
 	if o == nil {
 		return
 	}
 	o[key] = obj
+}
+
+func (o Object) SetNested(obj interface{}, key ...string) {
+	values.PutValue(o, obj, key...)
+}
+
+func (o Object) Bool(key ...string) bool {
+	return convert.ToBool(values.GetValueN(o, key...))
 }

@@ -74,6 +74,10 @@ func NewController(name string, informer cache.SharedIndexInformer, workqueue wo
 	return controller
 }
 
+func (c *Controller) Informer() cache.SharedIndexInformer {
+	return c.informer
+}
+
 func (c *Controller) run(threadiness int, stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
