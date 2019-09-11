@@ -7,11 +7,11 @@ import (
 
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/rancher/norman/pkg/store/empty"
+	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/clustercache"
-	"github.com/rancher/norman/pkg/store/empty"
-	"github.com/rancher/norman/pkg/types"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -149,7 +149,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.Schema, w types.Wat
 		return onChange(true, gvr, key, obj)
 	})
 	s.ccache.OnRemove(apiOp.Context(), func(gvr schema2.GroupVersionResource, key string, obj runtime.Object) error {
-		return onChange(false, gvr, key, nil)
+		return onChange(false, gvr, key, obj)
 	})
 
 	return result, nil
