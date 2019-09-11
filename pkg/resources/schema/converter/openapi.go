@@ -1,7 +1,7 @@
 package converter
 
 import (
-	"github.com/rancher/naok/pkg/attributes"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/types/convert"
 	"github.com/sirupsen/logrus"

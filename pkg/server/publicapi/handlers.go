@@ -2,8 +2,8 @@ package publicapi
 
 import (
 	"github.com/gorilla/mux"
-	"github.com/rancher/naok/pkg/attributes"
-	"github.com/rancher/naok/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/schema"
 	"github.com/rancher/norman/pkg/types"
 	runtimeschema "k8s.io/apimachinery/pkg/runtime/schema"
 )

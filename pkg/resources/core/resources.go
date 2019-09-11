@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/naok/pkg/resources/common"
-	"github.com/rancher/naok/pkg/resources/schema"
-	"github.com/rancher/naok/pkg/table"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/table"
 	"github.com/rancher/norman/pkg/data"
 	"github.com/rancher/norman/pkg/types/convert"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"

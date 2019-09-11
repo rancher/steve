@@ -5,8 +5,8 @@ import (
 	"flag"
 	"os"
 
-	"github.com/rancher/naok/pkg/server"
-	"github.com/rancher/naok/pkg/version"
+	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/steve/pkg/version"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -19,7 +19,7 @@ var (
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "naok"
+	app.Name = "steve"
 	app.Version = version.FriendlyVersion()
 	app.Usage = ""
 	app.Flags = []cli.Flag{

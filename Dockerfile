@@ -3,11 +3,11 @@ COPY go.mod  go.sum main.go /src/
 COPY vendor /src/vendor/
 COPY pkg /src/pkg/
 RUN cd /src && \
-    CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /naok -mod=vendor
+    CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /steve -mod=vendor
 
 FROM alpine
 RUN apk -U --no-cache add ca-certificates
-COPY --from=build /naok /usr/bin/naok
+COPY --from=build /steve /usr/bin/steve
 # Hack to make golang do files,dns search order
 ENV LOCALDOMAIN=""
-ENTRYPOINT ["/usr/bin/naok"]
+ENTRYPOINT ["/usr/bin/steve"]

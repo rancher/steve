@@ -1,8 +1,8 @@
 package converter
 
 import (
-	"github.com/rancher/naok/pkg/attributes"
-	"github.com/rancher/naok/pkg/table"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/table"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
 	beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"

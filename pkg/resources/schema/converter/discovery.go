@@ -3,7 +3,7 @@ package converter
 import (
 	"strings"
 
-	"github.com/rancher/naok/pkg/attributes"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/wrangler/pkg/merr"
 	"github.com/sirupsen/logrus"

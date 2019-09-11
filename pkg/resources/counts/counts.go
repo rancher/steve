@@ -7,9 +7,9 @@ import (
 
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/rancher/naok/pkg/accesscontrol"
-	"github.com/rancher/naok/pkg/attributes"
-	"github.com/rancher/naok/pkg/clustercache"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/norman/pkg/store/empty"
 	"github.com/rancher/norman/pkg/types"
 	"k8s.io/apimachinery/pkg/api/meta"

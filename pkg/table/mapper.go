@@ -1,7 +1,7 @@
 package table
 
 import (
-	"github.com/rancher/naok/pkg/attributes"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/norman/pkg/data"
 	"github.com/rancher/norman/pkg/types"
 )

@@ -5,10 +5,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/rancher/naok/pkg/accesscontrol"
-	k8sproxy "github.com/rancher/naok/pkg/proxy"
-	"github.com/rancher/naok/pkg/resources/schema"
-	"github.com/rancher/naok/pkg/server/router"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	k8sproxy "github.com/rancher/steve/pkg/proxy"
+	"github.com/rancher/steve/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/server/router"
 	"github.com/rancher/norman/pkg/api"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/urlbuilder"

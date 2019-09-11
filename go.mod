@@ -1,4 +1,4 @@
-module github.com/rancher/naok
+module github.com/rancher/steve
 
 go 1.12
 

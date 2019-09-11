@@ -1,7 +1,7 @@
 package common
 
 import (
-	"github.com/rancher/naok/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/resources/schema"
 	"github.com/rancher/norman/pkg/store/proxy"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/norman/pkg/types/convert"

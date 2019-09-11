@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rancher/naok/pkg/attributes"
-	schema2 "github.com/rancher/naok/pkg/resources/schema"
-	"github.com/rancher/naok/pkg/resources/schema/converter"
+	"github.com/rancher/steve/pkg/attributes"
+	schema2 "github.com/rancher/steve/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/resources/schema/converter"
 	"github.com/rancher/norman/pkg/types"
 	apiextcontrollerv1beta1 "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
 	v1 "github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io/v1"

@@ -1,8 +1,8 @@
 package common
 
 import (
-	"github.com/rancher/naok/pkg/attributes"
-	"github.com/rancher/naok/pkg/table"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/table"
 	"github.com/rancher/norman/pkg/types"
 )
 

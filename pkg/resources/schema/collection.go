@@ -3,9 +3,9 @@ package schema
 import (
 	"strings"
 
-	"github.com/rancher/naok/pkg/accesscontrol"
-	"github.com/rancher/naok/pkg/attributes"
-	"github.com/rancher/naok/pkg/table"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/table"
 	"github.com/rancher/norman/pkg/data"
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/wrangler/pkg/name"

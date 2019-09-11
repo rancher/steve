@@ -1,7 +1,7 @@
 package accesscontrol
 
 import (
-	"github.com/rancher/naok/pkg/attributes"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/norman/pkg/types"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )

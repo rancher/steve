@@ -1,14 +1,14 @@
 package resources
 
 import (
-	"github.com/rancher/naok/pkg/accesscontrol"
-	"github.com/rancher/naok/pkg/clustercache"
-	"github.com/rancher/naok/pkg/resources/apigroups"
-	"github.com/rancher/naok/pkg/resources/common"
-	"github.com/rancher/naok/pkg/resources/core"
-	"github.com/rancher/naok/pkg/resources/counts"
-	"github.com/rancher/naok/pkg/resources/helmrelease"
-	"github.com/rancher/naok/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/clustercache"
+	"github.com/rancher/steve/pkg/resources/apigroups"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/core"
+	"github.com/rancher/steve/pkg/resources/counts"
+	"github.com/rancher/steve/pkg/resources/helmrelease"
+	"github.com/rancher/steve/pkg/resources/schema"
 	"github.com/rancher/norman/pkg/store/apiroot"
 	"github.com/rancher/norman/pkg/store/proxy"
 	"github.com/rancher/norman/pkg/subscribe"
