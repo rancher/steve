@@ -2,10 +2,10 @@ package publicapi
 
 import (
 	"net/http"
-	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/rancher/naok/pkg/accesscontrol"
-	"github.com/rancher/naok/pkg/attributes"
 	k8sproxy "github.com/rancher/naok/pkg/proxy"
 	"github.com/rancher/naok/pkg/resources/schema"
 	"github.com/rancher/naok/pkg/server/router"
@@ -53,11 +53,12 @@ func (a *apiServer) common(rw http.ResponseWriter, req *http.Request) (*types.AP
 
 	schemas, err := a.sf.Schemas(user)
 	if err != nil {
+		logrus.Errorf("HTTP request failed: %v", err)
 		rw.Write([]byte(err.Error()))
 		rw.WriteHeader(http.StatusInternalServerError)
 	}
 
-	urlBuilder, err := urlbuilder.New(req, a, schemas)
+	urlBuilder, err := urlbuilder.NewPrefixed(req, schemas, "v1")
 	if err != nil {
 		rw.Write([]byte(err.Error()))
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -70,14 +71,6 @@ func (a *apiServer) common(rw http.ResponseWriter, req *http.Request) (*types.AP
 		Response:   rw,
 		URLBuilder: urlBuilder,
 	}, true
-}
-
-func (a *apiServer) Schema(base string, schema *types.Schema) string {
-	gvr := attributes.GVR(schema)
-	if gvr.Resource == "" {
-		return urlbuilder.ConstructBasicURL(base, "v1", schema.PluralName)
-	}
-	return urlbuilder.ConstructBasicURL(base, "v1", strings.ToLower(schema.ID))
 }
 
 type APIFunc func(schema.Factory, *types.APIRequest)

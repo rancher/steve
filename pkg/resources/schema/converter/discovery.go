@@ -62,21 +62,21 @@ func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, 
 			Version: gv.Version,
 			Kind:    resource.Kind,
 		}
-
 		gvr := gvk.GroupVersion().WithResource(resource.Name)
 
 		logrus.Infof("APIVersion %s/%s Kind %s", gvk.Group, gvk.Version, gvk.Kind)
 
-		schema := schemas[gvkToSchemaID(gvk)]
+		schema := schemas[GVKToSchemaID(gvk)]
 		if schema == nil {
 			schema = &types.Schema{
+				ID:      GVKToSchemaID(gvk),
 				Type:    "schema",
 				Dynamic: true,
 			}
 			attributes.SetGVK(schema, gvk)
 		}
 
-		schema.PluralName = resource.Name
+		schema.PluralName = GVRToPluralName(gvr)
 		attributes.SetAPIResource(schema, resource)
 		if preferredVersion := groupToPreferredVersion[gv.Group]; preferredVersion != "" && preferredVersion != gv.Version {
 			attributes.SetPreferredVersion(schema, preferredVersion)
@@ -85,12 +85,6 @@ func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, 
 			attributes.SetPreferredGroup(schema, group)
 		}
 
-		// switch ID to be GVR, not GVK
-		if schema.ID != "" {
-			delete(schemas, schema.ID)
-		}
-
-		schema.ID = GVRToSchemaID(gvr)
 		schemas[schema.ID] = schema
 	}
 

@@ -2,6 +2,7 @@ package converter
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rancher/norman/pkg/types"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
@@ -9,14 +10,14 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
-func gvkToSchemaID(gvk schema.GroupVersionKind) string {
+func GVKToSchemaID(gvk schema.GroupVersionKind) string {
 	if gvk.Group == "" {
-		return fmt.Sprintf("core.%s.%s", gvk.Version, gvk.Kind)
+		return strings.ToLower(fmt.Sprintf("core.%s.%s", gvk.Version, gvk.Kind))
 	}
-	return fmt.Sprintf("%s.%s.%s", gvk.Group, gvk.Version, gvk.Kind)
+	return strings.ToLower(fmt.Sprintf("%s.%s.%s", gvk.Group, gvk.Version, gvk.Kind))
 }
 
-func GVRToSchemaID(gvr schema.GroupVersionResource) string {
+func GVRToPluralName(gvr schema.GroupVersionResource) string {
 	if gvr.Group == "" {
 		return fmt.Sprintf("core.%s.%s", gvr.Version, gvr.Resource)
 	}

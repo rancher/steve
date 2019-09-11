@@ -30,20 +30,20 @@ func AddCustomResources(crd v1beta1.CustomResourceDefinitionClient, schemas map[
 			})
 		}
 
-		group, resource := crd.Spec.Group, crd.Status.AcceptedNames.Plural
+		group, kind := crd.Spec.Group, crd.Status.AcceptedNames.Kind
 
 		if crd.Spec.Version != "" {
-			forVersion(group, crd.Spec.Version, resource, schemas, crd.Spec.AdditionalPrinterColumns, columns)
+			forVersion(group, crd.Spec.Version, kind, schemas, crd.Spec.AdditionalPrinterColumns, columns)
 		}
 		for _, version := range crd.Spec.Versions {
-			forVersion(group, version.Name, resource, schemas, crd.Spec.AdditionalPrinterColumns, columns)
+			forVersion(group, version.Name, kind, schemas, crd.Spec.AdditionalPrinterColumns, columns)
 		}
 	}
 
 	return nil
 }
 
-func forVersion(group, version, resource string, schemas map[string]*types.Schema, columnDefs []beta1.CustomResourceColumnDefinition, columns []table.Column) {
+func forVersion(group, version, kind string, schemas map[string]*types.Schema, columnDefs []beta1.CustomResourceColumnDefinition, columns []table.Column) {
 	var versionColumns []table.Column
 	for _, col := range columnDefs {
 		versionColumns = append(versionColumns, table.Column{
@@ -57,10 +57,10 @@ func forVersion(group, version, resource string, schemas map[string]*types.Schem
 		versionColumns = columns
 	}
 
-	id := GVRToSchemaID(schema.GroupVersionResource{
-		Group:    group,
-		Version:  version,
-		Resource: resource,
+	id := GVKToSchemaID(schema.GroupVersionKind{
+		Group:   group,
+		Version: version,
+		Kind:    kind,
 	})
 
 	schema := schemas[id]

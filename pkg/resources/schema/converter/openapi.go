@@ -40,7 +40,7 @@ func modelToSchema(modelName string, k *proto.Kind) *types.Schema {
 					Kind:    convert.ToString(m["kind"]),
 				}
 
-				s.ID = gvkToSchemaID(gvk)
+				s.ID = GVKToSchemaID(gvk)
 				attributes.SetGVK(&s, gvk)
 			}
 		}

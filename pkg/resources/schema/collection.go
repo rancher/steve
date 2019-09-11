@@ -16,6 +16,7 @@ import (
 type Factory interface {
 	Schemas(user user.Info) (*types.Schemas, error)
 	ByGVR(gvr schema.GroupVersionResource) string
+	ByGVK(gvr schema.GroupVersionKind) string
 }
 
 type Collection struct {
@@ -54,8 +55,8 @@ func NewCollection(baseSchema *types.Schemas, access *accesscontrol.AccessStore)
 }
 
 func (c *Collection) Reset(schemas map[string]*types.Schema) {
-	byGVR := map[schema.GroupVersionResource]string{}
 	byGVK := map[schema.GroupVersionKind]string{}
+	byGVR := map[schema.GroupVersionResource]string{}
 
 	for _, s := range schemas {
 		gvr := attributes.GVR(s)
@@ -95,7 +96,11 @@ func (c *Collection) ByGVR(gvr schema.GroupVersionResource) string {
 		return id
 	}
 	gvr.Resource = name.GuessPluralName(strings.ToLower(gvr.Resource))
-	return c.byGVR[gvr]
+	return c.byGVK[schema.GroupVersionKind{
+		Group:   gvr.Group,
+		Version: gvr.Version,
+		Kind:    gvr.Resource,
+	}]
 }
 
 func (c *Collection) ByGVK(gvk schema.GroupVersionKind) string {
