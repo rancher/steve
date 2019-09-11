@@ -7,18 +7,15 @@ import (
 	"strconv"
 	"sync"
 
-	types2 "k8s.io/apimachinery/pkg/types"
-
-	"github.com/rancher/norman/pkg/types/convert"
-
-	errors2 "github.com/pkg/errors"
-
+	"github.com/pkg/errors"
 	"github.com/rancher/norman/pkg/types"
+	"github.com/rancher/norman/pkg/types/convert"
 	"github.com/rancher/norman/pkg/types/values"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 )
@@ -147,7 +144,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, k8sClient dynamic.Resource
 			Limit: 1,
 		})
 		if err != nil {
-			returnErr(errors2.Wrapf(err, "failed to list %s", schema.ID), result)
+			returnErr(errors.Wrapf(err, "failed to list %s", schema.ID), result)
 			return
 		}
 		rev = list.GetResourceVersion()
@@ -160,7 +157,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, k8sClient dynamic.Resource
 		ResourceVersion: rev,
 	})
 	if err != nil {
-		returnErr(errors2.Wrapf(err, "stopping watch for %s: %v", schema.ID), result)
+		returnErr(errors.Wrapf(err, "stopping watch for %s: %v", schema.ID), result)
 		return
 	}
 	defer watcher.Stop()
@@ -271,7 +268,12 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.Schema, params typ
 			return types.APIObject{}, err
 		}
 
-		resp, err := k8sClient.Patch(id, types2.StrategicMergePatchType, bytes, metav1.PatchOptions{})
+		pType := apitypes.StrategicMergePatchType
+		if apiOp.Request.Header.Get("content-type") == "application/json-patch+json" {
+			pType = apitypes.JSONPatchType
+		}
+
+		resp, err := k8sClient.Patch(id, pType, bytes, metav1.PatchOptions{})
 		if err != nil {
 			return types.APIObject{}, err
 		}
