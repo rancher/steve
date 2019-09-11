@@ -22,7 +22,7 @@ func (o Object) Map(names ...string) Object {
 func (o Object) Slice(names ...string) (result []Object) {
 	v := values.GetValueN(o, names...)
 	for _, item := range convert.ToInterfaceSlice(v) {
-		result = append(result, Object(convert.ToMapInterface(item)))
+		result = append(result, convert.ToMapInterface(item))
 	}
 	return
 }

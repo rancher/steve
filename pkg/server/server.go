@@ -2,33 +2,32 @@ package server
 
 import (
 	"context"
+	"github.com/rancher/norman/pkg/auth"
 	"net/http"
-
-	"github.com/rancher/wrangler/pkg/generic"
-	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/rancher/naok/pkg/clustercache"
-
-	"github.com/rancher/wrangler-api/pkg/generated/controllers/core"
 
 	"github.com/rancher/naok/pkg/accesscontrol"
 	"github.com/rancher/naok/pkg/client"
+	"github.com/rancher/naok/pkg/clustercache"
 	"github.com/rancher/naok/pkg/controllers/schema"
 	"github.com/rancher/naok/pkg/resources"
 	"github.com/rancher/naok/pkg/server/publicapi"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io"
+	"github.com/rancher/wrangler-api/pkg/generated/controllers/core"
 	rbaccontroller "github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
+	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
+	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 )
 
 type Config struct {
 	Kubeconfig    string
-	Namespace     string
 	ListenAddress string
+	WebhookKubeconfig string
+	Authentication bool
 }
 
 func Run(ctx context.Context, cfg Config) error {
@@ -36,6 +35,9 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
+
+	restConfig.QPS = 100
+	restConfig.Burst = 100
 
 	rbac, err := rbaccontroller.NewFactoryFromConfig(restConfig)
 	if err != nil {
@@ -80,12 +82,21 @@ func Run(ctx context.Context, cfg Config) error {
 		k8s.Discovery(),
 		crd.Apiextensions().V1beta1().CustomResourceDefinition(),
 		api.Apiregistration().V1().APIService(),
+		k8s.AuthorizationV1().SelfSubjectAccessReviews(),
 		ccache,
 		sf)
 
 	handler, err := publicapi.NewHandler(restConfig, sf)
 	if err != nil {
 		return err
+	}
+
+	if cfg.Authentication {
+		authMiddleware, err := auth.NewWebhookMiddleware(cfg.WebhookKubeconfig)
+		if err != nil {
+			return err
+		}
+		handler = wrapHandler(handler, authMiddleware)
 	}
 
 	for _, controllers := range []controllers{api, crd, rbac} {
@@ -104,6 +115,12 @@ func Run(ctx context.Context, cfg Config) error {
 
 	logrus.Infof("listening on %s", cfg.ListenAddress)
 	return http.ListenAndServe(cfg.ListenAddress, handler)
+}
+
+func wrapHandler(handler http.Handler, middleware func(http.ResponseWriter, *http.Request, http.Handler)) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		middleware(resp, req, handler)
+	})
 }
 
 type controllers interface {

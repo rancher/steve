@@ -1081,7 +1081,7 @@ type LabelSelector struct {
 	MatchLabels map[string]string `json:"matchLabels,omitempty" protobuf:"bytes,1,rep,name=matchLabels"`
 	// matchExpressions is a list of label selector requirements. The requirements are ANDed.
 	// +optional
-	MatchExpressions []LabelSelectorRequirement `json:",omitempty" protobuf:"bytes,2,rep,name=matchExpressions"`
+	MatchExpressions []LabelSelectorRequirement `json:"matchExpressions,omitempty" protobuf:"bytes,2,rep,name=matchExpressions"`
 }
 
 // A label selector requirement is a selector that contains values, a key, and an operator that

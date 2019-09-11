@@ -6,13 +6,17 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rancher/naok/pkg/attributes"
 	schema2 "github.com/rancher/naok/pkg/resources/schema"
 	"github.com/rancher/naok/pkg/resources/schema/converter"
+	"github.com/rancher/norman/pkg/types"
 	apiextcontrollerv1beta1 "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
 	v1 "github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io/v1"
 	"github.com/sirupsen/logrus"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/discovery"
+	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	apiv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
@@ -27,6 +31,7 @@ type handler struct {
 	schemas *schema2.Collection
 	client  discovery.DiscoveryInterface
 	crd     apiextcontrollerv1beta1.CustomResourceDefinitionClient
+	ssar    authorizationv1client.SelfSubjectAccessReviewInterface
 	handler SchemasHandler
 }
 
@@ -34,6 +39,7 @@ func Register(ctx context.Context,
 	discovery discovery.DiscoveryInterface,
 	crd apiextcontrollerv1beta1.CustomResourceDefinitionController,
 	apiService v1.APIServiceController,
+	ssar authorizationv1client.SelfSubjectAccessReviewInterface,
 	schemasHandler SchemasHandler,
 	schemas *schema2.Collection) (init func() error) {
 
@@ -42,6 +48,7 @@ func Register(ctx context.Context,
 		schemas: schemas,
 		handler: schemasHandler,
 		crd:     crd,
+		ssar:    ssar,
 	}
 
 	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
@@ -75,6 +82,24 @@ func (h *handler) queueRefresh() {
 	}()
 }
 
+func isListWatchable(schema *types.Schema) bool {
+	var (
+		canList  bool
+		canWatch bool
+	)
+
+	for _, verb := range attributes.Verbs(schema) {
+		switch verb {
+		case "list":
+			canList = true
+		case "watch":
+			canWatch = true
+		}
+	}
+
+	return canList && canWatch
+}
+
 func (h *handler) refreshAll() error {
 	h.Lock()
 	defer h.Unlock()
@@ -89,12 +114,42 @@ func (h *handler) refreshAll() error {
 		return err
 	}
 
-	h.schemas.Reset(schemas)
+	filteredSchemas := map[string]*types.Schema{}
+	for id, schema := range schemas {
+		if isListWatchable(schema) {
+			if ok, err := h.allowed(schema); err != nil {
+				return err
+			} else if !ok {
+				continue
+			}
+		}
+		filteredSchemas[id] = schema
+	}
+
+	h.schemas.Reset(filteredSchemas)
 	if h.handler != nil {
 		return h.handler.OnSchemas(h.schemas)
 	}
 
 	return nil
+}
+
+func (h *handler) allowed(schema *types.Schema) (bool, error) {
+	gvr := attributes.GVR(schema)
+	ssar, err := h.ssar.Create(&authorizationv1.SelfSubjectAccessReview{
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Verb:     "list",
+				Group:    gvr.Group,
+				Version:  gvr.Version,
+				Resource: gvr.Resource,
+			},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	return ssar.Status.Allowed && !ssar.Status.Denied, nil
 }
 
 func (h *handler) needToSync() bool {

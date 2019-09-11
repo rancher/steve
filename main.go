@@ -23,17 +23,21 @@ func main() {
 	app.Version = version.FriendlyVersion()
 	app.Usage = ""
 	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:        "authentication",
+			Destination: &config.Authentication,
+		},
+		cli.StringFlag{
+			Name:        "webhook-kubeconfig",
+			EnvVar:      "WEBHOOK_KUBECONFIG",
+			Value:       "webhook-kubeconfig.yaml",
+			Destination: &config.WebhookKubeconfig,
+		},
 		cli.StringFlag{
 			Name:        "kubeconfig",
 			EnvVar:      "KUBECONFIG",
 			Value:       "",
 			Destination: &config.Kubeconfig,
-		},
-		cli.StringFlag{
-			Name:        "namespace",
-			EnvVar:      "NAMESPACE",
-			Value:       "default",
-			Destination: &config.Namespace,
 		},
 		cli.StringFlag{
 			Name:        "listen-address",

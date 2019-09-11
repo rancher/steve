@@ -45,7 +45,14 @@ func getHost(r *http.Request, scheme string) string {
 func getScheme(r *http.Request) string {
 	scheme := r.Header.Get(ForwardedProtoHeader)
 	if scheme != "" {
-		return scheme
+		switch scheme {
+		case "ws":
+			return "http"
+		case "wss":
+			return "https"
+		default:
+			return scheme
+		}
 	} else if r.TLS != nil {
 		return "https"
 	}

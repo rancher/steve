@@ -195,6 +195,8 @@ func determineVerb(apiOp *types.APIRequest) Verb {
 		return Get
 	case http.MethodPost:
 		return Create
+	case http.MethodPatch:
+		return Update
 	case http.MethodPut:
 		return Update
 	case http.MethodDelete:

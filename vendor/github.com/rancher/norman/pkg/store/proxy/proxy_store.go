@@ -1,17 +1,22 @@
 package proxy
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
+
+	types2 "k8s.io/apimachinery/pkg/types"
+
+	"github.com/rancher/norman/pkg/types/convert"
 
 	errors2 "github.com/pkg/errors"
 
 	"github.com/rancher/norman/pkg/types"
-	"github.com/rancher/norman/pkg/types/convert/merge"
 	"github.com/rancher/norman/pkg/types/values"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
@@ -260,31 +265,32 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.Schema, params typ
 		return types.APIObject{}, err
 	}
 
-	for i := 0; i < 5; i++ {
-		resp, err := k8sClient.Get(id, metav1.GetOptions{})
+	if apiOp.Method == http.MethodPatch {
+		bytes, err := json.Marshal(data)
 		if err != nil {
 			return types.APIObject{}, err
 		}
 
-		resourceVersion, existing := resp.GetResourceVersion(), resp.Object
-		existing = merge.APIUpdateMerge(schema.InternalSchema, apiOp.Schemas, existing, data, apiOp.Option("replace") == "true")
-
-		values.PutValue(existing, resourceVersion, "metadata", "resourceVersion")
-		if len(apiOp.Namespaces) > 0 {
-			values.PutValue(existing, apiOp.Namespaces[0], "metadata", "namespace")
-		}
-		values.PutValue(existing, id, "metadata", "name")
-
-		resp, err = k8sClient.Update(&unstructured.Unstructured{Object: existing}, metav1.UpdateOptions{})
-		if errors.IsConflict(err) {
-			continue
-		} else if err != nil {
+		resp, err := k8sClient.Patch(id, types2.StrategicMergePatchType, bytes, metav1.PatchOptions{})
+		if err != nil {
 			return types.APIObject{}, err
 		}
+
 		_, result, err = s.singleResult(apiOp, schema, resp)
 		return types.ToAPI(result), err
 	}
 
+	resourceVersion := convert.ToString(values.GetValueN(data, "metadata", "resourceVersion"))
+	if resourceVersion == "" {
+		return types.APIObject{}, fmt.Errorf("metadata.resourceVersion is required for update")
+	}
+
+	resp, err := k8sClient.Update(&unstructured.Unstructured{Object: data}, metav1.UpdateOptions{})
+	if err != nil {
+		return types.APIObject{}, err
+	}
+
+	_, result, err = s.singleResult(apiOp, schema, resp)
 	return types.ToAPI(result), err
 }
 
