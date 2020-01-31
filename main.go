@@ -35,6 +35,6 @@ func main() {
 func run(_ *cli.Context) error {
 	ctx := signals.SetupSignalHandler(context.Background())
 	debugconfig.MustSetupDebug()
-	s := config.MustServerConfig().MustServer()
-	return s.ListenAndServe(ctx, nil)
+	s := config.MustServer()
+	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, nil)
 }

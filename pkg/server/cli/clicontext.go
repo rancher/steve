@@ -16,15 +16,15 @@ type Config struct {
 	WebhookConfig authcli.WebhookConfig
 }
 
-func (c *Config) MustServerConfig() *server.Server {
-	cc, err := c.ToServerConfig()
+func (c *Config) MustServer() *server.Server {
+	cc, err := c.ToServer()
 	if err != nil {
 		panic(err)
 	}
 	return cc
 }
 
-func (c *Config) ToServerConfig() (*server.Server, error) {
+func (c *Config) ToServer() (*server.Server, error) {
 	restConfig, err := kubeconfig.GetNonInteractiveClientConfig(c.KubeConfig).ClientConfig()
 	if err != nil {
 		return nil, err
@@ -39,8 +39,6 @@ func (c *Config) ToServerConfig() (*server.Server, error) {
 		Namespace:      c.Namespace,
 		RestConfig:     restConfig,
 		AuthMiddleware: auth,
-		HTTPPort:       c.HTTPListenPort,
-		HTTPSPort:      c.HTTPSListenPort,
 	}, nil
 }
 

@@ -27,8 +27,6 @@ type Server struct {
 	RestConfig *rest.Config
 
 	Namespace       string
-	HTTPSPort       int
-	HTTPPort        int
 	BaseSchemas     *types.APISchemas
 	SchemaTemplates []schema.Template
 	AuthMiddleware  auth.Middleware
@@ -45,6 +43,10 @@ type Controllers struct {
 	API      apiregistrationv1.Interface
 	CRD      apiextensionsv1beta1.Interface
 	starters []start.Starter
+}
+
+func (c *Controllers) Start(ctx context.Context) error {
+	return start.All(ctx, 5, c.starters...)
 }
 
 func NewController(cfg *rest.Config) (*Controllers, error) {

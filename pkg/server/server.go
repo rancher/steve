@@ -6,8 +6,6 @@ import (
 	"net/http"
 
 	"github.com/rancher/dynamiclistener/server"
-	"github.com/rancher/dynamiclistener/storage/kubernetes"
-	"github.com/rancher/dynamiclistener/storage/memory"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
@@ -16,8 +14,6 @@ import (
 	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/resources"
-	v1 "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
-	"github.com/rancher/wrangler/pkg/start"
 )
 
 var ErrConfigRequired = errors.New("rest config is required")
@@ -102,7 +98,7 @@ func (c *Server) Handler(ctx context.Context) (http.Handler, error) {
 		sf.AddTemplate(&c.SchemaTemplates[i])
 	}
 
-	if err := start.All(ctx, 5, c.starters...); err != nil {
+	if err := c.Controllers.Start(ctx); err != nil {
 		return nil, err
 	}
 
@@ -115,39 +111,26 @@ func (c *Server) Handler(ctx context.Context) (http.Handler, error) {
 	return handler, nil
 }
 
-func ListenAndServe(ctx context.Context, secrets v1.SecretController, namespace string, handler http.Handler, httpsPort, httpPort int, opts *server.ListenOpts) error {
-	var (
-		err error
-	)
-
-	if opts == nil {
-		opts = &server.ListenOpts{}
-	}
-
-	if opts.CA == nil || opts.CAKey == nil {
-		opts.CA, opts.CAKey, err = kubernetes.LoadOrGenCA(secrets, namespace, "serving-ca")
-		if err != nil {
-			return err
-		}
-	}
-
-	if opts.Storage == nil {
-		storage := kubernetes.Load(ctx, secrets, namespace, "service-cert", memory.New())
-		opts.Storage = storage
-	}
-
-	if err := server.ListenAndServe(ctx, httpsPort, httpPort, handler, opts); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, opts *server.ListenOpts) error {
 	handler, err := c.Handler(ctx)
 	if err != nil {
 		return err
 	}
 
-	return ListenAndServe(ctx, c.Core.Secret(), c.Namespace, handler, httpsPort, httpPort, opts)
+	if opts == nil {
+		opts = &server.ListenOpts{}
+	}
+	if opts.Storage == nil && opts.Secrets == nil {
+		opts.Secrets = c.Core.Secret()
+	}
+	if err := server.ListenAndServe(ctx, httpsPort, httpPort, handler, opts); err != nil {
+		return err
+	}
+
+	if err := c.Controllers.Start(ctx); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
+	return ctx.Err()
 }
