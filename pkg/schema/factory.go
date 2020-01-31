@@ -4,49 +4,40 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rancher/norman/v2/pkg/api/builtin"
-	"github.com/rancher/norman/v2/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/table"
+	"github.com/rancher/steve/pkg/schema/table"
+	"github.com/rancher/steve/pkg/schemaserver/builtin"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/wrangler/pkg/schemas"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
-func newSchemas() (*types.Schemas, error) {
-	s, err := types.NewSchemas(builtin.Schemas)
-	if err != nil {
+func newSchemas() (*types.APISchemas, error) {
+	apiSchemas := types.EmptyAPISchemas()
+	if err := apiSchemas.AddSchemas(builtin.Schemas); err != nil {
 		return nil, err
 	}
-	s.DefaultMapper = func() types.Mapper {
+	apiSchemas.InternalSchemas.DefaultMapper = func() schemas.Mapper {
 		return newDefaultMapper()
 	}
 
-	return s, nil
+	return apiSchemas, nil
 }
 
-func (c *Collection) Schemas(user user.Info) (*types.Schemas, error) {
+func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	access := c.as.AccessFor(user)
 	return c.schemasForSubject(access)
 }
 
-func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.Schemas, error) {
+func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.APISchemas, error) {
 	result, err := newSchemas()
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := result.AddSchemas(c.baseSchema); err != nil {
+	if err := result.AddSchemas(c.baseSchema); err != nil {
 		return nil, err
-	}
-
-	for _, template := range c.templates {
-		if template.RegisterType != nil {
-			s, err := result.Import(template.RegisterType)
-			if err != nil {
-				return nil, err
-			}
-			c.applyTemplates(result, s)
-		}
 	}
 
 	for _, s := range c.schemas {
@@ -60,7 +51,7 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 		}
 
 		verbs := attributes.Verbs(s)
-		verbAccess := accesscontrol.AccessListMap{}
+		verbAccess := accesscontrol.AccessListByVerb{}
 
 		for _, verb := range verbs {
 			a := access.AccessListFor(verb, gr)
@@ -100,7 +91,7 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 	return result, nil
 }
 
-func (c *Collection) applyTemplates(schemas *types.Schemas, schema *types.Schema) {
+func (c *Collection) applyTemplates(schemas *types.APISchemas, schema *types.APISchema) {
 	templates := []*Template{
 		c.templates[schema.ID],
 		c.templates[fmt.Sprintf("%s/%s", attributes.Group(schema), attributes.Kind(schema))],
@@ -112,7 +103,7 @@ func (c *Collection) applyTemplates(schemas *types.Schemas, schema *types.Schema
 			continue
 		}
 		if t.Mapper != nil {
-			schemas.AddMapper(schema.ID, t.Mapper)
+			schemas.InternalSchemas.AddMapper(schema.ID, t.Mapper)
 		}
 		if schema.Formatter == nil {
 			schema.Formatter = t.Formatter
@@ -128,7 +119,7 @@ func (c *Collection) applyTemplates(schemas *types.Schemas, schema *types.Schema
 			t.Customize(schema)
 		}
 		if len(t.Columns) > 0 {
-			schemas.AddMapper(schema.ID, table.NewColumns(t.ComputedColumns, t.Columns...))
+			schemas.InternalSchemas.AddMapper(schema.ID, table.NewColumns(t.ComputedColumns, t.Columns...))
 		}
 	}
 }

@@ -6,14 +6,13 @@ import (
 	"sync"
 	"time"
 
-	meta "k8s.io/apimachinery/pkg/api/meta"
-
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/resources/schema"
-	"github.com/rancher/norman/pkg/types"
+	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/merr"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -83,7 +82,7 @@ func (h *clusterCache) AddController(gvk schema2.GroupVersionKind, informer cach
 	h.typed[gvk] = informer
 }
 
-func validSchema(schema *types.Schema) bool {
+func validSchema(schema *types.APISchema) bool {
 	canList := false
 	canWatch := false
 	for _, verb := range attributes.Verbs(schema) {

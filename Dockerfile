@@ -1,8 +1,10 @@
+# syntax = docker/dockerfile:experimental
 FROM golang:1.12.7 as build
 COPY go.mod  go.sum main.go /src/
 COPY vendor /src/vendor/
 COPY pkg /src/pkg/
-RUN cd /src && \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd /src && \
     CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /steve -mod=vendor
 
 FROM alpine

@@ -2,127 +2,152 @@ package server
 
 import (
 	"context"
-	"github.com/rancher/norman/pkg/auth"
+	"errors"
 	"net/http"
 
+	"github.com/rancher/dynamiclistener/server"
+	"github.com/rancher/dynamiclistener/storage/kubernetes"
+	"github.com/rancher/dynamiclistener/storage/memory"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
-	"github.com/rancher/steve/pkg/controllers/schema"
-	"github.com/rancher/steve/pkg/resources"
-	"github.com/rancher/steve/pkg/server/publicapi"
-	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
-	"github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io"
-	"github.com/rancher/wrangler-api/pkg/generated/controllers/core"
-	rbaccontroller "github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
-	"github.com/rancher/wrangler/pkg/generic"
-	"github.com/rancher/wrangler/pkg/kubeconfig"
+	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
+	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/steve/pkg/server/handler"
+	"github.com/rancher/steve/pkg/server/resources"
+	v1 "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/start"
-	"github.com/sirupsen/logrus"
-	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes"
 )
 
-type Config struct {
-	Kubeconfig    string
-	ListenAddress string
-	WebhookKubeconfig string
-	Authentication bool
+var ErrConfigRequired = errors.New("rest config is required")
+
+func setDefaults(server *Server) error {
+	if server.RestConfig == nil {
+		return ErrConfigRequired
+	}
+
+	if server.Namespace == "" {
+		server.Namespace = "steve"
+	}
+
+	if server.Controllers == nil {
+		var err error
+		server.Controllers, err = NewController(server.RestConfig)
+		if err != nil {
+			return err
+		}
+	}
+
+	if server.Next == nil {
+		server.Next = http.NotFoundHandler()
+	}
+
+	if server.BaseSchemas == nil {
+		server.BaseSchemas = types.EmptyAPISchemas()
+	}
+
+	return nil
 }
 
-func Run(ctx context.Context, cfg Config) error {
-	restConfig, err := kubeconfig.GetNonInteractiveClientConfig(cfg.Kubeconfig).ClientConfig()
-	if err != nil {
-		return err
+func setup(ctx context.Context, server *Server) (http.Handler, *schema.Collection, error) {
+	if err := setDefaults(server); err != nil {
+		return nil, nil, err
 	}
 
-	restConfig.QPS = 100
-	restConfig.Burst = 100
-
-	rbac, err := rbaccontroller.NewFactoryFromConfig(restConfig)
+	cf, err := client.NewFactory(server.RestConfig)
 	if err != nil {
-		return err
-	}
-
-	core, err := core.NewFactoryFromConfig(restConfig)
-	if err != nil {
-		return err
-	}
-
-	k8s, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return err
-	}
-
-	api, err := apiregistration.NewFactoryFromConfig(restConfig)
-	if err != nil {
-		return err
-	}
-
-	crd, err := apiextensions.NewFactoryFromConfig(restConfig)
-	if err != nil {
-		return err
-	}
-
-	cf, err := client.NewFactory(restConfig)
-	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	ccache := clustercache.NewClusterCache(ctx, cf.DynamicClient())
 
-	sf := resources.SchemaFactory(cf,
-		accesscontrol.NewAccessStore(rbac.Rbac().V1()),
-		k8s,
-		ccache,
-		core.Core().V1().ConfigMap(),
-		core.Core().V1().Secret())
+	server.BaseSchemas = resources.DefaultSchemas(server.BaseSchemas, server.K8s.Discovery(), ccache)
+	server.SchemaTemplates = append(server.SchemaTemplates, resources.DefaultSchemaTemplates(cf)...)
 
-	sync := schema.Register(ctx,
-		k8s.Discovery(),
-		crd.Apiextensions().V1beta1().CustomResourceDefinition(),
-		api.Apiregistration().V1().APIService(),
-		k8s.AuthorizationV1().SelfSubjectAccessReviews(),
+	sf := schema.NewCollection(server.BaseSchemas, accesscontrol.NewAccessStore(server.RBAC))
+	sync := schemacontroller.Register(ctx,
+		server.K8s.Discovery(),
+		server.CRD.CustomResourceDefinition(),
+		server.API.APIService(),
+		server.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
 		ccache,
 		sf)
 
-	handler, err := publicapi.NewHandler(restConfig, sf)
+	handler, err := handler.New(server.RestConfig, sf, server.AuthMiddleware, server.Next, server.Router)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	server.PostStartHooks = append(server.PostStartHooks, func() error {
+		return sync()
+	})
+
+	return handler, sf, nil
+}
+
+func (c *Server) Handler(ctx context.Context) (http.Handler, error) {
+	handler, sf, err := setup(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hook := range c.StartHooks {
+		if err := hook(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+
+	for i := range c.SchemaTemplates {
+		sf.AddTemplate(&c.SchemaTemplates[i])
+	}
+
+	if err := start.All(ctx, 5, c.starters...); err != nil {
+		return nil, err
+	}
+
+	for _, hook := range c.PostStartHooks {
+		if err := hook(); err != nil {
+			return nil, err
+		}
+	}
+
+	return handler, nil
+}
+
+func ListenAndServe(ctx context.Context, secrets v1.SecretController, namespace string, handler http.Handler, httpsPort, httpPort int, opts *server.ListenOpts) error {
+	var (
+		err error
+	)
+
+	if opts == nil {
+		opts = &server.ListenOpts{}
+	}
+
+	if opts.CA == nil || opts.CAKey == nil {
+		opts.CA, opts.CAKey, err = kubernetes.LoadOrGenCA(secrets, namespace, "serving-ca")
+		if err != nil {
+			return err
+		}
+	}
+
+	if opts.Storage == nil {
+		storage := kubernetes.Load(ctx, secrets, namespace, "service-cert", memory.New())
+		opts.Storage = storage
+	}
+
+	if err := server.ListenAndServe(ctx, httpsPort, httpPort, handler, opts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, opts *server.ListenOpts) error {
+	handler, err := c.Handler(ctx)
 	if err != nil {
 		return err
 	}
 
-	if cfg.Authentication {
-		authMiddleware, err := auth.NewWebhookMiddleware(cfg.WebhookKubeconfig)
-		if err != nil {
-			return err
-		}
-		handler = wrapHandler(handler, authMiddleware)
-	}
-
-	for _, controllers := range []controllers{api, crd, rbac} {
-		for gvk, controller := range controllers.Controllers() {
-			ccache.AddController(gvk, controller.Informer())
-		}
-	}
-
-	if err := start.All(ctx, 5, api, crd, rbac); err != nil {
-		return err
-	}
-
-	if err := sync(); err != nil {
-		return err
-	}
-
-	logrus.Infof("listening on %s", cfg.ListenAddress)
-	return http.ListenAndServe(cfg.ListenAddress, handler)
-}
-
-func wrapHandler(handler http.Handler, middleware func(http.ResponseWriter, *http.Request, http.Handler)) http.Handler {
-	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-		middleware(resp, req, handler)
-	})
-}
-
-type controllers interface {
-	Controllers() map[schema2.GroupVersionKind]*generic.Controller
+	return ListenAndServe(ctx, c.Core.Secret(), c.Namespace, handler, httpsPort, httpPort, opts)
 }

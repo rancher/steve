@@ -1,10 +1,10 @@
-package publicapi
+package handler
 
 import (
 	"github.com/gorilla/mux"
-	"github.com/rancher/norman/v2/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schemaserver/types"
 	runtimeschema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -24,7 +24,7 @@ func k8sAPI(sf schema.Factory, apiOp *types.APIRequest) {
 
 	nOrN := vars["nameorns"]
 	if nOrN != "" {
-		schema := apiOp.Schemas.Schema(apiOp.Type)
+		schema := apiOp.Schemas.LookupSchema(apiOp.Type)
 		if attributes.Namespaced(schema) {
 			vars["namespace"] = nOrN
 		} else {
@@ -33,7 +33,7 @@ func k8sAPI(sf schema.Factory, apiOp *types.APIRequest) {
 	}
 
 	if namespace := vars["namespace"]; namespace != "" {
-		apiOp.Namespaces = []string{namespace}
+		apiOp.Namespace = namespace
 	}
 }
 

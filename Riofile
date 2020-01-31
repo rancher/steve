@@ -1,0 +1,4 @@
+services:
+  steve:
+    ports:
+    - 80:8080

@@ -1,14 +1,12 @@
 package proxy
 
 import (
-	"net"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/rancher/wrangler/pkg/kubeconfig"
-	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -40,7 +38,7 @@ func Handler(prefix string, cfg *rest.Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	upgradeTransport, err := makeUpgradeTransport(cfg, 0)
+	upgradeTransport, err := makeUpgradeTransport(cfg, transport)
 	if err != nil {
 		return nil, err
 	}
@@ -49,20 +47,27 @@ func Handler(prefix string, cfg *rest.Config) (http.Handler, error) {
 	proxy.UpgradeTransport = upgradeTransport
 	proxy.UseRequestLocation = true
 
-	handler := setHost(target.Host, proxy)
+	handler := http.Handler(proxy)
 
 	if len(target.Path) > 1 {
 		handler = prependPath(target.Path[:len(target.Path)-1], handler)
 	}
 
 	if len(prefix) > 2 {
-		return stripLeaveSlash(prefix, handler), nil
+		handler = stripLeaveSlash(prefix, handler)
 	}
 
-	return handler, nil
+	return authHeaders(handler), nil
 }
 
-func setHost(host string, h http.Handler) http.Handler {
+func authHeaders(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		req.Header.Del("Authorization")
+		handler.ServeHTTP(rw, req)
+	})
+}
+
+func SetHost(host string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		req.Host = host
 		h.ServeHTTP(w, req)
@@ -85,34 +90,20 @@ func prependPath(prefix string, h http.Handler) http.Handler {
 func stripLeaveSlash(prefix string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		p := strings.TrimPrefix(req.URL.Path, prefix)
-		if len(p) >= len(req.URL.Path) {
-			http.NotFound(w, req)
-			return
-		}
 		if len(p) > 0 && p[:1] != "/" {
 			p = "/" + p
 		}
 		req.URL.Path = p
+		fmt.Println(req.Method, " ", req.URL.String())
 		h.ServeHTTP(w, req)
 	})
 }
 
-func makeUpgradeTransport(config *rest.Config, keepalive time.Duration) (proxy.UpgradeRequestRoundTripper, error) {
+func makeUpgradeTransport(config *rest.Config, rt http.RoundTripper) (proxy.UpgradeRequestRoundTripper, error) {
 	transportConfig, err := config.TransportConfig()
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig, err := transport.TLSConfigFor(transportConfig)
-	if err != nil {
-		return nil, err
-	}
-	rt := utilnet.SetOldTransportDefaults(&http.Transport{
-		TLSClientConfig: tlsConfig,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: keepalive,
-		}).DialContext,
-	})
 
 	upgrader, err := transport.HTTPWrappersForConfig(transportConfig, proxy.MirrorRequest)
 	if err != nil {

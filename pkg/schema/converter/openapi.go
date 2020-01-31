@@ -1,23 +1,24 @@
 package converter
 
 import (
-	"github.com/rancher/norman/v2/pkg/types"
-	"github.com/rancher/norman/v2/pkg/types/convert"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/wrangler/pkg/data/convert"
+	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/kube-openapi/pkg/util/proto"
 )
 
-func modelToSchema(modelName string, k *proto.Kind) *types.Schema {
-	s := types.Schema{
-		ID:             modelName,
-		Type:           "schema",
-		ResourceFields: map[string]types.Field{},
-		Attributes:     map[string]interface{}{},
-		Description:    k.GetDescription(),
-		Dynamic:        true,
+func modelToSchema(modelName string, k *proto.Kind) *types.APISchema {
+	s := types.APISchema{
+		Schema: &schemas.Schema{
+			ID:             modelName,
+			ResourceFields: map[string]schemas.Field{},
+			Attributes:     map[string]interface{}{},
+			Description:    k.GetDescription(),
+		},
 	}
 
 	for fieldName, schemaField := range k.Fields {
@@ -49,7 +50,7 @@ func modelToSchema(modelName string, k *proto.Kind) *types.Schema {
 	return &s
 }
 
-func AddOpenAPI(client discovery.DiscoveryInterface, schemas map[string]*types.Schema) error {
+func AddOpenAPI(client discovery.DiscoveryInterface, schemas map[string]*types.APISchema) error {
 	openapi, err := client.OpenAPISchema()
 	if err != nil {
 		return err
@@ -71,10 +72,9 @@ func AddOpenAPI(client discovery.DiscoveryInterface, schemas map[string]*types.S
 	return nil
 }
 
-func toField(schema proto.Schema) types.Field {
-	f := types.Field{
+func toField(schema proto.Schema) schemas.Field {
+	f := schemas.Field{
 		Description: schema.GetDescription(),
-		Nullable:    true,
 		Create:      true,
 		Update:      true,
 	}

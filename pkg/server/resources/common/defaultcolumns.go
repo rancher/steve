@@ -1,9 +1,11 @@
 package common
 
 import (
-	"github.com/rancher/norman/v2/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/table"
+	"github.com/rancher/steve/pkg/schema/table"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/wrangler/pkg/schemas"
+	"github.com/rancher/wrangler/pkg/schemas/mappers"
 )
 
 var (
@@ -22,12 +24,15 @@ var (
 )
 
 type DefaultColumns struct {
-	types.EmptyMapper
+	mappers.EmptyMapper
 }
 
-func (d *DefaultColumns) ModifySchema(schema *types.Schema, schemas *types.Schemas) error {
-	if attributes.Columns(schema) == nil {
-		attributes.SetColumns(schema, []table.Column{
+func (d *DefaultColumns) ModifySchema(schema *schemas.Schema, schemas *schemas.Schemas) error {
+	as := &types.APISchema{
+		Schema: schema,
+	}
+	if attributes.Columns(as) == nil {
+		attributes.SetColumns(as, []table.Column{
 			NameColumn,
 			CreatedColumn,
 		})

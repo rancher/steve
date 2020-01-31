@@ -1,29 +1,29 @@
-package publicapi
+package handler
 
 import (
 	"net/http"
 
-	"github.com/rancher/norman/v2/pkg/api"
-	"github.com/rancher/norman/v2/pkg/auth"
-	"github.com/rancher/norman/v2/pkg/types"
-	"github.com/rancher/norman/v2/pkg/urlbuilder"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/auth"
 	k8sproxy "github.com/rancher/steve/pkg/proxy"
-	"github.com/rancher/steve/pkg/resources/schema"
+	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schemaserver/server"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/steve/pkg/schemaserver/urlbuilder"
 	"github.com/rancher/steve/pkg/server/router"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/rest"
 )
 
-func NewHandler(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, next http.Handler) (http.Handler, error) {
+func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, next http.Handler, routerFunc router.RouterFunc) (http.Handler, error) {
 	var (
 		err error
 	)
 
 	a := &apiServer{
 		sf:     sf,
-		server: api.DefaultAPIServer(),
+		server: server.DefaultAPIServer(),
 	}
 	a.server.AccessControl = accesscontrol.NewAccessControl()
 
@@ -33,18 +33,22 @@ func NewHandler(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middlew
 	}
 
 	w := authMiddleware.Wrap
-	return router.Routes(router.Handlers{
+	handlers := router.Handlers{
 		Next:            next,
 		K8sResource:     w(a.apiHandler(k8sAPI)),
 		GenericResource: w(a.apiHandler(nil)),
 		K8sProxy:        w(proxy),
 		APIRoot:         w(a.apiHandler(apiRoot)),
-	}), nil
+	}
+	if routerFunc == nil {
+		return router.Routes(handlers), nil
+	}
+	return routerFunc(handlers), nil
 }
 
 type apiServer struct {
 	sf     schema.Factory
-	server *api.Server
+	server *server.Server
 }
 
 func (a *apiServer) common(rw http.ResponseWriter, req *http.Request) (*types.APIRequest, bool) {

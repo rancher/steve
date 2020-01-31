@@ -1,38 +1,28 @@
 package resources
 
 import (
-	"github.com/rancher/norman/v2/pkg/store/apiroot"
-	"github.com/rancher/norman/v2/pkg/subscribe"
-	"github.com/rancher/norman/v2/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
-	"github.com/rancher/steve/pkg/resources/apigroups"
-	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/resources/core"
-	"github.com/rancher/steve/pkg/resources/counts"
-	"github.com/rancher/steve/pkg/resources/schema"
-	"k8s.io/client-go/kubernetes"
+	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schemaserver/store/apiroot"
+	"github.com/rancher/steve/pkg/schemaserver/subscribe"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/steve/pkg/server/resources/apigroups"
+	"github.com/rancher/steve/pkg/server/resources/common"
+	"github.com/rancher/steve/pkg/server/resources/counts"
+	"k8s.io/client-go/discovery"
 )
 
-func SchemaFactory(
-	cf *client.Factory,
-	as *accesscontrol.AccessStore,
-	k8s kubernetes.Interface,
-	ccache clustercache.ClusterCache,
-) (*schema.Collection, error) {
-	baseSchema := types.EmptySchemas()
-	collection := schema.NewCollection(baseSchema, as)
-
-	core.Register(collection)
+func DefaultSchemas(baseSchema *types.APISchemas, discovery discovery.DiscoveryInterface, ccache clustercache.ClusterCache) *types.APISchemas {
 	counts.Register(baseSchema, ccache)
 	subscribe.Register(baseSchema)
-	apigroups.Register(baseSchema, k8s.Discovery())
+	apigroups.Register(baseSchema, discovery)
 	apiroot.Register(baseSchema, []string{"v1"}, []string{"proxy:/apis"})
+	return baseSchema
+}
 
-	if err := common.Register(collection, cf); err != nil {
-		return nil, err
+func DefaultSchemaTemplates(cf *client.Factory) []schema.Template {
+	return []schema.Template{
+		common.DefaultTemplate(cf),
 	}
-
-	return collection, nil
 }

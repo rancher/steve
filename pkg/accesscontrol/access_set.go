@@ -2,15 +2,15 @@ package accesscontrol
 
 import (
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/norman/pkg/types"
+	"github.com/rancher/steve/pkg/schemaserver/types"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type AccessSet struct {
-	set map[key]ResourceAccess
+	set map[key]resourceAccessSet
 }
 
-type ResourceAccess map[Access]bool
+type resourceAccessSet map[Access]bool
 
 type key struct {
 	verb string
@@ -23,7 +23,7 @@ func (a *AccessSet) Merge(right *AccessSet) {
 		if !ok {
 			m = map[Access]bool{}
 			if a.set == nil {
-				a.set = map[key]ResourceAccess{}
+				a.set = map[key]resourceAccessSet{}
 			}
 			a.set[k] = m
 		}
@@ -34,14 +34,7 @@ func (a *AccessSet) Merge(right *AccessSet) {
 	}
 }
 
-func (a AccessSet) ResourceAccessFor(verb string, gr schema.GroupResource) ResourceAccess {
-	return a.set[key{
-		verb: verb,
-		gr:   gr,
-	}]
-}
-
-func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result []Access) {
+func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result AccessList) {
 	for _, v := range []string{all, verb} {
 		for _, g := range []string{all, gr.Group} {
 			for _, r := range []string{all, gr.Resource} {
@@ -63,7 +56,7 @@ func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result [
 
 func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 	if a.set == nil {
-		a.set = map[key]ResourceAccess{}
+		a.set = map[key]resourceAccessSet{}
 	}
 
 	k := key{verb: verb, gr: gr}
@@ -76,38 +69,13 @@ func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 	}
 }
 
-func (l ResourceAccess) None() bool {
-	return len(l) == 0
-}
+type AccessListByVerb map[string]AccessList
 
-func (l ResourceAccess) All() bool {
-	return l[Access{
-		Namespace:    all,
-		ResourceName: all,
-	}]
-}
-
-func (l ResourceAccess) AllForNamespace(namespace string) bool {
-	return l[Access{
-		Namespace:    namespace,
-		ResourceName: all,
-	}]
-}
-
-func (l ResourceAccess) HasAccess(namespace, name string) bool {
-	return l[Access{
-		Namespace:    namespace,
-		ResourceName: name,
-	}]
-}
-
-type AccessListMap map[string]AccessList
-
-func (a AccessListMap) Grants(verb, namespace, name string) bool {
+func (a AccessListByVerb) Grants(verb, namespace, name string) bool {
 	return a[verb].Grants(namespace, name)
 }
 
-func (a AccessListMap) AnyVerb(verb ...string) bool {
+func (a AccessListByVerb) AnyVerb(verb ...string) bool {
 	for _, v := range verb {
 		if len(a[v]) > 0 {
 			return true
@@ -145,10 +113,10 @@ func (a Access) nameOK(name string) bool {
 	return a.ResourceName == all || a.ResourceName == name
 }
 
-func GetAccessListMap(s *types.Schema) AccessListMap {
+func GetAccessListMap(s *types.APISchema) AccessListByVerb {
 	if s == nil {
 		return nil
 	}
-	v, _ := attributes.Access(s).(AccessListMap)
+	v, _ := attributes.Access(s).(AccessListByVerb)
 	return v
 }

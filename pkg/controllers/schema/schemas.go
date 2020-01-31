@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/rancher/steve/pkg/attributes"
-	schema2 "github.com/rancher/steve/pkg/resources/schema"
-	"github.com/rancher/steve/pkg/resources/schema/converter"
-	"github.com/rancher/norman/pkg/types"
+	schema2 "github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schema/converter"
+	"github.com/rancher/steve/pkg/schemaserver/types"
 	apiextcontrollerv1beta1 "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
 	v1 "github.com/rancher/wrangler-api/pkg/generated/controllers/apiregistration.k8s.io/v1"
 	"github.com/sirupsen/logrus"
@@ -82,7 +82,7 @@ func (h *handler) queueRefresh() {
 	}()
 }
 
-func isListWatchable(schema *types.Schema) bool {
+func isListWatchable(schema *types.APISchema) bool {
 	var (
 		canList  bool
 		canWatch bool
@@ -114,7 +114,7 @@ func (h *handler) refreshAll() error {
 		return err
 	}
 
-	filteredSchemas := map[string]*types.Schema{}
+	filteredSchemas := map[string]*types.APISchema{}
 	for id, schema := range schemas {
 		if isListWatchable(schema) {
 			if ok, err := h.allowed(schema); err != nil {
@@ -134,7 +134,7 @@ func (h *handler) refreshAll() error {
 	return nil
 }
 
-func (h *handler) allowed(schema *types.Schema) (bool, error) {
+func (h *handler) allowed(schema *types.APISchema) (bool, error) {
 	gvr := attributes.GVR(schema)
 	ssar, err := h.ssar.Create(&authorizationv1.SelfSubjectAccessReview{
 		Spec: authorizationv1.SelfSubjectAccessReviewSpec{

@@ -3,19 +3,19 @@ package accesscontrol
 import (
 	"fmt"
 
-	"github.com/rancher/norman/pkg/authorization"
-	"github.com/rancher/norman/pkg/types"
+	"github.com/rancher/steve/pkg/schemaserver/server"
+	"github.com/rancher/steve/pkg/schemaserver/types"
 )
 
 type AccessControl struct {
-	authorization.AllAccess
+	server.AllAccess
 }
 
 func NewAccessControl() *AccessControl {
 	return &AccessControl{}
 }
 
-func (a *AccessControl) CanWatch(apiOp *types.APIRequest, schema *types.Schema) error {
+func (a *AccessControl) CanWatch(apiOp *types.APIRequest, schema *types.APISchema) error {
 	access := GetAccessListMap(schema)
 	if !access.Grants("watch", "*", "*") {
 		return fmt.Errorf("watch not allowed")

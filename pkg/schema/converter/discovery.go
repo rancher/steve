@@ -3,9 +3,10 @@ package converter
 import (
 	"strings"
 
-	"github.com/rancher/norman/v2/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/wrangler/pkg/merr"
+	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -18,11 +19,13 @@ var (
 	}
 )
 
-func AddDiscovery(client discovery.DiscoveryInterface, schemas map[string]*types.Schema) error {
+func AddDiscovery(client discovery.DiscoveryInterface, schemasMap map[string]*types.APISchema) error {
 	logrus.Info("Refreshing all schemas")
 
 	groups, resourceLists, err := client.ServerGroupsAndResources()
-	if err != nil {
+	if gd, ok := err.(*discovery.ErrGroupDiscoveryFailed); ok {
+		logrus.Errorf("Failed to read API for groups %v", gd.Groups)
+	} else if err != nil {
 		return err
 	}
 
@@ -35,7 +38,7 @@ func AddDiscovery(client discovery.DiscoveryInterface, schemas map[string]*types
 			errs = append(errs, err)
 		}
 
-		if err := refresh(gv, versions, resourceList, schemas); err != nil {
+		if err := refresh(gv, versions, resourceList, schemasMap); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -51,7 +54,7 @@ func indexVersions(groups []*metav1.APIGroup) map[string]string {
 	return result
 }
 
-func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, resources *metav1.APIResourceList, schemas map[string]*types.Schema) error {
+func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, resources *metav1.APIResourceList, schemasMap map[string]*types.APISchema) error {
 	for _, resource := range resources.APIResources {
 		if strings.Contains(resource.Name, "/") {
 			continue
@@ -66,12 +69,12 @@ func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, 
 
 		logrus.Infof("APIVersion %s/%s Kind %s", gvk.Group, gvk.Version, gvk.Kind)
 
-		schema := schemas[GVKToSchemaID(gvk)]
+		schema := schemasMap[GVKToSchemaID(gvk)]
 		if schema == nil {
-			schema = &types.Schema{
-				ID:      GVKToSchemaID(gvk),
-				Type:    "schema",
-				Dynamic: true,
+			schema = &types.APISchema{
+				Schema: &schemas.Schema{
+					ID:      GVKToSchemaID(gvk),
+				},
 			}
 			attributes.SetGVK(schema, gvk)
 		}
@@ -85,7 +88,7 @@ func refresh(gv schema.GroupVersion, groupToPreferredVersion map[string]string, 
 			attributes.SetPreferredGroup(schema, group)
 		}
 
-		schemas[schema.ID] = schema
+		schemasMap[schema.ID] = schema
 	}
 
 	return nil

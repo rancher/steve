@@ -3,26 +3,27 @@ package schema
 import (
 	"strings"
 
-	"github.com/rancher/norman/v2/pkg/data"
-	"github.com/rancher/norman/v2/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/table"
+	"github.com/rancher/steve/pkg/schema/table"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/name"
+	"github.com/rancher/wrangler/pkg/schemas"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 type Factory interface {
-	Schemas(user user.Info) (*types.Schemas, error)
+	Schemas(user user.Info) (*types.APISchemas, error)
 	ByGVR(gvr schema.GroupVersionResource) string
 	ByGVK(gvr schema.GroupVersionKind) string
 }
 
 type Collection struct {
 	toSync     int32
-	baseSchema *types.Schemas
-	schemas    map[string]*types.Schema
+	baseSchema *types.APISchemas
+	schemas    map[string]*types.APISchema
 	templates  map[string]*Template
 	byGVR      map[schema.GroupVersionResource]string
 	byGVK      map[schema.GroupVersionKind]string
@@ -34,20 +35,19 @@ type Template struct {
 	Group           string
 	Kind            string
 	ID              string
-	RegisterType    interface{}
-	Customize       func(*types.Schema)
+	Customize       func(*types.APISchema)
 	Formatter       types.Formatter
 	Store           types.Store
 	StoreFactory    func(types.Store) types.Store
-	Mapper          types.Mapper
+	Mapper          schemas.Mapper
 	Columns         []table.Column
 	ComputedColumns func(data.Object)
 }
 
-func NewCollection(baseSchema *types.Schemas, access *accesscontrol.AccessStore) *Collection {
+func NewCollection(baseSchema *types.APISchemas, access *accesscontrol.AccessStore) *Collection {
 	return &Collection{
 		baseSchema: baseSchema,
-		schemas:    map[string]*types.Schema{},
+		schemas:    map[string]*types.APISchema{},
 		templates:  map[string]*Template{},
 		byGVR:      map[schema.GroupVersionResource]string{},
 		byGVK:      map[schema.GroupVersionKind]string{},
@@ -55,7 +55,7 @@ func NewCollection(baseSchema *types.Schemas, access *accesscontrol.AccessStore)
 	}
 }
 
-func (c *Collection) Reset(schemas map[string]*types.Schema) {
+func (c *Collection) Reset(schemas map[string]*types.APISchema) {
 	byGVK := map[schema.GroupVersionKind]string{}
 	byGVR := map[schema.GroupVersionResource]string{}
 
@@ -75,7 +75,7 @@ func (c *Collection) Reset(schemas map[string]*types.Schema) {
 	c.byGVK = byGVK
 }
 
-func (c *Collection) Schema(id string) *types.Schema {
+func (c *Collection) Schema(id string) *types.APISchema {
 	return c.schemas[id]
 }
 

@@ -3,16 +3,18 @@ package schema
 import (
 	"fmt"
 
-	"github.com/rancher/norman/v2/pkg/data"
-	"github.com/rancher/norman/v2/pkg/types"
+	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/wrangler/pkg/data"
+	"github.com/rancher/wrangler/pkg/schemas"
+	"github.com/rancher/wrangler/pkg/schemas/mappers"
 )
 
-func newDefaultMapper() types.Mapper {
+func newDefaultMapper() schemas.Mapper {
 	return &defaultMapper{}
 }
 
 type defaultMapper struct {
-	types.EmptyMapper
+	mappers.EmptyMapper
 }
 
 func (d *defaultMapper) FromInternal(data data.Object) {
