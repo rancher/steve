@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/websocket v1.4.0
 	github.com/pkg/errors v0.8.1
 	github.com/rancher/dynamiclistener v0.2.1-0.20200131054153-795bb90214d9
-	github.com/rancher/wrangler v0.4.1-0.20200131051624-f65ef17f3764
+	github.com/rancher/wrangler v0.4.1
 	github.com/rancher/wrangler-api v0.4.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.22.2
