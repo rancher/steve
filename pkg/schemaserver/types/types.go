@@ -59,6 +59,13 @@ type NamedResourceCollection struct {
 	Data []NamedResource `json:"data,omitempty"`
 }
 
+var ReservedFields = map[string]bool{
+	"id":      true,
+	"type":    true,
+	"links":   true,
+	"actions": true,
+}
+
 type APISchema struct {
 	*schemas.Schema
 
