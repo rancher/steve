@@ -11,7 +11,6 @@ type Config struct {
 	KubeConfig      string
 	HTTPSListenPort int
 	HTTPListenPort  int
-	Namespace       string
 
 	WebhookConfig authcli.WebhookConfig
 }
@@ -36,7 +35,6 @@ func (c *Config) ToServer() (*server.Server, error) {
 	}
 
 	return &server.Server{
-		Namespace:      c.Namespace,
 		RestConfig:     restConfig,
 		AuthMiddleware: auth,
 	}, nil
@@ -58,12 +56,6 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       8080,
 			Destination: &config.HTTPListenPort,
-		},
-		cli.StringFlag{
-			Name:        "namespace",
-			EnvVar:      "NAMESPACE",
-			Value:       "steve",
-			Destination: &config.Namespace,
 		},
 	}
 
