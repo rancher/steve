@@ -15,6 +15,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	k8s.io/api v0.17.2
 	k8s.io/apiextensions-apiserver v0.17.2
 	k8s.io/apimachinery v0.17.2
