@@ -86,7 +86,7 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 				var accessList accesscontrol.AccessList
 				for _, ns := range access.Namespaces() {
 					accessList = append(accessList, accesscontrol.Access{
-						Namespace:    "*",
+						Namespace:    accesscontrol.All,
 						ResourceName: ns,
 					})
 				}
