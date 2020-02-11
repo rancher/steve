@@ -90,7 +90,7 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 	}
 
 	for _, binding := range p.getClusterRoleBindings(subjectName) {
-		p.addAccess(result, all, binding.RoleRef)
+		p.addAccess(result, All, binding.RoleRef)
 	}
 
 	return result
