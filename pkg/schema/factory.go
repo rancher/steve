@@ -66,6 +66,16 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 
 		for _, verb := range verbs {
 			a := access.AccessListFor(verb, gr)
+			if !attributes.Namespaced(s) {
+				// trim out bad data where we are granted namespaced access to cluster scoped object
+				result := accesscontrol.AccessList{}
+				for _, access := range a {
+					if access.Namespace == accesscontrol.All {
+						result = append(result, access)
+					}
+				}
+				a = result
+			}
 			if len(a) > 0 {
 				verbAccess[verb] = a
 			}
