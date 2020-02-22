@@ -4,6 +4,7 @@ import (
 	authcli "github.com/rancher/steve/pkg/auth/cli"
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
+	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/urfave/cli"
 )
 
@@ -11,6 +12,7 @@ type Config struct {
 	KubeConfig      string
 	HTTPSListenPort int
 	HTTPListenPort  int
+	DashboardURL    string
 
 	WebhookConfig authcli.WebhookConfig
 }
@@ -28,6 +30,7 @@ func (c *Config) ToServer() (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	restConfig.RateLimiter = ratelimit.None
 
 	auth, err := c.WebhookConfig.WebhookMiddleware()
 	if err != nil {
@@ -37,6 +40,9 @@ func (c *Config) ToServer() (*server.Server, error) {
 	return &server.Server{
 		RestConfig:     restConfig,
 		AuthMiddleware: auth,
+		DashboardURL: func() string {
+			return c.DashboardURL
+		},
 	}, nil
 }
 
@@ -56,6 +62,11 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       8080,
 			Destination: &config.HTTPListenPort,
+		},
+		cli.StringFlag{
+			Name:        "dashboard-url",
+			Value:       "https://releases.rancher.com/dashboard/latest/index.html",
+			Destination: &config.DashboardURL,
 		},
 	}
 
