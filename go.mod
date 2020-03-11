@@ -11,8 +11,8 @@ require (
 	github.com/gorilla/websocket v1.4.0
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/pkg/errors v0.8.1
-	github.com/rancher/dynamiclistener v0.2.1-0.20200131054153-795bb90214d9
-	github.com/rancher/wrangler v0.4.2-0.20200215064225-8abf292acf7b
+	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
+	github.com/rancher/wrangler v0.5.1-0.20200311053157-692040bfd728
 	github.com/rancher/wrangler-api v0.4.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0
@@ -31,5 +31,3 @@ require (
 	k8s.io/kube-aggregator v0.17.2
 	k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
 )
-
-replace github.com/rancher/dynamiclistener => ../dynamiclistener
