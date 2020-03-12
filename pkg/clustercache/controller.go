@@ -89,14 +89,6 @@ func validSchema(schema *types.APISchema) bool {
 		return false
 	}
 
-	if attributes.PreferredVersion(schema) != "" {
-		return false
-	}
-
-	if attributes.PreferredGroup(schema) != "" {
-		return false
-	}
-
 	return true
 }
 

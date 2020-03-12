@@ -182,14 +182,6 @@ func (s *Store) schemasToWatch(apiOp *types.APIRequest) (result []*types.APISche
 			continue
 		}
 
-		if attributes.PreferredVersion(schema) != "" {
-			continue
-		}
-
-		if attributes.PreferredGroup(schema) != "" {
-			continue
-		}
-
 		if schema.Store == nil {
 			continue
 		}
