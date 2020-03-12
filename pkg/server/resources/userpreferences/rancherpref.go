@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/steve/pkg/server/store/proxy"
 	"github.com/rancher/wrangler/pkg/data/convert"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
@@ -71,6 +72,25 @@ func (e *rancherPrefStore) List(apiOp *types.APIRequest, schema *types.APISchema
 	}, nil
 }
 
+func (e *rancherPrefStore) createNamespace(apiOp *types.APIRequest, ns string) error {
+	client, err := e.cg.AdminClient(apiOp, apiOp.Schemas.LookupSchema("namespace"), "")
+	if err != nil {
+		return err
+	}
+	_, err = client.Get(ns, metav1.GetOptions{})
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
+	_, err = client.Create(&unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": ns,
+			},
+		},
+	}, metav1.CreateOptions{})
+	return err
+}
+
 func (e *rancherPrefStore) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (types.APIObject, error) {
 	client, err := e.getClient(apiOp)
 	if err != nil {
@@ -107,7 +127,15 @@ func (e *rancherPrefStore) Update(apiOp *types.APIRequest, schema *types.APISche
 		}
 	}
 
+	nsExists := false
 	for k, v := range newValues {
+		if !nsExists {
+			if err := e.createNamespace(apiOp, getUser(apiOp).GetName()); err != nil {
+				return types.APIObject{}, err
+			}
+			nsExists = true
+		}
+
 		_, err = client.Create(&unstructured.Unstructured{
 			Object: map[string]interface{}{
 				"apiVersion": gvk.GroupVersion().String(),
