@@ -44,11 +44,13 @@ var (
 		"Saved":                       "saving",
 		"Updated":                     "updating",
 		"Updating":                    "updating",
+		"Upgraded":                    "upgrading",
 		"Waiting":                     "waiting",
 		"InitialRolesPopulated":       "activating",
 		"ScalingActive":               "pending",
 		"AbleToScale":                 "pending",
 		"RunCompleted":                "running",
+		"Processed":                   "processed",
 	}
 
 	// True == error
