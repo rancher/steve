@@ -403,8 +403,8 @@ github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932/go.mod h
 github.com/rancher/wrangler v0.1.4 h1:bdzBw4H9JKQhXPBPNp4eHbmrkA24+VII865VLiVWcw8=
 github.com/rancher/wrangler v0.1.4/go.mod h1:EYP7cqpg42YqElaCm+U9ieSrGQKAXxUH5xsr+XGpWyE=
 github.com/rancher/wrangler v0.5.0/go.mod h1:txHSBkPtVgNH/0pUCvdP0Ak0HptAOc9ffBmFxQnL4z4=
-github.com/rancher/wrangler v0.5.1 h1:1H3jnVjpXzOxzuYPcn7PJ60KXGkaC0iWMhVqHliwfcQ=
-github.com/rancher/wrangler v0.5.1/go.mod h1:txHSBkPtVgNH/0pUCvdP0Ak0HptAOc9ffBmFxQnL4z4=
+github.com/rancher/wrangler v0.5.2 h1:8y8aSQLM+xzXgOMMIc8m6TcRedGPqpH9PpvCqR0pZAU=
+github.com/rancher/wrangler v0.5.2/go.mod h1:txHSBkPtVgNH/0pUCvdP0Ak0HptAOc9ffBmFxQnL4z4=
 github.com/rancher/wrangler-api v0.2.0/go.mod h1:zTPdNLZO07KvRaVOx6XQbKBSV55Fnn4s7nqmrMPJqd8=
 github.com/rancher/wrangler-api v0.5.0 h1:ScVozf5SjRLW0UzOka9xzdlTJ99vLR/Gbk4/kIY49GY=
 github.com/rancher/wrangler-api v0.5.0/go.mod h1:Ne7fjNRBDdUYPqltLUCW8eiaQwuKXIyAJH6wsuGK80w=
