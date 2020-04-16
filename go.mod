@@ -13,15 +13,14 @@ require (
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
-	github.com/rancher/wrangler v0.5.4-0.20200326191509-4054411d9736
-	github.com/rancher/wrangler-api v0.5.1-0.20200326194427-c13310506d04
+	github.com/rancher/wrangler v0.6.2-0.20200416052700-e88875e410e8
+	github.com/rancher/wrangler-api v0.6.1-0.20200416053439-201927d62012
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82 // indirect
-	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.0
