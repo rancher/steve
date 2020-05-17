@@ -11,10 +11,10 @@ require (
 	github.com/gorilla/mux v1.6.2
 	github.com/gorilla/websocket v1.4.0
 	github.com/json-iterator/go v1.1.9 // indirect
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
-	github.com/rancher/wrangler v0.6.2-0.20200417063009-962aed6a55dc
-	github.com/rancher/wrangler-api v0.6.1-0.20200416053439-201927d62012
+	github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f
+	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0
 	github.com/urfave/cli v1.22.2
