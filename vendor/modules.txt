@@ -79,7 +79,7 @@ github.com/rancher/dynamiclistener/server
 github.com/rancher/dynamiclistener/storage/file
 github.com/rancher/dynamiclistener/storage/kubernetes
 github.com/rancher/dynamiclistener/storage/memory
-# github.com/rancher/wrangler v0.5.4-0.20200326191509-4054411d9736
+# github.com/rancher/wrangler v0.5.4-0.20200520040055-b8d49179cfc8
 github.com/rancher/wrangler/pkg/apply
 github.com/rancher/wrangler/pkg/apply/injectors
 github.com/rancher/wrangler/pkg/broadcast

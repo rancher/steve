@@ -13,7 +13,7 @@ require (
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
-	github.com/rancher/wrangler v0.5.4-0.20200326191509-4054411d9736
+	github.com/rancher/wrangler v0.5.4-0.20200520040055-b8d49179cfc8
 	github.com/rancher/wrangler-api v0.5.1-0.20200326194427-c13310506d04
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0
