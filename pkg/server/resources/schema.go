@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/steve/pkg/schemaserver/subscribe"
 	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/steve/pkg/server/resources/apigroups"
+	"github.com/rancher/steve/pkg/server/resources/clusters"
 	"github.com/rancher/steve/pkg/server/resources/common"
 	"github.com/rancher/steve/pkg/server/resources/counts"
 	"github.com/rancher/steve/pkg/server/resources/userpreferences"
@@ -21,6 +22,7 @@ func DefaultSchemas(baseSchema *types.APISchemas, ccache clustercache.ClusterCac
 	subscribe.Register(baseSchema)
 	apiroot.Register(baseSchema, []string{"v1"}, []string{"proxy:/apis"})
 	userpreferences.Register(baseSchema, cg)
+	clusters.Register(baseSchema)
 	return baseSchema
 }
 

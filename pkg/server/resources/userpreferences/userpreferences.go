@@ -19,7 +19,6 @@ func Register(schemas *types.APISchemas, cg proxy.ClientGetter) {
 	schemas.InternalSchemas.TypeName("userpreference", UserPreference{})
 	schemas.MustImportAndCustomize(UserPreference{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
-		schema.ResourceMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet, http.MethodPut, http.MethodDelete}
 		schema.Store = New(cg)
 	})
