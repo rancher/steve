@@ -40,7 +40,7 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
-	github.com/rancher/rancher/pkg/auth v0.0.0-20200531020208-29f9426e5027
+	github.com/rancher/rancher/pkg/auth v0.0.0-20200531044436-079f4e4ab94d
 	github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f
 	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
 	github.com/sirupsen/logrus v1.4.2

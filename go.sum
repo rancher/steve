@@ -542,8 +542,8 @@ github.com/rancher/norman v0.0.0-20200517050325-f53cae161640 h1:wZT4IWBeMfKewJ+Z
 github.com/rancher/norman v0.0.0-20200517050325-f53cae161640/go.mod h1:92rz/7QN7DOeLQZlJY/8aFBOmF085igIVguR0wpxLas=
 github.com/rancher/pkg v0.0.0-20190514055449-b30ab9de040e h1:j6+HqCET/NLPBtew2m5apL7jWw/PStQ7iGwXjgAqdvo=
 github.com/rancher/pkg v0.0.0-20190514055449-b30ab9de040e/go.mod h1:XbYHTPaXuw8ZY9bylhYKQh/nJxDaTKk3YhAxPl4Qy/k=
-github.com/rancher/rancher/pkg/auth v0.0.0-20200531020208-29f9426e5027 h1:DK0DTWIHZcX/UKW2rRnL8E1fxdIRGRK3dJ5CDc7Io5o=
-github.com/rancher/rancher/pkg/auth v0.0.0-20200531020208-29f9426e5027/go.mod h1:2/THLNZAO0j+dC/T+gh/DTjoh3H4NaHMw+n1HmV7OC4=
+github.com/rancher/rancher/pkg/auth v0.0.0-20200531044436-079f4e4ab94d h1:48O3YcKo13rO0yrD8h5vtAmoEDMSqaCv6bc5IzIwZyE=
+github.com/rancher/rancher/pkg/auth v0.0.0-20200531044436-079f4e4ab94d/go.mod h1:2/THLNZAO0j+dC/T+gh/DTjoh3H4NaHMw+n1HmV7OC4=
 github.com/rancher/saml v0.0.0-20180713225824-ce1532152fde h1:+gd9up4jLeFeuNC5bHn7qfRXZO9WKtBe8b4vhucg9lg=
 github.com/rancher/saml v0.0.0-20180713225824-ce1532152fde/go.mod h1:Bp1IBnlwVB1EqRfSKecoPyf+1Wjh8zykMjlq4vJJhxY=
 github.com/rancher/steve v0.0.0-20200518163824-9e4ed62a470a/go.mod h1:48ecYu5vn9zQ1O0/8OnVuih73THoI21UT7sYFcv1RRo=
