@@ -72,7 +72,10 @@ func (u *DefaultURLBuilder) Marker(marker string) string {
 }
 
 func (u *DefaultURLBuilder) Link(schema *types.APISchema, id string, linkName string) string {
-	return u.schemaURL(schema, id, linkName)
+	if strings.Contains(id, "/") {
+		return u.schemaURL(schema, id, linkName)
+	}
+	return u.schemaURL(schema, id) + "?link=" + url.QueryEscape(linkName)
 }
 
 func (u *DefaultURLBuilder) ResourceLink(schema *types.APISchema, id string) string {

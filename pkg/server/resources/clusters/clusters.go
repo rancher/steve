@@ -3,6 +3,8 @@ package clusters
 import (
 	"net/http"
 
+	"github.com/rancher/steve/pkg/server/store/proxy"
+
 	"github.com/rancher/steve/pkg/schemaserver/store/empty"
 	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
@@ -29,11 +31,20 @@ var (
 type Cluster struct {
 }
 
-func Register(schemas *types.APISchemas) {
+func Register(schemas *types.APISchemas, cg proxy.ClientGetter) {
 	schemas.MustImportAndCustomize(Cluster{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
 		schema.Store = &Store{}
+
+		shell := &shell{
+			cg:        cg,
+			namespace: "dashboard-shells",
+		}
+		schema.LinkHandlers = map[string]http.Handler{
+			"shell": shell,
+		}
+
 		schema.Formatter = func(request *types.APIRequest, resource *types.RawResource) {
 			resource.Links["api"] = request.URLBuilder.RelativeToRoot("/k8s/clusters/" + resource.ID)
 		}

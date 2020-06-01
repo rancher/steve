@@ -27,10 +27,13 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/{name:v1}").Handler(h.APIRoot)
 
 	m.Path("/v1/{type}").Handler(h.K8sResource)
-	m.Path("/v1/{type}/{nameorns}").Handler(h.K8sResource)
-	m.Path("/v1/{type}/{namespace}/{name}").Handler(h.K8sResource)
+	m.Path("/v1/{type}/{nameorns}").Queries("link", "{link}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{nameorns}").Queries("action", "{action}").Handler(h.K8sResource)
+	m.Path("/v1/{type}/{nameorns}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}").Queries("action", "{action}").Handler(h.K8sResource)
+	m.Path("/v1/{type}/{namespace}/{name}").Queries("link", "{link}").Handler(h.K8sResource)
+	m.Path("/v1/{type}/{namespace}/{name}").Handler(h.K8sResource)
+	m.Path("/v1/{type}/{namespace}/{name}/{link}").Handler(h.K8sResource)
 	m.Path("/api").Handler(h.K8sProxy) // Can't just prefix this as UI needs /apikeys path
 	m.PathPrefix("/api/").Handler(h.K8sProxy)
 	m.PathPrefix("/apis").Handler(h.K8sProxy)

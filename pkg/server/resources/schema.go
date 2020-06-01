@@ -22,7 +22,7 @@ func DefaultSchemas(baseSchema *types.APISchemas, ccache clustercache.ClusterCac
 	subscribe.Register(baseSchema)
 	apiroot.Register(baseSchema, []string{"v1"}, []string{"proxy:/apis"})
 	userpreferences.Register(baseSchema, cg)
-	clusters.Register(baseSchema)
+	clusters.Register(baseSchema, cg)
 	return baseSchema
 }
 

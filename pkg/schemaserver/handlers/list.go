@@ -16,7 +16,19 @@ func ByIDHandler(request *types.APIRequest) (types.APIObject, error) {
 		return types.APIObject{}, httperror.NewAPIError(validation.NotFound, "no store found")
 	}
 
-	return store.ByID(request, request.Schema, request.Name)
+	resp, err := store.ByID(request, request.Schema, request.Name)
+	if err != nil {
+		return resp, err
+	}
+
+	if request.Link != "" {
+		if handler, ok := request.Schema.LinkHandlers[request.Link]; ok {
+			handler.ServeHTTP(request.Response, request.Request)
+			return types.APIObject{}, validation.ErrComplete
+		}
+	}
+
+	return resp, nil
 }
 
 func ListHandler(request *types.APIRequest) (types.APIObjectList, error) {
@@ -35,19 +47,5 @@ func ListHandler(request *types.APIRequest) (types.APIObjectList, error) {
 		return types.APIObjectList{}, httperror.NewAPIError(validation.NotFound, "no store found")
 	}
 
-	if request.Link == "" {
-		return store.List(request, request.Schema)
-	}
-
-	_, err := store.ByID(request, request.Schema, request.Name)
-	if err != nil {
-		return types.APIObjectList{}, err
-	}
-
-	if handler, ok := request.Schema.LinkHandlers[request.Link]; ok {
-		handler.ServeHTTP(request.Response, request.Request)
-		return types.APIObjectList{}, validation.ErrComplete
-	}
-
-	return types.APIObjectList{}, validation.NotFound
+	return store.List(request, request.Schema)
 }

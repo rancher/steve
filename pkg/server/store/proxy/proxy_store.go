@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 )
 
 var (
@@ -31,6 +32,9 @@ var (
 )
 
 type ClientGetter interface {
+	IsImpersonating() bool
+	K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error)
+	AdminK8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error)
 	Client(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)
 	AdminClient(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)
 	TableClient(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)

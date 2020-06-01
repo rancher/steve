@@ -102,6 +102,15 @@ func (j *EncodingResponseWriter) addLinks(schema *types.APISchema, context *type
 			rawResource.Links["remove"] = self
 		}
 	}
+	for link := range schema.LinkHandlers {
+		rawResource.Links[link] = context.URLBuilder.Link(schema, rawResource.ID, link)
+	}
+	for action := range schema.ActionHandlers {
+		if rawResource.Actions == nil {
+			rawResource.Actions = map[string]string{}
+		}
+		rawResource.Actions[action] = context.URLBuilder.Action(schema, rawResource.ID, action)
+	}
 }
 
 func getLimit(req *http.Request) int {
