@@ -107,13 +107,8 @@ func (p *Factory) K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, err
 	return kubernetes.NewForConfig(cfg)
 }
 
-func (p *Factory) AdminK8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error) {
-	cfg, err := setupConfig(ctx, p.clientCfg, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return kubernetes.NewForConfig(cfg)
+func (p *Factory) AdminK8sInterface() (kubernetes.Interface, error) {
+	return kubernetes.NewForConfig(p.clientCfg)
 }
 
 func (p *Factory) Client(ctx *types.APIRequest, s *types.APISchema, namespace string) (dynamic.ResourceInterface, error) {

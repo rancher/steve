@@ -67,7 +67,7 @@ func setup(ctx context.Context, server *Server) (http.Handler, *schema.Collectio
 
 	ccache := clustercache.NewClusterCache(ctx, cf.DynamicClient())
 
-	server.BaseSchemas = resources.DefaultSchemas(server.BaseSchemas, ccache, cf)
+	server.BaseSchemas = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, cf)
 	server.SchemaTemplates = append(server.SchemaTemplates, resources.DefaultSchemaTemplates(cf, asl, server.K8s.Discovery())...)
 
 	cols, err := common.NewDynamicColumns(server.RestConfig)

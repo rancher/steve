@@ -7,7 +7,6 @@ import (
 	"net/http/httputil"
 	"time"
 
-	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/steve/pkg/server/store/proxy"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
@@ -15,7 +14,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/kubernetes"
@@ -25,9 +27,48 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
+const (
+	roleLabel = "shell.cattle.io/cluster-role"
+)
+
 type shell struct {
 	namespace string
 	cg        proxy.ClientGetter
+}
+
+func (s *shell) PurgeOldShell(gvr schema.GroupVersionResource, key string, obj runtime.Object) error {
+	if obj == nil ||
+		gvr.Version != "v1" ||
+		gvr.Group != rbacv1.GroupName ||
+		gvr.Resource != "clusterroles" {
+		return nil
+	}
+
+	meta, err := meta.Accessor(obj)
+	if err != nil {
+		// ignore error
+		logrus.Warnf("failed to find metadata for %v, %s", gvr, key)
+		return nil
+	}
+
+	if meta.GetLabels()[roleLabel] != "true" {
+		return nil
+	}
+
+	if meta.GetCreationTimestamp().Add(time.Hour).Before(time.Now()) {
+		client, err := s.cg.AdminK8sInterface()
+		if err != nil {
+			return nil
+		}
+		name := meta.GetName()
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			client.RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
+		}()
+	}
+
+	return nil
 }
 
 func (s *shell) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -42,7 +83,12 @@ func (s *shell) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer client.RbacV1().ClusterRoles().Delete(ctx, role.Name, metav1.DeleteOptions{})
+	defer func() {
+		// Don't use request context as it already be canceled at this point
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		client.RbacV1().ClusterRoles().Delete(ctx, role.Name, metav1.DeleteOptions{})
+	}()
 
 	pod, err := s.createPod(ctx, user, role, client)
 	if err != nil {
@@ -66,7 +112,7 @@ func (s *shell) proxyRequest(rw http.ResponseWriter, req *http.Request, pod *v1.
 			Stdout:    false,
 			Stderr:    false,
 			TTY:       false,
-			Container: "",
+			Container: "shell",
 		}, scheme.ParameterCodec).URL()
 
 	httpClient := client.CoreV1().RESTClient().(*rest.RESTClient).Client
@@ -86,9 +132,7 @@ func (s *shell) proxyRequest(rw http.ResponseWriter, req *http.Request, pod *v1.
 
 func (s *shell) contextAndClient(req *http.Request) (context.Context, user.Info, kubernetes.Interface, error) {
 	ctx := req.Context()
-	apiContext := types.GetAPIContext(req.Context())
-
-	client, err := s.cg.AdminK8sInterface(apiContext)
+	client, err := s.cg.AdminK8sInterface()
 	if err != nil {
 		return ctx, nil, nil, err
 	}
@@ -122,6 +166,9 @@ func (s *shell) createRole(ctx context.Context, user user.Info, client kubernete
 	return client.RbacV1().ClusterRoles().Create(ctx, &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "dashboard-shell-",
+			Labels: map[string]string{
+				roleLabel: "true",
+			},
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -260,19 +307,16 @@ func (s *shell) createPod(ctx context.Context, user user.Info, role *rbacv1.Clus
 		return nil, err
 	}
 
-	hour := int64(15)
+	zero := int64(0)
+	t := true
 	pod, err := client.CoreV1().Pods(s.namespace).Create(ctx, &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "dashboard-shell-",
-			Namespace:    s.namespace,
-			Labels: map[string]string{
-				"clusterrolename": role.Name,
-				"clusterroleuid":  string(role.UID),
-			},
+			GenerateName:    "dashboard-shell-",
+			Namespace:       s.namespace,
 			OwnerReferences: ref(role),
 		},
 		Spec: v1.PodSpec{
-			ActiveDeadlineSeconds: &hour,
+			TerminationGracePeriodSeconds: &zero,
 			Volumes: []v1.Volume{
 				{
 					Name: "config",
@@ -289,13 +333,21 @@ func (s *shell) createPod(ctx context.Context, user user.Info, role *rbacv1.Clus
 			ServiceAccountName: sa.Name,
 			Containers: []v1.Container{
 				{
-					Name:            "shell",
-					TTY:             true,
-					Stdin:           true,
-					StdinOnce:       true,
-					Image:           "rancher/rancher-agent:v2.4.3",
+					Name:            "proxy",
+					Image:           "ibuildthecloud/shell:v0.0.1",
 					ImagePullPolicy: v1.PullIfNotPresent,
-					Command:         []string{"bash"},
+					Env: []v1.EnvVar{
+						{
+							Name:  "KUBECONFIG",
+							Value: "/root/.kube/config",
+						},
+					},
+					Command: []string{"kubectl", "proxy"},
+					SecurityContext: &v1.SecurityContext{
+						RunAsUser:              &zero,
+						RunAsGroup:             &zero,
+						ReadOnlyRootFilesystem: &t,
+					},
 					VolumeMounts: []v1.VolumeMount{
 						{
 							Name:      "config",
@@ -304,6 +356,15 @@ func (s *shell) createPod(ctx context.Context, user user.Info, role *rbacv1.Clus
 							SubPath:   "config",
 						},
 					},
+				},
+				{
+					Name:            "shell",
+					TTY:             true,
+					Stdin:           true,
+					StdinOnce:       true,
+					Image:           "ibuildthecloud/shell:v0.0.1",
+					ImagePullPolicy: v1.PullIfNotPresent,
+					Command:         []string{"bash"},
 				},
 			},
 		},
