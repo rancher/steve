@@ -36,6 +36,7 @@ replace (
 
 require (
 	github.com/ghodss/yaml v1.0.0
+	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1
 	github.com/pkg/errors v0.9.1
@@ -44,16 +45,19 @@ require (
 	github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f
 	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	helm.sh/helm/v3 v3.2.0
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.0
 	k8s.io/apiserver v0.18.0
 	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/helm v2.16.7+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.18.0
 	k8s.io/kube-openapi v0.0.0-20200121204235-bf4fb3bd569c
+	sigs.k8s.io/yaml v1.2.0
 )
