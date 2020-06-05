@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/schemaserver/types"
+	"github.com/rancher/steve/pkg/server/store/partition"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
 	"github.com/sirupsen/logrus"
@@ -50,9 +51,11 @@ type Store struct {
 func NewProxyStore(clientGetter ClientGetter, lookup accesscontrol.AccessSetLookup) types.Store {
 	return &errorStore{
 		Store: &WatchRefresh{
-			Store: &RBACStore{
-				Store: &Store{
-					clientGetter: clientGetter,
+			Store: &partition.Store{
+				Partitioner: &rbacPartitioner{
+					proxyStore: &Store{
+						clientGetter: clientGetter,
+					},
 				},
 			},
 			asl: lookup,

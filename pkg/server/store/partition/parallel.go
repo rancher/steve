@@ -1,4 +1,4 @@
-package proxy
+package partition
 
 import (
 	"context"
@@ -9,6 +9,10 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
+
+type Partition interface {
+	Name() string
+}
 
 type ParallelPartitionLister struct {
 	Lister      PartitionLister
@@ -40,12 +44,12 @@ func (p *ParallelPartitionLister) Continue() string {
 	return base64.StdEncoding.EncodeToString(bytes)
 }
 
-func indexOrZero(partitions []Partition, namespace string) int {
-	if namespace == "" {
+func indexOrZero(partitions []Partition, name string) int {
+	if name == "" {
 		return 0
 	}
 	for i, partition := range partitions {
-		if partition.Namespace == namespace {
+		if partition.Name() == name {
 			return i
 		}
 	}
@@ -74,11 +78,11 @@ func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume st
 }
 
 type listState struct {
-	Revision           string `json:"r,omitempty"`
-	PartitionNamespace string `json:"p,omitempty"`
-	Continue           string `json:"c,omitempty"`
-	Offset             int    `json:"o,omitempty"`
-	Limit              int    `json:"l,omitempty"`
+	Revision      string `json:"r,omitempty"`
+	PartitionName string `json:"p,omitempty"`
+	Continue      string `json:"c,omitempty"`
+	Offset        int    `json:"o,omitempty"`
+	Limit         int    `json:"l,omitempty"`
 }
 
 func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, limit int, result chan []types.APIObject) {
@@ -97,7 +101,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 		close(result)
 	}()
 
-	for i := indexOrZero(p.Partitions, state.PartitionNamespace); i < len(p.Partitions); i++ {
+	for i := indexOrZero(p.Partitions, state.PartitionName); i < len(p.Partitions); i++ {
 		if capacity <= 0 || isDone(ctx) {
 			break
 		}
@@ -129,7 +133,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 
 			for {
 				cont := ""
-				if partition.Namespace == state.PartitionNamespace {
+				if partition.Name() == state.PartitionName {
 					cont = state.Continue
 				}
 				list, err := p.Lister(ctx, partition, cont, state.Revision, limit)
@@ -150,7 +154,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 					p.revision = list.Revision
 				}
 
-				if state.PartitionNamespace == partition.Namespace && state.Offset > 0 && state.Offset < len(list.Objects) {
+				if state.PartitionName == partition.Name() && state.Offset > 0 && state.Offset < len(list.Objects) {
 					list.Objects = list.Objects[state.Offset:]
 				}
 
@@ -158,11 +162,11 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 					result <- list.Objects[:capacity]
 					// save state to redo this list at this offset
 					p.state = &listState{
-						Revision:           list.Revision,
-						PartitionNamespace: partition.Namespace,
-						Continue:           cont,
-						Offset:             capacity,
-						Limit:              limit,
+						Revision:      list.Revision,
+						PartitionName: partition.Name(),
+						Continue:      cont,
+						Offset:        capacity,
+						Limit:         limit,
 					}
 					capacity = 0
 					return nil
@@ -174,7 +178,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 					}
 					// loop again and get more data
 					state.Continue = list.Continue
-					state.PartitionNamespace = partition.Namespace
+					state.PartitionName = partition.Name()
 					state.Offset = 0
 				}
 			}
