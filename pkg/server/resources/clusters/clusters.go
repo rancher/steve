@@ -3,14 +3,21 @@ package clusters
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/steve/pkg/schemaserver/store/empty"
 	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/steve/pkg/server/store/proxy"
+	"github.com/rancher/steve/pkg/server/store/switchschema"
+	"github.com/rancher/steve/pkg/server/store/switchstore"
+	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
 )
 
 const (
@@ -31,13 +38,20 @@ var (
 	}
 )
 
-type Cluster struct {
-}
+func Register(ctx context.Context, schemas *types.APISchemas, cg proxy.ClientGetter, cluster clustercache.ClusterCache) error {
+	k8s, err := cg.AdminK8sInterface()
+	if err != nil {
+		return err
+	}
 
-func Register(ctx context.Context, schemas *types.APISchemas, cg proxy.ClientGetter, cluster clustercache.ClusterCache) {
 	shell := &shell{
 		cg:        cg,
 		namespace: "dashboard-shells",
+	}
+
+	picker := &picker{
+		start:     time.Now(),
+		discovery: k8s.Discovery(),
 	}
 
 	cluster.OnAdd(ctx, shell.PurgeOldShell)
@@ -47,74 +61,112 @@ func Register(ctx context.Context, schemas *types.APISchemas, cg proxy.ClientGet
 	schemas.MustImportAndCustomize(Cluster{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
-		schema.Store = &Store{}
-
+		schema.Formatter = Format
+		schema.Store = &switchstore.Store{
+			Picker: picker.Picker,
+		}
 		schema.LinkHandlers = map[string]http.Handler{
 			"shell": shell,
 		}
-
-		schema.Formatter = func(request *types.APIRequest, resource *types.RawResource) {
-			resource.Links["api"] = request.URLBuilder.RelativeToRoot("/k8s/clusters/" + resource.ID)
-		}
 	})
+
+	return nil
+}
+
+type Cluster struct {
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ClusterSpec   `json:"spec"`
+	Status ClusterStatus `json:"status"`
+}
+
+type ClusterSpec struct {
+	DisplayName string `json:"displayName"`
+}
+
+type ClusterStatus struct {
+	Driver  string        `json:"driver"`
+	Version *version.Info `json:"version,omitempty"`
+}
+
+func Format(request *types.APIRequest, resource *types.RawResource) {
+	copy := [][]string{
+		{"spec", "displayName"},
+		{"metadata", "creationTimestamp"},
+		{"status", "driver"},
+		{"status", "version"},
+	}
+
+	from := resource.APIObject.Data()
+	to := data.New()
+
+	for _, keys := range copy {
+		to.SetNested(data.GetValueN(from, keys...), keys...)
+	}
+
+	resource.APIObject.Object = to
+	resource.Links["api"] = request.URLBuilder.RelativeToRoot("/k8s/clusters/" + resource.ID)
 }
 
 type Store struct {
 	empty.Store
+
+	start     time.Time
+	discovery discovery.DiscoveryInterface
 }
 
-func toClusterList(obj types.APIObjectList, err error) (types.APIObjectList, error) {
-	for i := range obj.Objects {
-		obj.Objects[i], _ = toCluster(obj.Objects[i], err)
+type picker struct {
+	start     time.Time
+	discovery discovery.DiscoveryInterface
+}
+
+func (p *picker) Picker(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (types.Store, error) {
+	clusters := apiOp.Schemas.LookupSchema(rancherCluster)
+	if clusters == nil {
+		return &Store{
+			start:     p.start,
+			discovery: p.discovery,
+		}, nil
 	}
-	return obj, err
-}
-
-func toCluster(obj types.APIObject, err error) (types.APIObject, error) {
-	return types.APIObject{
-		Type:   "cluster",
-		ID:     obj.ID,
-		Object: &Cluster{},
-	}, err
+	return &switchschema.Store{
+		Schema: clusters,
+	}, nil
 }
 
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
-	clusters := apiOp.Schemas.LookupSchema(rancherCluster)
-	if clusters == nil {
-		if id == localID {
-			return local, nil
-		}
-		return types.APIObject{}, validation.NotFound
+	if id == localID {
+		return s.newLocal(), nil
 	}
-	return toCluster(clusters.Store.ByID(apiOp, clusters, id))
+	return types.APIObject{}, validation.NotFound
 }
 
 func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
-	clusters := apiOp.Schemas.LookupSchema(rancherCluster)
-	if clusters == nil {
-		return localList, nil
-	}
-	return toClusterList(clusters.Store.List(apiOp, clusters))
+	return types.APIObjectList{
+		Objects: []types.APIObject{
+			s.newLocal(),
+		},
+	}, nil
 }
 
-func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan types.APIEvent, error) {
-	clusters := apiOp.Schemas.LookupSchema(rancherCluster)
-	if clusters == nil {
-		return nil, nil
+func (s *Store) newLocal() types.APIObject {
+	cluster := &Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			CreationTimestamp: metav1.NewTime(s.start),
+		},
+		Spec: ClusterSpec{
+			DisplayName: "Remote",
+		},
+		Status: ClusterStatus{
+			Driver: "remote",
+		},
 	}
-	target, err := clusters.Store.Watch(apiOp, clusters, w)
-	if err != nil {
-		return nil, err
+	version, err := s.discovery.ServerVersion()
+	if err == nil {
+		cluster.Status.Version = version
 	}
-
-	result := make(chan types.APIEvent)
-	go func() {
-		defer close(result)
-		for event := range target {
-			event.Object, _ = toCluster(event.Object, nil)
-			result <- event
-		}
-	}()
-
-	return result, nil
+	return types.APIObject{
+		Type:   "cluster",
+		ID:     localID,
+		Object: cluster,
+	}
 }

@@ -20,14 +20,15 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
-func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache clustercache.ClusterCache, cg proxy.ClientGetter) *types.APISchemas {
+func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache clustercache.ClusterCache, cg proxy.ClientGetter) (*types.APISchemas, error) {
 	counts.Register(baseSchema, ccache)
 	subscribe.Register(baseSchema)
 	apiroot.Register(baseSchema, []string{"v1"}, []string{"proxy:/apis"})
 	userpreferences.Register(baseSchema, cg)
-	clusters.Register(ctx, baseSchema, cg, ccache)
 	helm.Register(baseSchema)
-	return baseSchema
+
+	err := clusters.Register(ctx, baseSchema, cg, ccache)
+	return baseSchema, err
 }
 
 func DefaultSchemaTemplates(cf *client.Factory, lookup accesscontrol.AccessSetLookup, discovery discovery.DiscoveryInterface) []schema.Template {
