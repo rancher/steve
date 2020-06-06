@@ -3,6 +3,7 @@ package helm
 import (
 	"strings"
 
+	"github.com/rancher/steve/pkg/schemaserver/store/empty"
 	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/steve/pkg/server/store/partition"
 	"github.com/rancher/steve/pkg/server/store/selector"
@@ -73,6 +74,9 @@ func (p *partitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb
 func (p *partitioner) Store(apiOp *types.APIRequest, partition partition.Partition) (types.Store, error) {
 	target := partition.(target)
 	schema := apiOp.Schemas.LookupSchema(target.schemaType)
+	if schema == nil {
+		return &empty.Store{}, nil
+	}
 	return &stripIDPrefix{
 		Store: &selector.Store{
 			Selector: target.selector,

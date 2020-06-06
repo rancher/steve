@@ -1,16 +1,16 @@
 package userpreferences
 
 import (
+	"github.com/rancher/norman/types/convert"
 	"github.com/rancher/steve/pkg/schemaserver/store/empty"
 	"github.com/rancher/steve/pkg/schemaserver/types"
 	"github.com/rancher/steve/pkg/server/store/proxy"
-	"github.com/rancher/wrangler/pkg/data"
-	"github.com/rancher/wrangler/pkg/data/convert"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apiserver/pkg/authentication/user"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 type configMapStore struct {
@@ -18,29 +18,34 @@ type configMapStore struct {
 	cg proxy.ClientGetter
 }
 
-func (e *configMapStore) getClient(apiOp *types.APIRequest) (dynamic.ResourceInterface, error) {
-	cmSchema := apiOp.Schemas.LookupSchema("configmap")
-	if cmSchema == nil {
-		return nil, validation.NotFound
+func (e *configMapStore) getClient(apiOp *types.APIRequest) (v1.ConfigMapInterface, error) {
+	c, err := e.cg.AdminK8sInterface()
+	if err != nil {
+		return nil, err
 	}
+	return c.CoreV1().ConfigMaps("kube-system"), nil
+}
 
-	return e.cg.AdminClient(apiOp, cmSchema, "kube-system")
+func newPref(u user.Info) (types.APIObject, *UserPreference) {
+	pref := &UserPreference{
+		Data: map[string]string{},
+	}
+	return types.APIObject{
+		Type:   "userpreference",
+		ID:     u.GetName(),
+		Object: pref,
+	}, pref
 }
 
 func (e *configMapStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
 	u := getUser(apiOp)
-	client, err := e.getClient(apiOp)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	result, pref := newPref(u)
 
-	pref := &UserPreference{
-		Data: map[string]string{},
-	}
-	result := types.APIObject{
-		Type:   "userpreference",
-		ID:     u.GetName(),
-		Object: pref,
+	client, err := e.getClient(apiOp)
+	if err == validation.NotFound {
+		return result, nil
+	} else if err != nil {
+		return types.APIObject{}, err
 	}
 
 	obj, err := client.Get(apiOp.Context(), prefName(u), metav1.GetOptions{})
@@ -48,8 +53,8 @@ func (e *configMapStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, 
 		return result, nil
 	}
 
-	d := data.Object(obj.Object).Map("data")
-	return result, convert.ToObj(d, &pref.Data)
+	pref.Data = obj.Data
+	return result, nil
 }
 
 func (e *configMapStore) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
@@ -71,18 +76,21 @@ func (e *configMapStore) Update(apiOp *types.APIRequest, schema *types.APISchema
 		return types.APIObject{}, err
 	}
 
+	values := map[string]string{}
+	for k, v := range data.Data().Map("data") {
+		values[k] = convert.ToString(v)
+	}
+
 	obj, err := client.Get(apiOp.Context(), prefName(u), metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		_, err = client.Create(apiOp.Context(), &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"name": prefName(u),
-				},
-				"data": data.Data().Map("data"),
+		_, err = client.Create(apiOp.Context(), &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: prefName(u),
 			},
+			Data: values,
 		}, metav1.CreateOptions{})
 	} else if err == nil {
-		obj.Object["data"] = data.Data().Map("data")
+		obj.Data = values
 		_, err = client.Update(apiOp.Context(), obj, metav1.UpdateOptions{})
 	}
 	if err != nil {
