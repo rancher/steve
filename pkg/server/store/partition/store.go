@@ -129,7 +129,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	}
 
 	ctx, cancel := context.WithCancel(apiOp.Context())
-	defer cancel()
 	apiOp = apiOp.WithContext(ctx)
 
 	eg := errgroup.Group{}
@@ -138,6 +137,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	for _, partition := range partitions {
 		store, err := s.Partitioner.Store(apiOp, partition)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 
@@ -158,6 +158,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 		defer close(response)
 		<-ctx.Done()
 		eg.Wait()
+		cancel()
 	}()
 
 	return response, nil
