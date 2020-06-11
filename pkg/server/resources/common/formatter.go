@@ -20,6 +20,10 @@ func DefaultTemplate(clientGetter proxy.ClientGetter, asl accesscontrol.AccessSe
 	}
 }
 
+func DefaultFormatter(next types.Formatter) types.Formatter {
+	return types.FormatterChain(Formatter, next)
+}
+
 func Formatter(request *types.APIRequest, resource *types.RawResource) {
 	meta, err := meta.Accessor(resource.APIObject.Object)
 	if err != nil {

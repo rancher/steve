@@ -37,11 +37,11 @@ func DefaultSchemaTemplates(cf *client.Factory, lookup accesscontrol.AccessSetLo
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
-			Formatter: helm.DropHelmData,
+			Formatter: common.DefaultFormatter(helm.DropHelmData),
 		},
 		{
 			ID:        "secret",
-			Formatter: helm.DropHelmData,
+			Formatter: common.DefaultFormatter(helm.DropHelmData),
 		},
 	}
 }
