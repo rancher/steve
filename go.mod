@@ -38,7 +38,7 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/mux v1.7.3
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/apiserver v0.0.0-20200612043804-70900e7dfb94
+	github.com/rancher/apiserver v0.0.0-20200612212259-10457317eb0b
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
 	github.com/rancher/norman v0.0.0-20200517050325-f53cae161640
 	github.com/rancher/rancher/pkg/auth v0.0.0-20200612062006-9ccb702b9571
