@@ -35,17 +35,16 @@ replace (
 )
 
 require (
-	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/mux v1.7.3
-	github.com/gorilla/websocket v1.4.1
 	github.com/pkg/errors v0.9.1
+	github.com/rancher/apiserver v0.0.0-20200612043804-70900e7dfb94
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
-	github.com/rancher/rancher/pkg/auth v0.0.0-20200531044436-079f4e4ab94d
+	github.com/rancher/norman v0.0.0-20200517050325-f53cae161640
+	github.com/rancher/rancher/pkg/auth v0.0.0-20200612062006-9ccb702b9571
 	github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f
 	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
