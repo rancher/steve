@@ -38,11 +38,11 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/mux v1.7.3
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/apiserver v0.0.0-20200612212259-10457317eb0b
+	github.com/rancher/apiserver v0.0.0-20200622164348-5ca5f492254f
 	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
 	github.com/rancher/norman v0.0.0-20200517050325-f53cae161640
 	github.com/rancher/rancher/pkg/auth v0.0.0-20200612062006-9ccb702b9571
-	github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f
+	github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407
 	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.22.2
