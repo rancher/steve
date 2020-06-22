@@ -287,6 +287,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, k8sClient dynamic.Resource
 		Watch:           true,
 		TimeoutSeconds:  &timeout,
 		ResourceVersion: rev,
+		LabelSelector:   w.Selector,
 	})
 	if err != nil {
 		returnErr(errors.Wrapf(err, "stopping watch for %s: %v", schema.ID, err), result)
