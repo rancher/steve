@@ -35,19 +35,26 @@ replace (
 )
 
 require (
+	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9 // indirect
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/mux v1.7.3
+	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/common v0.7.0 // indirect
+	github.com/prometheus/procfs v0.0.6 // indirect
 	github.com/rancher/apiserver v0.0.0-20200622174841-b4d1106a9883
-	github.com/rancher/dynamiclistener v0.2.1-0.20200213165308-111c5b43e932
-	github.com/rancher/norman v0.0.0-20200517050325-f53cae161640
-	github.com/rancher/rancher/pkg/auth v0.0.0-20200612062006-9ccb702b9571
-	github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407
-	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
+	github.com/rancher/dynamiclistener v0.2.1-0.20200714201033-9c1939da3af9
+	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
+	github.com/rancher/wrangler v0.6.2-0.20200714200521-c61fae623942
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/net v0.0.0-20191112182307-2180aed22343 // indirect
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	golang.org/x/sys v0.0.0-20191113165036-4c7a9d0fe056 // indirect
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
+	google.golang.org/genproto v0.0.0-20191115194625-c23dd37a84c9 // indirect
 	helm.sh/helm/v3 v3.2.0
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0
