@@ -303,15 +303,17 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, k8sClient dynamic.Resource
 		watcher.Stop()
 	}()
 
-	eg.Go(func() error {
-		for rel := range s.notifier.OnInboundRelationshipChange(ctx, schema, apiOp.Namespace) {
-			obj, err := s.byID(apiOp, schema, rel.Name)
-			if err == nil {
-				result <- s.toAPIEvent(apiOp, schema, watch.Modified, obj)
+	if s.notifier != nil {
+		eg.Go(func() error {
+			for rel := range s.notifier.OnInboundRelationshipChange(ctx, schema, apiOp.Namespace) {
+				obj, err := s.byID(apiOp, schema, rel.Name)
+				if err == nil {
+					result <- s.toAPIEvent(apiOp, schema, watch.Modified, obj)
+				}
 			}
-		}
-		return fmt.Errorf("closed")
-	})
+			return fmt.Errorf("closed")
+		})
+	}
 
 	eg.Go(func() error {
 		for event := range watcher.ResultChan() {
