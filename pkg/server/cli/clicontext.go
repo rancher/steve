@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 
-	rancherauth "github.com/rancher/rancher/pkg/auth"
 	steveauth "github.com/rancher/steve/pkg/auth"
 	authcli "github.com/rancher/steve/pkg/auth/cli"
 	"github.com/rancher/steve/pkg/server"
@@ -46,19 +45,6 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 		auth, err = c.WebhookConfig.WebhookMiddleware()
 		if err != nil {
 			return nil, err
-		}
-
-		if auth == nil {
-			authServer, err := rancherauth.NewServer(ctx, restConfig)
-			if err != nil {
-				return nil, err
-			}
-
-			auth = authServer.Authenticator
-			startHooks = append(startHooks, func(ctx context.Context, s *server.Server) error {
-				s.Next = authServer.Management.Wrap(s.Next)
-				return authServer.Start(ctx)
-			})
 		}
 	}
 
