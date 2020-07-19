@@ -49,7 +49,7 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 	}
 
 	return &server.Server{
-		RestConfig:     restConfig,
+		RESTConfig:     restConfig,
 		AuthMiddleware: auth,
 		DashboardURL: func() string {
 			return c.DashboardURL
