@@ -15,7 +15,6 @@ type Config struct {
 	KubeConfig      string
 	HTTPSListenPort int
 	HTTPListenPort  int
-	DashboardURL    string
 	Authentication  bool
 
 	WebhookConfig authcli.WebhookConfig
@@ -31,8 +30,7 @@ func (c *Config) MustServer(ctx context.Context) *server.Server {
 
 func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 	var (
-		auth       steveauth.Middleware
-		startHooks []server.StartHook
+		auth steveauth.Middleware
 	)
 
 	restConfig, err := kubeconfig.GetNonInteractiveClientConfig(c.KubeConfig).ClientConfig()
@@ -48,14 +46,9 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 		}
 	}
 
-	return &server.Server{
-		RESTConfig:     restConfig,
+	return server.New(ctx, restConfig, &server.Options{
 		AuthMiddleware: auth,
-		DashboardURL: func() string {
-			return c.DashboardURL
-		},
-		StartHooks: startHooks,
-	}, nil
+	})
 }
 
 func Flags(config *Config) []cli.Flag {
@@ -74,11 +67,6 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       9080,
 			Destination: &config.HTTPListenPort,
-		},
-		cli.StringFlag{
-			Name:        "dashboard-url",
-			Value:       "https://releases.rancher.com/dashboard/latest/index.html",
-			Destination: &config.DashboardURL,
 		},
 		cli.BoolTFlag{
 			Name:        "authentication",
