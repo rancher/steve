@@ -12,14 +12,21 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
+const (
+	subjectKindUser           = "User"
+	subjectKindGroup          = "Group"
+	subjectKindServiceAccount = "ServiceAccount"
+)
+
 type AccessSetLookup interface {
 	AccessFor(user user.Info) *AccessSet
 }
 
 type AccessStore struct {
-	users  *policyRuleIndex
-	groups *policyRuleIndex
-	cache  *cache.LRUExpireCache
+	users           *policyRuleIndex
+	groups          *policyRuleIndex
+	serviceAccounts *policyRuleIndex
+	cache           *cache.LRUExpireCache
 }
 
 type roleKey struct {
@@ -30,8 +37,9 @@ type roleKey struct {
 func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
 	revisions := newRoleRevision(ctx, rbac)
 	as := &AccessStore{
-		users:  newPolicyRuleIndex(true, revisions, rbac),
-		groups: newPolicyRuleIndex(false, revisions, rbac),
+		users:           newPolicyRuleIndex(subjectKindUser, revisions, rbac),
+		groups:          newPolicyRuleIndex(subjectKindGroup, revisions, rbac),
+		serviceAccounts: newPolicyRuleIndex(subjectKindServiceAccount, revisions, rbac),
 	}
 	if cacheResults {
 		as.cache = cache.NewLRUExpireCache(50)
@@ -51,6 +59,8 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	}
 
 	result := l.users.get(user.GetName())
+	result.Merge(l.serviceAccounts.get(user.GetName()))
+
 	for _, group := range user.GetGroups() {
 		result.Merge(l.groups.get(group))
 	}
@@ -67,6 +77,7 @@ func (l *AccessStore) CacheKey(user user.Info) string {
 	d := sha256.New()
 
 	l.users.addRolesToHash(d, user.GetName())
+	l.serviceAccounts.addRolesToHash(d, user.GetName())
 
 	groupBase := user.GetGroups()
 	groups := make([]string, 0, len(groupBase))

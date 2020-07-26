@@ -1,6 +1,7 @@
 package accesscontrol
 
 import (
+	"fmt"
 	"hash"
 	"sort"
 
@@ -10,8 +11,7 @@ import (
 )
 
 const (
-	rbacGroup = "rbac.authorization.k8s.io"
-	All       = "*"
+	All = "*"
 )
 
 type policyRuleIndex struct {
@@ -25,11 +25,7 @@ type policyRuleIndex struct {
 	clusterRoleIndexKey string
 }
 
-func newPolicyRuleIndex(user bool, revisions *roleRevisionIndex, rbac v1.Interface) *policyRuleIndex {
-	key := "Group"
-	if user {
-		key = "User"
-	}
+func newPolicyRuleIndex(key string, revisions *roleRevisionIndex, rbac v1.Interface) *policyRuleIndex {
 	pi := &policyRuleIndex{
 		kind:                key,
 		crCache:             rbac.ClusterRole().Cache(),
@@ -49,8 +45,8 @@ func newPolicyRuleIndex(user bool, revisions *roleRevisionIndex, rbac v1.Interfa
 
 func (p *policyRuleIndex) clusterRoleBindingBySubjectIndexer(crb *rbacv1.ClusterRoleBinding) (result []string, err error) {
 	for _, subject := range crb.Subjects {
-		if subject.APIGroup == rbacGroup && subject.Kind == p.kind && crb.RoleRef.Kind == "ClusterRole" {
-			result = append(result, subject.Name)
+		if subject.Kind == p.kind {
+			result = append(result, subjectName(subject))
 		}
 	}
 	return
@@ -58,8 +54,8 @@ func (p *policyRuleIndex) clusterRoleBindingBySubjectIndexer(crb *rbacv1.Cluster
 
 func (p *policyRuleIndex) roleBindingBySubject(rb *rbacv1.RoleBinding) (result []string, err error) {
 	for _, subject := range rb.Subjects {
-		if subject.APIGroup == rbacGroup && subject.Kind == p.kind {
-			result = append(result, subject.Name)
+		if subject.Kind == p.kind {
+			result = append(result, subjectName(subject))
 		}
 	}
 	return
@@ -106,23 +102,27 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 
 func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
 	for _, rule := range p.getRules(namespace, roleRef) {
-		for _, group := range rule.APIGroups {
-			for _, resource := range rule.Resources {
-				names := rule.ResourceNames
-				if len(names) == 0 {
-					names = []string{All}
-				}
-				for _, resourceName := range names {
-					for _, verb := range rule.Verbs {
-						accessSet.Add(verb,
-							schema.GroupResource{
-								Group:    group,
-								Resource: resource,
-							}, Access{
-								Namespace:    namespace,
-								ResourceName: resourceName,
-							})
-					}
+		addRuleToAccessSet(accessSet, rule, namespace)
+	}
+}
+
+func addRuleToAccessSet(accessSet *AccessSet, rule rbacv1.PolicyRule, namespace string) {
+	for _, group := range rule.APIGroups {
+		for _, resource := range rule.Resources {
+			names := rule.ResourceNames
+			if len(names) == 0 {
+				names = []string{All}
+			}
+			for _, resourceName := range names {
+				for _, verb := range rule.Verbs {
+					accessSet.Add(verb,
+						schema.GroupResource{
+							Group:    group,
+							Resource: resource,
+						}, Access{
+							Namespace:    namespace,
+							ResourceName: resourceName,
+						})
 				}
 			}
 		}
@@ -168,4 +168,11 @@ func (p *policyRuleIndex) getRoleBindings(subjectName string) []*rbacv1.RoleBind
 		return string(result[i].UID) < string(result[j].UID)
 	})
 	return result
+}
+
+func subjectName(subject rbacv1.Subject) string {
+	if subject.Kind == subjectKindServiceAccount {
+		return fmt.Sprintf("system:serviceaccount:%s:%s", subject.Namespace, subject.Name)
+	}
+	return subject.Name
 }
