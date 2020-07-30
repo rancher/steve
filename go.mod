@@ -36,10 +36,13 @@ replace (
 
 require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9 // indirect
-	github.com/golang/protobuf v1.3.2
+	github.com/google/go-cmp v0.4.0 // indirect
 	github.com/gorilla/mux v1.7.3
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
+	github.com/imdario/mergo v0.3.8 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.7.0 // indirect
 	github.com/prometheus/procfs v0.0.6 // indirect
@@ -48,22 +51,23 @@ require (
 	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
 	github.com/rancher/wrangler v0.6.2-0.20200714200521-c61fae623942
 	github.com/sirupsen/logrus v1.4.2
+	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
+	golang.org/x/crypto v0.0.0-20200414173820-0848c9571904 // indirect
 	golang.org/x/net v0.0.0-20191112182307-2180aed22343 // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/sys v0.0.0-20191113165036-4c7a9d0fe056 // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
+	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/genproto v0.0.0-20191115194625-c23dd37a84c9 // indirect
-	helm.sh/helm/v3 v3.2.0
+	google.golang.org/grpc v1.27.0 // indirect
 	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.0
 	k8s.io/apiserver v0.18.0
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/helm v2.16.7+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.18.0
 	k8s.io/kube-openapi v0.0.0-20200121204235-bf4fb3bd569c
-	sigs.k8s.io/yaml v1.2.0
 )
