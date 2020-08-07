@@ -510,7 +510,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount) *v1.Po
 
 	pod.Spec.Containers = append(pod.Spec.Containers, v1.Container{
 		Name:            "proxy",
-		Image:           "ibuildthecloud/shell:v0.0.1",
+		Image:           "ibuildthecloud/shell:v0.0.10",
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Env: []v1.EnvVar{
 			{
