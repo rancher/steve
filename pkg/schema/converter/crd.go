@@ -20,7 +20,9 @@ var (
 			Type: "string",
 		},
 		"metadata": {
-			Type: "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+			Type:   "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+			Create: true,
+			Update: true,
 		},
 	}
 )
