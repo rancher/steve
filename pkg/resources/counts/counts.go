@@ -68,7 +68,7 @@ func (s *Summary) DeepCopy() *Summary {
 type ItemCount struct {
 	Summary    Summary            `json:"summary,omitempty"`
 	Namespaces map[string]Summary `json:"namespaces,omitempty"`
-	Revision   int                `json:"revision,omitempty"`
+	Revision   int                `json:"-"`
 }
 
 func (i *ItemCount) DeepCopy() *ItemCount {
@@ -163,7 +163,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 			if _, _, _, oldSummary, ok := getInfo(oldObj); ok {
 				if oldSummary.Transitioning == summary.Transitioning &&
 					oldSummary.Error == summary.Error &&
-					oldSummary.State == summary.State {
+					simpleState(oldSummary) == simpleState(summary) {
 					return nil
 				}
 				itemCount = removeCounts(itemCount, namespace, oldSummary)
@@ -276,11 +276,11 @@ func removeSummary(counts Summary, summary summary.Summary) Summary {
 	if summary.Error {
 		counts.Error--
 	}
-	if summary.State != "" {
+	if simpleState(summary) != "" {
 		if counts.States == nil {
 			counts.States = map[string]int{}
 		}
-		counts.States[summary.State] -= 1
+		counts.States[simpleState(summary)] -= 1
 	}
 	return counts
 }
@@ -293,13 +293,22 @@ func addSummary(counts Summary, summary summary.Summary) Summary {
 	if summary.Error {
 		counts.Error++
 	}
-	if summary.State != "" {
+	if simpleState(summary) != "" {
 		if counts.States == nil {
 			counts.States = map[string]int{}
 		}
-		counts.States[summary.State] += 1
+		counts.States[simpleState(summary)] += 1
 	}
 	return counts
+}
+
+func simpleState(summary summary.Summary) string {
+	if summary.Error {
+		return "error"
+	} else if summary.Transitioning {
+		return "in-progress"
+	}
+	return ""
 }
 
 func (s *Store) getCount(apiOp *types.APIRequest) Count {
