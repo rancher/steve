@@ -1,9 +1,0 @@
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  generateName: test-
-  ownerReferences:
-  - kind: bad
-    apiVersion: bad
-    name: bad
-    uid: bad2
