@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/proxy"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -30,6 +31,32 @@ func ImpersonatingHandler(prefix string, cfg *rest.Config) http.Handler {
 	})
 }
 
+func setupUserAuth(req *http.Request, user user.Info, cfg *rest.Config) *rest.Config {
+	for _, group := range user.GetGroups() {
+		if group == "system:unauthenticated" && strings.HasPrefix(req.Header.Get("Authorization"), "Bearer ") &&
+			cfg.Transport == nil && cfg.WrapTransport == nil {
+			cfg := rest.CopyConfig(cfg)
+			cfg.Username = ""
+			cfg.Password = ""
+			cfg.BearerTokenFile = ""
+			cfg.TLSClientConfig.CertFile = ""
+			cfg.TLSClientConfig.CertData = nil
+			cfg.ExecProvider = nil
+			cfg.AuthConfigPersister = nil
+			cfg.Impersonate = rest.ImpersonationConfig{}
+
+			cfg.BearerToken = strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+			return cfg
+		}
+	}
+
+	cfg = rest.CopyConfig(cfg)
+	cfg.Impersonate.UserName = user.GetName()
+	cfg.Impersonate.Groups = user.GetGroups()
+	cfg.Impersonate.Extra = user.GetExtra()
+	return cfg
+}
+
 func impersonate(rw http.ResponseWriter, req *http.Request, prefix string, cfg *rest.Config) {
 	user, ok := request.UserFrom(req.Context())
 	if !ok {
@@ -37,11 +64,7 @@ func impersonate(rw http.ResponseWriter, req *http.Request, prefix string, cfg *
 		return
 	}
 
-	cfg = rest.CopyConfig(cfg)
-	cfg.Impersonate.UserName = user.GetName()
-	cfg.Impersonate.Groups = user.GetGroups()
-	cfg.Impersonate.Extra = user.GetExtra()
-
+	cfg = setupUserAuth(req, user, cfg)
 	handler, err := Handler(prefix, cfg)
 	if err != nil {
 		logrus.Errorf("failed to impersonate %v for proxy: %v", user, err)
