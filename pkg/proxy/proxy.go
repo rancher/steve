@@ -109,12 +109,15 @@ func Handler(prefix string, cfg *rest.Config) (http.Handler, error) {
 		handler = stripLeaveSlash(prefix, handler)
 	}
 
-	return authHeaders(handler), nil
+	return proxyHeaders(handler), nil
 }
 
-func authHeaders(handler http.Handler) http.Handler {
+func proxyHeaders(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		req.Header.Del("Authorization")
+		if req.Header.Get("X-Forwarded-Proto") == "" && req.TLS != nil {
+			req.Header.Set("X-Forwarded-Proto", "https")
+		}
 		handler.ServeHTTP(rw, req)
 	})
 }
