@@ -33,8 +33,7 @@ func ImpersonatingHandler(prefix string, cfg *rest.Config) http.Handler {
 
 func setupUserAuth(req *http.Request, user user.Info, cfg *rest.Config) *rest.Config {
 	for _, group := range user.GetGroups() {
-		if group == "system:unauthenticated" && strings.HasPrefix(req.Header.Get("Authorization"), "Bearer ") &&
-			cfg.Transport == nil && cfg.WrapTransport == nil {
+		if group == "system:unauthenticated" && strings.HasPrefix(req.Header.Get("Authorization"), "Bearer ") {
 			cfg := rest.CopyConfig(cfg)
 			cfg.Username = ""
 			cfg.Password = ""
