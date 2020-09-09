@@ -32,8 +32,14 @@ import (
 )
 
 var (
-	lowerChars = regexp.MustCompile("[a-z]+")
+	lowerChars  = regexp.MustCompile("[a-z]+")
+	paramScheme = runtime.NewScheme()
+	paramCodec  = runtime.NewParameterCodec(paramScheme)
 )
+
+func init() {
+	metav1.AddToGroupVersion(paramScheme, metav1.SchemeGroupVersion)
+}
 
 type ClientGetter interface {
 	IsImpersonating() bool
@@ -78,7 +84,7 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 }
 
 func decodeParams(apiOp *types.APIRequest, target runtime.Object) error {
-	return metav1.ParameterCodec.DecodeParameters(apiOp.Request.URL.Query(), metav1.SchemeGroupVersion, target)
+	return paramCodec.DecodeParameters(apiOp.Request.URL.Query(), metav1.SchemeGroupVersion, target)
 }
 
 func toAPI(schema *types.APISchema, obj runtime.Object) types.APIObject {
