@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rancher/wrangler/pkg/randomtoken"
-
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/wrangler/pkg/condition"
+	"github.com/rancher/wrangler/pkg/randomtoken"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -35,13 +34,15 @@ type PodImpersonation struct {
 	roleTimeout time.Duration
 	cg          proxy.ClientGetter
 	key         string
+	imageName   func() string
 }
 
-func New(key string, cg proxy.ClientGetter, roleTimeout time.Duration) *PodImpersonation {
+func New(key string, cg proxy.ClientGetter, roleTimeout time.Duration, imageName func() string) *PodImpersonation {
 	return &PodImpersonation{
 		roleTimeout: roleTimeout,
 		cg:          cg,
 		key:         key,
+		imageName:   imageName,
 	}
 }
 
@@ -510,7 +511,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount) *v1.Po
 
 	pod.Spec.Containers = append(pod.Spec.Containers, v1.Container{
 		Name:            "proxy",
-		Image:           "ibuildthecloud/shell:v0.0.10",
+		Image:           s.imageName(),
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Env: []v1.EnvVar{
 			{
