@@ -3,8 +3,6 @@ package resources
 import (
 	"context"
 
-	"github.com/rancher/steve/pkg/summarycache"
-
 	"github.com/rancher/apiserver/pkg/store/apiroot"
 	"github.com/rancher/apiserver/pkg/subscribe"
 	"github.com/rancher/apiserver/pkg/types"
@@ -15,9 +13,9 @@ import (
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/counts"
 	"github.com/rancher/steve/pkg/resources/formatters"
-	"github.com/rancher/steve/pkg/resources/userpreferences"
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/stores/proxy"
+	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/client-go/discovery"
 )
 
@@ -25,7 +23,6 @@ func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache cl
 	counts.Register(baseSchema, ccache)
 	subscribe.Register(baseSchema)
 	apiroot.Register(baseSchema, []string{"v1"}, "proxy:/apis")
-	userpreferences.Register(baseSchema, cg)
 	return baseSchema, nil
 }
 
