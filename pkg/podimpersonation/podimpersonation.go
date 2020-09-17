@@ -3,6 +3,7 @@ package podimpersonation
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rancher/steve/pkg/stores/proxy"
@@ -35,6 +36,8 @@ type PodImpersonation struct {
 	cg          proxy.ClientGetter
 	key         string
 	imageName   func() string
+	pending     map[string]bool
+	pendingLock sync.Mutex
 }
 
 func New(key string, cg proxy.ClientGetter, roleTimeout time.Duration, imageName func() string) *PodImpersonation {
@@ -43,6 +46,7 @@ func New(key string, cg proxy.ClientGetter, roleTimeout time.Duration, imageName
 		cg:          cg,
 		key:         key,
 		imageName:   imageName,
+		pending:     map[string]bool{},
 	}
 }
 
@@ -65,17 +69,40 @@ func (s *PodImpersonation) PurgeOldRoles(gvr schema.GroupVersionResource, key st
 		return nil
 	}
 
+	client, err := s.cg.AdminK8sInterface()
+	if err != nil {
+		return nil
+	}
+
 	if meta.GetCreationTimestamp().Add(s.roleTimeout).Before(time.Now()) {
-		client, err := s.cg.AdminK8sInterface()
-		if err != nil {
-			return nil
-		}
 		name := meta.GetName()
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			_ = client.RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
 		}()
+	} else {
+		s.pendingLock.Lock()
+		defer s.pendingLock.Unlock()
+
+		name := meta.GetName()
+		wait := meta.GetCreationTimestamp().Add(s.roleTimeout).Sub(time.Now())
+
+		if !s.pending[meta.GetName()] {
+			s.pending[meta.GetName()] = true
+			go func() {
+				time.Sleep(wait)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+
+				_ = client.RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
+
+				s.pendingLock.Lock()
+				delete(s.pending, name)
+				s.pendingLock.Unlock()
+			}()
+		}
 	}
 
 	return nil
@@ -519,7 +546,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount) *v1.Po
 				Value: "/root/.kube/config",
 			},
 		},
-		Command: []string{"kubectl", "proxy"},
+		Command: []string{"sh", "-c", "kubectl proxy || true"},
 		SecurityContext: &v1.SecurityContext{
 			RunAsUser:              &zero,
 			RunAsGroup:             &zero,
