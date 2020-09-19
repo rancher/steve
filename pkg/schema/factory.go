@@ -90,8 +90,12 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 						ResourceName: ns,
 					})
 				}
-				verbAccess["list"] = accessList
+				verbAccess["get"] = accessList
 				verbAccess["watch"] = accessList
+				if len(accessList) == 0 {
+					// always allow list
+					s.CollectionMethods = append(s.CollectionMethods, http.MethodGet)
+				}
 			} else {
 				continue
 			}
