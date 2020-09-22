@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/schema/converter"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -218,6 +219,10 @@ func (c *Collection) AddTemplate(templates ...Template) {
 	for i, template := range templates {
 		if template.Kind != "" {
 			c.templates[template.Group+"/"+template.Kind] = &templates[i]
+			c.templates[converter.GVKToSchemaID(schema.GroupVersionKind{
+				Group: template.Group,
+				Kind:  template.Kind,
+			})] = &templates[i]
 		}
 		if template.ID != "" {
 			c.templates[template.ID] = &templates[i]

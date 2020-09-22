@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/pkg/data"
+	"github.com/rancher/wrangler/pkg/summary"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -42,14 +43,16 @@ func formatter(summarycache *summarycache.SummaryCache) types.Formatter {
 		}
 
 		if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
-			summary, rel := summarycache.SummaryAndRelationship(unstr)
+			s, rel := summarycache.SummaryAndRelationship(unstr)
 			data.PutValue(unstr.Object, map[string]interface{}{
-				"name":          summary.State,
-				"error":         summary.Error,
-				"transitioning": summary.Transitioning,
-				"message":       strings.Join(summary.Message, ":"),
+				"name":          s.State,
+				"error":         s.Error,
+				"transitioning": s.Transitioning,
+				"message":       strings.Join(s.Message, ":"),
 			}, "metadata", "state")
 			data.PutValue(unstr.Object, rel, "metadata", "relationships")
+
+			summary.NormalizeConditions(unstr)
 		}
 	}
 }
