@@ -81,6 +81,7 @@ func (s *SummaryCache) OnInboundRelationshipChange(ctx context.Context, schema *
 		<-ctx.Done()
 		s.Lock()
 		defer s.Unlock()
+		close(cb)
 		delete(s.cbs, id)
 	}()
 
