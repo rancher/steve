@@ -21,17 +21,6 @@ func modelToSchema(modelName string, k *proto.Kind) *types.APISchema {
 		},
 	}
 
-	for fieldName, schemaField := range k.Fields {
-		s.ResourceFields[fieldName] = toField(schemaField)
-	}
-
-	for _, fieldName := range k.RequiredFields {
-		if f, ok := s.ResourceFields[fieldName]; ok {
-			f.Required = true
-			s.ResourceFields[fieldName] = f
-		}
-	}
-
 	if ms, ok := k.Extensions["x-kubernetes-group-version-kind"].([]interface{}); ok {
 		for _, mv := range ms {
 			if m, ok := mv.(map[interface{}]interface{}); ok {
@@ -44,6 +33,17 @@ func modelToSchema(modelName string, k *proto.Kind) *types.APISchema {
 				s.ID = GVKToVersionedSchemaID(gvk)
 				attributes.SetGVK(&s, gvk)
 			}
+		}
+	}
+
+	for fieldName, schemaField := range k.Fields {
+		s.ResourceFields[fieldName] = toField(s.ID, schemaField)
+	}
+
+	for _, fieldName := range k.RequiredFields {
+		if f, ok := s.ResourceFields[fieldName]; ok {
+			f.Required = true
+			s.ResourceFields[fieldName] = f
 		}
 	}
 
@@ -79,7 +79,7 @@ func AddOpenAPI(client discovery.DiscoveryInterface, schemas map[string]*types.A
 	return nil
 }
 
-func toField(schema proto.Schema) schemas.Field {
+func toField(gvk string, schema proto.Schema) schemas.Field {
 	f := schemas.Field{
 		Description: schema.GetDescription(),
 		Create:      true,
@@ -87,7 +87,7 @@ func toField(schema proto.Schema) schemas.Field {
 	}
 	switch v := schema.(type) {
 	case *proto.Array:
-		f.Type = "array[" + toField(v.SubType).Type + "]"
+		f.Type = "array[" + toField(gvk, v.SubType).Type + "]"
 	case *proto.Primitive:
 		if v.Type == "number" || v.Type == "integer" {
 			f.Type = "int"
@@ -95,10 +95,11 @@ func toField(schema proto.Schema) schemas.Field {
 			f.Type = v.Type
 		}
 	case *proto.Map:
-		f.Type = "map[" + toField(v.SubType).Type + "]"
+		f.Type = "map[" + toField(gvk, v.SubType).Type + "]"
 	case *proto.Kind:
-		parts := v.Path.Get()
-		f.Type = parts[len(parts)-1]
+		parts := v.GetPath().Get()
+		t := gvk + parts[len(parts)-1]
+		f.Type = t
 	case proto.Reference:
 		sub := v.SubSchema()
 		if p, ok := sub.(*proto.Primitive); ok {
