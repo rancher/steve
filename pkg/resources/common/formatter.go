@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/pkg/data"
+	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/rancher/wrangler/pkg/summary"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,7 +39,7 @@ func formatter(summarycache *summarycache.SummaryCache) types.Formatter {
 		u := request.URLBuilder.RelativeToRoot(selfLink)
 		resource.Links["view"] = u
 
-		if _, ok := resource.Links["update"]; !ok {
+		if _, ok := resource.Links["update"]; !ok && slice.ContainsString(resource.Schema.CollectionMethods, "PUT") {
 			resource.Links["update"] = u
 		}
 
