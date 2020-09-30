@@ -31,7 +31,8 @@ func ImpersonatingHandler(prefix string, cfg *rest.Config) http.Handler {
 	})
 }
 
-func setupUserAuth(req *http.Request, user user.Info, cfg *rest.Config) *rest.Config {
+func setupUserAuth(req *http.Request, user user.Info, cfg *rest.Config) (*rest.Config, bool) {
+	authed := true
 	for _, group := range user.GetGroups() {
 		if group == "system:unauthenticated" && strings.HasPrefix(req.Header.Get("Authorization"), "Bearer ") {
 			cfg := rest.CopyConfig(cfg)
@@ -45,7 +46,9 @@ func setupUserAuth(req *http.Request, user user.Info, cfg *rest.Config) *rest.Co
 			cfg.Impersonate = rest.ImpersonationConfig{}
 
 			cfg.BearerToken = strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
-			return cfg
+			return cfg, true
+		} else if group == "system:unauthenticated" {
+			authed = false
 		}
 	}
 
@@ -53,21 +56,26 @@ func setupUserAuth(req *http.Request, user user.Info, cfg *rest.Config) *rest.Co
 	cfg.Impersonate.UserName = user.GetName()
 	cfg.Impersonate.Groups = user.GetGroups()
 	cfg.Impersonate.Extra = user.GetExtra()
-	return cfg
+	return cfg, authed
 }
 
 func impersonate(rw http.ResponseWriter, req *http.Request, prefix string, cfg *rest.Config) {
 	user, ok := request.UserFrom(req.Context())
 	if !ok {
-		rw.WriteHeader(http.StatusUnauthorized)
+		http.Error(rw, "not authorized", http.StatusUnauthorized)
 		return
 	}
 
-	cfg = setupUserAuth(req, user, cfg)
+	cfg, authed := setupUserAuth(req, user, cfg)
+	// we want to send a 401, not a 403 for unauthed API requests to make the UI happier
+	if !authed && strings.HasPrefix(req.URL.Path, "/api") {
+		http.Error(rw, "not authorized", http.StatusUnauthorized)
+		return
+	}
 	handler, err := Handler(prefix, cfg)
 	if err != nil {
 		logrus.Errorf("failed to impersonate %v for proxy: %v", user, err)
-		rw.WriteHeader(http.StatusInternalServerError)
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
