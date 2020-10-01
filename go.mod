@@ -48,7 +48,7 @@ require (
 	github.com/rancher/apiserver v0.0.0-20200730050206-780f0e4c5f48
 	github.com/rancher/dynamiclistener v0.2.1-0.20200714201033-9c1939da3af9
 	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
-	github.com/rancher/wrangler v0.7.0
+	github.com/rancher/wrangler v0.7.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/urfave/cli v1.22.2
