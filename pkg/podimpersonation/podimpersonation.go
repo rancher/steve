@@ -3,6 +3,7 @@ package podimpersonation
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -186,6 +187,21 @@ func (s *PodImpersonation) createRole(ctx context.Context, user user.Info, names
 		return nil, err
 	}
 
+	rule := rbacv1.PolicyRule{
+		Verbs:         []string{"impersonate"},
+		APIGroups:     []string{""},
+		Resources:     []string{"users"},
+		ResourceNames: []string{user.GetName()},
+	}
+
+	if strings.HasPrefix(user.GetName(), "system:serviceaccount:") {
+		rule = rbacv1.PolicyRule{
+			Verbs:     []string{"impersonate"},
+			APIGroups: []string{""},
+			Resources: []string{"serviceaccounts"},
+		}
+	}
+
 	return client.RbacV1().ClusterRoles().Create(ctx, &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "pod-impersonation-" + s.key + "-",
@@ -194,12 +210,7 @@ func (s *PodImpersonation) createRole(ctx context.Context, user user.Info, names
 			},
 		},
 		Rules: []rbacv1.PolicyRule{
-			{
-				Verbs:         []string{"impersonate"},
-				APIGroups:     []string{""},
-				Resources:     []string{"users"},
-				ResourceNames: []string{user.GetName()},
-			},
+			rule,
 			{
 				Verbs:         []string{"impersonate"},
 				APIGroups:     []string{""},
