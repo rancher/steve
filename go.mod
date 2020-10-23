@@ -45,7 +45,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.7.0 // indirect
 	github.com/prometheus/procfs v0.0.6 // indirect
-	github.com/rancher/apiserver v0.0.0-20200730050206-780f0e4c5f48
+	github.com/rancher/apiserver v0.0.0-20201023000256-1a0a904f9197
 	github.com/rancher/dynamiclistener v0.2.1-0.20200714201033-9c1939da3af9
 	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
 	github.com/rancher/wrangler v0.7.1
