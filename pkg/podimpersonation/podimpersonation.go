@@ -51,18 +51,18 @@ func New(key string, cg proxy.ClientGetter, roleTimeout time.Duration, imageName
 	}
 }
 
-func (s *PodImpersonation) PurgeOldRoles(gvr schema.GroupVersionResource, key string, obj runtime.Object) error {
+func (s *PodImpersonation) PurgeOldRoles(gvk schema.GroupVersionKind, key string, obj runtime.Object) error {
 	if obj == nil ||
-		gvr.Version != "v1" ||
-		gvr.Group != rbacv1.GroupName ||
-		gvr.Resource != "clusterroles" {
+		gvk.Version != "v1" ||
+		gvk.Group != rbacv1.GroupName ||
+		gvk.Kind != "ClusterRole" {
 		return nil
 	}
 
 	meta, err := meta.Accessor(obj)
 	if err != nil {
 		// ignore error
-		logrus.Warnf("failed to find metadata for %v, %s", gvr, key)
+		logrus.Warnf("failed to find metadata for %v, %s", gvk, key)
 		return nil
 	}
 

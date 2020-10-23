@@ -114,7 +114,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	var (
 		result      = make(chan types.APIEvent, 100)
 		counts      map[string]ItemCount
-		gvrToSchema = map[schema2.GroupVersionResource]*types.APISchema{}
+		gvkToSchema = map[schema2.GroupVersionKind]*types.APISchema{}
 		countLock   sync.Mutex
 	)
 
@@ -133,10 +133,10 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 			continue
 		}
 
-		gvrToSchema[attributes.GVR(schema)] = schema
+		gvkToSchema[attributes.GVK(schema)] = schema
 	}
 
-	onChange := func(add bool, gvr schema2.GroupVersionResource, _ string, obj, oldObj runtime.Object) error {
+	onChange := func(add bool, gvk schema2.GroupVersionKind, _ string, obj, oldObj runtime.Object) error {
 		countLock.Lock()
 		defer countLock.Unlock()
 
@@ -144,7 +144,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 			return nil
 		}
 
-		schema := gvrToSchema[gvr]
+		schema := gvkToSchema[gvk]
 		if schema == nil {
 			return nil
 		}
@@ -195,14 +195,14 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		return nil
 	}
 
-	s.ccache.OnAdd(apiOp.Context(), func(gvr schema2.GroupVersionResource, key string, obj runtime.Object) error {
-		return onChange(true, gvr, key, obj, nil)
+	s.ccache.OnAdd(apiOp.Context(), func(gvk schema2.GroupVersionKind, key string, obj runtime.Object) error {
+		return onChange(true, gvk, key, obj, nil)
 	})
-	s.ccache.OnChange(apiOp.Context(), func(gvr schema2.GroupVersionResource, key string, obj, oldObj runtime.Object) error {
-		return onChange(true, gvr, key, obj, oldObj)
+	s.ccache.OnChange(apiOp.Context(), func(gvk schema2.GroupVersionKind, key string, obj, oldObj runtime.Object) error {
+		return onChange(true, gvk, key, obj, oldObj)
 	})
-	s.ccache.OnRemove(apiOp.Context(), func(gvr schema2.GroupVersionResource, key string, obj runtime.Object) error {
-		return onChange(false, gvr, key, obj, nil)
+	s.ccache.OnRemove(apiOp.Context(), func(gvk schema2.GroupVersionKind, key string, obj runtime.Object) error {
+		return onChange(false, gvk, key, obj, nil)
 	})
 
 	return buffer(result), nil
@@ -315,7 +315,7 @@ func (s *Store) getCount(apiOp *types.APIRequest) Count {
 	counts := map[string]ItemCount{}
 
 	for _, schema := range s.schemasToWatch(apiOp) {
-		gvr := attributes.GVR(schema)
+		gvk := attributes.GVK(schema)
 		access, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
 
 		rev := 0
@@ -325,7 +325,7 @@ func (s *Store) getCount(apiOp *types.APIRequest) Count {
 
 		all := access.Grants("list", "*", "*")
 
-		for _, obj := range s.ccache.List(gvr) {
+		for _, obj := range s.ccache.List(gvk) {
 			name, ns, revision, summary, ok := getInfo(obj)
 			if !ok {
 				continue
