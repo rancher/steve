@@ -127,10 +127,8 @@ func setup(ctx context.Context, server *Server) error {
 	}
 
 	sf := schema.NewCollection(ctx, server.BaseSchemas, asl)
-	summaryCache := summarycache.New(sf)
-	ccache.OnAdd(ctx, summaryCache.OnAdd)
-	ccache.OnRemove(ctx, summaryCache.OnRemove)
-	ccache.OnChange(ctx, summaryCache.OnChange)
+	summaryCache := summarycache.New(sf, ccache)
+	summaryCache.Start(ctx)
 
 	for _, template := range resources.DefaultSchemaTemplates(cf, summaryCache, asl, server.controllers.K8s.Discovery()) {
 		sf.AddTemplate(template)

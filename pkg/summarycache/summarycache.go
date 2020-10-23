@@ -2,12 +2,12 @@ package summarycache
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/schema/converter"
 	"github.com/rancher/wrangler/pkg/slice"
@@ -35,24 +35,37 @@ type Relationship struct {
 	FromType    string `json:"fromType,omitempty"`
 	Rel         string `json:"rel,omitempty"`
 	Selector    string `json:"selector,omitempty"`
+
+	State         string `json:"state,omitempty"`
+	Message       string `json:"message,omitempty"`
+	Error         bool   `json:"error,omitempty"`
+	Transitioning bool   `json:"transitioning,omitempty"`
 }
 
 type SummaryCache struct {
 	sync.RWMutex
-	cache   cache.ThreadSafeStore
-	schemas *schema.Collection
-	cbs     map[int]chan *summary.Relationship
+	cache        cache.ThreadSafeStore
+	schemas      *schema.Collection
+	clusterCache clustercache.ClusterCache
+	cbs          map[int]chan *summary.Relationship
 }
 
-func New(schemas *schema.Collection) *SummaryCache {
+func New(schemas *schema.Collection, clusterCache clustercache.ClusterCache) *SummaryCache {
 	indexers := cache.Indexers{}
 	s := &SummaryCache{
-		cache:   cache.NewThreadSafeStore(indexers, cache.Indices{}),
-		schemas: schemas,
-		cbs:     map[int]chan *summary.Relationship{},
+		cache:        cache.NewThreadSafeStore(indexers, cache.Indices{}),
+		schemas:      schemas,
+		clusterCache: clusterCache,
+		cbs:          map[int]chan *summary.Relationship{},
 	}
 	indexers[relationshipIndex] = s.relationshipIndexer
 	return s
+}
+
+func (s *SummaryCache) Start(ctx context.Context) {
+	s.clusterCache.OnAdd(ctx, s.OnAdd)
+	s.clusterCache.OnRemove(ctx, s.OnRemove)
+	s.clusterCache.OnChange(ctx, s.OnChange)
 }
 
 func (s *SummaryCache) OnInboundRelationshipChange(ctx context.Context, schema *types.APISchema, namespace string) <-chan *summary.Relationship {
@@ -152,19 +165,25 @@ func toSelector(sel *metav1.LabelSelector) string {
 }
 
 func (s *SummaryCache) toRel(ns string, rel *summary.Relationship) Relationship {
-	ns = s.resolveNamespace(ns, rel.Namespace, runtimeschema.FromAPIVersionAndKind(rel.APIVersion, rel.Kind))
+	gvk := runtimeschema.FromAPIVersionAndKind(rel.APIVersion, rel.Kind)
+	ns = s.resolveNamespace(ns, rel.Namespace, gvk)
 
 	id := rel.Name
 	if id != "" && ns != "" {
 		id = ns + "/" + rel.Name
 	}
 
+	obj, ok, err := s.clusterCache.Get(gvk, ns, rel.Name)
+	if err != nil || !ok {
+		obj = nil
+	}
+
 	if rel.Inbound {
-		return Relationship{
+		return addObject(Relationship{
 			FromID:   id,
 			FromType: converter.GVKToSchemaID(runtimeschema.FromAPIVersionAndKind(rel.APIVersion, rel.Kind)),
 			Rel:      rel.Type,
-		}
+		}, obj)
 	}
 
 	toNS := ""
@@ -172,13 +191,32 @@ func (s *SummaryCache) toRel(ns string, rel *summary.Relationship) Relationship 
 		toNS = ns
 	}
 
-	return Relationship{
+	return addObject(Relationship{
 		ToID:        id,
 		ToType:      converter.GVKToSchemaID(runtimeschema.FromAPIVersionAndKind(rel.APIVersion, rel.Kind)),
 		Rel:         rel.Type,
 		ToNamespace: toNS,
 		Selector:    toSelector(rel.Selector),
+	}, obj)
+}
+
+func addObject(rel Relationship, obj interface{}) Relationship {
+	if obj == nil {
+		return rel
 	}
+
+	ro, ok := obj.(runtime.Object)
+	if !ok {
+		return rel
+	}
+
+	summarized := summary.Summarized(ro)
+	rel.State = summarized.State
+	rel.Error = summarized.Error
+	rel.Message = strings.Join(summarized.Message, "; ")
+	rel.Transitioning = summarized.Transitioning
+
+	return rel
 }
 
 func (s *SummaryCache) Add(obj runtime.Object) {
@@ -286,17 +324,17 @@ func (s *SummaryCache) refersTo(summarized *summary.SummarizedObject, rel *summa
 	return summarized.Namespace == ns
 }
 
-func (s *SummaryCache) OnAdd(gvr runtimeschema.GroupVersionResource, key string, obj runtime.Object) error {
+func (s *SummaryCache) OnAdd(_ runtimeschema.GroupVersionKind, key string, obj runtime.Object) error {
 	s.Add(obj)
 	return nil
 }
 
-func (s *SummaryCache) OnRemove(gvr runtimeschema.GroupVersionResource, key string, obj runtime.Object) error {
+func (s *SummaryCache) OnRemove(_ runtimeschema.GroupVersionKind, key string, obj runtime.Object) error {
 	s.Remove(obj)
 	return nil
 }
 
-func (s *SummaryCache) OnChange(gvr runtimeschema.GroupVersionResource, key string, obj, oldObj runtime.Object) error {
+func (s *SummaryCache) OnChange(_ runtimeschema.GroupVersionKind, key string, obj, oldObj runtime.Object) error {
 	s.Change(obj, oldObj)
 	return nil
 }
@@ -326,10 +364,6 @@ func toKey(obj runtime.Object) string {
 	}
 
 	return toKeyFrom(namespace, name, gvk)
-}
-
-func toRelKey(key string, index int) string {
-	return fmt.Sprintf("%s:%d", key, index)
 }
 
 func relEquals(left, right *summary.Relationship) bool {
