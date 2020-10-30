@@ -46,6 +46,7 @@ type ClientGetter interface {
 	K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error)
 	AdminK8sInterface() (kubernetes.Interface, error)
 	Client(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)
+	DynamicClient(ctx *types.APIRequest) (dynamic.Interface, error)
 	AdminClient(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)
 	TableClient(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)
 	TableAdminClient(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)

@@ -118,7 +118,7 @@ func setup(ctx context.Context, server *Server) error {
 		asl = accesscontrol.NewAccessStore(ctx, true, server.controllers.RBAC)
 	}
 
-	ccache := clustercache.NewClusterCache(ctx, cf.DynamicClient())
+	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
 	server.ClusterCache = ccache
 
 	server.BaseSchemas, err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, cf)
