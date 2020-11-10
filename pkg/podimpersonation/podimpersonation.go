@@ -557,7 +557,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount) *v1.Po
 				Value: "/root/.kube/config",
 			},
 		},
-		Command: []string{"sh", "-c", "kubectl proxy || true"},
+		Command: []string{"sh", "-c", "kubectl proxy --disable-filter || true"},
 		SecurityContext: &v1.SecurityContext{
 			RunAsUser:              &zero,
 			RunAsGroup:             &zero,
