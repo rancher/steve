@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/rancher/apiserver/pkg/server"
+	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/apiserver/pkg/urlbuilder"
 	"github.com/rancher/steve/pkg/accesscontrol"
@@ -16,7 +17,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, next http.Handler, routerFunc router.RouterFunc) (http.Handler, error) {
+func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, next http.Handler,
+	routerFunc router.RouterFunc) (*apiserver.Server, http.Handler, error) {
 	var (
 		proxy http.Handler
 		err   error
@@ -31,7 +33,7 @@ func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, ne
 	if authMiddleware == nil {
 		proxy, err = k8sproxy.Handler("/", cfg)
 		if err != nil {
-			return nil, err
+			return a.server, nil, err
 		}
 		authMiddleware = auth.ToMiddleware(auth.AuthenticatorFunc(auth.AlwaysAdmin))
 	} else {
@@ -46,9 +48,9 @@ func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, ne
 		APIRoot:     w(a.apiHandler(apiRoot)),
 	}
 	if routerFunc == nil {
-		return router.Routes(handlers), nil
+		return a.server, router.Routes(handlers), nil
 	}
-	return routerFunc(handlers), nil
+	return a.server, routerFunc(handlers), nil
 }
 
 type apiServer struct {

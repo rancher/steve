@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/accesscontrol"
@@ -33,6 +34,7 @@ type Server struct {
 	RESTConfig      *rest.Config
 	BaseSchemas     *types.APISchemas
 	AccessSetLookup accesscontrol.AccessSetLookup
+	APIServer       *apiserver.Server
 
 	authMiddleware      auth.Middleware
 	controllers         *Controllers
@@ -150,11 +152,12 @@ func setup(ctx context.Context, server *Server) error {
 		ccache,
 		sf)
 
-	handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
+	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
 	if err != nil {
 		return err
 	}
 
+	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
 	return nil
