@@ -6,6 +6,7 @@ import (
 	steveauth "github.com/rancher/steve/pkg/auth"
 	authcli "github.com/rancher/steve/pkg/auth/cli"
 	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/steve/pkg/ui"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/urfave/cli"
@@ -13,9 +14,10 @@ import (
 
 type Config struct {
 	KubeConfig      string
+	Context         string
 	HTTPSListenPort int
 	HTTPListenPort  int
-	Authentication  bool
+	UIPath          string
 
 	WebhookConfig authcli.WebhookConfig
 }
@@ -33,13 +35,13 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 		auth steveauth.Middleware
 	)
 
-	restConfig, err := kubeconfig.GetNonInteractiveClientConfig(c.KubeConfig).ClientConfig()
+	restConfig, err := kubeconfig.GetNonInteractiveClientConfigWithContext(c.KubeConfig, c.Context).ClientConfig()
 	if err != nil {
 		return nil, err
 	}
 	restConfig.RateLimiter = ratelimit.None
 
-	if c.Authentication {
+	if c.WebhookConfig.WebhookAuthentication {
 		auth, err = c.WebhookConfig.WebhookMiddleware()
 		if err != nil {
 			return nil, err
@@ -48,6 +50,7 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 
 	return server.New(ctx, restConfig, &server.Options{
 		AuthMiddleware: auth,
+		Next:           ui.New(c.UIPath),
 	})
 }
 
@@ -58,6 +61,15 @@ func Flags(config *Config) []cli.Flag {
 			EnvVar:      "KUBECONFIG",
 			Destination: &config.KubeConfig,
 		},
+		cli.StringFlag{
+			Name:        "context",
+			EnvVar:      "CONTEXT",
+			Destination: &config.Context,
+		},
+		cli.StringFlag{
+			Name:        "ui-path",
+			Destination: &config.UIPath,
+		},
 		cli.IntFlag{
 			Name:        "https-listen-port",
 			Value:       9443,
@@ -67,10 +79,6 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       9080,
 			Destination: &config.HTTPListenPort,
-		},
-		cli.BoolTFlag{
-			Name:        "authentication",
-			Destination: &config.Authentication,
 		},
 	}
 
