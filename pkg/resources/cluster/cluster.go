@@ -21,6 +21,9 @@ import (
 
 func Register(ctx context.Context, apiSchemas *types.APISchemas, cg proxy.ClientGetter, schemaFactory steveschema.Factory) {
 	apiSchemas.InternalSchemas.TypeName("management.cattle.io.cluster", Cluster{})
+
+	apiSchemas.MustImportAndCustomize(&ApplyInput{}, nil)
+	apiSchemas.MustImportAndCustomize(&ApplyOutput{}, nil)
 	apiSchemas.MustImportAndCustomize(Cluster{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
