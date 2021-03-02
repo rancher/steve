@@ -14,9 +14,11 @@ require (
 	github.com/gorilla/mux v1.7.3
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
+	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/rancher/apiserver v0.0.0-20201023000256-1a0a904f9197
 	github.com/rancher/dynamiclistener v0.2.1-0.20200714201033-9c1939da3af9
+	github.com/rancher/kubernetes-provider-detector v0.1.2
 	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
 	github.com/rancher/wrangler v0.7.1
 	github.com/sirupsen/logrus v1.6.0
