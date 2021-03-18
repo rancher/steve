@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/aggregation"
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
@@ -41,16 +42,21 @@ type Server struct {
 	needControllerStart bool
 	next                http.Handler
 	router              router.RouterFunc
+
+	aggregationSecretNamespace string
+	aggregationSecretName      string
 }
 
 type Options struct {
 	// Controllers If the controllers are passed in the caller must also start the controllers
-	Controllers     *Controllers
-	ClientFactory   *client.Factory
-	AccessSetLookup accesscontrol.AccessSetLookup
-	AuthMiddleware  auth.Middleware
-	Next            http.Handler
-	Router          router.RouterFunc
+	Controllers                *Controllers
+	ClientFactory              *client.Factory
+	AccessSetLookup            accesscontrol.AccessSetLookup
+	AuthMiddleware             auth.Middleware
+	Next                       http.Handler
+	Router                     router.RouterFunc
+	AggregationSecretNamespace string
+	AggregationSecretName      string
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -59,13 +65,15 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 	}
 
 	server := &Server{
-		RESTConfig:      restConfig,
-		ClientFactory:   opts.ClientFactory,
-		AccessSetLookup: opts.AccessSetLookup,
-		authMiddleware:  opts.AuthMiddleware,
-		controllers:     opts.Controllers,
-		next:            opts.Next,
-		router:          opts.Router,
+		RESTConfig:                 restConfig,
+		ClientFactory:              opts.ClientFactory,
+		AccessSetLookup:            opts.AccessSetLookup,
+		authMiddleware:             opts.AuthMiddleware,
+		controllers:                opts.Controllers,
+		next:                       opts.Next,
+		router:                     opts.Router,
+		aggregationSecretNamespace: opts.AggregationSecretNamespace,
+		aggregationSecretName:      opts.AggregationSecretName,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -155,6 +163,9 @@ func setup(ctx context.Context, server *Server) error {
 	if err != nil {
 		return err
 	}
+
+	aggregation.Watch(ctx, server.controllers.Core.Secret(), server.aggregationSecretNamespace,
+		server.aggregationSecretName, handler)
 
 	server.APIServer = apiServer
 	server.Handler = handler
