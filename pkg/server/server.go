@@ -36,6 +36,7 @@ type Server struct {
 	BaseSchemas     *types.APISchemas
 	AccessSetLookup accesscontrol.AccessSetLookup
 	APIServer       *apiserver.Server
+	ClusterRegistry string
 
 	authMiddleware      auth.Middleware
 	controllers         *Controllers
@@ -57,6 +58,7 @@ type Options struct {
 	Router                     router.RouterFunc
 	AggregationSecretNamespace string
 	AggregationSecretName      string
+	ClusterRegistry            string
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -74,6 +76,7 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		router:                     opts.Router,
 		aggregationSecretNamespace: opts.AggregationSecretNamespace,
 		aggregationSecretName:      opts.AggregationSecretName,
+		ClusterRegistry:            opts.ClusterRegistry,
 	}
 
 	if err := setup(ctx, server); err != nil {
