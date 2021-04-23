@@ -66,13 +66,13 @@ func NewUIHandler(opts *Options) *Handler {
 		releaseSetting: opts.ReleaseSetting,
 		middleware: middleware.Chain{
 			middleware.Gzip,
-			middleware.DenyFrameOptions,
+			middleware.FrameOptions,
 			middleware.CacheMiddleware("json", "js", "css"),
 		}.Handler,
 		indexMiddleware: middleware.Chain{
 			middleware.Gzip,
 			middleware.NoCache,
-			middleware.DenyFrameOptions,
+			middleware.FrameOptions,
 			middleware.ContentType,
 		}.Handler,
 	}
