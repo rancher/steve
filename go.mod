@@ -18,12 +18,12 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/apiserver v0.0.0-20201023000256-1a0a904f9197
+	github.com/rancher/apiserver v0.0.0-20210423001905-8cca34223733
 	github.com/rancher/dynamiclistener v0.2.1-0.20200714201033-9c1939da3af9
 	github.com/rancher/kubernetes-provider-detector v0.1.2
 	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
 	github.com/rancher/remotedialer v0.2.6-0.20210318171128-d1ebd5202be4
-	github.com/rancher/wrangler v0.8.1-0.20210421002857-0b7c314c3022
+	github.com/rancher/wrangler v0.8.1-0.20210421205019-fa5fd9ec6f6f
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
