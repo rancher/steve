@@ -3,7 +3,7 @@ package converter
 import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/schemas"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
 func modelV3ToSchema(name string, k *v1.JSONSchemaProps, schemasMap map[string]*types.APISchema) *types.APISchema {
@@ -27,9 +27,10 @@ func modelV3ToSchema(name string, k *v1.JSONSchemaProps, schemasMap map[string]*
 		}
 	}
 
-	if _, ok := schemasMap[s.ID]; !ok {
-		schemasMap[s.ID] = &s
+	if existing, ok := schemasMap[s.ID]; ok && len(existing.Attributes) > 0 {
+		s.Attributes = existing.Attributes
 	}
+	schemasMap[s.ID] = &s
 
 	for k, v := range s.ResourceFields {
 		if types.ReservedFields[k] {
