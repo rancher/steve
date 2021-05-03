@@ -167,9 +167,6 @@ func setup(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	aggregation.Watch(ctx, server.controllers.Core.Secret(), server.aggregationSecretNamespace,
-		server.aggregationSecretName, handler)
-
 	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
@@ -185,6 +182,11 @@ func (c *Server) start(ctx context.Context) error {
 	return nil
 }
 
+func (c *Server) StartAggregation(ctx context.Context) {
+	aggregation.Watch(ctx, c.controllers.Core.Secret(), c.aggregationSecretNamespace,
+		c.aggregationSecretName, c)
+}
+
 func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, opts *server.ListenOpts) error {
 	if opts == nil {
 		opts = &server.ListenOpts{}
@@ -192,6 +194,9 @@ func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, op
 	if opts.Storage == nil && opts.Secrets == nil {
 		opts.Secrets = c.controllers.Core.Secret()
 	}
+
+	c.StartAggregation(ctx)
+
 	if err := server.ListenAndServe(ctx, httpsPort, httpPort, c, opts); err != nil {
 		return err
 	}
