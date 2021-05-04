@@ -26,10 +26,12 @@ func ListenAndServe(ctx context.Context, url string, caCert []byte, token string
 			InsecureSkipVerify: true,
 		}
 	} else if len(caCert) > 0 {
-		pool := x509.NewCertPool()
-		pool.AppendCertsFromPEM(caCert)
-		dialer.TLSClientConfig = &tls.Config{
-			RootCAs: pool,
+		if _, err := http.Get(url); err != nil {
+			pool := x509.NewCertPool()
+			pool.AppendCertsFromPEM(caCert)
+			dialer.TLSClientConfig = &tls.Config{
+				RootCAs: pool,
+			}
 		}
 	}
 
