@@ -15,10 +15,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	HandshakeTimeOut = 10 * time.Second
+)
+
 func ListenAndServe(ctx context.Context, url string, caCert []byte, token string, handler http.Handler) {
 	dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: 45 * time.Second,
+		HandshakeTimeout: HandshakeTimeOut,
 	}
 
 	if caCert != nil && len(caCert) == 0 {
