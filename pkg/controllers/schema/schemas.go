@@ -154,7 +154,6 @@ func (h *handler) refreshAll(ctx context.Context) error {
 		return nil
 	}
 
-	logrus.Info("Refreshing all schemas")
 	schemas, err := converter.ToSchemas(h.crd, h.client)
 	if err != nil {
 		return err
