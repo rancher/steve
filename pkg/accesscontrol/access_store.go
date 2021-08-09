@@ -64,6 +64,10 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 }
 
 func (l *AccessStore) CacheKey(user user.Info) string {
+	cacheKey, ok := l.cache.Get(user.GetName())
+	if ok {
+		return cacheKey.(string)
+	}
 	d := sha256.New()
 
 	l.users.addRolesToHash(d, user.GetName())
@@ -77,5 +81,7 @@ func (l *AccessStore) CacheKey(user user.Info) string {
 		l.groups.addRolesToHash(d, group)
 	}
 
-	return hex.EncodeToString(d.Sum(nil))
+	cacheKey = hex.EncodeToString(d.Sum(nil))
+	l.cache.Add(user.GetName(), cacheKey, 2*time.Second)
+	return cacheKey.(string)
 }
