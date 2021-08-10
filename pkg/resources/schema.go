@@ -24,7 +24,7 @@ import (
 )
 
 func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache clustercache.ClusterCache,
-	cg proxy.ClientGetter, schemaFactory steveschema.Factory) error {
+	cg proxy.ClientGetter, schemaFactory steveschema.Factory, serverVersion string) error {
 	counts.Register(baseSchema, ccache)
 	subscribe.Register(baseSchema, func(apiOp *types.APIRequest) *types.APISchemas {
 		user, ok := request.UserFrom(apiOp.Context())
@@ -35,7 +35,7 @@ func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache cl
 			}
 		}
 		return apiOp.Schemas
-	})
+	}, serverVersion)
 	apiroot.Register(baseSchema, []string{"v1"}, "proxy:/apis")
 	cluster.Register(ctx, baseSchema, cg, schemaFactory)
 	userpreferences.Register(baseSchema)
