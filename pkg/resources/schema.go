@@ -52,10 +52,16 @@ func DefaultSchemaTemplates(cf *client.Factory,
 		{
 			ID:        "configmap",
 			Formatter: formatters.DropHelmData,
+			Customize: func(apiSchema *types.APISchema) {
+				apiSchema.CollectionFormatter = formatters.TruncateBytesInData
+			},
 		},
 		{
 			ID:        "secret",
 			Formatter: formatters.DropHelmData,
+			Customize: func(apiSchema *types.APISchema) {
+				apiSchema.CollectionFormatter = formatters.TruncateBytesInData
+			},
 		},
 		{
 			ID:        "pod",
