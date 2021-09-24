@@ -18,7 +18,7 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/rancher/apiserver v0.0.0-20210922180056-297b6df8d714
+	github.com/rancher/apiserver v0.0.0-20210924210127-09a507da41a4
 	github.com/rancher/dynamiclistener v0.2.1-0.20200714201033-9c1939da3af9
 	github.com/rancher/kubernetes-provider-detector v0.1.2
 	github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4
