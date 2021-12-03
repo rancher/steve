@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rancher/apiserver/pkg/middleware"
@@ -134,7 +135,8 @@ func (u *Handler) path() (path string, isURL bool) {
 
 func (u *Handler) ServeAsset() http.Handler {
 	return u.middleware(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		http.FileServer(http.Dir(u.pathSetting())).ServeHTTP(rw, req)
+		//http.FileServer(http.Dir(u.pathSetting())).ServeHTTP(rw, req)
+		http.FileServer(neuteredFileSystem{http.Dir(u.pathSetting())}).ServeHTTP(rw, req)
 	}))
 }
 
@@ -174,4 +176,31 @@ func serveIndex(resp io.Writer, url string) error {
 
 	_, err = io.Copy(resp, r.Body)
 	return err
+}
+
+// PANDARIA
+type neuteredFileSystem struct {
+	fs http.FileSystem
+}
+
+// PANDARIA
+func (nfs neuteredFileSystem) Open(path string) (http.File, error) {
+	f, err := nfs.fs.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	if s.IsDir() {
+		index := strings.TrimSuffix(path, "/") + "/index.html"
+		if _, err := nfs.fs.Open(index); err != nil {
+			return nil, err
+		}
+	}
+
+	return f, nil
 }
