@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 
 	"github.com/rancher/steve/pkg/debug"
@@ -33,7 +32,7 @@ func main() {
 }
 
 func run(_ *cli.Context) error {
-	ctx := signals.SetupSignalHandler(context.Background())
+	ctx := signals.SetupSignalContext()
 	debugconfig.MustSetupDebug()
 	s, err := config.ToServer(ctx)
 	if err != nil {

@@ -14,7 +14,6 @@ require (
 	github.com/adrg/xdg v0.3.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.2
-	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
@@ -23,7 +22,7 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.2
 	github.com/rancher/norman v0.0.0-20210423002317-8e6ffc77a819
 	github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a
-	github.com/rancher/wrangler v0.8.1-0.20210423003607-f71a90542852
+	github.com/rancher/wrangler v0.8.11-0.20211214201934-f5aa5d9f2e81
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
