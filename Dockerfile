@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM golang:1.13.4 as build
+FROM golang:1.17 as build
 COPY go.mod go.sum main.go /src/
 COPY pkg /src/pkg/
 #RUN --mount=type=cache,target=/root/.cache/go-build \
