@@ -18,6 +18,7 @@ type Config struct {
 	HTTPSListenPort int
 	HTTPListenPort  int
 	UIPath          string
+	Offline         string
 
 	WebhookConfig authcli.WebhookConfig
 }
@@ -69,6 +70,12 @@ func Flags(config *Config) []cli.Flag {
 		cli.StringFlag{
 			Name:        "ui-path",
 			Destination: &config.UIPath,
+		},
+		cli.StringFlag{
+			Name:        "offline",
+			Value:       "dynamic",
+			Usage:       "Determine whether or not to run the UI offline, accepts values true/false/dynamic",
+			Destination: &config.Offline,
 		},
 		cli.IntFlag{
 			Name:        "https-listen-port",
