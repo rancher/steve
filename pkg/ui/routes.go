@@ -7,13 +7,23 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func New(path string) http.Handler {
+func New(path string, offline string) http.Handler {
 	vue := NewUIHandler(&Options{
 		Path: func() string {
 			if path == "" {
 				return defaultPath
 			}
 			return path
+		},
+		Offline: func() string {
+			switch offline {
+			case
+				"true",
+				"false",
+				"dynamic":
+				return offline
+			}
+			return "dynamic"
 		},
 	})
 
