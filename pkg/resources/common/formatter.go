@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/schema"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/pkg/data"
@@ -22,7 +23,7 @@ func DefaultTemplate(clientGetter proxy.ClientGetter,
 	summaryCache *summarycache.SummaryCache,
 	asl accesscontrol.AccessSetLookup) schema.Template {
 	return schema.Template{
-		Store:     proxy.NewProxyStore(clientGetter, summaryCache, asl),
+		Store:     metricsStore.NewMetricsStore(proxy.NewProxyStore(clientGetter, summaryCache, asl)),
 		Formatter: formatter(summaryCache),
 	}
 }
