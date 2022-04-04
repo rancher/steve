@@ -33,6 +33,8 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/v1/{type}/{namespace}/{name}").Queries("link", "{link}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}/{link}").Handler(h.K8sResource)
+	// This link is for a websocket which will not work with the 302 response sent in ui/routes.go
+	m.Path("/k8s/clusters/local/v1/{type:subscribe}").Handler(h.K8sResource)
 	m.Path("/api").Handler(h.K8sProxy) // Can't just prefix this as UI needs /apikeys path
 	m.PathPrefix("/api/").Handler(h.K8sProxy)
 	m.PathPrefix("/apis").Handler(h.K8sProxy)
