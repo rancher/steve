@@ -5,6 +5,7 @@ import (
 	"hash"
 	"sort"
 
+	"github.com/rancher/norman/types"
 	v1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -110,6 +111,20 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 	return result
 }
 
+func (p *policyRuleIndex) getForSchema(subjectName string, schema *types.Schema) *AccessSet {
+	result := &AccessSet{}
+
+	for _, binding := range p.getRoleBindingsForSchema(subjectName, schema) {
+		p.addAccess(result, binding.Namespace, binding.RoleRef)
+	}
+
+	for _, binding := range p.getClusterRoleBindings(subjectName) {
+		p.addAccess(result, All, binding.RoleRef)
+	}
+
+	return result
+}
+
 func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
 	for _, rule := range p.getRules(namespace, roleRef) {
 		for _, group := range rule.APIGroups {
@@ -174,4 +189,27 @@ func (p *policyRuleIndex) getRoleBindings(subjectName string) []*rbacv1.RoleBind
 		return string(result[i].UID) < string(result[j].UID)
 	})
 	return result
+}
+
+func (p *policyRuleIndex) getRoleBindingsForSchema(subjectName string, schema *types.Schema) []*rbacv1.RoleBinding {
+	result, err := p.rbCache.GetByIndex(p.roleIndexKey, subjectName)
+	if err != nil {
+		return nil
+	}
+	ret := []*rbacv1.RoleBinding{}
+	// FIXME: add an index if there isn't one already
+	for _, r := range result {
+		role, err := p.crCache.Get(r.RoleRef.Name)
+		if err != nil {
+			return nil
+		}
+		for _, rule := range role.Rules {
+			for _, resource := range rule.Resources {
+				if resource == schema.ID {
+					ret = append(ret, r)
+				}
+			}
+		}
+	}
+	return ret
 }

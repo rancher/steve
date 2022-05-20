@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/rancher/norman/types"
 	v1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -14,6 +15,10 @@ import (
 
 type AccessSetLookup interface {
 	AccessFor(user user.Info) *AccessSet
+}
+
+type AccessSetForSchemaLookup interface {
+	AccessForSchema(user user.Info, schema *types.Schema) *AccessSet
 }
 
 type AccessStore struct {
@@ -53,6 +58,30 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	result := l.users.get(user.GetName())
 	for _, group := range user.GetGroups() {
 		result.Merge(l.groups.get(group))
+	}
+
+	if l.cache != nil {
+		result.ID = cacheKey
+		l.cache.Add(cacheKey, result, 24*time.Hour)
+	}
+
+	return result
+}
+
+func (l *AccessStore) AccessForSchema(user user.Info, schema *types.Schema) *AccessSet {
+	var cacheKey string
+	if l.cache != nil {
+		cacheKey = l.CacheKey(user)
+		val, ok := l.cache.Get(cacheKey)
+		if ok {
+			as, _ := val.(*AccessSet)
+			return as
+		}
+	}
+
+	result := l.users.getForSchema(user.GetName(), schema)
+	for _, group := range user.GetGroups() {
+		result.Merge(l.groups.getForSchema(group, schema))
 	}
 
 	if l.cache != nil {
