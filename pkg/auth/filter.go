@@ -2,6 +2,7 @@ package auth
 
 import (
 	"io/ioutil"
+	"k8s.io/client-go/rest"
 	"net/http"
 	"strings"
 	"time"
@@ -82,8 +83,8 @@ func WebhookConfigForURL(url string) (string, error) {
 	return tmpFile.Name(), clientcmd.WriteToFile(config, tmpFile.Name())
 }
 
-func NewWebhookAuthenticator(cacheTTL time.Duration, kubeConfigFile string) (Authenticator, error) {
-	wh, err := webhook.New(kubeConfigFile, "v1", nil, WebhookBackoff, nil)
+func NewWebhookAuthenticator(cacheTTL time.Duration, kubeConfig *rest.Config) (Authenticator, error) {
+	wh, err := webhook.New(kubeConfig, "v1", nil, WebhookBackoff)
 	if err != nil {
 		return nil, err
 	}
@@ -99,8 +100,8 @@ func NewWebhookAuthenticator(cacheTTL time.Duration, kubeConfigFile string) (Aut
 	}, nil
 }
 
-func NewWebhookMiddleware(cacheTTL time.Duration, kubeConfigFile string) (Middleware, error) {
-	auth, err := NewWebhookAuthenticator(cacheTTL, kubeConfigFile)
+func NewWebhookMiddleware(cacheTTL time.Duration, kubeConfig *rest.Config) (Middleware, error) {
+	auth, err := NewWebhookAuthenticator(cacheTTL, kubeConfig)
 	if err != nil {
 		return nil, err
 	}

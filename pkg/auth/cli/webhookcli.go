@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"time"
 
@@ -38,7 +39,12 @@ func (w *WebhookConfig) WebhookMiddleware() (auth.Middleware, error) {
 		config = tempFile
 	}
 
-	return auth.NewWebhookMiddleware(time.Duration(w.CacheTTLSeconds)*time.Second, config)
+	kubeConfig, err := clientcmd.BuildConfigFromFlags("", config)
+	if err != nil {
+		return nil, err
+	}
+
+	return auth.NewWebhookMiddleware(time.Duration(w.CacheTTLSeconds)*time.Second, kubeConfig)
 }
 
 func Flags(config *WebhookConfig) []cli.Flag {
