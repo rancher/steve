@@ -138,7 +138,7 @@ func setup(ctx context.Context, server *Server) error {
 	server.ClusterCache = ccache
 	sf := schema.NewCollection(ctx, server.BaseSchemas, asl)
 
-	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
+	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version, server.controllers.RBAC); err != nil {
 		return err
 	}
 

@@ -1,10 +1,12 @@
 package accesscontrol
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -12,6 +14,13 @@ import (
 type AccessSet struct {
 	ID  string
 	set map[key]resourceAccessSet
+}
+
+func (a *AccessSet) Print() { // FIXME just for debugging
+	fmt.Printf("ID: %s\n", a.ID)
+	for k, v := range a.set {
+		fmt.Printf("(%+v) => %+v\n", k, v)
+	}
 }
 
 type resourceAccessSet map[Access]bool
@@ -117,6 +126,41 @@ func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 		m = map[Access]bool{}
 		m[access] = true
 		a.set[k] = m
+	}
+}
+
+func (a *AccessSet) Remove(verb string, gr schema.GroupResource, access Access) {
+	if a.set == nil {
+		return
+	}
+	k := key{verb: verb, gr: gr}
+	if m, ok := a.set[k]; ok {
+		delete(m, access)
+	}
+}
+
+func (a *AccessSet) AddAccess(namespace string, role *rbacv1.Role) { // FIXME refactor with policyRuleIndex addAccess()
+	for _, rule := range role.Rules {
+		for _, group := range rule.APIGroups {
+			for _, resource := range rule.Resources {
+				names := rule.ResourceNames
+				if len(names) == 0 {
+					names = []string{All}
+				}
+				for _, resourceName := range names {
+					for _, verb := range rule.Verbs {
+						a.Add(verb,
+							schema.GroupResource{
+								Group:    group,
+								Resource: resource,
+							}, Access{
+								Namespace:    namespace,
+								ResourceName: resourceName,
+							})
+					}
+				}
+			}
+		}
 	}
 }
 

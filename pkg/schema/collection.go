@@ -10,16 +10,19 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	v1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/cache"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
 type Factory interface {
 	Schemas(user user.Info) (*types.APISchemas, error)
+	SchemasWithWatch(user user.Info, rbac v1.Interface) (*types.APISchemas, error)
 	ByGVR(gvr schema.GroupVersionResource) string
 	ByGVK(gvr schema.GroupVersionKind) string
 	OnChange(ctx context.Context, cb func())
@@ -38,9 +41,15 @@ type Collection struct {
 	cache      *cache.LRUExpireCache
 	lock       sync.RWMutex
 
-	ctx     context.Context
-	running map[string]func()
-	as      accesscontrol.AccessSetLookup
+	ctx          context.Context
+	running      map[string]func()
+	as           accesscontrol.AccessSetLookup
+	roleBindings v1.RoleBindingClient
+	// FIXME: clusterrolebinding too
+	rbWatch        watch.Interface
+	rbByUser       map[string]chan watch.Event
+	watchesStarted map[string]struct{}
+	watchLock      sync.RWMutex
 }
 
 type Template struct {
@@ -77,7 +86,7 @@ func WrapServer(factory Factory, server *server.Server) http.Handler {
 }
 
 func NewCollection(ctx context.Context, baseSchema *types.APISchemas, access accesscontrol.AccessSetLookup) *Collection {
-	return &Collection{
+	c := &Collection{
 		baseSchema: baseSchema,
 		schemas:    map[string]*types.APISchema{},
 		templates:  map[string][]*Template{},
@@ -89,6 +98,7 @@ func NewCollection(ctx context.Context, baseSchema *types.APISchemas, access acc
 		as:         access,
 		running:    map[string]func(){},
 	}
+	return c
 }
 
 func (c *Collection) OnChange(ctx context.Context, cb func()) {

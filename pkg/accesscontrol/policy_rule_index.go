@@ -150,6 +150,31 @@ func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, role
 	}
 }
 
+func (p *policyRuleIndex) removeAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
+	for _, rule := range p.getRules(namespace, roleRef) {
+		for _, group := range rule.APIGroups {
+			for _, resource := range rule.ResourceNames {
+				names := rule.ResourceNames
+				if len(names) == 0 {
+					names = []string{All}
+				}
+				for _, resourceName := range names {
+					for _, verb := range rule.Verbs {
+						accessSet.Remove(verb,
+							schema.GroupResource{
+								Group:    group,
+								Resource: resource,
+							}, Access{
+								Namespace:    namespace,
+								ResourceName: resourceName,
+							})
+					}
+				}
+			}
+		}
+	}
+}
+
 func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) []rbacv1.PolicyRule {
 	switch roleRef.Kind {
 	case "ClusterRole":

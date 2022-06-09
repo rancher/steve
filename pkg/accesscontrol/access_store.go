@@ -9,12 +9,15 @@ import (
 
 	"github.com/rancher/norman/types"
 	v1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 type AccessSetLookup interface {
 	AccessFor(user user.Info) *AccessSet
+	AddAccess(access *AccessSet, namespace string, roleRef rbacv1.RoleRef)
+	RemoveAccess(access *AccessSet, namespace string, roleRef rbacv1.RoleRef)
 }
 
 type AccessSetForSchemaLookup interface {
@@ -47,7 +50,7 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	var cacheKey string
 	if l.cache != nil {
-		cacheKey = l.CacheKey(user)
+		cacheKey = user.GetUID()
 		val, ok := l.cache.Get(cacheKey)
 		if ok {
 			as, _ := val.(*AccessSet)
@@ -71,7 +74,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 func (l *AccessStore) AccessForSchema(user user.Info, schema *types.Schema) *AccessSet {
 	var cacheKey string
 	if l.cache != nil {
-		cacheKey = l.CacheKey(user)
+		cacheKey = user.GetUID()
 		val, ok := l.cache.Get(cacheKey)
 		if ok {
 			as, _ := val.(*AccessSet)
@@ -90,6 +93,14 @@ func (l *AccessStore) AccessForSchema(user user.Info, schema *types.Schema) *Acc
 	}
 
 	return result
+}
+
+func (l *AccessStore) AddAccess(access *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
+	l.users.addAccess(access, namespace, roleRef)
+}
+
+func (l *AccessStore) RemoveAccess(access *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
+	l.users.removeAccess(access, namespace, roleRef)
 }
 
 func (l *AccessStore) CacheKey(user user.Info) string {
