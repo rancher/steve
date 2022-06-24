@@ -334,12 +334,22 @@ func (s *PodImpersonation) createPod(ctx context.Context, user user.Info, role *
 		return nil, err
 	}
 
-	sa, err = s.waitForServiceAccount(ctx, client, sa)
+	sc := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            sa.Name + "-token",
+			OwnerReferences: ref(role),
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": sa.Name,
+			},
+		},
+		Type: v1.SecretTypeServiceAccountToken,
+	}
+	tokenSecret, err := client.CoreV1().Secrets(sa.Namespace).Create(ctx, &sc, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	pod = s.augmentPod(pod, sa, podOptions.ImageOverride)
+	pod = s.augmentPod(pod, sa, tokenSecret, podOptions.ImageOverride)
 
 	if err := s.createConfigMaps(ctx, user, role, pod, podOptions, client); err != nil {
 		return nil, err
@@ -489,7 +499,7 @@ func (s *PodImpersonation) adminKubeConfig(user user.Info, role *rbacv1.ClusterR
 	}, nil
 }
 
-func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, imageOverride string) *v1.Pod {
+func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret *v1.Secret, imageOverride string) *v1.Pod {
 	var (
 		zero = int64(0)
 		t    = true
@@ -523,10 +533,10 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, imageO
 			},
 		},
 		v1.Volume{
-			Name: sa.Secrets[0].Name,
+			Name: secret.Name,
 			VolumeSource: v1.VolumeSource{
 				Secret: &v1.SecretVolumeSource{
-					SecretName:  sa.Secrets[0].Name,
+					SecretName:  secret.Name,
 					DefaultMode: &m,
 				},
 			},
@@ -577,7 +587,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, imageO
 				SubPath:   "config",
 			},
 			{
-				Name:      sa.Secrets[0].Name,
+				Name:      secret.Name,
 				MountPath: "/var/run/secrets/kubernetes.io/serviceaccount",
 				ReadOnly:  true,
 			},
