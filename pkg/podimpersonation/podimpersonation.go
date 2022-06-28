@@ -348,7 +348,19 @@ func (s *PodImpersonation) createPod(ctx context.Context, user user.Info, role *
 	if err != nil {
 		return nil, err
 	}
-
+	if _, ok := tokenSecret.Data[v1.ServiceAccountTokenKey]; !ok {
+		for {
+			logrus.Debugf("wait for svc account secret to be populated with token %s", tokenSecret.Name)
+			time.Sleep(2 * time.Second)
+			tokenSecret, err = client.CoreV1().Secrets(sa.Namespace).Get(ctx, sc.Name, metav1.GetOptions{})
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := tokenSecret.Data[v1.ServiceAccountTokenKey]; ok {
+				break
+			}
+		}
+	}
 	pod = s.augmentPod(pod, sa, tokenSecret, podOptions.ImageOverride)
 
 	if err := s.createConfigMaps(ctx, user, role, pod, podOptions, client); err != nil {
@@ -358,7 +370,6 @@ func (s *PodImpersonation) createPod(ctx context.Context, user user.Info, role *
 	if err := s.createSecrets(ctx, role, pod, podOptions, client); err != nil {
 		return nil, err
 	}
-
 	pod.OwnerReferences = ref(role)
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
