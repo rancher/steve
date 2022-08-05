@@ -33,6 +33,8 @@ var ExistingContext = ToMiddleware(AuthenticatorFunc(func(req *http.Request) (us
 	return user, ok, nil
 }))
 
+const CattleAuthFailed = "X-API-Cattle-Auth-Failed"
+
 type Authenticator interface {
 	Authenticate(req *http.Request) (user.Info, bool, error)
 }
@@ -144,6 +146,7 @@ func ToMiddleware(auth Authenticator) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			info, ok, err := auth.Authenticate(req)
+			ctx := req.Context()
 			if err != nil {
 				info = &user.DefaultInfo{
 					Name: "system:cattle:error",
@@ -153,6 +156,7 @@ func ToMiddleware(auth Authenticator) Middleware {
 						"system:cattle:error",
 					},
 				}
+				ctx = request.WithValue(ctx, CattleAuthFailed, "true")
 			} else if !ok {
 				info = &user.DefaultInfo{
 					Name: "system:unauthenticated",
@@ -162,8 +166,8 @@ func ToMiddleware(auth Authenticator) Middleware {
 					},
 				}
 			}
+			ctx = request.WithUser(ctx, info)
 
-			ctx := request.WithUser(req.Context(), info)
 			req = req.WithContext(ctx)
 			next.ServeHTTP(rw, req)
 		})
