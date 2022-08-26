@@ -36,6 +36,7 @@ type Collection struct {
 	byGVR      map[schema.GroupVersionResource]string
 	byGVK      map[schema.GroupVersionKind]string
 	cache      *cache.LRUExpireCache
+	userCache  *cache.LRUExpireCache
 	lock       sync.RWMutex
 
 	ctx     context.Context
@@ -84,6 +85,7 @@ func NewCollection(ctx context.Context, baseSchema *types.APISchemas, access acc
 		byGVR:      map[schema.GroupVersionResource]string{},
 		byGVK:      map[schema.GroupVersionKind]string{},
 		cache:      cache.NewLRUExpireCache(1000),
+		userCache:  cache.NewLRUExpireCache(1000),
 		notifiers:  map[int]func(){},
 		ctx:        ctx,
 		as:         access,

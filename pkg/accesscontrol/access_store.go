@@ -14,6 +14,7 @@ import (
 
 type AccessSetLookup interface {
 	AccessFor(user user.Info) *AccessSet
+	PurgeUserData(id string)
 }
 
 type AccessStore struct {
@@ -61,6 +62,10 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	}
 
 	return result
+}
+
+func (l *AccessStore) PurgeUserData(id string) {
+	l.cache.Remove(id)
 }
 
 func (l *AccessStore) CacheKey(user user.Info) string {
