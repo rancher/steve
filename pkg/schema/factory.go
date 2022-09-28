@@ -23,6 +23,7 @@ func newSchemas() (*types.APISchemas, error) {
 
 func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	access := c.as.AccessFor(user)
+	c.removeOldRecords(access, user)
 	val, ok := c.cache.Get(access.ID)
 	if ok {
 		schemas, _ := val.(*types.APISchemas)
@@ -33,9 +34,32 @@ func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	c.cache.Add(access.ID, schemas, 24*time.Hour)
+	c.addToCache(access, user, schemas)
 	return schemas, nil
+}
+
+func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user.Info) {
+	current, ok := c.userCache.Get(user.GetName())
+	if ok {
+		currentId, cOk := current.(string)
+		if cOk && currentId != access.ID {
+			// we only want to keep around one record per user. If our current access record is invalid, purge the
+			//record of it from the cache, so we don't keep duplicates
+			c.purgeUserRecords(currentId)
+			c.userCache.Remove(user.GetName())
+		}
+	}
+}
+
+func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
+	c.cache.Add(access.ID, schemas, 24*time.Hour)
+	c.userCache.Add(user.GetName(), access.ID, 24*time.Hour)
+}
+
+// PurgeUserRecords removes a record from the backing LRU cache before expiry
+func (c *Collection) purgeUserRecords(id string) {
+	c.cache.Remove(id)
+	c.as.PurgeUserData(id)
 }
 
 func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.APISchemas, error) {
