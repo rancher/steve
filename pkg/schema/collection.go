@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rancher/apiserver/pkg/server"
+	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
@@ -55,7 +55,7 @@ type Template struct {
 	StoreFactory func(types.Store) types.Store
 }
 
-func WrapServer(factory Factory, server *server.Server) http.Handler {
+func WrapServer(factory Factory, server *apiserver.Server) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		user, ok := request.UserFrom(req.Context())
 		if !ok {
