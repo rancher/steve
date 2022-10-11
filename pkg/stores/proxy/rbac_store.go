@@ -1,9 +1,7 @@
 package proxy
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"sort"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -19,19 +17,6 @@ var (
 		Partition{Passthrough: true},
 	}
 )
-
-type filterKey struct{}
-
-func AddNamespaceConstraint(req *http.Request, names ...string) *http.Request {
-	set := sets.NewString(names...)
-	ctx := context.WithValue(req.Context(), filterKey{}, set)
-	return req.WithContext(ctx)
-}
-
-func getNamespaceConstraint(req *http.Request) (sets.String, bool) {
-	set, ok := req.Context().Value(filterKey{}).(sets.String)
-	return set, ok
-}
 
 type Partition struct {
 	Namespace   string
@@ -128,35 +113,9 @@ func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.AP
 	return b.Store.WatchNames(apiOp, schema, wr, b.partition.Names)
 }
 
+// isPassthrough determines whether a request can be passed through directly to the underlying store
+// or if the results need to be partitioned by namespace and name based on the requester's access.
 func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string) ([]partition.Partition, bool) {
-	partitions, passthrough := isPassthroughUnconstrained(apiOp, schema, verb)
-	namespaces, ok := getNamespaceConstraint(apiOp.Request)
-	if !ok {
-		return partitions, passthrough
-	}
-
-	var result []partition.Partition
-
-	if passthrough {
-		for namespace := range namespaces {
-			result = append(result, Partition{
-				Namespace: namespace,
-				All:       true,
-			})
-		}
-		return result, false
-	}
-
-	for _, partition := range partitions {
-		if namespaces.Has(partition.Name()) {
-			result = append(result, partition)
-		}
-	}
-
-	return result, false
-}
-
-func isPassthroughUnconstrained(apiOp *types.APIRequest, schema *types.APISchema, verb string) ([]partition.Partition, bool) {
 	accessListByVerb, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
 	if accessListByVerb.All(verb) {
 		return nil, true
