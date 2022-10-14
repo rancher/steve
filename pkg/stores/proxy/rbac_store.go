@@ -18,6 +18,7 @@ var (
 	}
 )
 
+// Partition is an implementation of the partition.Partition interface that uses RBAC to determine how a set of resources should be segregated and accessed.
 type Partition struct {
 	Namespace   string
 	All         bool
@@ -25,14 +26,18 @@ type Partition struct {
 	Names       sets.String
 }
 
+// Name returns the name of the partition, which for this type is the namespace.
 func (p Partition) Name() string {
 	return p.Namespace
 }
 
+// rbacPartitioner is an implementation of the partition.Partioner interface.
 type rbacPartitioner struct {
 	proxyStore *Store
 }
 
+// Lookup returns the default passthrough partition which is used only for retrieving single resources.
+// Listing or watching resources require custom partitions.
 func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error) {
 	switch verb {
 	case "create":
@@ -48,6 +53,9 @@ func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchem
 	}
 }
 
+// All returns a slice of partitions applicable to the API schema and the user's access level.
+// For watching individual resources or for blanket access permissions, it returns the passthrough partition.
+// For more granular permissions, it returns a slice of partitions matching an allowed namespace or resource names.
 func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error) {
 	switch verb {
 	case "list":
@@ -77,6 +85,7 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 	}
 }
 
+// Store returns a proxy Store suited to listing and watching resources by partition.
 func (p *rbacPartitioner) Store(apiOp *types.APIRequest, partition partition.Partition) (types.Store, error) {
 	return &byNameOrNamespaceStore{
 		Store:     p.proxyStore,
@@ -89,6 +98,7 @@ type byNameOrNamespaceStore struct {
 	partition Partition
 }
 
+// List returns a list of resources by partition.
 func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
 	if b.partition.Passthrough {
 		return b.Store.List(apiOp, schema)
@@ -101,6 +111,7 @@ func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.API
 	return b.Store.ByNames(apiOp, schema, b.partition.Names)
 }
 
+// Watch returns a channel of resources by partition.
 func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan types.APIEvent, error) {
 	if b.partition.Passthrough {
 		return b.Store.Watch(apiOp, schema, wr)

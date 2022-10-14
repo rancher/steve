@@ -46,6 +46,7 @@ func init() {
 	metav1.AddToGroupVersion(paramScheme, metav1.SchemeGroupVersion)
 }
 
+// ClientGetter is a dynamic kubernetes client factory.
 type ClientGetter interface {
 	IsImpersonating() bool
 	K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error)
@@ -59,15 +60,18 @@ type ClientGetter interface {
 	TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string) (dynamic.ResourceInterface, error)
 }
 
+// RelationshipNotifier is an interface for handling wrangler summary.Relationship events.
 type RelationshipNotifier interface {
 	OnInboundRelationshipChange(ctx context.Context, schema *types.APISchema, namespace string) <-chan *summary.Relationship
 }
 
+// Store implements types.Store directly on top of kubernetes.
 type Store struct {
 	clientGetter ClientGetter
 	notifier     RelationshipNotifier
 }
 
+// NewProxyStore returns a wrapped types.Store.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
 	return &errorStore{
 		Store: &WatchRefresh{
@@ -84,6 +88,7 @@ func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, loo
 	}
 }
 
+// ByID looks up a single object by its ID.
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
 	result, err := s.byID(apiOp, schema, apiOp.Namespace, id)
 	return toAPI(schema, result), err
@@ -219,6 +224,12 @@ func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
 	return result
 }
 
+// ByNames filters a list of objects by an allowed set of names.
+// In plain kubernetes, if a user has permission to 'list' or 'watch' a defined set of resource names,
+// performing the list or watch will result in a Forbidden error, because the user does not have permission
+// to list *all* resources.
+// With this filter, the request can be performed successfully, and only the allowed resources will
+// be returned in the list.
 func (s *Store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names sets.String) (types.APIObjectList, error) {
 	if apiOp.Namespace == "*" {
 		// This happens when you grant namespaced objects with "get" by name in a clusterrolebinding. We will treat
@@ -247,6 +258,7 @@ func (s *Store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names 
 	return objs, nil
 }
 
+// List returns a list of resources.
 func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
 	client, err := s.clientGetter.TableClient(apiOp, schema, apiOp.Namespace)
 	if err != nil {
@@ -360,6 +372,12 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 	return
 }
 
+// WatchNames returns a channel of events filtered by an allowed set of names.
+// In plain kubernetes, if a user has permission to 'list' or 'watch' a defined set of resource names,
+// performing the list or watch will result in a Forbidden error, because the user does not have permission
+// to list *all* resources.
+// With this filter, the request can be performed successfully, and only the allowed resources will
+// be returned in watch.
 func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.String) (chan types.APIEvent, error) {
 	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, apiOp.Namespace)
 	if err != nil {
@@ -383,6 +401,7 @@ func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w t
 	return result, nil
 }
 
+// Watch returns a channel of events for a list or resource.
 func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan types.APIEvent, error) {
 	client, err := s.clientGetter.TableClientForWatch(apiOp, schema, apiOp.Namespace)
 	if err != nil {
@@ -428,6 +447,7 @@ func (s *Store) toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, et 
 	return event
 }
 
+// Create creates a single object in the store.
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject) (types.APIObject, error) {
 	var (
 		resp *unstructured.Unstructured
@@ -468,6 +488,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 	return apiObject, err
 }
 
+// Update updates a single object in the store.
 func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject, id string) (types.APIObject, error) {
 	var (
 		err   error
@@ -535,6 +556,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 	return toAPI(schema, resp), nil
 }
 
+// Delete deletes an object from a store.
 func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
 	opts := metav1.DeleteOptions{}
 	if err := decodeParams(apiOp, &opts); err != nil {
