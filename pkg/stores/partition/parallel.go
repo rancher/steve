@@ -170,17 +170,16 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 					}
 					capacity = 0
 					return nil
-				} else {
-					result <- list.Objects
-					capacity -= len(list.Objects)
-					if list.Continue == "" {
-						return nil
-					}
-					// loop again and get more data
-					state.Continue = list.Continue
-					state.PartitionName = partition.Name()
-					state.Offset = 0
 				}
+				result <- list.Objects
+				capacity -= len(list.Objects)
+				if list.Continue == "" {
+					return nil
+				}
+				// loop again and get more data
+				state.Continue = list.Continue
+				state.PartitionName = partition.Name()
+				state.Offset = 0
 			}
 		})
 	}
