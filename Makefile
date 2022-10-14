@@ -12,3 +12,6 @@ run-host: build
 
 test:
 	bash scripts/test.sh
+
+validate:
+	bash scripts/validate.sh

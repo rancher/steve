@@ -166,14 +166,13 @@ func isPassthroughUnconstrained(apiOp *types.APIRequest, schema *types.APISchema
 	if apiOp.Namespace != "" {
 		if resources[apiOp.Namespace].All {
 			return nil, true
-		} else {
-			return []partition.Partition{
-				Partition{
-					Namespace: apiOp.Namespace,
-					Names:     resources[apiOp.Namespace].Names,
-				},
-			}, false
 		}
+		return []partition.Partition{
+			Partition{
+				Namespace: apiOp.Namespace,
+				Names:     resources[apiOp.Namespace].Names,
+			},
+		}, false
 	}
 
 	var result []partition.Partition
