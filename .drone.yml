@@ -8,6 +8,35 @@ steps:
   settings:
     api_key:
       from_secret: FOSSA_API_KEY
+  when:
+    instance:
+      include:
+      - drone-publish.rancher.io
+      exclude:
+      - drone-pr.rancher.io
+---
+kind: pipeline
+name: build
+
+steps:
+  - name: build
+    image: registry.suse.com/bci/golang:1.19
+    commands:
+    - make build-bin
     when:
-      instance:
-        - drone-publish.rancher.io
+      event:
+      - push
+      - pull_request
+---
+kind: pipeline
+name: test
+
+steps:
+  - name: test
+    image: registry.suse.com/bci/golang:1.19
+    commands:
+    - make test
+    when:
+      event:
+      - push
+      - pull_request
