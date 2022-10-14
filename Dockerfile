@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM golang:1.13.4 as build
+FROM registry.suse.com/bci/golang:1.19 as build
 COPY go.mod go.sum main.go /src/
 COPY pkg /src/pkg/
 #RUN --mount=type=cache,target=/root/.cache/go-build \
@@ -7,8 +7,7 @@ RUN \
     cd /src && \
     CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /steve
 
-FROM alpine
-RUN apk -U --no-cache add ca-certificates
+FROM registry.suse.com/bci/bci-micro:15.4.15.1
 COPY --from=build /steve /usr/bin/steve
 # Hack to make golang do files,dns search order
 ENV LOCALDOMAIN=""
