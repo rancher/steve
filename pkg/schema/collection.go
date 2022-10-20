@@ -14,17 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/cache"
-	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
-
-type Factory interface {
-	Schemas(user user.Info) (*types.APISchemas, error)
-	ByGVR(gvr schema.GroupVersionResource) string
-	ByGVK(gvr schema.GroupVersionKind) string
-	OnChange(ctx context.Context, cb func())
-	AddTemplate(template ...Template)
-}
 
 type Collection struct {
 	toSync     int32
