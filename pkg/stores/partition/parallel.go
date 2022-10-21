@@ -5,9 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
-	"github.com/rancher/apiserver/pkg/types"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Partition represents a named grouping of kubernetes resources,
@@ -33,7 +33,7 @@ type ParallelPartitionLister struct {
 }
 
 // PartitionLister lists objects for one partition.
-type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string, limit int) (types.APIObjectList, error)
+type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, error)
 
 // Err returns the latest error encountered.
 func (p *ParallelPartitionLister) Err() error {
@@ -72,7 +72,7 @@ func indexOrZero(partitions []Partition, name string) int {
 // List returns a stream of objects up to the requested limit.
 // If the continue token is not empty, it decodes it and returns the stream
 // starting at the indicated marker.
-func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume string) (<-chan []types.APIObject, error) {
+func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume string) (<-chan []unstructured.Unstructured, error) {
 	var state listState
 	if resume != "" {
 		bytes, err := base64.StdEncoding.DecodeString(resume)
@@ -88,7 +88,7 @@ func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume st
 		}
 	}
 
-	result := make(chan []types.APIObject)
+	result := make(chan []unstructured.Unstructured)
 	go p.feeder(ctx, state, limit, result)
 	return result, nil
 }
@@ -120,7 +120,7 @@ type listState struct {
 // 100000, the result is truncated and a continue token is generated that
 // indicates the partition and offset for the client to start on in the next
 // request.
-func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, limit int, result chan []types.APIObject) {
+func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, limit int, result chan []unstructured.Unstructured) {
 	var (
 		sem      = semaphore.NewWeighted(p.Concurrency)
 		capacity = limit
@@ -183,25 +183,25 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 				}
 
 				if state.Revision == "" {
-					state.Revision = list.Revision
+					state.Revision = list.GetResourceVersion()
 				}
 
 				if p.revision == "" {
-					p.revision = list.Revision
+					p.revision = list.GetResourceVersion()
 				}
 
 				// We have already seen the first objects in the list, truncate up to the offset.
-				if state.PartitionName == partition.Name() && state.Offset > 0 && state.Offset < len(list.Objects) {
-					list.Objects = list.Objects[state.Offset:]
+				if state.PartitionName == partition.Name() && state.Offset > 0 && state.Offset < len(list.Items) {
+					list.Items = list.Items[state.Offset:]
 				}
 
 				// Case 1: the capacity has been reached across all goroutines but the list is still only partial,
 				// so save the state so that the next page can be requested later.
-				if len(list.Objects) > capacity {
-					result <- list.Objects[:capacity]
+				if len(list.Items) > capacity {
+					result <- list.Items[:capacity]
 					// save state to redo this list at this offset
 					p.state = &listState{
-						Revision:      list.Revision,
+						Revision:      list.GetResourceVersion(),
 						PartitionName: partition.Name(),
 						Continue:      cont,
 						Offset:        capacity,
@@ -210,16 +210,16 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 					capacity = 0
 					return nil
 				}
-				result <- list.Objects
-				capacity -= len(list.Objects)
+				result <- list.Items
+				capacity -= len(list.Items)
 				// Case 2: all objects have been returned, we are done.
-				if list.Continue == "" {
+				if list.GetContinue() == "" {
 					return nil
 				}
 				// Case 3: we started at an offset and truncated the list to skip the objects up to the offset.
 				// We're not yet up to capacity and have not retrieved every object,
 				// so loop again and get more data.
-				state.Continue = list.Continue
+				state.Continue = list.GetContinue()
 				state.PartitionName = partition.Name()
 				state.Offset = 0
 			}

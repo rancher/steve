@@ -1,12 +1,21 @@
+// Package partition implements a store with parallel partitioning of data
+// so that segmented data can be concurrently collected and returned as a single data set.
 package partition
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 const defaultLimit = 100000
@@ -15,7 +24,7 @@ const defaultLimit = 100000
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (Partition, error)
 	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]Partition, error)
-	Store(apiOp *types.APIRequest, partition Partition) (types.Store, error)
+	Store(apiOp *types.APIRequest, partition Partition) (UnstructuredStore, error)
 }
 
 // Store implements types.Store for partitions.
@@ -23,7 +32,17 @@ type Store struct {
 	Partitioner Partitioner
 }
 
-func (s *Store) getStore(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (types.Store, error) {
+// UnstructuredStore is like types.Store but deals in k8s unstructured objects instead of apiserver types.
+type UnstructuredStore interface {
+	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error)
+	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error)
+	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, error)
+	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, error)
+	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error)
+	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
+}
+
+func (s *Store) getStore(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (UnstructuredStore, error) {
 	p, err := s.Partitioner.Lookup(apiOp, schema, verb, id)
 	if err != nil {
 		return nil, err
@@ -39,7 +58,11 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 		return types.APIObject{}, err
 	}
 
-	return target.Delete(apiOp, schema, id)
+	obj, err := target.Delete(apiOp, schema, id)
+	if err != nil {
+		return types.APIObject{}, err
+	}
+	return toAPI(schema, obj), nil
 }
 
 // ByID looks up a single object by its ID.
@@ -49,14 +72,18 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 		return types.APIObject{}, err
 	}
 
-	return target.ByID(apiOp, schema, id)
+	obj, err := target.ByID(apiOp, schema, id)
+	if err != nil {
+		return types.APIObject{}, err
+	}
+	return toAPI(schema, obj), nil
 }
 
 func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
-	cont string, revision string, limit int) (types.APIObjectList, error) {
+	cont string, revision string, limit int) (*unstructured.UnstructuredList, error) {
 	store, err := s.Partitioner.Store(apiOp, partition)
 	if err != nil {
-		return types.APIObjectList{}, err
+		return nil, err
 	}
 
 	req := apiOp.Clone()
@@ -88,7 +115,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	lister := ParallelPartitionLister{
-		Lister: func(ctx context.Context, partition Partition, cont string, revision string, limit int) (types.APIObjectList, error) {
+		Lister: func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, error) {
 			return s.listPartition(ctx, apiOp, schema, partition, cont, revision, limit)
 		},
 		Concurrency: 3,
@@ -104,7 +131,10 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	for items := range list {
-		result.Objects = append(result.Objects, items...)
+		for _, item := range items {
+			item := item
+			result.Objects = append(result.Objects, toAPI(schema, &item))
+		}
 	}
 
 	result.Revision = lister.Revision()
@@ -119,7 +149,11 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 		return types.APIObject{}, err
 	}
 
-	return target.Create(apiOp, schema, data)
+	obj, err := target.Create(apiOp, schema, data)
+	if err != nil {
+		return types.APIObject{}, err
+	}
+	return toAPI(schema, obj), nil
 }
 
 // Update updates a single object in the store.
@@ -129,7 +163,11 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data ty
 		return types.APIObject{}, err
 	}
 
-	return target.Update(apiOp, schema, data, id)
+	obj, err := target.Update(apiOp, schema, data, id)
+	if err != nil {
+		return types.APIObject{}, err
+	}
+	return toAPI(schema, obj), nil
 }
 
 // Watch returns a channel of events for a list or resource.
@@ -159,7 +197,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 				return err
 			}
 			for i := range c {
-				response <- i
+				response <- toAPIEvent(apiOp, schema, i)
 			}
 			return nil
 		})
@@ -188,4 +226,81 @@ func getLimit(req *http.Request) int {
 		limit = defaultLimit
 	}
 	return limit
+}
+
+func toAPI(schema *types.APISchema, obj runtime.Object) types.APIObject {
+	if obj == nil || reflect.ValueOf(obj).IsNil() {
+		return types.APIObject{}
+	}
+
+	if unstr, ok := obj.(*unstructured.Unstructured); ok {
+		obj = moveToUnderscore(unstr)
+	}
+
+	apiObject := types.APIObject{
+		Type:   schema.ID,
+		Object: obj,
+	}
+
+	m, err := meta.Accessor(obj)
+	if err != nil {
+		return apiObject
+	}
+
+	id := m.GetName()
+	ns := m.GetNamespace()
+	if ns != "" {
+		id = fmt.Sprintf("%s/%s", ns, id)
+	}
+
+	apiObject.ID = id
+	return apiObject
+}
+
+func moveToUnderscore(obj *unstructured.Unstructured) *unstructured.Unstructured {
+	if obj == nil {
+		return nil
+	}
+
+	for k := range types.ReservedFields {
+		v, ok := obj.Object[k]
+		if ok {
+			delete(obj.Object, k)
+			obj.Object["_"+k] = v
+		}
+	}
+
+	return obj
+}
+
+func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Event) types.APIEvent {
+	name := types.ChangeAPIEvent
+	switch event.Type {
+	case watch.Deleted:
+		name = types.RemoveAPIEvent
+	case watch.Added:
+		name = types.CreateAPIEvent
+	case watch.Error:
+		name = "resource.error"
+	}
+
+	apiEvent := types.APIEvent{
+		Name: name,
+	}
+
+	if event.Type == watch.Error {
+		status, _ := event.Object.(*metav1.Status)
+		apiEvent.Error = fmt.Errorf(status.Message)
+		return apiEvent
+	}
+
+	apiEvent.Object = toAPI(schema, event.Object)
+
+	m, err := meta.Accessor(event.Object)
+	if err != nil {
+		return apiEvent
+	}
+
+	apiEvent.Revision = m.GetResourceVersion()
+	return apiEvent
 }

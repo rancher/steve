@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 func TestList(t *testing.T) {
@@ -19,7 +20,7 @@ func TestList(t *testing.T) {
 		name       string
 		apiOps     []*types.APIRequest
 		partitions []Partition
-		objects    map[string]types.APIObjectList
+		objects    map[string]*unstructured.UnstructuredList
 		want       []types.APIObjectList
 	}{
 		{
@@ -32,10 +33,10 @@ func TestList(t *testing.T) {
 					name: "all",
 				},
 			},
-			objects: map[string]types.APIObjectList{
+			objects: map[string]*unstructured.UnstructuredList{
 				"all": {
-					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
 					},
 				},
 			},
@@ -59,12 +60,12 @@ func TestList(t *testing.T) {
 					name: "all",
 				},
 			},
-			objects: map[string]types.APIObjectList{
+			objects: map[string]*unstructured.UnstructuredList{
 				"all": {
-					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-						newApple("granny-smith").toObj(),
-						newApple("crispin").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("granny-smith").Unstructured,
+						newApple("crispin").Unstructured,
 					},
 				},
 			},
@@ -101,20 +102,20 @@ func TestList(t *testing.T) {
 					name: "yellow",
 				},
 			},
-			objects: map[string]types.APIObjectList{
+			objects: map[string]*unstructured.UnstructuredList{
 				"pink": {
-					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
 					},
 				},
 				"green": {
-					Objects: []types.APIObject{
-						newApple("granny-smith").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("granny-smith").Unstructured,
 					},
 				},
 				"yellow": {
-					Objects: []types.APIObject{
-						newApple("crispin").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("crispin").Unstructured,
 					},
 				},
 			},
@@ -148,28 +149,28 @@ func TestList(t *testing.T) {
 					name: "red",
 				},
 			},
-			objects: map[string]types.APIObjectList{
+			objects: map[string]*unstructured.UnstructuredList{
 				"pink": {
-					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-						newApple("honeycrisp").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("honeycrisp").Unstructured,
 					},
 				},
 				"green": {
-					Objects: []types.APIObject{
-						newApple("granny-smith").toObj(),
-						newApple("bramley").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("granny-smith").Unstructured,
+						newApple("bramley").Unstructured,
 					},
 				},
 				"yellow": {
-					Objects: []types.APIObject{
-						newApple("crispin").toObj(),
-						newApple("golden-delicious").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("crispin").Unstructured,
+						newApple("golden-delicious").Unstructured,
 					},
 				},
 				"red": {
-					Objects: []types.APIObject{
-						newApple("red-delicious").toObj(),
+					Items: []unstructured.Unstructured{
+						newApple("red-delicious").Unstructured,
 					},
 				},
 			},
@@ -235,7 +236,7 @@ func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, v
 	return m.partitions, nil
 }
 
-func (m mockPartitioner) Store(apiOp *types.APIRequest, partition Partition) (types.Store, error) {
+func (m mockPartitioner) Store(apiOp *types.APIRequest, partition Partition) (UnstructuredStore, error) {
 	return m.stores[partition.Name()], nil
 }
 
@@ -248,11 +249,11 @@ func (m mockPartition) Name() string {
 }
 
 type mockStore struct {
-	contents  types.APIObjectList
+	contents  *unstructured.UnstructuredList
 	partition mockPartition
 }
 
-func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
+func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error) {
 	query, _ := url.ParseQuery(apiOp.Request.URL.RawQuery)
 	l := query.Get("limit")
 	if l == "" {
@@ -261,46 +262,46 @@ func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (type
 	i := 0
 	if c := query.Get("continue"); c != "" {
 		start, _ := base64.StdEncoding.DecodeString(c)
-		for j, obj := range m.contents.Objects {
-			if string(start) == obj.Name() {
+		for j, obj := range m.contents.Items {
+			if string(start) == obj.GetName() {
 				i = j
 				break
 			}
 		}
 	}
 	lInt, _ := strconv.Atoi(l)
-	contents := m.contents
-	if len(contents.Objects) > i+lInt {
-		contents.Continue = base64.StdEncoding.EncodeToString([]byte(contents.Objects[i+lInt].Name()))
+	contents := m.contents.DeepCopy()
+	if len(contents.Items) > i+lInt {
+		contents.SetContinue(base64.StdEncoding.EncodeToString([]byte(contents.Items[i+lInt].GetName())))
 	}
-	if i > len(contents.Objects) {
+	if i > len(contents.Items) {
 		return contents, nil
 	}
-	if i+lInt > len(contents.Objects) {
-		contents.Objects = contents.Objects[i:]
+	if i+lInt > len(contents.Items) {
+		contents.Items = contents.Items[i:]
 		return contents, nil
 	}
-	contents.Objects = contents.Objects[i : i+lInt]
+	contents.Items = contents.Items[i : i+lInt]
 	return contents, nil
 }
 
-func (m *mockStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
+func (m *mockStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (types.APIObject, error) {
+func (m *mockStore) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (types.APIObject, error) {
+func (m *mockStore) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
+func (m *mockStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan types.APIEvent, error) {
+func (m *mockStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
 	panic("not implemented")
 }
 

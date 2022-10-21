@@ -9,7 +9,9 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/stores/partition"
 	"github.com/rancher/wrangler/pkg/kv"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 var (
@@ -85,8 +87,8 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 	}
 }
 
-// Store returns a proxy Store suited to listing and watching resources by partition.
-func (p *rbacPartitioner) Store(apiOp *types.APIRequest, partition partition.Partition) (types.Store, error) {
+// Store returns an UnstructuredStore suited to listing and watching resources by partition.
+func (p *rbacPartitioner) Store(apiOp *types.APIRequest, partition partition.Partition) (partition.UnstructuredStore, error) {
 	return &byNameOrNamespaceStore{
 		Store:     p.proxyStore,
 		partition: partition.(Partition),
@@ -99,7 +101,7 @@ type byNameOrNamespaceStore struct {
 }
 
 // List returns a list of resources by partition.
-func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
+func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error) {
 	if b.partition.Passthrough {
 		return b.Store.List(apiOp, schema)
 	}
@@ -112,7 +114,7 @@ func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.API
 }
 
 // Watch returns a channel of resources by partition.
-func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan types.APIEvent, error) {
+func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
 	if b.partition.Passthrough {
 		return b.Store.Watch(apiOp, schema, wr)
 	}
