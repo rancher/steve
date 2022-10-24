@@ -5,11 +5,11 @@ package partition
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"reflect"
 	"strconv"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 )
-
-const defaultLimit = 100000
 
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
@@ -122,19 +120,18 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		Partitions:  partitions,
 	}
 
-	resume := apiOp.Request.URL.Query().Get("continue")
-	limit := getLimit(apiOp.Request)
+	opts := listprocessor.ParseQuery(apiOp)
 
-	list, err := lister.List(apiOp.Context(), limit, resume)
+	stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume)
 	if err != nil {
 		return result, err
 	}
 
-	for items := range list {
-		for _, item := range items {
-			item := item
-			result.Objects = append(result.Objects, toAPI(schema, &item))
-		}
+	list := listprocessor.FilterList(stream, opts.Filters)
+
+	for _, item := range list {
+		item := item
+		result.Objects = append(result.Objects, toAPI(schema, &item))
 	}
 
 	result.Revision = lister.Revision()
@@ -211,21 +208,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	}()
 
 	return response, nil
-}
-
-// getLimit extracts the limit parameter from the request or sets a default of 100000.
-// Since a default is always set, this implies that clients must always be
-// aware that the list may be incomplete.
-func getLimit(req *http.Request) int {
-	limitString := req.URL.Query().Get("limit")
-	limit, err := strconv.Atoi(limitString)
-	if err != nil {
-		limit = 0
-	}
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	return limit
 }
 
 func toAPI(schema *types.APISchema, obj runtime.Object) types.APIObject {

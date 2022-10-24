@@ -198,6 +198,86 @@ func TestList(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "with filters",
+			apiOps: []*types.APIRequest{
+				newRequest("filter=data.color=green"),
+				newRequest("filter=data.color=green&filter=metadata.name=bramley"),
+			},
+			partitions: []Partition{
+				mockPartition{
+					name: "all",
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("granny-smith").Unstructured,
+						newApple("bramley").Unstructured,
+						newApple("crispin").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Objects: []types.APIObject{
+						newApple("granny-smith").toObj(),
+						newApple("bramley").toObj(),
+					},
+				},
+				{
+					Objects: []types.APIObject{
+						newApple("bramley").toObj(),
+					},
+				},
+			},
+		},
+		{
+			name: "multi-partition with filters",
+			apiOps: []*types.APIRequest{
+				newRequest("filter=data.category=baking"),
+			},
+			partitions: []Partition{
+				mockPartition{
+					name: "pink",
+				},
+				mockPartition{
+					name: "green",
+				},
+				mockPartition{
+					name: "yellow",
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"pink": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").with(map[string]string{"category": "eating"}).Unstructured,
+						newApple("honeycrisp").with(map[string]string{"category": "eating,baking"}).Unstructured,
+					},
+				},
+				"green": {
+					Items: []unstructured.Unstructured{
+						newApple("granny-smith").with(map[string]string{"category": "baking"}).Unstructured,
+						newApple("bramley").with(map[string]string{"category": "eating"}).Unstructured,
+					},
+				},
+				"yellow": {
+					Items: []unstructured.Unstructured{
+						newApple("crispin").with(map[string]string{"category": "baking"}).Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Objects: []types.APIObject{
+						newApple("honeycrisp").with(map[string]string{"category": "eating,baking"}).toObj(),
+						newApple("granny-smith").with(map[string]string{"category": "baking"}).toObj(),
+						newApple("crispin").with(map[string]string{"category": "baking"}).toObj(),
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -352,4 +432,11 @@ func (a apple) toObj() types.APIObject {
 		ID:     a.Object["metadata"].(map[string]interface{})["name"].(string),
 		Object: &a.Unstructured,
 	}
+}
+
+func (a apple) with(data map[string]string) apple {
+	for k, v := range data {
+		a.Object["data"].(map[string]interface{})[k] = v
+	}
+	return a
 }
