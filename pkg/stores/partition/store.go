@@ -128,6 +128,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	list := listprocessor.FilterList(stream, opts.Filters)
+	list = listprocessor.SortList(list, opts.Sort)
 
 	for _, item := range list {
 		item := item

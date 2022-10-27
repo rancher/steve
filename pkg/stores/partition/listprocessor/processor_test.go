@@ -796,3 +796,322 @@ func TestFilterList(t *testing.T) {
 		})
 	}
 }
+
+func TestSortList(t *testing.T) {
+	tests := []struct {
+		name    string
+		objects []unstructured.Unstructured
+		sort    Sort
+		want    []unstructured.Unstructured
+	}{
+		{
+			name: "sort metadata.name",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				field: []string{"metadata", "name"},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "reverse sort metadata.name",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				field: []string{"metadata", "name"},
+				order: DESC,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid field",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				field: []string{"data", "productType"},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "unsorted",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+			sort: Sort{},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := SortList(test.objects, test.sort)
+			assert.Equal(t, test.want, got)
+		})
+	}
+}

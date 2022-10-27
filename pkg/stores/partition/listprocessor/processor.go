@@ -2,6 +2,7 @@
 package listprocessor
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,6 +17,7 @@ const (
 	continueParam = "continue"
 	limitParam    = "limit"
 	filterParam   = "filter"
+	sortParam     = "sort"
 )
 
 // ListOptions represents the query parameters that may be included in a list request.
@@ -23,6 +25,7 @@ type ListOptions struct {
 	ChunkSize int
 	Resume    string
 	Filters   []Filter
+	Sort      Sort
 }
 
 // Filter represents a field to filter by.
@@ -31,6 +34,25 @@ type ListOptions struct {
 type Filter struct {
 	field []string
 	match string
+}
+
+// SortOrder represents whether the list should be ascending or descending.
+type SortOrder int
+
+const (
+	// ASC stands for ascending order.
+	ASC SortOrder = iota
+	// DESC stands for descending (reverse) order.
+	DESC
+)
+
+// Sort represents the criteria to sort on.
+// The subfield to sort by is represented in a request query using . notation, e.g. 'metadata.name'.
+// The subfield is internally represented as a slice, e.g. [metadata, name].
+// The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
+type Sort struct {
+	field []string
+	order SortOrder
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
@@ -47,10 +69,20 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		}
 		filterOpts = append(filterOpts, Filter{field: strings.Split(filter[0], "."), match: filter[1]})
 	}
+	sort := Sort{}
+	sortKey := q.Get(sortParam)
+	if sortKey != "" && sortKey[0] == '-' {
+		sort.order = DESC
+		sortKey = sortKey[1:]
+	}
+	if sortKey != "" {
+		sort.field = strings.Split(sortKey, ".")
+	}
 	return &ListOptions{
 		ChunkSize: chunkSize,
 		Resume:    cont,
 		Filters:   filterOpts,
+		Sort:      sort,
 	}
 }
 
@@ -147,4 +179,20 @@ func matchesAll(obj map[string]interface{}, filters []Filter) bool {
 		}
 	}
 	return true
+}
+
+// SortList sorts the slice by the provided sort criteria.
+func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructured {
+	if len(s.field) == 0 {
+		return list
+	}
+	sort.Slice(list, func(i, j int) bool {
+		iField := convert.ToString(data.GetValueN(list[i].Object, s.field...))
+		jField := convert.ToString(data.GetValueN(list[j].Object, s.field...))
+		if s.order == ASC {
+			return iField < jField
+		}
+		return jField < iField
+	})
+	return list
 }

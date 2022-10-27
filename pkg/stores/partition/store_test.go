@@ -278,6 +278,85 @@ func TestList(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "with sorting",
+			apiOps: []*types.APIRequest{
+				newRequest("sort=metadata.name"),
+				newRequest("sort=-metadata.name"),
+			},
+			partitions: []Partition{
+				mockPartition{
+					name: "all",
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("granny-smith").Unstructured,
+						newApple("bramley").Unstructured,
+						newApple("crispin").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Objects: []types.APIObject{
+						newApple("bramley").toObj(),
+						newApple("crispin").toObj(),
+						newApple("fuji").toObj(),
+						newApple("granny-smith").toObj(),
+					},
+				},
+				{
+					Objects: []types.APIObject{
+						newApple("granny-smith").toObj(),
+						newApple("fuji").toObj(),
+						newApple("crispin").toObj(),
+						newApple("bramley").toObj(),
+					},
+				},
+			},
+		},
+		{
+			name: "multi-partition sort=metadata.name",
+			apiOps: []*types.APIRequest{
+				newRequest("sort=metadata.name"),
+			},
+			partitions: []Partition{
+				mockPartition{
+					name: "green",
+				},
+				mockPartition{
+					name: "yellow",
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"pink": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+					},
+				},
+				"green": {
+					Items: []unstructured.Unstructured{
+						newApple("granny-smith").Unstructured,
+					},
+				},
+				"yellow": {
+					Items: []unstructured.Unstructured{
+						newApple("crispin").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Objects: []types.APIObject{
+						newApple("crispin").toObj(),
+						newApple("granny-smith").toObj(),
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
