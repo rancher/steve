@@ -128,10 +128,10 @@ type PodOptions struct {
 // CreatePod will create a pod with a service account that impersonates as user. Corresponding
 // ClusterRoles, ClusterRoleBindings, and ServiceAccounts will be create.
 // IMPORTANT NOTES:
-//   1. To ensure this is used securely the namespace assigned to the pod must be a dedicated
-//      namespace used only for the purpose of running impersonated pods. This is to ensure
-//      proper protection for the service accounts created.
-//   2. The pod must KUBECONFIG env var set to where you expect the kubeconfig to reside
+//  1. To ensure this is used securely the namespace assigned to the pod must be a dedicated
+//     namespace used only for the purpose of running impersonated pods. This is to ensure
+//     proper protection for the service accounts created.
+//  2. The pod must KUBECONFIG env var set to where you expect the kubeconfig to reside
 func (s *PodImpersonation) CreatePod(ctx context.Context, user user.Info, pod *v1.Pod, podOptions *PodOptions) (*v1.Pod, error) {
 	if podOptions == nil {
 		podOptions = &PodOptions{}

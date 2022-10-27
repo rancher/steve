@@ -41,11 +41,11 @@ func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user.Info) {
 	current, ok := c.userCache.Get(user.GetName())
 	if ok {
-		currentId, cOk := current.(string)
-		if cOk && currentId != access.ID {
+		currentID, cOk := current.(string)
+		if cOk && currentID != access.ID {
 			// we only want to keep around one record per user. If our current access record is invalid, purge the
 			//record of it from the cache, so we don't keep duplicates
-			c.purgeUserRecords(currentId)
+			c.purgeUserRecords(currentID)
 			c.userCache.Remove(user.GetName())
 		}
 	}

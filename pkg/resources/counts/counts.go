@@ -280,7 +280,7 @@ func removeSummary(counts Summary, summary summary.Summary) Summary {
 		if counts.States == nil {
 			counts.States = map[string]int{}
 		}
-		counts.States[simpleState(summary)] -= 1
+		counts.States[simpleState(summary)]--
 	}
 	return counts
 }
@@ -297,7 +297,7 @@ func addSummary(counts Summary, summary summary.Summary) Summary {
 		if counts.States == nil {
 			counts.States = map[string]int{}
 		}
-		counts.States[simpleState(summary)] += 1
+		counts.States[simpleState(summary)]++
 	}
 	return counts
 }

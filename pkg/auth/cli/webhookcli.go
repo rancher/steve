@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"time"
 
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/urfave/cli"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type WebhookConfig struct {
