@@ -18,14 +18,17 @@ const (
 	limitParam    = "limit"
 	filterParam   = "filter"
 	sortParam     = "sort"
+	pageSizeParam = "pagesize"
+	pageParam     = "page"
 )
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
-	ChunkSize int
-	Resume    string
-	Filters   []Filter
-	Sort      Sort
+	ChunkSize  int
+	Resume     string
+	Filters    []Filter
+	Sort       Sort
+	Pagination Pagination
 }
 
 // Filter represents a field to filter by.
@@ -55,6 +58,12 @@ type Sort struct {
 	order SortOrder
 }
 
+// Pagination represents how to return paginated results.
+type Pagination struct {
+	pageSize int
+	page     int
+}
+
 // ParseQuery parses the query params of a request and returns a ListOptions.
 func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 	chunkSize := getLimit(apiOp)
@@ -78,11 +87,22 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 	if sortKey != "" {
 		sort.field = strings.Split(sortKey, ".")
 	}
+	var err error
+	pagination := Pagination{}
+	pagination.pageSize, err = strconv.Atoi(q.Get(pageSizeParam))
+	if err != nil {
+		pagination.pageSize = 0
+	}
+	pagination.page, err = strconv.Atoi(q.Get(pageParam))
+	if err != nil {
+		pagination.page = 1
+	}
 	return &ListOptions{
-		ChunkSize: chunkSize,
-		Resume:    cont,
-		Filters:   filterOpts,
-		Sort:      sort,
+		ChunkSize:  chunkSize,
+		Resume:     cont,
+		Filters:    filterOpts,
+		Sort:       sort,
+		Pagination: pagination,
 	}
 }
 
@@ -195,4 +215,27 @@ func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructu
 		return jField < iField
 	})
 	return list
+}
+
+// PaginateList returns a subset of the result based on the pagination criteria as well as the total number of pages the caller can expect.
+func PaginateList(list []unstructured.Unstructured, p Pagination) ([]unstructured.Unstructured, int) {
+	if p.pageSize <= 0 {
+		return list, 0
+	}
+	page := p.page - 1
+	if p.page < 1 {
+		page = 0
+	}
+	pages := len(list) / p.pageSize
+	if len(list)%p.pageSize != 0 {
+		pages++
+	}
+	offset := p.pageSize * page
+	if offset > len(list) {
+		return []unstructured.Unstructured{}, pages
+	}
+	if offset+p.pageSize > len(list) {
+		return list[offset:], pages
+	}
+	return list[offset : offset+p.pageSize], pages
 }

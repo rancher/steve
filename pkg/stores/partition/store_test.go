@@ -42,6 +42,7 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count: 1,
 					Objects: []types.APIObject{
 						newApple("fuji").toObj(),
 					},
@@ -71,18 +72,21 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count:    1,
 					Continue: base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("granny-smith"))))),
 					Objects: []types.APIObject{
 						newApple("fuji").toObj(),
 					},
 				},
 				{
+					Count:    1,
 					Continue: base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("crispin"))))),
 					Objects: []types.APIObject{
 						newApple("granny-smith").toObj(),
 					},
 				},
 				{
+					Count: 1,
 					Objects: []types.APIObject{
 						newApple("crispin").toObj(),
 					},
@@ -121,6 +125,7 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count: 2,
 					Objects: []types.APIObject{
 						newApple("granny-smith").toObj(),
 						newApple("crispin").toObj(),
@@ -176,6 +181,7 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count:    3,
 					Continue: base64.StdEncoding.EncodeToString([]byte(`{"p":"green","o":1,"l":3}`)),
 					Objects: []types.APIObject{
 						newApple("fuji").toObj(),
@@ -184,6 +190,7 @@ func TestList(t *testing.T) {
 					},
 				},
 				{
+					Count:    3,
 					Continue: base64.StdEncoding.EncodeToString([]byte(`{"p":"red","l":3}`)),
 					Objects: []types.APIObject{
 						newApple("bramley").toObj(),
@@ -192,6 +199,7 @@ func TestList(t *testing.T) {
 					},
 				},
 				{
+					Count: 1,
 					Objects: []types.APIObject{
 						newApple("red-delicious").toObj(),
 					},
@@ -221,12 +229,14 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count: 2,
 					Objects: []types.APIObject{
 						newApple("granny-smith").toObj(),
 						newApple("bramley").toObj(),
 					},
 				},
 				{
+					Count: 1,
 					Objects: []types.APIObject{
 						newApple("bramley").toObj(),
 					},
@@ -270,6 +280,7 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count: 3,
 					Objects: []types.APIObject{
 						newApple("honeycrisp").with(map[string]string{"category": "eating,baking"}).toObj(),
 						newApple("granny-smith").with(map[string]string{"category": "baking"}).toObj(),
@@ -301,6 +312,7 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count: 4,
 					Objects: []types.APIObject{
 						newApple("bramley").toObj(),
 						newApple("crispin").toObj(),
@@ -309,6 +321,7 @@ func TestList(t *testing.T) {
 					},
 				},
 				{
+					Count: 4,
 					Objects: []types.APIObject{
 						newApple("granny-smith").toObj(),
 						newApple("fuji").toObj(),
@@ -350,6 +363,7 @@ func TestList(t *testing.T) {
 			},
 			want: []types.APIObjectList{
 				{
+					Count: 2,
 					Objects: []types.APIObject{
 						newApple("crispin").toObj(),
 						newApple("granny-smith").toObj(),
