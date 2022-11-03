@@ -1,6 +1,7 @@
 package partition
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -9,10 +10,13 @@ import (
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
 func TestList(t *testing.T) {
@@ -26,7 +30,7 @@ func TestList(t *testing.T) {
 		{
 			name: "basic",
 			apiOps: []*types.APIRequest{
-				newRequest(""),
+				newRequest("", "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -52,9 +56,9 @@ func TestList(t *testing.T) {
 		{
 			name: "limit and continue",
 			apiOps: []*types.APIRequest{
-				newRequest("limit=1"),
-				newRequest(fmt.Sprintf("limit=1&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("granny-smith"))))))),
-				newRequest(fmt.Sprintf("limit=1&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("crispin"))))))),
+				newRequest("limit=1", "user1"),
+				newRequest(fmt.Sprintf("limit=1&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("granny-smith")))))), "user1"),
+				newRequest(fmt.Sprintf("limit=1&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("crispin")))))), "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -96,7 +100,7 @@ func TestList(t *testing.T) {
 		{
 			name: "multi-partition",
 			apiOps: []*types.APIRequest{
-				newRequest(""),
+				newRequest("", "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -136,9 +140,9 @@ func TestList(t *testing.T) {
 		{
 			name: "multi-partition with limit and continue",
 			apiOps: []*types.APIRequest{
-				newRequest("limit=3"),
-				newRequest(fmt.Sprintf("limit=3&continue=%s", base64.StdEncoding.EncodeToString([]byte(`{"p":"green","o":1,"l":3}`)))),
-				newRequest(fmt.Sprintf("limit=3&continue=%s", base64.StdEncoding.EncodeToString([]byte(`{"p":"red","l":3}`)))),
+				newRequest("limit=3", "user1"),
+				newRequest(fmt.Sprintf("limit=3&continue=%s", base64.StdEncoding.EncodeToString([]byte(`{"p":"green","o":1,"l":3}`))), "user1"),
+				newRequest(fmt.Sprintf("limit=3&continue=%s", base64.StdEncoding.EncodeToString([]byte(`{"p":"red","l":3}`))), "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -209,8 +213,8 @@ func TestList(t *testing.T) {
 		{
 			name: "with filters",
 			apiOps: []*types.APIRequest{
-				newRequest("filter=data.color=green"),
-				newRequest("filter=data.color=green&filter=metadata.name=bramley"),
+				newRequest("filter=data.color=green", "user1"),
+				newRequest("filter=data.color=green&filter=metadata.name=bramley", "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -246,7 +250,7 @@ func TestList(t *testing.T) {
 		{
 			name: "multi-partition with filters",
 			apiOps: []*types.APIRequest{
-				newRequest("filter=data.category=baking"),
+				newRequest("filter=data.category=baking", "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -292,8 +296,8 @@ func TestList(t *testing.T) {
 		{
 			name: "with sorting",
 			apiOps: []*types.APIRequest{
-				newRequest("sort=metadata.name"),
-				newRequest("sort=-metadata.name"),
+				newRequest("sort=metadata.name", "user1"),
+				newRequest("sort=-metadata.name", "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -334,7 +338,7 @@ func TestList(t *testing.T) {
 		{
 			name: "multi-partition sort=metadata.name",
 			apiOps: []*types.APIRequest{
-				newRequest("sort=metadata.name"),
+				newRequest("sort=metadata.name", "user1"),
 			},
 			partitions: []Partition{
 				mockPartition{
@@ -381,12 +385,11 @@ func TestList(t *testing.T) {
 					contents: test.objects[p.Name()],
 				}
 			}
-			store := Store{
-				Partitioner: mockPartitioner{
-					stores:     stores,
-					partitions: test.partitions,
-				},
-			}
+			asl := &mockAccessSetLookup{}
+			store := NewStore(mockPartitioner{
+				stores:     stores,
+				partitions: test.partitions,
+			}, asl)
 			for i, req := range test.apiOps {
 				got, gotErr := store.List(req, schema)
 				assert.Nil(t, gotErr)
@@ -488,16 +491,19 @@ var colorMap = map[string]string{
 	"red-delicious":    "red",
 }
 
-func newRequest(query string) *types.APIRequest {
+func newRequest(query, username string) *types.APIRequest {
 	return &types.APIRequest{
-		Request: &http.Request{
+		Request: (&http.Request{
 			URL: &url.URL{
 				Scheme:   "https",
 				Host:     "rancher",
 				Path:     "/apples",
 				RawQuery: query,
 			},
-		},
+		}).WithContext(request.WithUser(context.Background(), &user.DefaultInfo{
+			Name:   username,
+			Groups: []string{"system:authenticated"},
+		})),
 	}
 }
 
@@ -532,4 +538,16 @@ func (a apple) with(data map[string]string) apple {
 		a.Object["data"].(map[string]interface{})[k] = v
 	}
 	return a
+}
+
+type mockAccessSetLookup struct{}
+
+func (m *mockAccessSetLookup) AccessFor(_ user.Info) *accesscontrol.AccessSet {
+	return &accesscontrol.AccessSet{
+		ID: "aabbccdd",
+	}
+}
+
+func (m *mockAccessSetLookup) PurgeUserData(_ string) {
+	panic("not implemented")
 }

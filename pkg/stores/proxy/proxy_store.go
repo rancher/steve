@@ -75,14 +75,15 @@ type Store struct {
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
 	return &errorStore{
 		Store: &WatchRefresh{
-			Store: &partition.Store{
-				Partitioner: &rbacPartitioner{
+			Store: partition.NewStore(
+				&rbacPartitioner{
 					proxyStore: &Store{
 						clientGetter: clientGetter,
 						notifier:     notifier,
 					},
 				},
-			},
+				lookup,
+			),
 			asl: lookup,
 		},
 	}

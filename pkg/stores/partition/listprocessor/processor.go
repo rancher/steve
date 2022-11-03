@@ -20,6 +20,7 @@ const (
 	sortParam     = "sort"
 	pageSizeParam = "pagesize"
 	pageParam     = "page"
+	revisionParam = "revision"
 )
 
 // ListOptions represents the query parameters that may be included in a list request.
@@ -29,6 +30,7 @@ type ListOptions struct {
 	Filters    []Filter
 	Sort       Sort
 	Pagination Pagination
+	Revision   string
 }
 
 // Filter represents a field to filter by.
@@ -37,6 +39,12 @@ type ListOptions struct {
 type Filter struct {
 	field []string
 	match string
+}
+
+// String returns the filter as a query string.
+func (f Filter) String() string {
+	field := strings.Join(f.field, ".")
+	return field + "=" + f.match
 }
 
 // SortOrder represents whether the list should be ascending or descending.
@@ -58,10 +66,24 @@ type Sort struct {
 	order SortOrder
 }
 
+// String returns the sort parameters as a query string.
+func (s Sort) String() string {
+	field := strings.Join(s.field, ".")
+	if s.order == DESC {
+		field = "-" + field
+	}
+	return field
+}
+
 // Pagination represents how to return paginated results.
 type Pagination struct {
 	pageSize int
 	page     int
+}
+
+// PageSize returns the integer page size.
+func (p Pagination) PageSize() int {
+	return p.pageSize
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
@@ -78,14 +100,20 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		}
 		filterOpts = append(filterOpts, Filter{field: strings.Split(filter[0], "."), match: filter[1]})
 	}
-	sort := Sort{}
+	// sort the filter fields so they can be used as a cache key in the store
+	sort.Slice(filterOpts, func(i, j int) bool {
+		fieldI := strings.Join(filterOpts[i].field, ".")
+		fieldJ := strings.Join(filterOpts[j].field, ".")
+		return fieldI < fieldJ
+	})
+	sortOpts := Sort{}
 	sortKey := q.Get(sortParam)
 	if sortKey != "" && sortKey[0] == '-' {
-		sort.order = DESC
+		sortOpts.order = DESC
 		sortKey = sortKey[1:]
 	}
 	if sortKey != "" {
-		sort.field = strings.Split(sortKey, ".")
+		sortOpts.field = strings.Split(sortKey, ".")
 	}
 	var err error
 	pagination := Pagination{}
@@ -97,12 +125,14 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 	if err != nil {
 		pagination.page = 1
 	}
+	revision := q.Get(revisionParam)
 	return &ListOptions{
 		ChunkSize:  chunkSize,
 		Resume:     cont,
 		Filters:    filterOpts,
-		Sort:       sort,
+		Sort:       sortOpts,
 		Pagination: pagination,
+		Revision:   revision,
 	}
 }
 
