@@ -122,7 +122,7 @@ item is included in the list.
 Resources can also be filtered by the Rancher projects their namespaces belong
 to. Since a project isn't an intrinsic part of the resource itself, the filter
 parameter for filtering by projects is separate from the main `filter`
-parameter. This query parameter is only applicable when steve is runnning in
+parameter. This query parameter is only applicable when steve is running in
 concert with Rancher.
 
 The list can be filtered by either projects or namespaces or both.
@@ -220,3 +220,434 @@ If a page number is out of bounds, an empty list is returned.
 `page` and `pagesize` can be used alongside the `limit` and `continue`
 parameters supported by Kubernetes. `limit` and `continue` are typically used
 for server-side chunking and do not guarantee results in any order.
+
+Running the Steve server
+------------------------
+
+Steve is typically imported as a library. The calling code starts the server:
+
+```go
+import (
+	"fmt"
+	"context"
+
+	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/wrangler/pkg/kubeconfig"
+)
+
+func steve() error {
+	restConfig, err := kubeconfig.GetNonInteractiveClientConfigWithContext("", "").ClientConfig()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	s, err := server.New(ctx, restConfig, nil)
+	if err != nil {
+		return err
+	}
+	fmt.Println(s.ListenAndServe(ctx, 9443, 9080, nil))
+	return nil
+}
+```
+
+steve can be run directly as a binary for testing. By default it runs on ports 9080 and 9443:
+
+```sh
+export KUBECONFIG=your.cluster
+go run main.go
+```
+
+The API can be accessed by navigating to https://localhost:9443/v1.
+
+Steve Features
+--------------
+
+Steve's main use is as an opinionated consumer of
+[rancher/apiserver](https://github.com/rancher/apiserver), which it uses to
+dynamically register every Kubernetes API as its own. It implements
+apiserver
+[Stores](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types#Store) to
+use Kubernetes as its data store.
+
+### Stores
+
+Steve uses apiserver Stores to transform and store data, mainly in Kubernetes.
+The main mechanism it uses is the proxy store, which is actually a series of
+four nested stores and a "partitioner". It can be instantiated by calling
+[NewProxyStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#NewProxyStore).
+This gives you:
+
+* [`proxy.errorStore`](https://github.com/rancher/steve/blob/master/pkg/stores/proxy/error_wrapper.go) -
+  translates any returned errors into HTTP errors
+* [`proxy.WatchRefresh`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#WatchRefresh) -
+  wraps the nested store's Watch method, canceling the watch if access to the
+  watched resource changes
+* [`partition.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#Store) -
+  wraps the nested store's List method and parallelizes the request according
+  to the given partitioner, and additionally implements filtering, sorting, and
+  pagination on the unstructured data from the nested store
+* [`proxy.rbacPartitioner`](https://github.com/rancher/steve/blob/master/pkg/stores/proxy/rbac_store.go) -
+  the partitioner fed to the `partition.Store` which allows it to parallelize
+  requests based on the user's access to certain namespaces or resources
+* [`proxy.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#Store) -
+  the Kubernetes proxy store which performs the actual connection to Kubernetes
+  for all operations
+
+The default schema additionally wraps this proxy store in
+[`metrics.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/metrics#Store),
+which records request metrics to Prometheus, by calling
+[`metrics.NewMetricsStore`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/metrics#NewMetricsStore)
+on it.
+
+Steve provides two additional exported stores that are mainly used by Rancher's
+[catalogv2](https://github.com/rancher/rancher/tree/release/v2.7/pkg/catalogv2)
+package:
+
+* [`selector.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/selector#Store)
+  - wraps the list and watch commands with a label selector
+* [`switchschema.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/switchschema#Store)
+  - transforms the object's schema
+
+### Schemas
+
+Steve watches all Kubernetes API resources, including built-ins, CRDs, and
+APIServices, and registers them under its own /v1 endpoint. The component
+responsible for watching and registering these schemas is the [schema
+controller](https://github.com/rancher/steve/blob/master/pkg/controllers/schema/schemas.go).
+Schemas can be queried from the /v1/schemas endpoint. Steve also registers a
+few of its own schemas not from Kubernetes to facilitate certain use cases.
+
+#### [Cluster](https://github.com/rancher/steve/tree/master/pkg/resources/cluster)
+
+Steve creates a fake local cluster to use in standalone scenarios when there is
+not a real
+[clusters.management.cattle.io](https://pkg.go.dev/github.com/rancher/rancher/pkg/apis/management.cattle.io/v3#Cluster)
+resource available. Rancher overrides this and sets its own customizations on
+the cluster resource.
+
+#### [User Preferences](https://github.com/rancher/steve/tree/master/pkg/resources/userpreferences)
+
+User preferences in steve provides a way to configure dashboard preferences
+through a configuration file named ``prefs.json``. Rancher overrides this and
+uses the
+[preferences.management.cattle.io](https://pkg.go.dev/github.com/rancher/rancher/pkg/apis/management.cattle.io/v3#Preference)
+resource for preference storage instead.
+
+#### [Counts](https://github.com/rancher/steve/tree/master/pkg/resources/counts)
+
+Counts keeps track of the number of resources and updates the count in a
+buffered stream that the dashboard can subscribe to.
+
+#### [Subscribe](https://github.com/rancher/apiserver/tree/master/pkg/subscribe)
+
+Steve exposes a websocket endpoint on /v1/subscribe for sending streams of
+events. Connect to the endpoint using a websocket client like websocat:
+
+```sh
+websocat -k wss://127.0.0.1:9443/v1/subscribe
+```
+
+Review the [apiserver](https://github.com/rancher/apiserver#subscribe) guide
+for details.
+
+In addition to regular Kubernetes resources, steve allows you to subscribe to
+special steve resources. For example, to subscribe to counts, send a websocket
+message like this:
+
+```
+{"resourceType":"count"}
+```
+
+### Schema Templates
+
+Existing schemas can be customized using schema templates. You can customize
+individual schemas or apply customizations to all schemas.
+
+For example, if you wanted to customize the store for secrets so that secret
+data is always redacted, you could implement a store like this:
+
+```go
+import (
+	"github.com/rancher/apiserver/pkg/store/empty"
+	"github.com/rancher/apiserver/pkg/types"
+)
+
+type redactStore struct {
+	empty.Store // must override the other interface methods as well
+	            // or use a different nested store
+}
+
+func (r *redactStore) ByID(_ *types.APIRequest, _ *types.APISchema, id string) (types.APIObject, error) {
+	return types.APIObject{
+		ID: id,
+		Object: map[string]string{
+			"value": "[redacted]",
+		},
+	}, nil
+}
+
+func (r *redactStore) List(_ *types.APIRequest, _ *types.APISchema) (types.APIObjectList, error) {
+	return types.APIObjectList{
+		Objects: []types.APIObject{
+			{
+				Object: map[string]string{
+					"value": "[redacted]",
+				},
+			},
+		},
+	}, nil
+}
+```
+
+and then create a schema template for the schema with ID "secrets" that uses
+that store:
+
+```go
+import (
+	"github.com/rancher/steve/pkg/schema"
+)
+
+template := schema.Template{
+	ID: "secret",
+	Store: &redactStore{},
+}
+```
+
+You could specify the same by providing the group and kind:
+
+```go
+template := schema.Template{
+	Group: "", // core resources have an empty group
+	Kind: "secret",
+	Store: &redactStore{},
+}
+```
+
+then add the template to the schema factory:
+
+```go
+schemaFactory.AddTemplate(template)
+```
+
+As another example, if you wanted to add custom field to all objects in a
+collection response, you can add a schema template with a collection formatter
+to omit the ID or the group and kind:
+
+```go
+template := schema.Template{
+	Customize: func(schema *types.APISchema) {
+		schema.CollectionFormatter = func(apiOp *types.APIRequest, collection *types.GenericCollection) {
+			schema.CollectionFormatter = func(apiOp *types.APIRequest, collection *types.GenericCollection) {
+				for _, d := range collection.Data {
+					obj := d.APIObject.Object.(*unstructured.Unstructured)
+					obj.Object["tag"] = "custom"
+				}
+			}
+		}
+	}
+}
+```
+
+### Schema Access Control
+
+Steve implements access control on schemas based on the user's RBAC in
+Kubernetes.
+
+The apiserver
+[`Server`](https://pkg.go.dev/github.com/rancher/apiserver/pkg/server#Server)
+object exposes an AccessControl field which is used to customize how access
+control is performed on server requests.
+
+An
+[`accesscontrol.AccessStore`](https://pkg.go.dev/github.com/rancher/steve/pkg/accesscontrol#AccessStore)
+is stored on the schema factory. When a user makes any request, the request
+handler first finds all the schemas that are available to the user. To do this,
+it first retrieves an
+[`accesscontrol.AccessSet`](https://pkg.go.dev/github.com/rancher/steve/pkg/accesscontrol#AccessSet)
+by calling
+[`AccessFor`](https://pkg.go.dev/github.com/rancher/steve/pkg/accesscontrol#AccessStore.AccessFor)
+on the user. The AccessSet contains a map of resources and the verbs that can
+be used on them. The AccessSet is calculated by looking up all of the user's
+role bindings and cluster role bindings for the user's name and group. The
+result is cached, and the cached result is used until the user's role
+assignments change. Once the AccessSet is retrieved, each registered schema is
+checked for existence in the AccessSet, and filtered out if it is not
+available.
+
+This final set of schemas is inserted into the
+[`types.APIRequest`](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types#APIRequest)
+object and passed to the apiserver handler.
+
+### Authentication
+
+Steve authenticates incoming requests using a customizable authentication
+middleware. The default authenticator in standalone steve is the
+[AlwaysAdmin](https://pkg.go.dev/github.com/rancher/steve/pkg/auth#AlwaysAdmin)
+middleware, which accepts all incoming requests and sets admin attributes on
+the user. The authenticator can be overridden by passing a custom middleware to
+the steve server:
+
+```go
+import (
+	"context"
+	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/steve/pkg/auth"
+	"k8s.io/apiserver/pkg/authentication/user"
+)
+
+func run() {
+	restConfig := getRestConfig()
+	authenticator := func (req *http.Request) (user.Info, bool, error) {
+		username, password, ok := req.BasicAuth()
+		if !ok {
+			return nil, false, nil
+		}
+		if username == "hello" && password == "world" {
+			return &user.DefaultInfo{
+				Name: username,
+				UID: username,
+				Groups: []string{
+				    "system:authenticated",
+				},
+			}, true, nil
+		}
+		return nil, false, nil
+	}
+	server := server.New(context.TODO(), restConfig, &server.Options{
+		AuthMiddleware: auth.ToMiddlware(auth.AuthenticatorFunc(authenticator)),
+	}
+	server.ListenAndServe(context.TODO(), 9443, 9080, nil)
+}
+```
+
+Once the user is authenticated, if the request is for a Kubernetes resource,
+then steve must proxy the request to Kubernetes, so it needs to transform the
+request. Steve passes the user Info object from the authenticator to a proxy
+handler, either a generic handler or an impersonating handler. The generic
+[Handler](https://pkg.go.dev/github.com/rancher/steve/pkg/proxy#Handler) mainly
+sets transport options and cleans up the headers on the request in preparation
+for forwarding it to Kubernetes. The
+[ImpersonatingHandler](https://pkg.go.dev/github.com/rancher/steve/pkg/proxy#ImpersonatingHandler)
+uses the user Info object to set Impersonate-* headers on the request, which
+Kubernetes uses to decide access.
+
+### Dashboard
+
+Steve is designed to be consumed by a graphical user interface and therefore
+serves one by default, even in the test server. The default UI is the Rancher
+Vue UI hosted on releases.rancher.com. It can be viewed by visiting the running
+steve instance on port 9443 in a browser.
+
+The UI can be enabled and customized by passing options to
+[NewUIHandler](https://pkg.go.dev/github.com/rancher/steve/pkg/ui#NewUIHandler).
+For example, if you have an alternative index.html file, add the file to
+a directory called `./ui`, then create a route that serves a custom UI handler:
+
+```go
+import (
+	"net/http"
+	"github.com/rancher/steve/pkg/ui"
+	"github.com/gorilla/mux"
+)
+
+func routes() http.Handler {
+	custom := ui.NewUIHandler(&ui.Options{
+		Index: func() string {
+			return "./ui/index.html"
+		},
+	}
+	router := mux.NewRouter()
+	router.Handle("/hello", custom.IndexFile())
+	return router
+```
+
+If no options are set, the UI handler will serve the latest index.html file
+from the Rancher Vue UI.
+
+### Cluster Cache
+
+The cluster cache keeps watches of all resources with registered schemas. This
+is mainly used to update the summary cache and resource counts, but any module
+could add a handler to react to any resource change or get cached cluster data.
+For example, if we wanted a handler to log all "add" events for newly created
+secrets:
+
+```go
+import (
+	"context"
+	"github.com/rancher/steve/pkg/server"
+	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+)
+
+func logSecretEvents(server *server.Server) {
+	server.ClusterCache.OnAdd(context.TODO(), func(gvk schema.GroupVersionKind, key string, obj runtime.Object) error {
+		if gvk.Kind == "Secret" {
+			logrus.Infof("[event] add: %s", key)
+		}
+		return nil
+	})
+}
+```
+
+### Aggregation
+
+Rancher uses a concept called "aggregation" to maintain connections to remote
+services. Steve implements an aggregation client in order to allow connections
+from Rancher and expose its API to Rancher.
+
+Aggregation is enabled by defining a secret name and namespace in the steve
+server:
+
+```go
+import (
+	"context"
+	"github.com/rancher/steve/pkg/server"
+)
+
+func run() {
+	restConfig := getRestConfig()
+	server := server.New(context.TODO(), restConfig, &server.Options{
+		AggregationSecretNamespace: "cattle-system",
+		AggregationSecretName: "stv-aggregation",
+	})
+	server.ListenAndServe(context.TODO(), 9443, 9080, nil)
+}
+```
+
+This prompts the steve server to start a controller that watches for this
+secret. The secret is expected to contain two pieces of data, a URL and a
+token:
+
+```sh
+$ kubectl -n cattle-system get secret stv-aggregation -o yaml
+apiVersion: v1
+data:
+  token: Zm9vYmFy
+  url: aHR0cHM6Ly8xNzIuMTcuMC4xOjg0NDMvdjMvY29ubmVjdA==
+kind: Secret
+metadata:
+...
+```
+
+Steve makes a websocket connection to the URL using the token to authenticate.
+When the secret changes, the steve aggregation server restarts with the
+up-to-date URL and token.
+
+Through this websocket connection, the steve agent is exposed on the remote
+management server and the management server can route steve requests to it. The
+management server can also keep track of the availability of the agent by
+detecting whether the websocket session is still active. In Rancher, the
+connection endpoint runs on /v3/connect.
+
+Rancher implements aggregation for other types of services as well. In Rancher,
+the user can define endpoints via a
+[v3.APIService](https://pkg.go.dev/github.com/rancher/rancher/pkg/apis/management.cattle.io/v3#APIService)
+custom resource (which is distinct from the built-in Kubernetes
+[v1.APIService](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/api-service-v1/)
+resource. Then Rancher runs a middleware handler that routes incoming requests
+to defined endpoints. The external services follow the same process of using a
+defined secret containing a URL and token to connect and authenticate to
+Rancher. This aggregation is defined independently and does not use steve's
+aggregation client.
