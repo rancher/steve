@@ -842,7 +842,7 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				field: []string{"metadata", "name"},
+				primaryField: []string{"metadata", "name"},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -918,8 +918,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				field: []string{"metadata", "name"},
-				order: DESC,
+				primaryField: []string{"metadata", "name"},
+				primaryOrder: DESC,
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -995,7 +995,7 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				field: []string{"data", "productType"},
+				primaryField: []string{"data", "productType"},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -1102,6 +1102,318 @@ func TestSortList(t *testing.T) {
 						},
 						"data": map[string]interface{}{
 							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "primary sort ascending, secondary sort ascending",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				primaryField:   []string{"data", "color"},
+				secondaryField: []string{"metadata", "name"},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "primary sort ascending, secondary sort descending",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				primaryField:   []string{"data", "color"},
+				secondaryField: []string{"metadata", "name"},
+				secondaryOrder: DESC,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "primary sort descending, secondary sort ascending",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				primaryField:   []string{"data", "color"},
+				primaryOrder:   DESC,
+				secondaryField: []string{"metadata", "name"},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "primary sort descending, secondary sort descending",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				primaryField:   []string{"data", "color"},
+				primaryOrder:   DESC,
+				secondaryField: []string{"metadata", "name"},
+				secondaryOrder: DESC,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
 						},
 					},
 				},

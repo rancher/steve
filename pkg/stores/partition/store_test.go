@@ -414,6 +414,117 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
+			name: "sorting with secondary sort",
+			apiOps: []*types.APIRequest{
+				newRequest("sort=data.color,metadata.name,", "user1"),
+			},
+			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+			},
+			partitions: map[string][]Partition{
+				"user1": {
+					mockPartition{
+						name: "all",
+					},
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("honeycrisp").Unstructured,
+						newApple("granny-smith").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("granny-smith").toObj(),
+						newApple("fuji").toObj(),
+						newApple("honeycrisp").toObj(),
+					},
+				},
+			},
+		},
+		{
+			name: "sorting with missing primary sort is unsorted",
+			apiOps: []*types.APIRequest{
+				newRequest("sort=,metadata.name", "user1"),
+			},
+			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+			},
+			partitions: map[string][]Partition{
+				"user1": {
+					mockPartition{
+						name: "all",
+					},
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("honeycrisp").Unstructured,
+						newApple("granny-smith").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+						newApple("honeycrisp").toObj(),
+						newApple("granny-smith").toObj(),
+					},
+				},
+			},
+		},
+		{
+			name: "sorting with missing secondary sort is single-column sorted",
+			apiOps: []*types.APIRequest{
+				newRequest("sort=metadata.name,", "user1"),
+			},
+			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+			},
+			partitions: map[string][]Partition{
+				"user1": {
+					mockPartition{
+						name: "all",
+					},
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("honeycrisp").Unstructured,
+						newApple("granny-smith").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+						newApple("granny-smith").toObj(),
+						newApple("honeycrisp").toObj(),
+					},
+				},
+			},
+		},
+		{
 			name: "multi-partition sort=metadata.name",
 			apiOps: []*types.APIRequest{
 				newRequest("sort=metadata.name", "user1"),

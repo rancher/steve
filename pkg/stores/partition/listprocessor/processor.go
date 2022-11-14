@@ -62,15 +62,25 @@ const (
 // The subfield is internally represented as a slice, e.g. [metadata, name].
 // The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
 type Sort struct {
-	field []string
-	order SortOrder
+	primaryField   []string
+	secondaryField []string
+	primaryOrder   SortOrder
+	secondaryOrder SortOrder
 }
 
 // String returns the sort parameters as a query string.
 func (s Sort) String() string {
-	field := strings.Join(s.field, ".")
-	if s.order == DESC {
+	field := ""
+	if s.primaryOrder == DESC {
 		field = "-" + field
+	}
+	field += strings.Join(s.primaryField, ".")
+	if len(s.secondaryField) > 0 {
+		field += ","
+		if s.secondaryOrder == DESC {
+			field += "-"
+		}
+		field += strings.Join(s.secondaryField, ".")
 	}
 	return field
 }
@@ -107,13 +117,27 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		return fieldI < fieldJ
 	})
 	sortOpts := Sort{}
-	sortKey := q.Get(sortParam)
-	if sortKey != "" && sortKey[0] == '-' {
-		sortOpts.order = DESC
-		sortKey = sortKey[1:]
-	}
-	if sortKey != "" {
-		sortOpts.field = strings.Split(sortKey, ".")
+	sortKeys := q.Get(sortParam)
+	if sortKeys != "" {
+		sortParts := strings.SplitN(sortKeys, ",", 2)
+		primaryField := sortParts[0]
+		if primaryField != "" && primaryField[0] == '-' {
+			sortOpts.primaryOrder = DESC
+			primaryField = primaryField[1:]
+		}
+		if primaryField != "" {
+			sortOpts.primaryField = strings.Split(primaryField, ".")
+		}
+		if len(sortParts) > 1 {
+			secondaryField := sortParts[1]
+			if secondaryField != "" && secondaryField[0] == '-' {
+				sortOpts.secondaryOrder = DESC
+				secondaryField = secondaryField[1:]
+			}
+			if secondaryField != "" {
+				sortOpts.secondaryField = strings.Split(secondaryField, ".")
+			}
+		}
 	}
 	var err error
 	pagination := Pagination{}
@@ -233,16 +257,24 @@ func matchesAll(obj map[string]interface{}, filters []Filter) bool {
 
 // SortList sorts the slice by the provided sort criteria.
 func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructured {
-	if len(s.field) == 0 {
+	if len(s.primaryField) == 0 {
 		return list
 	}
 	sort.Slice(list, func(i, j int) bool {
-		iField := convert.ToString(data.GetValueN(list[i].Object, s.field...))
-		jField := convert.ToString(data.GetValueN(list[j].Object, s.field...))
-		if s.order == ASC {
-			return iField < jField
+		leftPrime := convert.ToString(data.GetValueN(list[i].Object, s.primaryField...))
+		rightPrime := convert.ToString(data.GetValueN(list[j].Object, s.primaryField...))
+		if leftPrime == rightPrime && len(s.secondaryField) > 0 {
+			leftSecond := convert.ToString(data.GetValueN(list[i].Object, s.secondaryField...))
+			rightSecond := convert.ToString(data.GetValueN(list[j].Object, s.secondaryField...))
+			if s.secondaryOrder == ASC {
+				return leftSecond < rightSecond
+			}
+			return rightSecond < leftSecond
 		}
-		return jField < iField
+		if s.primaryOrder == ASC {
+			return leftPrime < rightPrime
+		}
+		return rightPrime < leftPrime
 	})
 	return list
 }
