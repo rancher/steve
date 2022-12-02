@@ -3,17 +3,17 @@ kind: pipeline
 name: fossa
 
 steps:
-- name: fossa
-  image: rancher/drone-fossa:latest
-  settings:
-    api_key:
-      from_secret: FOSSA_API_KEY
-  when:
-    instance:
-      include:
-      - drone-publish.rancher.io
-      exclude:
-      - drone-pr.rancher.io
+  - name: fossa
+    image: rancher/drone-fossa:latest
+    settings:
+      api_key:
+        from_secret: FOSSA_API_KEY
+    when:
+      instance:
+        include:
+          - drone-publish.rancher.io
+        exclude:
+          - drone-pr.rancher.io
 ---
 kind: pipeline
 name: build
@@ -22,11 +22,11 @@ steps:
   - name: build
     image: registry.suse.com/bci/golang:1.19
     commands:
-    - make build-bin
+      - make build-bin
     when:
       event:
-      - push
-      - pull_request
+        - push
+        - pull_request
 ---
 kind: pipeline
 name: validate
@@ -38,6 +38,7 @@ steps:
       - zypper in -y go=1.19 git tar gzip make
       - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.49.0
       - mv ./bin/golangci-lint /usr/local/bin/golangci-lint
+      - GOBIN=/usr/local/bin go install github.com/golang/mock/mockgen@v1.6.0
       - make validate
     when:
       event:
@@ -51,8 +52,8 @@ steps:
   - name: test
     image: registry.suse.com/bci/golang:1.19
     commands:
-    - make test
+      - make test
     when:
       event:
-      - push
-      - pull_request
+        - push
+        - pull_request
