@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func Test_includeFields(t *testing.T) {
@@ -538,6 +539,76 @@ func Test_excludeValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			excludeValues(tt.request, tt.unstr)
 			assert.Equal(t, tt.want, tt.unstr)
+		})
+	}
+}
+
+func Test_selfLink(t *testing.T) {
+	tests := []struct {
+		name              string
+		group             string
+		version           string
+		resource          string
+		resourceName      string
+		resourceNamespace string
+		want              string
+	}{
+		{
+			name:              "empty group",
+			group:             "",
+			version:           "v1",
+			resource:          "pods",
+			resourceName:      "rancher",
+			resourceNamespace: "cattle-system",
+			want:              "/api/v1/namespaces/cattle-system/pods/rancher",
+		},
+		{
+			name:              "third party crd",
+			group:             "fake.group.io",
+			version:           "v4",
+			resource:          "new-crd",
+			resourceName:      "new-resource",
+			resourceNamespace: "random-ns",
+			want:              "/apis/fake.group.io/v4/namespaces/random-ns/new-crd/new-resource",
+		},
+		{
+			name:         "non-namespaced third party crd",
+			group:        "fake.group.io",
+			version:      "v4",
+			resource:     "new-crd",
+			resourceName: "new-resource",
+			want:         "/apis/fake.group.io/v4/new-crd/new-resource",
+		},
+		{
+			name:         "rancher crd, non namespaced",
+			group:        "management.cattle.io",
+			version:      "v3",
+			resource:     "cluster",
+			resourceName: "c-123xyz",
+			want:         "/v1/management.cattle.io.cluster/c-123xyz",
+		},
+		{
+			name:              "rancher crd, namespaced",
+			group:             "management.cattle.io",
+			version:           "v3",
+			resource:          "catalogtemplates",
+			resourceName:      "built-in",
+			resourceNamespace: "cattle-global-data",
+			want:              "/v1/management.cattle.io.catalogtemplates/cattle-global-data/built-in",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			gvr := schema2.GroupVersionResource{
+				Group:    test.group,
+				Version:  test.version,
+				Resource: test.resource,
+			}
+			obj := unstructured.Unstructured{}
+			obj.SetName(test.resourceName)
+			obj.SetNamespace(test.resourceNamespace)
+			assert.Equal(t, test.want, selfLink(gvr, &obj), "did not get expected prefix for object")
 		})
 	}
 }
