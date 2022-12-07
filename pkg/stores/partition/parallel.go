@@ -137,7 +137,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 	}()
 
 	for i := indexOrZero(p.Partitions, state.PartitionName); i < len(p.Partitions); i++ {
-		if capacity <= 0 || isDone(ctx) {
+		if (limit > 0 && capacity <= 0) || isDone(ctx) {
 			break
 		}
 
@@ -197,7 +197,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 
 				// Case 1: the capacity has been reached across all goroutines but the list is still only partial,
 				// so save the state so that the next page can be requested later.
-				if len(list.Items) > capacity {
+				if limit > 0 && len(list.Items) > capacity {
 					result <- list.Items[:capacity]
 					// save state to redo this list at this offset
 					p.state = &listState{

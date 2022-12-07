@@ -50,6 +50,39 @@ generating a kubeconfig for a cluster, or installing an app from a catalog:
 POST /v1/catalog.cattle.io.clusterrepos/rancher-partner-charts?action=install
 ```
 
+#### `limit`
+
+Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
+
+Set the maximum number of results to retrieve from Kubernetes. The limit is
+passed on as a parameter to the Kubernetes request. The purpose of setting this
+limit is to prevent a huge response from overwhelming Steve and Rancher. For
+more information about setting limits, review the Kubernetes documentation on
+[retrieving results in
+chunks](https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks).
+
+The limit controls the size of the set coming from Kubernetes, and then
+filtering, sorting, and pagination are applied on that set. Because of this, if
+the result set is partial, there is no guarantee that the result returned to
+the client is fully sorted across the entire list, only across the returned
+chunk.
+
+The returned response will include a `continue` token, which indicates that the
+result is partial and must be used in the subsequent request to retrieve the
+next chunk.
+
+The default limit is 100000. To override the default, set `limit=-1`.
+
+#### `continue`
+
+Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
+
+Continue retrieving the next chunk of a partial list. The continue token is
+included in the response of a limited list and indicates that the result is
+partial. This token can then be used as a query parameter to retrieve the next
+chunk. All chunks have been retrieved when the continue field in the response
+is empty.
+
 #### `filter`
 
 Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).

@@ -77,8 +77,12 @@ func TestList(t *testing.T) {
 				newRequest("limit=1", "user1"),
 				newRequest(fmt.Sprintf("limit=1&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("granny-smith")))))), "user1"),
 				newRequest(fmt.Sprintf("limit=1&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"p":"all","c":"%s","l":1}`, base64.StdEncoding.EncodeToString([]byte("crispin")))))), "user1"),
+				newRequest("limit=-1", "user1"),
 			},
 			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
 				{
 					"user1": "roleA",
 				},
@@ -123,6 +127,14 @@ func TestList(t *testing.T) {
 				{
 					Count: 1,
 					Objects: []types.APIObject{
+						newApple("crispin").toObj(),
+					},
+				},
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+						newApple("granny-smith").toObj(),
 						newApple("crispin").toObj(),
 					},
 				},

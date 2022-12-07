@@ -161,15 +161,12 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 }
 
 // getLimit extracts the limit parameter from the request or sets a default of 100000.
-// Since a default is always set, this implies that clients must always be
-// aware that the list may be incomplete.
+// The default limit can be explicitly disabled by setting it to zero or negative.
+// If the default is accepted, clients must be aware that the list may be incomplete, and use the "continue" token to get the next chunk of results.
 func getLimit(apiOp *types.APIRequest) int {
 	limitString := apiOp.Request.URL.Query().Get(limitParam)
 	limit, err := strconv.Atoi(limitString)
 	if err != nil {
-		limit = 0
-	}
-	if limit <= 0 {
 		limit = defaultLimit
 	}
 	return limit
