@@ -72,7 +72,7 @@ func indexOrZero(partitions []Partition, name string) int {
 // List returns a stream of objects up to the requested limit.
 // If the continue token is not empty, it decodes it and returns the stream
 // starting at the indicated marker.
-func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume string) (<-chan []unstructured.Unstructured, error) {
+func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume, revision string) (<-chan []unstructured.Unstructured, error) {
 	var state listState
 	if resume != "" {
 		bytes, err := base64.StdEncoding.DecodeString(resume)
@@ -86,6 +86,8 @@ func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume st
 		if state.Limit > 0 {
 			limit = state.Limit
 		}
+	} else {
+		state.Revision = revision
 	}
 
 	result := make(chan []unstructured.Unstructured)

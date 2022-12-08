@@ -1743,7 +1743,7 @@ func TestList(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			schema := &types.APISchema{Schema: &schemas.Schema{ID: "apple"}}
-			stores := map[string]*mockStore{}
+			stores := map[string]UnstructuredStore{}
 			for _, partitions := range test.partitions {
 				for _, p := range partitions {
 					stores[p.Name()] = &mockStore{
@@ -1775,7 +1775,7 @@ func TestList(t *testing.T) {
 				}
 				if len(test.wantListCalls) > 0 {
 					for name, _ := range store.Partitioner.(mockPartitioner).stores {
-						assert.Equal(t, test.wantListCalls[i][name], store.Partitioner.(mockPartitioner).stores[name].called)
+						assert.Equal(t, test.wantListCalls[i][name], store.Partitioner.(mockPartitioner).stores[name].(*mockStore).called)
 					}
 				}
 			}
@@ -1783,8 +1783,74 @@ func TestList(t *testing.T) {
 	}
 }
 
+func TestListByRevision(t *testing.T) {
+
+	schema := &types.APISchema{Schema: &schemas.Schema{ID: "apple"}}
+	asl := &mockAccessSetLookup{userRoles: []map[string]string{
+		{
+			"user1": "roleA",
+		},
+		{
+			"user1": "roleA",
+		},
+	}}
+	store := NewStore(mockPartitioner{
+		stores: map[string]UnstructuredStore{
+			"all": &mockVersionedStore{
+				versions: []mockStore{
+					{
+						contents: &unstructured.UnstructuredList{
+							Object: map[string]interface{}{
+								"metadata": map[string]interface{}{
+									"resourceVersion": "1",
+								},
+							},
+							Items: []unstructured.Unstructured{
+								newApple("fuji").Unstructured,
+							},
+						},
+					},
+					{
+						contents: &unstructured.UnstructuredList{
+							Object: map[string]interface{}{
+								"metadata": map[string]interface{}{
+									"resourceVersion": "2",
+								},
+							},
+							Items: []unstructured.Unstructured{
+								newApple("fuji").Unstructured,
+								newApple("granny-smith").Unstructured,
+							},
+						},
+					},
+				},
+			},
+		},
+		partitions: map[string][]Partition{
+			"user1": {
+				mockPartition{
+					name: "all",
+				},
+			},
+		},
+	}, asl)
+	req := newRequest("", "user1")
+	t.Setenv("CATTLE_REQUEST_CACHE_DISABLED", "Y")
+
+	got, gotErr := store.List(req, schema)
+	assert.Nil(t, gotErr)
+	wantVersion := "2"
+	assert.Equal(t, wantVersion, got.Revision)
+
+	req = newRequest("revision=1", "user1")
+	got, gotErr = store.List(req, schema)
+	assert.Nil(t, gotErr)
+	wantVersion = "1"
+	assert.Equal(t, wantVersion, got.Revision)
+}
+
 type mockPartitioner struct {
-	stores     map[string]*mockStore
+	stores     map[string]UnstructuredStore
 	partitions map[string][]Partition
 }
 
@@ -1866,6 +1932,49 @@ func (m *mockStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id 
 
 func (m *mockStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
 	panic("not implemented")
+}
+
+type mockVersionedStore struct {
+	mockStore
+	versions []mockStore
+}
+
+func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error) {
+	m.called++
+	query, _ := url.ParseQuery(apiOp.Request.URL.RawQuery)
+	rv := len(m.versions) - 1
+	if query.Get("resourceVersion") != "" {
+		rv, _ = strconv.Atoi(query.Get("resourceVersion"))
+		rv--
+	}
+	l := query.Get("limit")
+	if l == "" {
+		return m.versions[rv].contents, nil
+	}
+	i := 0
+	if c := query.Get("continue"); c != "" {
+		start, _ := base64.StdEncoding.DecodeString(c)
+		for j, obj := range m.versions[rv].contents.Items {
+			if string(start) == obj.GetName() {
+				i = j
+				break
+			}
+		}
+	}
+	lInt, _ := strconv.Atoi(l)
+	contents := m.versions[rv].contents.DeepCopy()
+	if len(contents.Items) > i+lInt {
+		contents.SetContinue(base64.StdEncoding.EncodeToString([]byte(contents.Items[i+lInt].GetName())))
+	}
+	if i > len(contents.Items) {
+		return contents, nil
+	}
+	if i+lInt > len(contents.Items) {
+		contents.Items = contents.Items[i:]
+		return contents, nil
+	}
+	contents.Items = contents.Items[i : i+lInt]
+	return contents, nil
 }
 
 type mockCache struct {
