@@ -101,7 +101,7 @@ type byNameOrNamespaceStore struct {
 }
 
 // List returns a list of resources by partition.
-func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error) {
+func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
 	if b.partition.Passthrough {
 		return b.Store.List(apiOp, schema)
 	}
