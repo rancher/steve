@@ -1881,12 +1881,12 @@ type mockStore struct {
 	called    int
 }
 
-func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error) {
+func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
 	m.called++
 	query, _ := url.ParseQuery(apiOp.Request.URL.RawQuery)
 	l := query.Get("limit")
 	if l == "" {
-		return m.contents, nil
+		return m.contents, nil, nil
 	}
 	i := 0
 	if c := query.Get("continue"); c != "" {
@@ -1904,29 +1904,29 @@ func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*uns
 		contents.SetContinue(base64.StdEncoding.EncodeToString([]byte(contents.Items[i+lInt].GetName())))
 	}
 	if i > len(contents.Items) {
-		return contents, nil
+		return contents, nil, nil
 	}
 	if i+lInt > len(contents.Items) {
 		contents.Items = contents.Items[i:]
-		return contents, nil
+		return contents, nil, nil
 	}
 	contents.Items = contents.Items[i : i+lInt]
-	return contents, nil
+	return contents, nil, nil
 }
 
-func (m *mockStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error) {
+func (m *mockStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, error) {
+func (m *mockStore) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, error) {
+func (m *mockStore) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	panic("not implemented")
 }
 
-func (m *mockStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error) {
+func (m *mockStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	panic("not implemented")
 }
 
@@ -1939,7 +1939,7 @@ type mockVersionedStore struct {
 	versions []mockStore
 }
 
-func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error) {
+func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
 	m.called++
 	query, _ := url.ParseQuery(apiOp.Request.URL.RawQuery)
 	rv := len(m.versions) - 1
@@ -1949,7 +1949,7 @@ func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISche
 	}
 	l := query.Get("limit")
 	if l == "" {
-		return m.versions[rv].contents, nil
+		return m.versions[rv].contents, nil, nil
 	}
 	i := 0
 	if c := query.Get("continue"); c != "" {
@@ -1967,14 +1967,14 @@ func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISche
 		contents.SetContinue(base64.StdEncoding.EncodeToString([]byte(contents.Items[i+lInt].GetName())))
 	}
 	if i > len(contents.Items) {
-		return contents, nil
+		return contents, nil, nil
 	}
 	if i+lInt > len(contents.Items) {
 		contents.Items = contents.Items[i:]
-		return contents, nil
+		return contents, nil, nil
 	}
 	contents.Items = contents.Items[i : i+lInt]
-	return contents, nil
+	return contents, nil, nil
 }
 
 type mockCache struct {

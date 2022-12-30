@@ -79,11 +79,11 @@ type cacheKey struct {
 
 // UnstructuredStore is like types.Store but deals in k8s unstructured objects instead of apiserver types.
 type UnstructuredStore interface {
-	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error)
-	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, error)
-	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, error)
-	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, error)
-	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, error)
+	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
+	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error)
+	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error)
+	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
+	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
 	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
 }
 
@@ -103,11 +103,11 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 		return types.APIObject{}, err
 	}
 
-	obj, err := target.Delete(apiOp, schema, id)
+	obj, warnings, err := target.Delete(apiOp, schema, id)
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj), nil
+	return toAPI(schema, obj, warnings), nil
 }
 
 // ByID looks up a single object by its ID.
@@ -117,18 +117,18 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 		return types.APIObject{}, err
 	}
 
-	obj, err := target.ByID(apiOp, schema, id)
+	obj, warnings, err := target.ByID(apiOp, schema, id)
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj), nil
+	return toAPI(schema, obj, warnings), nil
 }
 
 func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
-	cont string, revision string, limit int) (*unstructured.UnstructuredList, error) {
+	cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
 	store, err := s.Partitioner.Store(apiOp, partition)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	req := apiOp.Clone()
@@ -163,7 +163,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	lister := ParallelPartitionLister{
-		Lister: func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, error) {
+		Lister: func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
 			return s.listPartition(ctx, apiOp, schema, partition, cont, revision, limit)
 		},
 		Concurrency: 3,
@@ -217,7 +217,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	for _, item := range list {
 		item := item
-		result.Objects = append(result.Objects, toAPI(schema, &item))
+		result.Objects = append(result.Objects, toAPI(schema, &item, nil))
 	}
 
 	result.Revision = key.revision
@@ -254,11 +254,11 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 		return types.APIObject{}, err
 	}
 
-	obj, err := target.Create(apiOp, schema, data)
+	obj, warnings, err := target.Create(apiOp, schema, data)
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj), nil
+	return toAPI(schema, obj, warnings), nil
 }
 
 // Update updates a single object in the store.
@@ -268,11 +268,11 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data ty
 		return types.APIObject{}, err
 	}
 
-	obj, err := target.Update(apiOp, schema, data, id)
+	obj, warnings, err := target.Update(apiOp, schema, data, id)
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj), nil
+	return toAPI(schema, obj, warnings), nil
 }
 
 // Watch returns a channel of events for a list or resource.
@@ -318,7 +318,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	return response, nil
 }
 
-func toAPI(schema *types.APISchema, obj runtime.Object) types.APIObject {
+func toAPI(schema *types.APISchema, obj runtime.Object, warnings []types.Warning) types.APIObject {
 	if obj == nil || reflect.ValueOf(obj).IsNil() {
 		return types.APIObject{}
 	}
@@ -344,6 +344,7 @@ func toAPI(schema *types.APISchema, obj runtime.Object) types.APIObject {
 	}
 
 	apiObject.ID = id
+	apiObject.Warnings = warnings
 	return apiObject
 }
 
@@ -384,7 +385,7 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 		return apiEvent
 	}
 
-	apiEvent.Object = toAPI(schema, event.Object)
+	apiEvent.Object = toAPI(schema, event.Object, nil)
 
 	m, err := meta.Accessor(event.Object)
 	if err != nil {

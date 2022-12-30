@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
+	"github.com/rancher/apiserver/pkg/types"
+
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,7 +35,7 @@ type ParallelPartitionLister struct {
 }
 
 // PartitionLister lists objects for one partition.
-type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, error)
+type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error)
 
 // Err returns the latest error encountered.
 func (p *ParallelPartitionLister) Err() error {
@@ -174,7 +176,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 				if partition.Name() == state.PartitionName {
 					cont = state.Continue
 				}
-				list, err := p.Lister(ctx, partition, cont, state.Revision, limit)
+				list, _, err := p.Lister(ctx, partition, cont, state.Revision, limit)
 				if err != nil {
 					return err
 				}
