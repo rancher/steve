@@ -257,7 +257,7 @@ func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dy
 
 func returnErr(err error, c chan watch.Event) {
 	c <- watch.Event{
-		Type: "resource.error",
+		Type: watch.Error,
 		Object: &metav1.Status{
 			Message: err.Error(),
 		},
