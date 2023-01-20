@@ -18,7 +18,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
-	github.com/rancher/apiserver v0.0.0-20221229135954-26bed53611c4
+	github.com/rancher/apiserver v0.0.0-20230120214941-e88c32739dc7
 	github.com/rancher/dynamiclistener v0.3.5
 	github.com/rancher/kubernetes-provider-detector v0.1.2
 	github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99
