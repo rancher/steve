@@ -177,7 +177,7 @@ func receiveWithTimeout(input chan types.APIEvent, duration time.Duration) (*typ
 	case value := <-input:
 		return &value, nil
 	case <-time.After(duration):
-		return nil, fmt.Errorf("timeout error, no value recieved after %f seconds", duration.Seconds())
+		return nil, fmt.Errorf("timeout error, no value received after %f seconds", duration.Seconds())
 	}
 }
 
