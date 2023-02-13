@@ -124,37 +124,37 @@ func (p *Factory) AdminClient(ctx *types.APIRequest, s *types.APISchema, namespa
 }
 
 func (p *Factory) ClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
-	return newClient(ctx, p.clientCfg, s, namespace, p.impersonate, warningHandler)
+	return newClient(ctx, p.watchClientCfg, s, namespace, p.impersonate, warningHandler)
 }
 
 func (p *Factory) AdminClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
-	return newClient(ctx, p.clientCfg, s, namespace, false, warningHandler)
+	return newClient(ctx, p.watchClientCfg, s, namespace, false, warningHandler)
 }
 
 func (p *Factory) TableClient(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	if attributes.Table(s) {
-		return newClient(ctx, p.clientCfg, s, namespace, p.impersonate, warningHandler)
+		return newClient(ctx, p.tableClientCfg, s, namespace, p.impersonate, warningHandler)
 	}
 	return p.Client(ctx, s, namespace, warningHandler)
 }
 
 func (p *Factory) TableAdminClient(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	if attributes.Table(s) {
-		return newClient(ctx, p.clientCfg, s, namespace, false, warningHandler)
+		return newClient(ctx, p.tableClientCfg, s, namespace, false, warningHandler)
 	}
 	return p.AdminClient(ctx, s, namespace, warningHandler)
 }
 
 func (p *Factory) TableClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	if attributes.Table(s) {
-		return newClient(ctx, p.clientCfg, s, namespace, p.impersonate, warningHandler)
+		return newClient(ctx, p.tableWatchClientCfg, s, namespace, p.impersonate, warningHandler)
 	}
 	return p.ClientForWatch(ctx, s, namespace, warningHandler)
 }
 
 func (p *Factory) TableAdminClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	if attributes.Table(s) {
-		return newClient(ctx, p.clientCfg, s, namespace, false, warningHandler)
+		return newClient(ctx, p.tableWatchClientCfg, s, namespace, false, warningHandler)
 	}
 	return p.AdminClientForWatch(ctx, s, namespace, warningHandler)
 }
