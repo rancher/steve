@@ -28,8 +28,6 @@ func TestList(t *testing.T) {
 		partitions    map[string][]Partition
 		objects       map[string]*unstructured.UnstructuredList
 		want          []types.APIObjectList
-		wantCache     []mockCache
-		disableCache  bool
 		wantListCalls []map[string]int
 	}{
 		{
@@ -644,60 +642,10 @@ func TestList(t *testing.T) {
 					Revision: "42",
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"all": 1},
-				{"all": 1},
-				{"all": 1},
+				{"all": 2},
+				{"all": 3},
 			},
 		},
 		{
@@ -757,124 +705,9 @@ func TestList(t *testing.T) {
 					Revision: "42",
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleB"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"all": 1},
 				{"all": 2},
-			},
-		},
-		{
-			name: "pagination with cache disabled",
-			apiOps: []*types.APIRequest{
-				newRequest("pagesize=1", "user1"),
-				newRequest("pagesize=1&page=2&revision=42", "user1"),
-				newRequest("pagesize=1&page=3&revision=42", "user1"),
-			},
-			access: []map[string]string{
-				{
-					"user1": "roleA",
-				},
-				{
-					"user1": "roleA",
-				},
-				{
-					"user1": "roleA",
-				},
-			},
-			partitions: map[string][]Partition{
-				"user1": {
-					mockPartition{
-						name: "all",
-					},
-				},
-			},
-			objects: map[string]*unstructured.UnstructuredList{
-				"all": {
-					Object: map[string]interface{}{
-						"metadata": map[string]interface{}{
-							"resourceVersion": "42",
-						},
-					},
-					Items: []unstructured.Unstructured{
-						newApple("fuji").Unstructured,
-						newApple("granny-smith").Unstructured,
-					},
-				},
-			},
-			want: []types.APIObjectList{
-				{
-					Count:    2,
-					Pages:    2,
-					Revision: "42",
-					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-					},
-				},
-				{
-					Count:    2,
-					Pages:    2,
-					Revision: "42",
-					Objects: []types.APIObject{
-						newApple("granny-smith").toObj(),
-					},
-				},
-				{
-					Count:    2,
-					Pages:    2,
-					Revision: "42",
-				},
-			},
-			wantCache:    []mockCache{},
-			disableCache: true,
-			wantListCalls: []map[string]int{
-				{"all": 1},
-				{"all": 2},
-				{"all": 3},
 			},
 		},
 		{
@@ -951,52 +784,18 @@ func TestList(t *testing.T) {
 					},
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("crispin").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("crispin").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"green": 1, "yellow": 1},
-				{"green": 1, "yellow": 1},
+				{"green": 2, "yellow": 2},
 			},
 		},
 		{
 			name: "pagesize=1 & limit=2 & continue",
 			apiOps: []*types.APIRequest{
 				newRequest("pagesize=1&limit=2", "user1"),
-				newRequest("pagesize=1&page=2&limit=2", "user1"),             // does not use cache
-				newRequest("pagesize=1&page=2&revision=42&limit=2", "user1"), // uses cache
-				newRequest("pagesize=1&page=3&revision=42&limit=2", "user1"), // next page from cache
+				newRequest("pagesize=1&page=2&limit=2", "user1"),
+				newRequest("pagesize=1&page=2&revision=42&limit=2", "user1"),
+				newRequest("pagesize=1&page=3&revision=42&limit=2", "user1"),
 				newRequest(fmt.Sprintf("pagesize=1&revision=42&limit=2&continue=%s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`)))))), "user1"),
 			},
 			access: []map[string]string{
@@ -1081,137 +880,12 @@ func TestList(t *testing.T) {
 					},
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    2,
-							resume:       "",
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"continue": base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`))))),
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    2,
-							resume:       "",
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"continue": base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`))))),
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    2,
-							resume:       "",
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"continue": base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`))))),
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    2,
-							resume:       "",
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"continue": base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`))))),
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    2,
-							resume:       "",
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"continue": base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`))))),
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-						{
-							chunkSize:    2,
-							resume:       base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(`{"r":"42","p":"all","c":"%s","l":2}`, base64.StdEncoding.EncodeToString([]byte(`crispin`))))),
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("crispin").Unstructured,
-								newApple("red-delicious").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"all": 2},
 				{"all": 4},
-				{"all": 4},
-				{"all": 4},
-				{"all": 5},
+				{"all": 6},
+				{"all": 8},
+				{"all": 9},
 			},
 		},
 		{
@@ -1295,113 +969,11 @@ func TestList(t *testing.T) {
 					},
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user2", "roleB"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user2", "roleB"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user2", "roleB"),
-							resourcePath: "/apples",
-							revision:     "42",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"all": 1},
 				{"all": 2},
-				{"all": 2},
-				{"all": 2},
+				{"all": 3},
+				{"all": 4},
 			},
 		},
 		{
@@ -1506,113 +1078,11 @@ func TestList(t *testing.T) {
 					},
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						cacheKey{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user2", "roleB"),
-							resourcePath: "/apples",
-							revision:     "103",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("crispin").Unstructured,
-								newApple("golden-delicious").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user2", "roleB"),
-							resourcePath: "/apples",
-							revision:     "103",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("crispin").Unstructured,
-								newApple("golden-delicious").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user2", "roleB"),
-							resourcePath: "/apples",
-							revision:     "103",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("crispin").Unstructured,
-								newApple("golden-delicious").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"green": 1, "yellow": 0},
 				{"green": 1, "yellow": 1},
-				{"green": 1, "yellow": 1},
-				{"green": 1, "yellow": 1},
+				{"green": 2, "yellow": 1},
+				{"green": 2, "yellow": 2},
 			},
 		},
 		{
@@ -1688,52 +1158,6 @@ func TestList(t *testing.T) {
 					},
 				},
 			},
-			wantCache: []mockCache{
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						cacheKey{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-					},
-				},
-				{
-					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleA"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-						{
-							chunkSize:    100000,
-							pageSize:     1,
-							accessID:     getAccessID("user1", "roleB"),
-							resourcePath: "/apples",
-							revision:     "102",
-						}: {
-							Items: []unstructured.Unstructured{
-								newApple("granny-smith").Unstructured,
-								newApple("bramley").Unstructured,
-							},
-						},
-					},
-				},
-			},
 			wantListCalls: []map[string]int{
 				{"green": 1},
 				{"green": 2},
@@ -1752,9 +1176,6 @@ func TestList(t *testing.T) {
 				}
 			}
 			asl := &mockAccessSetLookup{userRoles: test.access}
-			if test.disableCache {
-				t.Setenv("CATTLE_REQUEST_CACHE_DISABLED", "Y")
-			}
 			store := NewStore(mockPartitioner{
 				stores:     stores,
 				partitions: test.partitions,
@@ -1763,16 +1184,6 @@ func TestList(t *testing.T) {
 				got, gotErr := store.List(req, schema)
 				assert.Nil(t, gotErr)
 				assert.Equal(t, test.want[i], got)
-				if test.disableCache {
-					assert.Nil(t, store.listCache)
-				}
-				if len(test.wantCache) > 0 {
-					assert.Equal(t, len(test.wantCache[i].contents), len(store.listCache.Keys()))
-					for k, v := range test.wantCache[i].contents {
-						cachedVal, _ := store.listCache.Get(k)
-						assert.Equal(t, v, cachedVal)
-					}
-				}
 				if len(test.wantListCalls) > 0 {
 					for name, _ := range store.Partitioner.(mockPartitioner).stores {
 						assert.Equal(t, test.wantListCalls[i][name], store.Partitioner.(mockPartitioner).stores[name].(*mockStore).called)
@@ -1835,7 +1246,6 @@ func TestListByRevision(t *testing.T) {
 		},
 	}, asl)
 	req := newRequest("", "user1")
-	t.Setenv("CATTLE_REQUEST_CACHE_DISABLED", "Y")
 
 	got, gotErr := store.List(req, schema)
 	assert.Nil(t, gotErr)
@@ -1975,10 +1385,6 @@ func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISche
 	}
 	contents.Items = contents.Items[i : i+lInt]
 	return contents, nil, nil
-}
-
-type mockCache struct {
-	contents map[cacheKey]*unstructured.UnstructuredList
 }
 
 var colorMap = map[string]string{
