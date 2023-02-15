@@ -15,6 +15,7 @@ require (
 	github.com/google/gnostic-models v0.6.8
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
@@ -23,6 +24,7 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20240503193601-9f5f6586bb5b
 	github.com/rancher/remotedialer v0.3.2
+	github.com/rancher/wrangler v1.1.2
 	github.com/rancher/wrangler/v2 v2.2.0-rc6
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
@@ -37,7 +39,8 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.29.3
-	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
+	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 )
 
 require (
@@ -103,7 +106,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/component-base v0.29.3 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
 	sigs.k8s.io/cli-utils v0.35.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

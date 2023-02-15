@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"github.com/rancher/steve/pkg/resources/common"
 	"net/http"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
@@ -15,7 +16,6 @@ import (
 	"github.com/rancher/steve/pkg/clustercache"
 	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources"
-	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/schemas"
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/schema/definitions"
@@ -90,6 +90,32 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 	return server, server.start(ctx)
 }
 
+func NewAlpha(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
+	if opts == nil {
+		opts = &Options{}
+	}
+
+	server := &Server{
+		RESTConfig:                 restConfig,
+		ClientFactory:              opts.ClientFactory,
+		AccessSetLookup:            opts.AccessSetLookup,
+		authMiddleware:             opts.AuthMiddleware,
+		controllers:                opts.Controllers,
+		next:                       opts.Next,
+		router:                     opts.Router,
+		aggregationSecretNamespace: opts.AggregationSecretNamespace,
+		aggregationSecretName:      opts.AggregationSecretName,
+		ClusterRegistry:            opts.ClusterRegistry,
+		Version:                    opts.ServerVersion,
+	}
+
+	if err := setupAlpha(ctx, server); err != nil {
+		return nil, err
+	}
+
+	return server, server.start(ctx)
+}
+
 func setDefaults(server *Server) error {
 	if server.RESTConfig == nil {
 		return ErrConfigRequired
@@ -149,6 +175,68 @@ func setup(ctx context.Context, server *Server) error {
 	summaryCache.Start(ctx)
 
 	for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache()) {
+		sf.AddTemplate(template)
+	}
+
+	cols, err := common.NewDynamicColumns(server.RESTConfig)
+	if err != nil {
+		return err
+	}
+
+	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
+
+	schemacontroller.Register(ctx,
+		cols,
+		server.controllers.K8s.Discovery(),
+		server.controllers.CRD.CustomResourceDefinition(),
+		server.controllers.API.APIService(),
+		server.controllers.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		ccache,
+		sf)
+
+	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
+	if err != nil {
+		return err
+	}
+
+	server.APIServer = apiServer
+	server.Handler = handler
+	server.SchemaFactory = sf
+	return nil
+}
+
+func setupAlpha(ctx context.Context, server *Server) error {
+	err := setDefaults(server)
+	if err != nil {
+		return err
+	}
+
+	cf := server.ClientFactory
+	if cf == nil {
+		cf, err = client.NewFactory(server.RESTConfig, server.authMiddleware != nil)
+		if err != nil {
+			return err
+		}
+		server.ClientFactory = cf
+	}
+
+	asl := server.AccessSetLookup
+	if asl == nil {
+		asl = accesscontrol.NewAccessStore(ctx, true, server.controllers.RBAC)
+	}
+
+	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
+	server.ClusterCache = ccache
+	sf := schema.NewCollection(ctx, server.BaseSchemas, asl)
+
+	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
+		return err
+	}
+
+	summaryCache := summarycache.New(sf, ccache)
+	summaryCache.Start(ctx)
+
+	for _, template := range resources.DefaultSchemaTemplatesAlpha(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
 		sf.AddTemplate(template)
 	}
 
