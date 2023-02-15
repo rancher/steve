@@ -7,6 +7,7 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package sqlcache
 
 import (
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,10 +69,10 @@ func TestListOptionIndexer(t *testing.T) {
 		t.Error(err)
 	}
 
-	lo := ListOptions{
+	lo := listprocessor.ListOptions{
 		Filters:    nil,
-		Sort:       Sort{},
-		Pagination: Pagination{},
+		Sort:       listprocessor.Sort{},
+		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
 	r, err := l.ListByOptions(lo)
@@ -106,10 +107,10 @@ func TestListOptionIndexer(t *testing.T) {
 	}
 	r = l.List()
 	assert.Len(r, 2)
-	lo = ListOptions{
-		Filters:    []Filter{{field: []string{"Brand"}, match: "ferrari"}},
-		Sort:       Sort{},
-		Pagination: Pagination{},
+	lo = listprocessor.ListOptions{
+		Filters:    []listprocessor.Filter{{Field: []string{"Brand"}, Match: "ferrari"}},
+		Sort:       listprocessor.Sort{},
+		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
 	r, err = l.ListByOptions(lo)
@@ -122,10 +123,10 @@ func TestListOptionIndexer(t *testing.T) {
 	assert.Equal(r[0].(*v1.Pod).Labels["Wheels"], "3")
 
 	// historically, v1.Pod still exists in version 1, gone in version 2, back in version 3
-	lo = ListOptions{
-		Filters:    []Filter{{field: []string{"Brand"}, match: "ferrari"}},
-		Sort:       Sort{},
-		Pagination: Pagination{},
+	lo = listprocessor.ListOptions{
+		Filters:    []listprocessor.Filter{{Field: []string{"Brand"}, Match: "ferrari"}},
+		Sort:       listprocessor.Sort{},
+		Pagination: listprocessor.Pagination{},
 		Revision:   "1",
 	}
 	r, err = l.ListByOptions(lo)
@@ -162,10 +163,10 @@ func TestListOptionIndexer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	lo = ListOptions{
-		Filters:    []Filter{{field: []string{"Brand"}, match: "f"}}, // tesla filtered out
-		Sort:       Sort{primaryField: []string{"Color"}, primaryOrder: DESC},
-		Pagination: Pagination{},
+	lo = listprocessor.ListOptions{
+		Filters:    []listprocessor.Filter{{Field: []string{"Brand"}, Match: "f"}}, // tesla filtered out
+		Sort:       listprocessor.Sort{PrimaryField: []string{"Color"}, PrimaryOrder: listprocessor.DESC},
+		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
 	r, err = l.ListByOptions(lo)
@@ -177,10 +178,10 @@ func TestListOptionIndexer(t *testing.T) {
 	assert.Equal(r[1].(*v1.Pod).Labels["Color"], "blue")
 
 	// test pagination
-	lo = ListOptions{
-		Filters:    []Filter{},
-		Sort:       Sort{primaryField: []string{"Color"}},
-		Pagination: Pagination{pageSize: 2},
+	lo = listprocessor.ListOptions{
+		Filters:    []listprocessor.Filter{},
+		Sort:       listprocessor.Sort{PrimaryField: []string{"Color"}},
+		Pagination: listprocessor.Pagination{PageSize: 2},
 		Revision:   "",
 	}
 	r, err = l.ListByOptions(lo)
@@ -190,7 +191,7 @@ func TestListOptionIndexer(t *testing.T) {
 	assert.Len(r, 2)
 	assert.Equal(r[0].(*v1.Pod).Labels["Color"], "black")
 	assert.Equal(r[1].(*v1.Pod).Labels["Color"], "blue")
-	lo.Pagination.page = 2
+	lo.Pagination.Page = 2
 	r, err = l.ListByOptions(lo)
 	if err != nil {
 		t.Error(err)

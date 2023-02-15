@@ -5,56 +5,12 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"strconv"
 	"strings"
 )
-
-// ListOptions represents the query parameters that may be included in a list request.
-type ListOptions struct {
-	ChunkSize  int
-	Resume     string
-	Filters    []Filter
-	Sort       Sort
-	Pagination Pagination
-	Revision   string
-}
-
-// Filter represents a field to filter by.
-// A subfield in an object is represented in a request query using . notation, e.g. 'metadata.name'.
-// The subfield is internally represented as a slice, e.g. [metadata, name].
-type Filter struct {
-	field []string
-	match string
-}
-
-// Sort represents the criteria to sort on.
-// The subfield to sort by is represented in a request query using . notation, e.g. 'metadata.name'.
-// The subfield is internally represented as a slice, e.g. [metadata, name].
-// The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
-type Sort struct {
-	primaryField   []string
-	secondaryField []string
-	primaryOrder   SortOrder
-	secondaryOrder SortOrder
-}
-
-// SortOrder represents whether the list should be ascending or descending.
-type SortOrder int
-
-const (
-	// ASC stands for ascending order.
-	ASC SortOrder = iota
-	// DESC stands for descending (reverse) order.
-	DESC
-)
-
-// Pagination represents how to return paginated results.
-type Pagination struct {
-	pageSize int
-	page     int
-}
 
 // ListOptionIndexer extends VersionedIndexer by allowing queries based on ListOption
 type ListOptionIndexer struct {
@@ -154,17 +110,17 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 }
 
 // ListByOptions returns objects according to the ListOptions struct
-func (l *ListOptionIndexer) ListByOptions(lo ListOptions) ([]any, error) {
+func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions) ([]any, error) {
 	// compute list of interesting fields (filtered or sorted)
 	fields := [][]string{}
 	for _, filter := range lo.Filters {
-		fields = append(fields, filter.field)
+		fields = append(fields, filter.Field)
 	}
-	if len(lo.Sort.primaryField) > 0 {
-		fields = append(fields, lo.Sort.primaryField)
+	if len(lo.Sort.PrimaryField) > 0 {
+		fields = append(fields, lo.Sort.PrimaryField)
 	}
-	if len(lo.Sort.secondaryField) > 0 {
-		fields = append(fields, lo.Sort.secondaryField)
+	if len(lo.Sort.SecondaryField) > 0 {
+		fields = append(fields, lo.Sort.SecondaryField)
 	}
 
 	// compute join clauses (one per interesting field) and their corresponding parameters
@@ -179,9 +135,9 @@ func (l *ListOptionIndexer) ListByOptions(lo ListOptions) ([]any, error) {
 	// compute WHERE clauses (from lo.Filters and lo.Revision) - and their corresponding parameters
 	whereClauses := []string{}
 	for _, filter := range lo.Filters {
-		columnName := toColumnName(filter.field)
+		columnName := toColumnName(filter.Field)
 		whereClauses = append(whereClauses, fmt.Sprintf(`"f_%s".value LIKE ?`, columnName))
-		params = append(params, fmt.Sprintf("%%%s%%", filter.match))
+		params = append(params, fmt.Sprintf("%%%s%%", filter.Match))
 	}
 	if lo.Revision == "" {
 		// latest
@@ -200,18 +156,18 @@ func (l *ListOptionIndexer) ListByOptions(lo ListOptions) ([]any, error) {
 
 	// compute ORDER BY clauses (from lo.Sort)
 	orderByClauses := []string{}
-	if len(lo.Sort.primaryField) > 0 {
-		columnName := toColumnName(lo.Sort.primaryField)
+	if len(lo.Sort.PrimaryField) > 0 {
+		columnName := toColumnName(lo.Sort.PrimaryField)
 		direction := "ASC"
-		if lo.Sort.primaryOrder == DESC {
+		if lo.Sort.PrimaryOrder == listprocessor.DESC {
 			direction = "DESC"
 		}
 		orderByClauses = append(orderByClauses, fmt.Sprintf(`"f_%s".value %s`, columnName, direction))
 	}
-	if len(lo.Sort.secondaryField) > 0 {
-		columnName := toColumnName(lo.Sort.secondaryField)
+	if len(lo.Sort.SecondaryField) > 0 {
+		columnName := toColumnName(lo.Sort.SecondaryField)
 		direction := "ASC"
-		if lo.Sort.secondaryOrder == DESC {
+		if lo.Sort.SecondaryOrder == listprocessor.DESC {
 			direction = "DESC"
 		}
 		orderByClauses = append(orderByClauses, fmt.Sprintf(`"f_%s".value %s`, columnName, direction))
@@ -220,13 +176,13 @@ func (l *ListOptionIndexer) ListByOptions(lo ListOptions) ([]any, error) {
 	// compute LIMIT/OFFSET clauses (from lo.Pagination)
 	limitClause := ""
 	offsetClause := ""
-	if lo.Pagination.pageSize >= 1 {
+	if lo.Pagination.PageSize >= 1 {
 		limitClause = " LIMIT ?"
-		params = append(params, lo.Pagination.pageSize)
+		params = append(params, lo.Pagination.PageSize)
 
-		if lo.Pagination.page >= 1 {
+		if lo.Pagination.Page >= 1 {
 			offsetClause = " OFFSET ?"
-			params = append(params, lo.Pagination.pageSize*(lo.Pagination.page-1))
+			params = append(params, lo.Pagination.PageSize*(lo.Pagination.Page-1))
 		}
 	}
 
