@@ -47,14 +47,14 @@ type Partition struct {
 // A subfield in an object is represented in a request query using . notation, e.g. 'metadata.name'.
 // The subfield is internally represented as a slice, e.g. [metadata, name].
 type Filter struct {
-	field []string
-	match string
+	Field []string
+	Match string
 }
 
 // String returns the filter as a query string.
 func (f Filter) String() string {
-	field := strings.Join(f.field, ".")
-	return field + "=" + f.match
+	field := strings.Join(f.Field, ".")
+	return field + "=" + f.Match
 }
 
 // SortOrder represents whether the list should be ascending or descending.
@@ -72,38 +72,33 @@ const (
 // The subfield is internally represented as a slice, e.g. [metadata, name].
 // The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
 type Sort struct {
-	primaryField   []string
-	secondaryField []string
-	primaryOrder   SortOrder
-	secondaryOrder SortOrder
+	PrimaryField   []string
+	SecondaryField []string
+	PrimaryOrder   SortOrder
+	SecondaryOrder SortOrder
 }
 
 // String returns the sort parameters as a query string.
 func (s Sort) String() string {
 	field := ""
-	if s.primaryOrder == DESC {
+	if s.PrimaryOrder == DESC {
 		field = "-" + field
 	}
-	field += strings.Join(s.primaryField, ".")
-	if len(s.secondaryField) > 0 {
+	field += strings.Join(s.PrimaryField, ".")
+	if len(s.SecondaryField) > 0 {
 		field += ","
-		if s.secondaryOrder == DESC {
+		if s.SecondaryOrder == DESC {
 			field += "-"
 		}
-		field += strings.Join(s.secondaryField, ".")
+		field += strings.Join(s.SecondaryField, ".")
 	}
 	return field
 }
 
 // Pagination represents how to return paginated results.
 type Pagination struct {
-	pageSize int
-	page     int
-}
-
-// PageSize returns the integer page size.
-func (p Pagination) PageSize() int {
-	return p.pageSize
+	PageSize int
+	Page     int
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
@@ -118,12 +113,12 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		if len(filter) != 2 {
 			continue
 		}
-		filterOpts = append(filterOpts, Filter{field: strings.Split(filter[0], "."), match: filter[1]})
+		filterOpts = append(filterOpts, Filter{Field: strings.Split(filter[0], "."), Match: filter[1]})
 	}
 	// sort the filter fields so they can be used as a cache key in the store
 	sort.Slice(filterOpts, func(i, j int) bool {
-		fieldI := strings.Join(filterOpts[i].field, ".")
-		fieldJ := strings.Join(filterOpts[j].field, ".")
+		fieldI := strings.Join(filterOpts[i].Field, ".")
+		fieldJ := strings.Join(filterOpts[j].Field, ".")
 		return fieldI < fieldJ
 	})
 	sortOpts := Sort{}
@@ -132,32 +127,32 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		sortParts := strings.SplitN(sortKeys, ",", 2)
 		primaryField := sortParts[0]
 		if primaryField != "" && primaryField[0] == '-' {
-			sortOpts.primaryOrder = DESC
+			sortOpts.PrimaryOrder = DESC
 			primaryField = primaryField[1:]
 		}
 		if primaryField != "" {
-			sortOpts.primaryField = strings.Split(primaryField, ".")
+			sortOpts.PrimaryField = strings.Split(primaryField, ".")
 		}
 		if len(sortParts) > 1 {
 			secondaryField := sortParts[1]
 			if secondaryField != "" && secondaryField[0] == '-' {
-				sortOpts.secondaryOrder = DESC
+				sortOpts.SecondaryOrder = DESC
 				secondaryField = secondaryField[1:]
 			}
 			if secondaryField != "" {
-				sortOpts.secondaryField = strings.Split(secondaryField, ".")
+				sortOpts.SecondaryField = strings.Split(secondaryField, ".")
 			}
 		}
 	}
 	var err error
 	pagination := Pagination{}
-	pagination.pageSize, err = strconv.Atoi(q.Get(pageSizeParam))
+	pagination.PageSize, err = strconv.Atoi(q.Get(pageSizeParam))
 	if err != nil {
-		pagination.pageSize = 0
+		pagination.PageSize = 0
 	}
-	pagination.page, err = strconv.Atoi(q.Get(pageParam))
+	pagination.Page, err = strconv.Atoi(q.Get(pageParam))
 	if err != nil {
-		pagination.page = 1
+		pagination.Page = 1
 	}
 	revision := q.Get(revisionParam)
 	return &ListOptions{
@@ -198,11 +193,11 @@ func matchesOne(obj map[string]interface{}, filter Filter) bool {
 	var objValue interface{}
 	var ok bool
 	subField := []string{}
-	for !ok && len(filter.field) > 0 {
-		objValue, ok = data.GetValue(obj, filter.field...)
+	for !ok && len(filter.Field) > 0 {
+		objValue, ok = data.GetValue(obj, filter.Field...)
 		if !ok {
-			subField = append(subField, filter.field[len(filter.field)-1])
-			filter.field = filter.field[:len(filter.field)-1]
+			subField = append(subField, filter.Field[len(filter.Field)-1])
+			filter.Field = filter.Field[:len(filter.Field)-1]
 		}
 	}
 	if !ok {
@@ -214,11 +209,11 @@ func matchesOne(obj map[string]interface{}, filter Filter) bool {
 			return false
 		}
 		stringVal := convert.ToString(typedVal)
-		if strings.Contains(stringVal, filter.match) {
+		if strings.Contains(stringVal, filter.Match) {
 			return true
 		}
 	case []interface{}:
-		filter = Filter{field: subField, match: filter.match}
+		filter = Filter{Field: subField, Match: filter.Match}
 		if matchesAny(typedVal, filter) {
 			return true
 		}
@@ -231,7 +226,7 @@ func matchesAny(obj []interface{}, filter Filter) bool {
 		switch typedItem := v.(type) {
 		case string, int, bool:
 			stringVal := convert.ToString(typedItem)
-			if strings.Contains(stringVal, filter.match) {
+			if strings.Contains(stringVal, filter.Match) {
 				return true
 			}
 		case map[string]interface{}:
