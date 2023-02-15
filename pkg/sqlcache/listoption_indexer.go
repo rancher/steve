@@ -2,11 +2,12 @@ package sqlcache
 
 import (
 	"database/sql"
+	"encoding/gob"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
 	"strconv"
 	"strings"
@@ -23,34 +24,24 @@ type ListOptionIndexer struct {
 // FieldFunc is a function from an object to a filterable/sortable property. Result can be string, int or bool
 type FieldFunc func(obj any) any
 
-// NewListOptionIndexer returns a cache.Indexer on a Kubernetes resource that is also able to satisfy ListOption queries
-func NewListOptionIndexer(example meta.Object, path string, fieldFuncs map[string]FieldFunc) (*ListOptionIndexer, error) {
-	keyFunc := func(a any) (string, error) {
-		o, ok := a.(meta.Object)
-		if !ok {
-			return "", errors.Errorf("Unexpected object does not conform to meta.Object: %v", a)
-		}
-		return o.GetName(), nil
-	}
+// NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
+// ListOptionIndexer is also able to satisfy ListOption queries on indexed resources
+func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyFunc, fieldFuncs map[string]FieldFunc, path string) (*ListOptionIndexer, error) {
+	// necessary in order to gob/ungob unstructured.Unstructured objects
+	gob.Register(map[string]interface{}{})
 
-	return NewCustomListOptionIndexer(example, keyFunc, path, fieldFuncs, cache.Indexers{})
-}
-
-// NewCustomListOptionIndexer returns a cache.Indexer on a Kubernetes resource that is also able to satisfy ListOption queries
-// with custom keyFunc and Indexers
-func NewCustomListOptionIndexer(example meta.Object, keyFunc cache.KeyFunc, path string, fieldFuncs map[string]FieldFunc, indexers cache.Indexers) (*ListOptionIndexer, error) {
 	versionFunc := func(a any) (int, error) {
-		o, ok := a.(meta.Object)
+		o, ok := a.(*unstructured.Unstructured)
 		if !ok {
-			return 0, errors.Errorf("Unexpected object does not conform to meta.Object: %v", a)
+			return 0, errors.Errorf("Unexpected object type, expected unstructured.Unstructured: %v", a)
 		}
 		i, err := strconv.Atoi(o.GetResourceVersion())
 		if err != nil {
-			return 0, errors.Errorf("Unexpected non-integer version: %v", o.GetResourceVersion())
+			return 0, errors.Errorf("Unexpected non-integer ResourceVersion: %v", o.GetResourceVersion())
 		}
 		return i, nil
 	}
-	v, err := NewVersionedIndexer(example, keyFunc, versionFunc, path, indexers)
+	v, err := NewVersionedIndexer(example, keyFunc, versionFunc, path, cache.Indexers{})
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +101,7 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 }
 
 // ListByOptions returns objects according to the ListOptions struct
-func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions) ([]any, error) {
+func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions) (*unstructured.UnstructuredList, error) {
 	// compute list of interesting fields (filtered or sorted)
 	fields := [][]string{}
 	for _, filter := range lo.Filters {
@@ -203,10 +194,15 @@ func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions) ([]any, 
 	stmt += limitClause
 	stmt += offsetClause
 
-	result, err := l.QueryObjects(l.Prepare(stmt), params...)
+	items, err := l.QueryObjects(l.Prepare(stmt), params...)
 	if err != nil {
 		return nil, err
 	}
+
+	result := &unstructured.UnstructuredList{}
+	result.SetUnstructuredContent(map[string]any{
+		"items": items,
+	})
 
 	return result, nil
 }
