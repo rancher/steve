@@ -14,10 +14,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
 	"github.com/rancher/wrangler/pkg/summary"
@@ -84,21 +82,11 @@ type Store struct {
 	notifier     RelationshipNotifier
 }
 
-// NewProxyStore returns a wrapped types.Store.
-func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
-	return &errorStore{
-		Store: &WatchRefresh{
-			Store: partition.NewStore(
-				&rbacPartitioner{
-					proxyStore: &Store{
-						clientGetter: clientGetter,
-						notifier:     notifier,
-					},
-				},
-				lookup,
-			),
-			asl: lookup,
-		},
+// NewStore returns a partition.UnstructuredStore directly on top of kubernetes.
+func NewStore(clientGetter ClientGetter, notifier RelationshipNotifier) *Store {
+	return &Store{
+		clientGetter: clientGetter,
+		notifier:     notifier,
 	}
 }
 

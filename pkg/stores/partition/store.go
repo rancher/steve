@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxy"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -295,4 +296,21 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 
 	apiEvent.Revision = m.GetResourceVersion()
 	return apiEvent
+}
+
+// NewProxyStore returns a wrapped types.Store.
+func NewProxyStore(clientGetter proxy.ClientGetter, notifier proxy.RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
+	return proxy.NewErrorStore(
+		proxy.NewWatchRefresh(
+			NewStore(
+				&rbacPartitioner{
+					proxyStore: proxy.NewStore(
+						clientGetter, notifier,
+					),
+				},
+				lookup,
+			),
+			lookup,
+		),
+	)
 }

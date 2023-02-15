@@ -3,6 +3,8 @@ package common
 import (
 	"strings"
 
+	"github.com/rancher/steve/pkg/stores/partition"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
@@ -23,7 +25,7 @@ func DefaultTemplate(clientGetter proxy.ClientGetter,
 	summaryCache *summarycache.SummaryCache,
 	asl accesscontrol.AccessSetLookup) schema.Template {
 	return schema.Template{
-		Store:     metricsStore.NewMetricsStore(proxy.NewProxyStore(clientGetter, summaryCache, asl)),
+		Store:     metricsStore.NewMetricsStore(partition.NewProxyStore(clientGetter, summaryCache, asl)),
 		Formatter: formatter(summaryCache),
 	}
 }

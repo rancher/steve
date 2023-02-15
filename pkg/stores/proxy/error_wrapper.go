@@ -7,8 +7,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
+// errorStore implements types.Store with errors translated into APIErrors
 type errorStore struct {
 	types.Store
+}
+
+// NewErrorStore returns a store with errors translated into APIErrors
+func NewErrorStore(s types.Store) types.Store {
+	return &errorStore{Store: s}
 }
 
 // ByID looks up a single object by its ID.
