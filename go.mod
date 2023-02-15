@@ -15,6 +15,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
+	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
@@ -37,6 +38,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.25.4
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1
+	k8s.io/utils v0.0.0-20221011040102-427025108f67
 )
 
 require (
@@ -104,7 +106,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/component-base v0.25.4 // indirect
 	k8s.io/klog/v2 v2.80.1 // indirect
-	k8s.io/utils v0.0.0-20221011040102-427025108f67 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.33 // indirect
 	sigs.k8s.io/cli-utils v0.27.0 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
