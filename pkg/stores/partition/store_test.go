@@ -278,8 +278,20 @@ func TestList(t *testing.T) {
 			apiOps: []*types.APIRequest{
 				newRequest("filter=data.color=green", "user1"),
 				newRequest("filter=data.color=green&filter=metadata.name=bramley", "user1"),
+				newRequest("filter=data.color=green,data.color=pink", "user1"),
+				newRequest("filter=data.color=green,data.color=pink&filter=metadata.name=fuji", "user1"),
+				newRequest("filter=data.color=green,data.color=pink&filter=metadata.name=crispin", "user1"),
 			},
 			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
 				{
 					"user1": "roleA",
 				},
@@ -317,6 +329,23 @@ func TestList(t *testing.T) {
 					Objects: []types.APIObject{
 						newApple("bramley").toObj(),
 					},
+				},
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+						newApple("granny-smith").toObj(),
+						newApple("bramley").toObj(),
+					},
+				},
+				{
+					Count: 1,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+					},
+				},
+				{
+					Count: 0,
 				},
 			},
 		},
@@ -1737,6 +1766,133 @@ func TestList(t *testing.T) {
 			wantListCalls: []map[string]int{
 				{"green": 1},
 				{"green": 2},
+			},
+		},
+		{
+			name: "pagination with or filters",
+			apiOps: []*types.APIRequest{
+				newRequest("filter=metadata.name=el,data.color=el&pagesize=2", "user1"),
+				newRequest("filter=metadata.name=el,data.color=el&pagesize=2&page=2&revision=42", "user1"),
+				newRequest("filter=metadata.name=el,data.color=el&pagesize=2&page=3&revision=42", "user1"),
+			},
+			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+			},
+			partitions: map[string][]Partition{
+				"user1": {
+					mockPartition{
+						name: "all",
+					},
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Object: map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"resourceVersion": "42",
+						},
+					},
+					Items: []unstructured.Unstructured{
+						newApple("fuji").Unstructured,
+						newApple("granny-smith").Unstructured,
+						newApple("red-delicious").Unstructured,
+						newApple("golden-delicious").Unstructured,
+						newApple("crispin").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Count:    3,
+					Pages:    2,
+					Revision: "42",
+					Objects: []types.APIObject{
+						newApple("red-delicious").toObj(),
+						newApple("golden-delicious").toObj(),
+					},
+				},
+				{
+					Count:    3,
+					Pages:    2,
+					Revision: "42",
+					Objects: []types.APIObject{
+						newApple("crispin").toObj(),
+					},
+				},
+				{
+					Count:    3,
+					Pages:    2,
+					Revision: "42",
+				},
+			},
+			wantCache: []mockCache{
+				{
+					contents: map[cacheKey]*unstructured.UnstructuredList{
+						{
+							chunkSize:    100000,
+							filters:      "data.color=el,metadata.name=el",
+							pageSize:     2,
+							accessID:     getAccessID("user1", "roleA"),
+							resourcePath: "/apples",
+							revision:     "42",
+						}: {
+							Items: []unstructured.Unstructured{
+								newApple("red-delicious").Unstructured,
+								newApple("golden-delicious").Unstructured,
+								newApple("crispin").Unstructured,
+							},
+						},
+					},
+				},
+				{
+					contents: map[cacheKey]*unstructured.UnstructuredList{
+						{
+							chunkSize:    100000,
+							filters:      "data.color=el,metadata.name=el",
+							pageSize:     2,
+							accessID:     getAccessID("user1", "roleA"),
+							resourcePath: "/apples",
+							revision:     "42",
+						}: {
+							Items: []unstructured.Unstructured{
+								newApple("red-delicious").Unstructured,
+								newApple("golden-delicious").Unstructured,
+								newApple("crispin").Unstructured,
+							},
+						},
+					},
+				},
+				{
+					contents: map[cacheKey]*unstructured.UnstructuredList{
+						{
+							chunkSize:    100000,
+							filters:      "data.color=el,metadata.name=el",
+							pageSize:     2,
+							accessID:     getAccessID("user1", "roleA"),
+							resourcePath: "/apples",
+							revision:     "42",
+						}: {
+							Items: []unstructured.Unstructured{
+								newApple("red-delicious").Unstructured,
+								newApple("golden-delicious").Unstructured,
+								newApple("crispin").Unstructured,
+							},
+						},
+					},
+				},
+			},
+			wantListCalls: []map[string]int{
+				{"all": 1},
+				{"all": 1},
+				{"all": 1},
 			},
 		},
 	}

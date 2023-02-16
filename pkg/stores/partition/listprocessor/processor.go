@@ -21,13 +21,14 @@ const (
 	pageSizeParam = "pagesize"
 	pageParam     = "page"
 	revisionParam = "revision"
+	orOp          = ","
 )
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
 	ChunkSize  int
 	Resume     string
-	Filters    []Filter
+	Filters    []OrFilter
 	Sort       Sort
 	Pagination Pagination
 	Revision   string
@@ -45,6 +46,25 @@ type Filter struct {
 func (f Filter) String() string {
 	field := strings.Join(f.field, ".")
 	return field + "=" + f.match
+}
+
+// OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
+type OrFilter struct {
+	filters []Filter
+}
+
+// String returns the filter as a query string.
+func (f OrFilter) String() string {
+	var fields strings.Builder
+	for i, field := range f.filters {
+		fields.WriteString(strings.Join(field.field, "."))
+		fields.WriteByte('=')
+		fields.WriteString(field.match)
+		if i < len(f.filters)-1 {
+			fields.WriteByte(',')
+		}
+	}
+	return fields.String()
 }
 
 // SortOrder represents whether the list should be ascending or descending.
@@ -102,19 +122,36 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 	q := apiOp.Request.URL.Query()
 	cont := q.Get(continueParam)
 	filterParams := q[filterParam]
-	filterOpts := []Filter{}
+	filterOpts := []OrFilter{}
 	for _, filters := range filterParams {
-		filter := strings.Split(filters, "=")
-		if len(filter) != 2 {
-			continue
+		orFilters := strings.Split(filters, orOp)
+		orFilter := OrFilter{}
+		for _, filter := range orFilters {
+			filter := strings.Split(filter, "=")
+			if len(filter) != 2 {
+				continue
+			}
+			orFilter.filters = append(orFilter.filters, Filter{field: strings.Split(filter[0], "."), match: filter[1]})
 		}
-		filterOpts = append(filterOpts, Filter{field: strings.Split(filter[0], "."), match: filter[1]})
+		filterOpts = append(filterOpts, orFilter)
 	}
 	// sort the filter fields so they can be used as a cache key in the store
+	for _, orFilter := range filterOpts {
+		sort.Slice(orFilter.filters, func(i, j int) bool {
+			fieldI := strings.Join(orFilter.filters[i].field, ".")
+			fieldJ := strings.Join(orFilter.filters[j].field, ".")
+			return fieldI < fieldJ
+		})
+	}
 	sort.Slice(filterOpts, func(i, j int) bool {
-		fieldI := strings.Join(filterOpts[i].field, ".")
-		fieldJ := strings.Join(filterOpts[j].field, ".")
-		return fieldI < fieldJ
+		var fieldI, fieldJ strings.Builder
+		for _, f := range filterOpts[i].filters {
+			fieldI.WriteString(strings.Join(f.field, "."))
+		}
+		for _, f := range filterOpts[j].filters {
+			fieldJ.WriteString(strings.Join(f.field, "."))
+		}
+		return fieldI.String() < fieldJ.String()
 	})
 	sortOpts := Sort{}
 	sortKeys := q.Get(sortParam)
@@ -174,7 +211,7 @@ func getLimit(apiOp *types.APIRequest) int {
 
 // FilterList accepts a channel of unstructured objects and a slice of filters and returns the filtered list.
 // Filters are ANDed together.
-func FilterList(list <-chan []unstructured.Unstructured, filters []Filter) []unstructured.Unstructured {
+func FilterList(list <-chan []unstructured.Unstructured, filters []OrFilter) []unstructured.Unstructured {
 	result := []unstructured.Unstructured{}
 	for items := range list {
 		for _, item := range items {
@@ -215,14 +252,14 @@ func matchesOne(obj map[string]interface{}, filter Filter) bool {
 		}
 	case []interface{}:
 		filter = Filter{field: subField, match: filter.match}
-		if matchesAny(typedVal, filter) {
+		if matchesOneInList(typedVal, filter) {
 			return true
 		}
 	}
 	return false
 }
 
-func matchesAny(obj []interface{}, filter Filter) bool {
+func matchesOneInList(obj []interface{}, filter Filter) bool {
 	for _, v := range obj {
 		switch typedItem := v.(type) {
 		case string, int, bool:
@@ -235,7 +272,7 @@ func matchesAny(obj []interface{}, filter Filter) bool {
 				return true
 			}
 		case []interface{}:
-			if matchesAny(typedItem, filter) {
+			if matchesOneInList(typedItem, filter) {
 				return true
 			}
 		}
@@ -243,9 +280,18 @@ func matchesAny(obj []interface{}, filter Filter) bool {
 	return false
 }
 
-func matchesAll(obj map[string]interface{}, filters []Filter) bool {
+func matchesAny(obj map[string]interface{}, filter OrFilter) bool {
+	for _, f := range filter.filters {
+		if matches := matchesOne(obj, f); matches {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesAll(obj map[string]interface{}, filters []OrFilter) bool {
 	for _, f := range filters {
-		if !matchesOne(obj, f) {
+		if !matchesAny(obj, f) {
 			return false
 		}
 	}

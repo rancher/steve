@@ -97,7 +97,13 @@ Example, filtering by object name:
 /v1/{type}?filter=metadata.name=foo
 ```
 
-Filters are ANDed together, so an object must match all filters to be
+One filter can list multiple possible fields to match, these are ORed together:
+
+```
+/v1/{type}?filter=metadata.name=foo,metadata.namespace=foo
+```
+
+Stacked filters are ANDed together, so an object must match all filters to be
 included in the list.
 
 ```
