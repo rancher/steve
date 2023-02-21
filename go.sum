@@ -510,14 +510,14 @@ github.com/rancher/dynamiclistener v0.3.5 h1:5TaIHvkDGmZKvc96Huur16zfTKOiLhDtK4S
 github.com/rancher/dynamiclistener v0.3.5/go.mod h1:dW/YF6/m2+uEyJ5VtEcd9THxda599HP6N9dSXk81+k0=
 github.com/rancher/kubernetes-provider-detector v0.1.2 h1:iFfmmcZiGya6s3cS4Qxksyqqw5hPbbIDHgKJ2Y44XKM=
 github.com/rancher/kubernetes-provider-detector v0.1.2/go.mod h1:ypuJS7kP7rUiAn330xG46mj+Nhvym05GM8NqMVekpH0=
-github.com/rancher/lasso v0.0.0-20221202205459-e7138f16489c h1:RKGa+6plIHqyfBcC+lnCs3oe7A8wSFkUPBtqWBAi/1E=
-github.com/rancher/lasso v0.0.0-20221202205459-e7138f16489c/go.mod h1:Qewwr/xGzhtG7WCxhubrKZrdAobv5yqAIuHbDoxThZQ=
+github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc h1:29VHrInLV4qSevvcvhBj5UhQWkPShxrxv4AahYg2Scw=
+github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc/go.mod h1:dEfC9eFQigj95lv/JQ8K5e7+qQCacWs1aIA6nLxKzT8=
 github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99 h1:+Oob+DG+SZoX8hnKBWpZfVwxx6K84hMou9nbBOTux7w=
 github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99/go.mod h1:zpv7z4ySYL5LlEBKEPf/xf3cjx837/J2i/wHpT43viE=
 github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a h1:Go8MpBEeZCR0yV1ylu2/KjJBvpYomIezU58pejYCtgk=
 github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a/go.mod h1:vq3LvyOFnLcwMiCE1KdW3foPd6g5kAjZOtOb7JqGHck=
-github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1 h1:Rnrc4yx1Pkqoto7/n6GT68tk5up/SLuan1uSYXACpoM=
-github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1/go.mod h1:+GbeNyk8mbdOdMSdLIqvz+0JQ/2PhIb4ufMOcmHLIJQ=
+github.com/rancher/wrangler v1.1.0 h1:1VWistON261oKmCPF5fOPMWb/YwjgEciO9pCw5Z0mzQ=
+github.com/rancher/wrangler v1.1.0/go.mod h1:lQorqAAIMkNWteece1GiuwZTmMqkaVTXL5qjiiPVDxQ=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
@@ -563,6 +563,7 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.2.0/go.mod h1:qt09Ya8vawLte6SNmTgCsAVtYtaKzEcn8ATUoHMkEqE=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
+github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
@@ -570,8 +571,9 @@ github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/stretchr/testify v1.8.0 h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PKk=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
+github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKsk=
+github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
