@@ -23,9 +23,9 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.2
 	github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99
 	github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a
-	github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1
+	github.com/rancher/wrangler v1.1.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
@@ -75,7 +75,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/rancher/lasso v0.0.0-20221202205459-e7138f16489c // indirect
+	github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.opentelemetry.io/contrib v0.20.0 // indirect
