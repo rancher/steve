@@ -245,26 +245,3 @@ func matchesAll(obj map[string]interface{}, filters []Filter) bool {
 	}
 	return true
 }
-
-// PaginateList returns a subset of the result based on the pagination criteria as well as the total number of pages the caller can expect.
-func PaginateList(list []unstructured.Unstructured, p Pagination) ([]unstructured.Unstructured, int) {
-	if p.pageSize <= 0 {
-		return list, 0
-	}
-	page := p.page - 1
-	if p.page < 1 {
-		page = 0
-	}
-	pages := len(list) / p.pageSize
-	if len(list)%p.pageSize != 0 {
-		pages++
-	}
-	offset := p.pageSize * page
-	if offset > len(list) {
-		return []unstructured.Unstructured{}, pages
-	}
-	if offset+p.pageSize > len(list) {
-		return list[offset:], pages
-	}
-	return list[offset : offset+p.pageSize], pages
-}

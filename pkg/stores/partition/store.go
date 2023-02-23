@@ -144,7 +144,6 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	result.Count = len(list)
-	list, pages := listprocessor.PaginateList(list, opts.Pagination)
 
 	for _, item := range list {
 		item := item
@@ -152,7 +151,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	result.Revision = lister.Revision()
-	result.Pages = pages
+	result.Pages = 0
 	return result, lister.Err()
 }
 
