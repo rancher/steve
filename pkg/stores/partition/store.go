@@ -142,7 +142,6 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	if lister.Err() != nil {
 		return result, lister.Err()
 	}
-	list = listprocessor.SortList(list, opts.Sort)
 
 	result.Count = len(list)
 	list, pages := listprocessor.PaginateList(list, opts.Pagination)

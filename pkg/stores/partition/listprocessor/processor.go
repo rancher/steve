@@ -246,30 +246,6 @@ func matchesAll(obj map[string]interface{}, filters []Filter) bool {
 	return true
 }
 
-// SortList sorts the slice by the provided sort criteria.
-func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructured {
-	if len(s.primaryField) == 0 {
-		return list
-	}
-	sort.Slice(list, func(i, j int) bool {
-		leftPrime := convert.ToString(data.GetValueN(list[i].Object, s.primaryField...))
-		rightPrime := convert.ToString(data.GetValueN(list[j].Object, s.primaryField...))
-		if leftPrime == rightPrime && len(s.secondaryField) > 0 {
-			leftSecond := convert.ToString(data.GetValueN(list[i].Object, s.secondaryField...))
-			rightSecond := convert.ToString(data.GetValueN(list[j].Object, s.secondaryField...))
-			if s.secondaryOrder == ASC {
-				return leftSecond < rightSecond
-			}
-			return rightSecond < leftSecond
-		}
-		if s.primaryOrder == ASC {
-			return leftPrime < rightPrime
-		}
-		return rightPrime < leftPrime
-	})
-	return list
-}
-
 // PaginateList returns a subset of the result based on the pagination criteria as well as the total number of pages the caller can expect.
 func PaginateList(list []unstructured.Unstructured, p Pagination) ([]unstructured.Unstructured, int) {
 	if p.pageSize <= 0 {
