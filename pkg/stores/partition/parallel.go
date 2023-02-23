@@ -2,9 +2,6 @@ package partition
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
-
 	"github.com/rancher/apiserver/pkg/types"
 
 	"golang.org/x/sync/errgroup"
@@ -29,13 +26,12 @@ type ParallelPartitionLister struct {
 	// Partitions is the set of partitions that will be concurrently queried.
 	Partitions []Partition
 
-	state    *listState
 	revision string
 	err      error
 }
 
 // PartitionLister lists objects for one partition.
-type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string) (*unstructured.UnstructuredList, []types.Warning, error)
+type PartitionLister func(ctx context.Context, partition Partition, revision string) (*unstructured.UnstructuredList, []types.Warning, error)
 
 // Err returns the latest error encountered.
 func (p *ParallelPartitionLister) Err() error {
@@ -47,75 +43,18 @@ func (p *ParallelPartitionLister) Revision() string {
 	return p.revision
 }
 
-// Continue returns the encoded continue token based on the current list state.
-func (p *ParallelPartitionLister) Continue() string {
-	if p.state == nil {
-		return ""
-	}
-	bytes, err := json.Marshal(p.state)
-	if err != nil {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(bytes)
-}
-
-func indexOrZero(partitions []Partition, name string) int {
-	if name == "" {
-		return 0
-	}
-	for i, partition := range partitions {
-		if partition.Name() == name {
-			return i
-		}
-	}
-	return 0
-}
-
 // List returns a stream of objects.
 // If the continue token is not empty, it decodes it and returns the stream
 // starting at the indicated marker.
-func (p *ParallelPartitionLister) List(ctx context.Context, resume, revision string) (<-chan []unstructured.Unstructured, error) {
-	var state listState
-	if resume != "" {
-		bytes, err := base64.StdEncoding.DecodeString(resume)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(bytes, &state); err != nil {
-			return nil, err
-		}
-	} else {
-		state.Revision = revision
-	}
-
+func (p *ParallelPartitionLister) List(ctx context.Context, revision string) (<-chan []unstructured.Unstructured, error) {
 	result := make(chan []unstructured.Unstructured)
-	go p.feeder(ctx, state, result)
+	go p.feeder(ctx, revision, result)
 	return result, nil
-}
-
-// listState is a representation of the continuation point for a partial list.
-// It is encoded as the continue token in the returned response.
-type listState struct {
-	// Revision is the resourceVersion for the List object.
-	Revision string `json:"r,omitempty"`
-
-	// PartitionName is the name of the partition.
-	PartitionName string `json:"p,omitempty"`
-
-	// Continue is the continue token returned from Kubernetes for a partially filled list request.
-	// It is a subfield of the continue token returned from steve.
-	Continue string `json:"c,omitempty"`
-
-	// Offset is the offset from the start of the list within the partition to begin the result list.
-	Offset int `json:"o,omitempty"`
-
-	// Limit is the maximum number of items from all partitions to return in the result.
-	Limit int `json:"l,omitempty"`
 }
 
 // feeder spawns a goroutine to list resources in each partition and feeds the
 // results, in order by partition index, into a channel.
-func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, result chan []unstructured.Unstructured) {
+func (p *ParallelPartitionLister) feeder(ctx context.Context, revision string, result chan []unstructured.Unstructured) {
 	var (
 		sem  = semaphore.NewWeighted(p.Concurrency)
 		last chan struct{}
@@ -130,7 +69,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, r
 		close(result)
 	}()
 
-	for i := indexOrZero(p.Partitions, state.PartitionName); i < len(p.Partitions); i++ {
+	for i := 0; i < len(p.Partitions); i++ {
 		if isDone(ctx) {
 			break
 		}
@@ -145,8 +84,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, r
 		// setup a linked list of channel to control insertion order
 		last = next
 
-		// state.Revision is decoded from the continue token, there won't be a revision on the first request.
-		if state.Revision == "" {
+		if revision == "" {
 			// don't have a revision yet so grab all tickets to set a revision
 			tickets = 3
 		}
@@ -155,52 +93,27 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, r
 			break
 		}
 
-		// make state local for this partition
-		state := state
+		// make revision local for this partition
+		revision := revision
 		eg.Go(func() error {
 			defer sem.Release(tickets)
 			defer close(next)
 
 			for {
-				cont := ""
-				if partition.Name() == state.PartitionName {
-					cont = state.Continue
-				}
-				list, _, err := p.Lister(ctx, partition, cont, state.Revision)
+				list, _, err := p.Lister(ctx, partition, revision)
 				if err != nil {
 					return err
 				}
 
 				waitForTurn(ctx, turn)
-				if p.state != nil {
-					return nil
-				}
-
-				if state.Revision == "" {
-					state.Revision = list.GetResourceVersion()
-				}
 
 				if p.revision == "" {
 					p.revision = list.GetResourceVersion()
 				}
 
-				// We have already seen the first objects in the list, truncate up to the offset.
-				if state.PartitionName == partition.Name() && state.Offset > 0 && state.Offset < len(list.Items) {
-					list.Items = list.Items[state.Offset:]
-				}
-
 				result <- list.Items
 
-				// Case 1: all objects have been returned, we are done.
-				if list.GetContinue() == "" {
-					return nil
-				}
-				// Case 2: we started at an offset and truncated the list to skip the objects up to the offset.
-				// We're not yet up to capacity and have not retrieved every object,
-				// so loop again and get more data.
-				state.Continue = list.GetContinue()
-				state.PartitionName = partition.Name()
-				state.Offset = 0
+				return nil
 			}
 		})
 	}
