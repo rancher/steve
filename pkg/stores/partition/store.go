@@ -17,6 +17,12 @@ import (
 	"reflect"
 )
 
+// Partition represents a named grouping of kubernetes resources,
+// such as by namespace or a set of names.
+type Partition interface {
+	Name() string
+}
+
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (Partition, error)
@@ -121,26 +127,17 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		return result, err
 	}
 
-	lister := ParallelPartitionLister{
-		Lister: func(ctx context.Context, partition Partition, revision string) (*unstructured.UnstructuredList, []types.Warning, error) {
-			return s.listPartition(ctx, apiOp, schema, partition, revision)
-		},
-		Concurrency: 3,
-		Partitions:  partitions,
-	}
-
 	opts := listprocessor.ParseQuery(apiOp)
 
-	stream, err := lister.List(apiOp.Context(), opts.Revision)
-	if err != nil {
-		return result, err
-	}
-	list := listprocessor.ToList(stream)
-	// Check for any errors returned during the parallel listing requests.
-	// We don't want to bother with further processing if the list is empty or corrupt.
-	// ToList guarantees that the stream has been consumed and the error is populated if there is any.
-	if lister.Err() != nil {
-		return result, lister.Err()
+	var list []unstructured.Unstructured
+	revision := ""
+	for _, partition := range partitions {
+		partial, _, err := s.listPartition(apiOp.Context(), apiOp, schema, partition, opts.Revision)
+		if err != nil {
+			return result, err
+		}
+		list = append(list, partial.Items...)
+		revision = partial.GetResourceVersion()
 	}
 
 	result.Count = len(list)
@@ -150,9 +147,9 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		result.Objects = append(result.Objects, toAPI(schema, &item, nil))
 	}
 
-	result.Revision = lister.Revision()
+	result.Revision = revision
 	result.Pages = 0
-	return result, lister.Err()
+	return result, nil
 }
 
 // Create creates a single object in the store.
