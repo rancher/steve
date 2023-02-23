@@ -172,19 +172,13 @@ func getLimit(apiOp *types.APIRequest) int {
 	return limit
 }
 
-// FilterList accepts a channel of unstructured objects and a slice of filters and returns the filtered list.
-// Filters are ANDed together.
-func FilterList(list <-chan []unstructured.Unstructured, filters []Filter) []unstructured.Unstructured {
+// ToList accepts a channel of unstructured objects and returns its contents as a list.
+func ToList(list <-chan []unstructured.Unstructured) []unstructured.Unstructured {
 	result := []unstructured.Unstructured{}
 	for items := range list {
 		for _, item := range items {
-			if len(filters) == 0 {
-				result = append(result, item)
-				continue
-			}
-			if matchesAll(item.Object, filters) {
-				result = append(result, item)
-			}
+			result = append(result, item)
+			continue
 		}
 	}
 	return result

@@ -135,10 +135,10 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	if err != nil {
 		return result, err
 	}
-	list := listprocessor.FilterList(stream, opts.Filters)
+	list := listprocessor.ToList(stream)
 	// Check for any errors returned during the parallel listing requests.
 	// We don't want to bother with further processing if the list is empty or corrupt.
-	// FilterList guarantees that the stream has been consumed and the error is populated if there is any.
+	// ToList guarantees that the stream has been consumed and the error is populated if there is any.
 	if lister.Err() != nil {
 		return result, lister.Err()
 	}
