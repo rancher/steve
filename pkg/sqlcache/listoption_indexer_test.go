@@ -13,33 +13,19 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
 	"strconv"
 	"testing"
 )
 
-func brandfunc(c any) any {
-	return c.(*unstructured.Unstructured).GetLabels()["Brand"]
-}
-
-func colorfunc(c any) any {
-	return c.(*unstructured.Unstructured).GetLabels()["Color"]
-}
-
-var fieldFunc = map[string]FieldFunc{
-	"Brand": brandfunc,
-	"Color": colorfunc,
-}
-
 func TestListOptionIndexer(t *testing.T) {
 	assert := assert.New(t)
 
-	podGVK := schema.GroupVersionKind{
-		Version: "v1",
-		Kind:    "Pod",
-	}
+	example, _ := u.ToUnstructured(&v1.Pod{})
+	fields := [][]string{{"metadata", "labels", "Brand"}, {"metadata", "labels", "Color"}}
 
-	l, err := NewListOptionIndexer(podGVK, TEST_DB_LOCATION, fieldFunc)
+	l, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, TEST_DB_LOCATION)
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,9 +45,7 @@ func TestListOptionIndexer(t *testing.T) {
 		t.Error(err)
 	}
 	err = l.Add(red)
-	if err != nil {
-		t.Error(err)
-	}
+	failOnError(t, err)
 
 	// add two v1.Pods and list with default options
 	revision++
@@ -75,12 +59,12 @@ func TestListOptionIndexer(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	failOnError(t, err)
 	err = l.Add(blue)
-	if err != nil {
-		t.Error(err)
+	failOnError(t, err)
+
+	passthroughPartitions := []listprocessor.Partition{
+		{Passthrough: true},
 	}
 
 	lo := listprocessor.ListOptions{
@@ -89,25 +73,19 @@ func TestListOptionIndexer(t *testing.T) {
 		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
-	r, err := l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 2)
+	ul, err := l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 2)
 
 	// delete one and list again. Should be gone
 	err = l.Delete(red)
-	if err != nil {
-		t.Error(err)
-	}
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 1)
-	assert.Equal(r[0].(*unstructured.Unstructured).GetName(), "focus")
+	failOnError(t, err)
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 1)
+	assert.Equal(ul.Items[0].GetName(), "focus")
 	// gone also from most-recent store
-	r = l.List()
+	r := l.List()
 	assert.Len(r, 1)
 	assert.Equal(r[0].(*unstructured.Unstructured).GetName(), "focus")
 
@@ -118,50 +96,40 @@ func TestListOptionIndexer(t *testing.T) {
 	labels["Wheels"] = "3"
 	red.SetLabels(labels)
 	err = l.Update(red)
-	if err != nil {
-		t.Error(err)
-	}
+	failOnError(t, err)
 	r = l.List()
 	assert.Len(r, 2)
 	lo = listprocessor.ListOptions{
-		Filters:    []listprocessor.Filter{{Field: []string{"Brand"}, Match: "ferrari"}},
+		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "ferrari"}},
 		Sort:       listprocessor.Sort{},
 		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 1)
-	assert.Equal(r[0].(*unstructured.Unstructured).GetName(), "testa rossa")
-	assert.Equal(r[0].(*unstructured.Unstructured).GetResourceVersion(), "3")
-	assert.Equal(r[0].(*unstructured.Unstructured).GetLabels()["Wheels"], "3")
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 1)
+	assert.Equal(ul.Items[0].GetName(), "testa rossa")
+	assert.Equal(ul.Items[0].GetResourceVersion(), "3")
+	assert.Equal(ul.Items[0].GetLabels()["Wheels"], "3")
 
 	// historically, Pod still exists in version 1, gone in version 2, back in version 3
 	lo = listprocessor.ListOptions{
-		Filters:    []listprocessor.Filter{{Field: []string{"Brand"}, Match: "ferrari"}},
+		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "ferrari"}},
 		Sort:       listprocessor.Sort{},
 		Pagination: listprocessor.Pagination{},
 		Revision:   "1",
 	}
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 1)
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 1)
 	lo.Revision = "2"
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 0)
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 0)
 	lo.Revision = "3"
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 1)
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 1)
 
 	// add another Pod, test filter by substring and sorting
 	revision++
@@ -175,51 +143,225 @@ func TestListOptionIndexer(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	failOnError(t, err)
 	err = l.Add(black)
-	if err != nil {
-		t.Error(err)
-	}
+	failOnError(t, err)
 	lo = listprocessor.ListOptions{
-		Filters:    []listprocessor.Filter{{Field: []string{"Brand"}, Match: "f"}}, // tesla filtered out
-		Sort:       listprocessor.Sort{PrimaryField: []string{"Color"}, PrimaryOrder: listprocessor.DESC},
+		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "f"}}, // tesla filtered out
+		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "labels", "Color"}, PrimaryOrder: listprocessor.DESC},
 		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 2)
-	assert.Equal(r[0].(*unstructured.Unstructured).GetLabels()["Color"], "red")
-	assert.Equal(r[1].(*unstructured.Unstructured).GetLabels()["Color"], "blue")
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 2)
+	assert.Equal(ul.Items[0].GetLabels()["Color"], "red")
+	assert.Equal(ul.Items[1].GetLabels()["Color"], "blue")
 
 	// test pagination
 	lo = listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{},
-		Sort:       listprocessor.Sort{PrimaryField: []string{"Color"}},
+		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "labels", "Color"}},
 		Pagination: listprocessor.Pagination{PageSize: 2},
 		Revision:   "",
 	}
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Len(r, 2)
-	assert.Equal(r[0].(*unstructured.Unstructured).GetLabels()["Color"], "black")
-	assert.Equal(r[1].(*unstructured.Unstructured).GetLabels()["Color"], "blue")
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 2)
+	assert.Equal(ul.Items[0].GetLabels()["Color"], "black")
+	assert.Equal(ul.Items[1].GetLabels()["Color"], "blue")
 	lo.Pagination.Page = 2
-	r, err = l.ListByOptions(lo)
-	if err != nil {
-		t.Error(err)
+	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 1)
+	assert.Equal(ul.Items[0].GetLabels()["Color"], "red")
+
+	// test filtering by name
+	lo = listprocessor.ListOptions{
+		Filters:    []listprocessor.Filter{},
+		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "labels", "Color"}},
+		Pagination: listprocessor.Pagination{PageSize: 2},
+		Revision:   "",
 	}
-	assert.Len(r, 1)
-	assert.Equal(r[0].(*unstructured.Unstructured).GetLabels()["Color"], "red")
+	partitions := []listprocessor.Partition{
+		{Passthrough: false, Namespace: "", All: false, Names: sets.NewString("model 3")},
+	}
+	ul, err = l.ListByOptions(lo, partitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 1)
+	assert.Equal(ul.Items[0].GetLabels()["Color"], "black")
+
+	// test with empty name set
+	partitions = []listprocessor.Partition{
+		{Passthrough: false, Namespace: "", All: false, Names: sets.NewString()},
+	}
+	ul, err = l.ListByOptions(lo, partitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 0)
 
 	err = l.Close()
+	failOnError(t, err)
+}
+
+func TestListOptionIndexerWithPartitions(t *testing.T) {
+	assert := assert.New(t)
+
+	example, _ := u.ToUnstructured(&v1.Pod{})
+	fields := [][]string{{"metadata", "labels", "Brand"}, {"metadata", "labels", "Color"}}
+
+	l, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, TEST_DB_LOCATION)
 	if err != nil {
 		t.Error(err)
+	}
+
+	// garage namespace: three pods
+	revision := 1
+	red, err := u.ToUnstructured(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "garage",
+			Name:            "testa rossa",
+			ResourceVersion: strconv.Itoa(revision),
+			Labels: map[string]string{
+				"Brand": "ferrari",
+				"Color": "red",
+			},
+		},
+	})
+	failOnError(t, err)
+	err = l.Add(red)
+	failOnError(t, err)
+
+	revision++
+	blue, err := u.ToUnstructured(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "garage",
+			Name:            "focus",
+			ResourceVersion: strconv.Itoa(revision),
+			Labels: map[string]string{
+				"Brand": "ford",
+				"Color": "blue",
+			},
+		},
+	})
+	failOnError(t, err)
+	err = l.Add(blue)
+	failOnError(t, err)
+
+	revision++
+	black, err := u.ToUnstructured(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "garage",
+			Name:            "model 3",
+			ResourceVersion: strconv.Itoa(revision),
+			Labels: map[string]string{
+				"Brand": "tesla",
+				"Color": "black",
+			},
+		},
+	})
+	failOnError(t, err)
+	err = l.Add(black)
+	failOnError(t, err)
+
+	// yard namespace: one Pod
+	revision++
+	white, err := u.ToUnstructured(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "yard",
+			Name:            "corolla",
+			ResourceVersion: strconv.Itoa(revision),
+			Labels: map[string]string{
+				"Brand": "toyota",
+				"Color": "white",
+			},
+		},
+	})
+	failOnError(t, err)
+	err = l.Add(white)
+	failOnError(t, err)
+
+	// no namespace: one Pod
+	revision++
+	pink, err := u.ToUnstructured(&v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "",
+			Name:            "minor",
+			ResourceVersion: strconv.Itoa(revision),
+			Labels: map[string]string{
+				"Brand": "mini",
+				"Color": "pink",
+			},
+		},
+	})
+	failOnError(t, err)
+	err = l.Add(pink)
+	failOnError(t, err)
+
+	passthroughPartitions := []listprocessor.Partition{
+		{Passthrough: true},
+	}
+
+	lo := listprocessor.ListOptions{
+		Filters:    nil,
+		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "name"}, PrimaryOrder: listprocessor.ASC},
+		Pagination: listprocessor.Pagination{},
+		Revision:   "",
+	}
+
+	// passthrough: get all 5 cars
+	ul, err := l.ListByOptions(lo, passthroughPartitions)
+	failOnError(t, err)
+	assert.Len(ul.Items, 5)
+
+	// no partitions: no cars
+	ul, err = l.ListByOptions(lo, []listprocessor.Partition{})
+	failOnError(t, err)
+	assert.Len(ul.Items, 0)
+
+	// one partition on the garage namespace: 3 cars
+	ul, err = l.ListByOptions(lo, []listprocessor.Partition{{Namespace: "garage", All: true}})
+	failOnError(t, err)
+	assert.Len(ul.Items, 3)
+	assert.Equal(ul.Items[0].GetName(), "focus")
+	assert.Equal(ul.Items[1].GetName(), "model 3")
+	assert.Equal(ul.Items[2].GetName(), "testa rossa")
+
+	// two partition on the garage and yard namespaces: 4 cars
+	ul, err = l.ListByOptions(lo, []listprocessor.Partition{
+		{Namespace: "garage", All: true},
+		{Namespace: "yard", All: true},
+	})
+	failOnError(t, err)
+	assert.Len(ul.Items, 4)
+	assert.Equal(ul.Items[0].GetName(), "corolla")
+	assert.Equal(ul.Items[1].GetName(), "focus")
+	assert.Equal(ul.Items[2].GetName(), "model 3")
+	assert.Equal(ul.Items[3].GetName(), "testa rossa")
+
+	// two partitions, one limited to one car in the garage, one with full permission on yard: 2 cars
+	ul, err = l.ListByOptions(lo, []listprocessor.Partition{
+		{Namespace: "garage", All: false, Names: sets.NewString("focus")},
+		{Namespace: "yard", All: true},
+	})
+	failOnError(t, err)
+	assert.Len(ul.Items, 2)
+	assert.Equal(ul.Items[0].GetName(), "corolla")
+	assert.Equal(ul.Items[1].GetName(), "focus")
+
+	// two partitions, one limited to a car not in the set, one no specific permission: 0 cars
+	ul, err = l.ListByOptions(lo, []listprocessor.Partition{
+		{Namespace: "garage", All: false, Names: sets.NewString("viper")},
+		{Namespace: "yard", All: false},
+	})
+	failOnError(t, err)
+	assert.Len(ul.Items, 0)
+
+	err = l.Close()
+	failOnError(t, err)
+}
+
+func failOnError(t *testing.T, err error) {
+	if err != nil {
+		t.Errorf("%+v", err)
 	}
 }
