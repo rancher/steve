@@ -92,29 +92,6 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 	return toAPI(schema, obj, warnings), nil
 }
 
-func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
-	revision string) (*unstructured.UnstructuredList, []types.Warning, error) {
-	store, err := s.Partitioner.Store(apiOp, partition)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	req := apiOp.Clone()
-	req.Request = req.Request.Clone(ctx)
-
-	values := req.Request.URL.Query()
-	values.Del("limit")
-	values.Del("continue")
-	if revision != "" {
-		values.Set("resourceVersion", revision)
-		values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
-	}
-
-	req.Request.URL.RawQuery = values.Encode()
-
-	return store.List(req, schema)
-}
-
 // List returns a list of objects across all applicable partitions.
 // If pagination parameters are used, it returns a segment of the list.
 func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
@@ -132,10 +109,29 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	var list []unstructured.Unstructured
 	revision := ""
 	for _, partition := range partitions {
-		partial, _, err := s.listPartition(apiOp.Context(), apiOp, schema, partition, opts.Revision)
+		store, err := s.Partitioner.Store(apiOp, partition)
 		if err != nil {
 			return result, err
 		}
+
+		req := apiOp.Clone()
+		req.Request = req.Request.Clone(apiOp.Context())
+
+		values := req.Request.URL.Query()
+		values.Del("limit")
+		values.Del("continue")
+		if opts.Revision != "" {
+			values.Set("resourceVersion", opts.Revision)
+			values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
+		}
+
+		req.Request.URL.RawQuery = values.Encode()
+
+		partial, _, err := store.List(req, schema)
+		if err != nil {
+			return result, err
+		}
+
 		list = append(list, partial.Items...)
 		revision = partial.GetResourceVersion()
 	}
