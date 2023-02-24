@@ -225,7 +225,7 @@ func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, v
 	return m.partitions[user.GetName()], nil
 }
 
-func (m mockPartitioner) Store(apiOp *types.APIRequest, partition Partition) (UnstructuredStore, error) {
+func (m mockPartitioner) Store(partition Partition) (UnstructuredStore, error) {
 	return m.stores[partition.Name()], nil
 }
 

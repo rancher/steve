@@ -87,7 +87,7 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 }
 
 // Store returns an UnstructuredStore suited to listing and watching resources by partition.
-func (p *rbacPartitioner) Store(apiOp *types.APIRequest, partition Partition) (UnstructuredStore, error) {
+func (p *rbacPartitioner) Store(partition Partition) (UnstructuredStore, error) {
 	return &byNameOrNamespaceStore{
 		Store:     p.proxyStore,
 		partition: partition.(rbacPartition),

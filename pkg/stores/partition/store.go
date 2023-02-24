@@ -28,7 +28,7 @@ type Partition interface {
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (Partition, error)
 	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]Partition, error)
-	Store(apiOp *types.APIRequest, partition Partition) (UnstructuredStore, error)
+	Store(partition Partition) (UnstructuredStore, error)
 }
 
 // Store implements types.Store for partitions.
@@ -62,7 +62,7 @@ func (s *Store) getStore(apiOp *types.APIRequest, schema *types.APISchema, verb,
 		return nil, err
 	}
 
-	return s.Partitioner.Store(apiOp, p)
+	return s.Partitioner.Store(p)
 }
 
 // Delete deletes an object from a store.
@@ -110,7 +110,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	var list []unstructured.Unstructured
 	revision := ""
 	for _, partition := range partitions {
-		store, err := s.Partitioner.Store(apiOp, partition)
+		store, err := s.Partitioner.Store(partition)
 		if err != nil {
 			return result, err
 		}
@@ -191,7 +191,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	response := make(chan types.APIEvent)
 
 	for _, partition := range partitions {
-		store, err := s.Partitioner.Store(apiOp, partition)
+		store, err := s.Partitioner.Store(partition)
 		if err != nil {
 			cancel()
 			return nil, err
