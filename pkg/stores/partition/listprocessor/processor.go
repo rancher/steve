@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
@@ -31,6 +33,14 @@ type ListOptions struct {
 	Sort       Sort
 	Pagination Pagination
 	Revision   string
+}
+
+// Partition represents filtering of a request's results by namespace or a list of resource names
+type Partition struct {
+	Namespace   string
+	All         bool
+	Passthrough bool
+	Names       sets.String
 }
 
 // Filter represents a field to filter by.

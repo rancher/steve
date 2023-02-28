@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,7 +25,7 @@ func TestList(t *testing.T) {
 		name          string
 		apiOps        []*types.APIRequest
 		access        []map[string]string
-		partitions    map[string][]Partition
+		partitions    map[string][]listprocessor.Partition
 		objects       map[string]*unstructured.UnstructuredList
 		want          []types.APIObjectList
 		wantListCalls []map[string]int
@@ -45,10 +46,11 @@ func TestList(t *testing.T) {
 					"user1": "roleA",
 				},
 			},
-			partitions: map[string][]Partition{
+			partitions: map[string][]listprocessor.Partition{
 				"user1": {
-					mockPartition{
-						name: "all",
+					listprocessor.Partition{
+						Namespace: "all",
+						All:       true,
 					},
 				},
 			},
@@ -78,13 +80,15 @@ func TestList(t *testing.T) {
 					"user1": "roleA",
 				},
 			},
-			partitions: map[string][]Partition{
+			partitions: map[string][]listprocessor.Partition{
 				"user1": {
-					mockPartition{
-						name: "green",
+					listprocessor.Partition{
+						Namespace: "green",
+						All:       true,
 					},
-					mockPartition{
-						name: "yellow",
+					listprocessor.Partition{
+						Namespace: "yellow",
+						All:       true,
 					},
 				},
 			},
@@ -122,8 +126,8 @@ func TestList(t *testing.T) {
 			stores := map[string]UnstructuredStore{}
 			for _, partitions := range test.partitions {
 				for _, p := range partitions {
-					stores[p.Name()] = &mockStore{
-						contents: test.objects[p.Name()],
+					stores[p.Namespace] = &mockStore{
+						contents: test.objects[p.Namespace],
 					}
 				}
 			}
@@ -189,10 +193,11 @@ func TestListByRevision(t *testing.T) {
 				},
 			},
 		},
-		partitions: map[string][]Partition{
+		partitions: map[string][]listprocessor.Partition{
 			"user1": {
-				mockPartition{
-					name: "all",
+				listprocessor.Partition{
+					Namespace: "all",
+					All:       true,
 				},
 			},
 		},
@@ -213,20 +218,20 @@ func TestListByRevision(t *testing.T) {
 
 type mockPartitioner struct {
 	stores     map[string]UnstructuredStore
-	partitions map[string][]Partition
+	partitions map[string][]listprocessor.Partition
 }
 
-func (m mockPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (Partition, error) {
+func (m mockPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error) {
 	panic("not implemented")
 }
 
-func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]Partition, error) {
+func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error) {
 	user, _ := request.UserFrom(apiOp.Request.Context())
 	return m.partitions[user.GetName()], nil
 }
 
-func (m mockPartitioner) Store(partition Partition) (UnstructuredStore, error) {
-	return m.stores[partition.Name()], nil
+func (m mockPartitioner) Store(partition listprocessor.Partition) (UnstructuredStore, error) {
+	return m.stores[partition.Namespace], nil
 }
 
 type mockPartition struct {

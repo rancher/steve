@@ -18,17 +18,11 @@ import (
 	"reflect"
 )
 
-// Partition represents a named grouping of kubernetes resources,
-// such as by namespace or a set of names.
-type Partition interface {
-	Name() string
-}
-
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
-	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (Partition, error)
-	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]Partition, error)
-	Store(partition Partition) (UnstructuredStore, error)
+	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error)
+	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error)
+	Store(partition listprocessor.Partition) (UnstructuredStore, error)
 }
 
 // Store implements types.Store for partitions.
