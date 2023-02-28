@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -518,4 +519,98 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 		}
 	}
 	return obj, buffer, nil
+}
+
+// ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
+	opts := listprocessor.ParseQuery(apiOp)
+
+	list := []unstructured.Unstructured{}
+	revision := ""
+	for _, partition := range partitions {
+
+		req := apiOp.Clone()
+		req.Request = req.Request.Clone(apiOp.Context())
+
+		values := req.Request.URL.Query()
+		values.Del("limit")
+		values.Del("continue")
+		if opts.Revision != "" {
+			values.Set("resourceVersion", opts.Revision)
+			values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
+		}
+
+		req.Request.URL.RawQuery = values.Encode()
+
+		partial, _, err := s.listByPartition(partition, req, schema)
+		if err != nil {
+			return nil, "", err
+		}
+
+		list = append(list, partial.Items...)
+		revision = partial.GetResourceVersion()
+	}
+
+	return list, revision, nil
+}
+
+// listByPartition returns an unstructured list of resources belonging to a specified partition
+func (s *Store) listByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
+	if partition.Passthrough {
+		return s.List(apiOp, schema)
+	}
+
+	apiOp.Namespace = partition.Namespace
+	if partition.All {
+		return s.List(apiOp, schema)
+	}
+	return s.ByNames(apiOp, schema, partition.Names)
+}
+
+// WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
+func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error) {
+	ctx, cancel := context.WithCancel(apiOp.Context())
+	apiOp = apiOp.Clone().WithContext(ctx)
+
+	eg := errgroup.Group{}
+
+	result := make(chan watch.Event)
+
+	for _, partition := range partitions {
+		p := partition
+		eg.Go(func() error {
+			defer cancel()
+			c, err := s.watchByPartition(p, apiOp, schema, wr)
+
+			if err != nil {
+				return err
+			}
+			for i := range c {
+				result <- i
+			}
+			return nil
+		})
+	}
+
+	go func() {
+		defer close(result)
+		<-ctx.Done()
+		eg.Wait()
+		cancel()
+	}()
+
+	return result, nil
+}
+
+// watchByPartition returns a channel of events for a list or resource belonging to a specified partition
+func (s *Store) watchByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
+	if partition.Passthrough {
+		return s.Watch(apiOp, schema, wr)
+	}
+
+	apiOp.Namespace = partition.Namespace
+	if partition.All {
+		return s.Watch(apiOp, schema, wr)
+	}
+	return s.WatchNames(apiOp, schema, wr, partition.Names)
 }

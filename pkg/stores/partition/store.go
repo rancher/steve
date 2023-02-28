@@ -3,26 +3,25 @@
 package partition
 
 import (
-	"context"
 	"fmt"
+	"reflect"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/proxy"
-	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"reflect"
 )
 
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error)
 	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error)
-	Store(partition listprocessor.Partition) (UnstructuredStore, error)
+	Store() UnstructuredStore
 }
 
 // Store implements types.Store for partitions.
@@ -48,23 +47,14 @@ type UnstructuredStore interface {
 	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
 	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
 	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
-}
 
-func (s *Store) getStore(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (UnstructuredStore, error) {
-	p, err := s.Partitioner.Lookup(apiOp, schema, verb, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.Partitioner.Store(p)
+	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error)
+	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error)
 }
 
 // Delete deletes an object from a store.
 func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "delete", id)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.Delete(apiOp, schema, id)
 	if err != nil {
@@ -75,10 +65,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 // ByID looks up a single object by its ID.
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "get", id)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.ByID(apiOp, schema, id)
 	if err != nil {
@@ -99,37 +86,9 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		return result, err
 	}
 
-	opts := listprocessor.ParseQuery(apiOp)
+	store := s.Partitioner.Store()
 
-	var list []unstructured.Unstructured
-	revision := ""
-	for _, partition := range partitions {
-		store, err := s.Partitioner.Store(partition)
-		if err != nil {
-			return result, err
-		}
-
-		req := apiOp.Clone()
-		req.Request = req.Request.Clone(apiOp.Context())
-
-		values := req.Request.URL.Query()
-		values.Del("limit")
-		values.Del("continue")
-		if opts.Revision != "" {
-			values.Set("resourceVersion", opts.Revision)
-			values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
-		}
-
-		req.Request.URL.RawQuery = values.Encode()
-
-		partial, _, err := store.List(req, schema)
-		if err != nil {
-			return result, err
-		}
-
-		list = append(list, partial.Items...)
-		revision = partial.GetResourceVersion()
-	}
+	list, revision, err := store.ListByPartitions(apiOp, schema, partitions)
 
 	result.Count = len(list)
 
@@ -145,10 +104,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 // Create creates a single object in the store.
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "create", "")
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.Create(apiOp, schema, data)
 	if err != nil {
@@ -159,10 +115,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 
 // Update updates a single object in the store.
 func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "update", id)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.Update(apiOp, schema, data, id)
 	if err != nil {
@@ -178,37 +131,20 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(apiOp.Context())
-	apiOp = apiOp.Clone().WithContext(ctx)
+	store := s.Partitioner.Store()
 
-	eg := errgroup.Group{}
 	response := make(chan types.APIEvent)
-
-	for _, partition := range partitions {
-		store, err := s.Partitioner.Store(partition)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-
-		eg.Go(func() error {
-			defer cancel()
-			c, err := store.Watch(apiOp, schema, wr)
-			if err != nil {
-				return err
-			}
-			for i := range c {
-				response <- toAPIEvent(apiOp, schema, i)
-			}
-			return nil
-		})
+	c, err := store.WatchByPartitions(apiOp, schema, wr, partitions)
+	if err != nil {
+		return nil, err
 	}
 
 	go func() {
 		defer close(response)
-		<-ctx.Done()
-		eg.Wait()
-		cancel()
+
+		for i := range c {
+			response <- toAPIEvent(schema, i)
+		}
 	}()
 
 	return response, nil
@@ -260,7 +196,7 @@ func moveToUnderscore(obj *unstructured.Unstructured) *unstructured.Unstructured
 	return obj
 }
 
-func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Event) types.APIEvent {
+func toAPIEvent(schema *types.APISchema, event watch.Event) types.APIEvent {
 	name := types.ChangeAPIEvent
 	switch event.Type {
 	case watch.Deleted:

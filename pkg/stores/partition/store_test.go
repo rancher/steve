@@ -123,17 +123,12 @@ func TestList(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			schema := &types.APISchema{Schema: &schemas.Schema{ID: "apple"}}
-			stores := map[string]UnstructuredStore{}
-			for _, partitions := range test.partitions {
-				for _, p := range partitions {
-					stores[p.Namespace] = &mockStore{
-						contents: test.objects[p.Namespace],
-					}
-				}
-			}
 			asl := &mockAccessSetLookup{userRoles: test.access}
 			store := NewStore(mockPartitioner{
-				stores:     stores,
+				store: &mockStore{
+					contents: test.objects,
+					called:   map[string]int{},
+				},
 				partitions: test.partitions,
 			}, asl)
 			for i, req := range test.apiOps {
@@ -141,8 +136,8 @@ func TestList(t *testing.T) {
 				assert.Nil(t, gotErr)
 				assert.Equal(t, test.want[i], got)
 				if len(test.wantListCalls) > 0 {
-					for name, _ := range store.Partitioner.(mockPartitioner).stores {
-						assert.Equal(t, test.wantListCalls[i][name], store.Partitioner.(mockPartitioner).stores[name].(*mockStore).called)
+					for name, called := range store.Partitioner.(mockPartitioner).store.(*mockStore).called {
+						assert.Equal(t, test.wantListCalls[i][name], called)
 					}
 				}
 			}
@@ -150,74 +145,8 @@ func TestList(t *testing.T) {
 	}
 }
 
-func TestListByRevision(t *testing.T) {
-
-	schema := &types.APISchema{Schema: &schemas.Schema{ID: "apple"}}
-	asl := &mockAccessSetLookup{userRoles: []map[string]string{
-		{
-			"user1": "roleA",
-		},
-		{
-			"user1": "roleA",
-		},
-	}}
-	store := NewStore(mockPartitioner{
-		stores: map[string]UnstructuredStore{
-			"all": &mockVersionedStore{
-				versions: []mockStore{
-					{
-						contents: &unstructured.UnstructuredList{
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"resourceVersion": "1",
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-							},
-						},
-					},
-					{
-						contents: &unstructured.UnstructuredList{
-							Object: map[string]interface{}{
-								"metadata": map[string]interface{}{
-									"resourceVersion": "2",
-								},
-							},
-							Items: []unstructured.Unstructured{
-								newApple("fuji").Unstructured,
-								newApple("granny-smith").Unstructured,
-							},
-						},
-					},
-				},
-			},
-		},
-		partitions: map[string][]listprocessor.Partition{
-			"user1": {
-				listprocessor.Partition{
-					Namespace: "all",
-					All:       true,
-				},
-			},
-		},
-	}, asl)
-	req := newRequest("", "user1")
-
-	got, gotErr := store.List(req, schema)
-	assert.Nil(t, gotErr)
-	wantVersion := "2"
-	assert.Equal(t, wantVersion, got.Revision)
-
-	req = newRequest("revision=1", "user1")
-	got, gotErr = store.List(req, schema)
-	assert.Nil(t, gotErr)
-	wantVersion = "1"
-	assert.Equal(t, wantVersion, got.Revision)
-}
-
 type mockPartitioner struct {
-	stores     map[string]UnstructuredStore
+	store      UnstructuredStore
 	partitions map[string][]listprocessor.Partition
 }
 
@@ -230,35 +159,55 @@ func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, v
 	return m.partitions[user.GetName()], nil
 }
 
-func (m mockPartitioner) Store(partition listprocessor.Partition) (UnstructuredStore, error) {
-	return m.stores[partition.Namespace], nil
-}
-
-type mockPartition struct {
-	name string
-}
-
-func (m mockPartition) Name() string {
-	return m.name
+func (m mockPartitioner) Store() UnstructuredStore {
+	return m.store
 }
 
 type mockStore struct {
-	contents  *unstructured.UnstructuredList
-	partition mockPartition
-	called    int
+	contents  map[string]*unstructured.UnstructuredList
+	partition listprocessor.Partition
+	called    map[string]int
+}
+
+func (m *mockStore) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
+	list := []unstructured.Unstructured{}
+	revision := ""
+	for _, partition := range partitions {
+		apiOp = apiOp.Clone()
+		apiOp.Namespace = partition.Namespace
+		partial, _, err := m.List(apiOp, schema)
+		if err != nil {
+			return nil, "", err
+		}
+
+		list = append(list, partial.Items...)
+		revision = partial.GetResourceVersion()
+	}
+	return list, revision, nil
 }
 
 func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
-	m.called++
+	n := apiOp.Namespace
+	previous, ok := m.called[n]
+	if !ok {
+		m.called[n] = 1
+	} else {
+		m.called[n] = previous + 1
+	}
 	query, _ := url.ParseQuery(apiOp.Request.URL.RawQuery)
 	l := query.Get("limit")
 	if l == "" {
-		return m.contents, nil, nil
+		return m.contents[n], nil, nil
 	}
 	i := 0
 	if c := query.Get("continue"); c != "" {
 		start, _ := base64.StdEncoding.DecodeString(c)
-		for j, obj := range m.contents.Items {
+		for j, obj := range m.contents[n].Items {
 			if string(start) == obj.GetName() {
 				i = j
 				break
@@ -266,7 +215,7 @@ func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*uns
 		}
 	}
 	lInt, _ := strconv.Atoi(l)
-	contents := m.contents.DeepCopy()
+	contents := m.contents[n].DeepCopy()
 	if len(contents.Items) > i+lInt {
 		contents.SetContinue(base64.StdEncoding.EncodeToString([]byte(contents.Items[i+lInt].GetName())))
 	}
@@ -299,49 +248,6 @@ func (m *mockStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id 
 
 func (m *mockStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
 	panic("not implemented")
-}
-
-type mockVersionedStore struct {
-	mockStore
-	versions []mockStore
-}
-
-func (m *mockVersionedStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
-	m.called++
-	query, _ := url.ParseQuery(apiOp.Request.URL.RawQuery)
-	rv := len(m.versions) - 1
-	if query.Get("resourceVersion") != "" {
-		rv, _ = strconv.Atoi(query.Get("resourceVersion"))
-		rv--
-	}
-	l := query.Get("limit")
-	if l == "" {
-		return m.versions[rv].contents, nil, nil
-	}
-	i := 0
-	if c := query.Get("continue"); c != "" {
-		start, _ := base64.StdEncoding.DecodeString(c)
-		for j, obj := range m.versions[rv].contents.Items {
-			if string(start) == obj.GetName() {
-				i = j
-				break
-			}
-		}
-	}
-	lInt, _ := strconv.Atoi(l)
-	contents := m.versions[rv].contents.DeepCopy()
-	if len(contents.Items) > i+lInt {
-		contents.SetContinue(base64.StdEncoding.EncodeToString([]byte(contents.Items[i+lInt].GetName())))
-	}
-	if i > len(contents.Items) {
-		return contents, nil, nil
-	}
-	if i+lInt > len(contents.Items) {
-		contents.Items = contents.Items[i:]
-		return contents, nil, nil
-	}
-	contents.Items = contents.Items[i : i+lInt]
-	return contents, nil, nil
 }
 
 var colorMap = map[string]string{

@@ -2,16 +2,15 @@ package partition
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/wrangler/pkg/kv"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/watch"
-	"sort"
 )
 
 var (
@@ -75,42 +74,8 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 }
 
 // Store returns an UnstructuredStore suited to listing and watching resources by partition.
-func (p *rbacPartitioner) Store(partition listprocessor.Partition) (UnstructuredStore, error) {
-	return &byNameOrNamespaceStore{
-		Store:     p.proxyStore,
-		partition: partition,
-	}, nil
-}
-
-type byNameOrNamespaceStore struct {
-	*proxy.Store
-	partition listprocessor.Partition
-}
-
-// List returns a list of resources by partition.
-func (b *byNameOrNamespaceStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
-	if b.partition.Passthrough {
-		return b.Store.List(apiOp, schema)
-	}
-
-	apiOp.Namespace = b.partition.Namespace
-	if b.partition.All {
-		return b.Store.List(apiOp, schema)
-	}
-	return b.Store.ByNames(apiOp, schema, b.partition.Names)
-}
-
-// Watch returns a channel of resources by partition.
-func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
-	if b.partition.Passthrough {
-		return b.Store.Watch(apiOp, schema, wr)
-	}
-
-	apiOp.Namespace = b.partition.Namespace
-	if b.partition.All {
-		return b.Store.Watch(apiOp, schema, wr)
-	}
-	return b.Store.WatchNames(apiOp, schema, wr, b.partition.Names)
+func (p *rbacPartitioner) Store() UnstructuredStore {
+	return p.proxyStore
 }
 
 // isPassthrough determines whether a request can be passed through directly to the underlying store
