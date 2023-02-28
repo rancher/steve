@@ -21,35 +21,22 @@ import (
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error)
 	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error)
-	Store() UnstructuredStore
+	Store() proxy.Store
 }
 
-// Store implements types.Store for partitions.
+// Store implements types.proxyStore for partitions.
 type Store struct {
 	Partitioner Partitioner
 	asl         accesscontrol.AccessSetLookup
 }
 
-// NewStore creates a types.Store implementation with a partitioner
+// NewStore creates a types.proxyStore implementation with a partitioner
 func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup) *Store {
 	s := &Store{
 		Partitioner: partitioner,
 		asl:         asl,
 	}
 	return s
-}
-
-// UnstructuredStore is like types.Store but deals in k8s unstructured objects instead of apiserver types.
-type UnstructuredStore interface {
-	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
-	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error)
-	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error)
-	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
-	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
-	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
-
-	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error)
-	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error)
 }
 
 // Delete deletes an object from a store.
@@ -228,13 +215,13 @@ func toAPIEvent(schema *types.APISchema, event watch.Event) types.APIEvent {
 	return apiEvent
 }
 
-// NewProxyStore returns a wrapped types.Store.
+// NewProxyStore returns a wrapped types.proxyStore.
 func NewProxyStore(clientGetter proxy.ClientGetter, notifier proxy.RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
 	return proxy.NewErrorStore(
 		proxy.NewWatchRefresh(
 			NewStore(
 				&rbacPartitioner{
-					proxyStore: proxy.NewStore(
+					proxyStore: proxy.NewProxyStore(
 						clientGetter, notifier,
 					),
 				},

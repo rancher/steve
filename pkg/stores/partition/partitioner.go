@@ -21,7 +21,7 @@ var (
 
 // rbacPartitioner is an implementation of the partition.Partitioner interface.
 type rbacPartitioner struct {
-	proxyStore *proxy.Store
+	proxyStore proxy.Store
 }
 
 // Lookup returns the default passthrough partition which is used only for retrieving single resources.
@@ -73,8 +73,8 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 	}
 }
 
-// Store returns an UnstructuredStore suited to listing and watching resources by partition.
-func (p *rbacPartitioner) Store() UnstructuredStore {
+// Store returns an Store suited to listing and watching resources by partition.
+func (p *rbacPartitioner) Store() proxy.Store {
 	return p.proxyStore
 }
 

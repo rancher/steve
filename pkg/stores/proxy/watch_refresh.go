@@ -9,7 +9,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
-// WatchRefresh implements types.Store with awareness of changes to the requester's access.
+// WatchRefresh implements types.store with awareness of changes to the requester's access.
 type WatchRefresh struct {
 	types.Store
 	asl accesscontrol.AccessSetLookup

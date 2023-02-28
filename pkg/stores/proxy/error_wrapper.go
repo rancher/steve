@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
-// errorStore implements types.Store with errors translated into APIErrors
+// errorStore implements types.store with errors translated into APIErrors
 type errorStore struct {
 	types.Store
 }

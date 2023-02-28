@@ -77,22 +77,36 @@ type RelationshipNotifier interface {
 	OnInboundRelationshipChange(ctx context.Context, schema *types.APISchema, namespace string) <-chan *summary.Relationship
 }
 
-// Store implements partition.UnstructuredStore directly on top of kubernetes.
-type Store struct {
+// Store is like types.Store but deals in k8s unstructured objects instead of apiserver types.
+// This interface exists in order for store to be mocked in tests
+type Store interface {
+	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
+	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error)
+	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error)
+	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
+	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
+	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
+
+	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error)
+	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error)
+}
+
+// store implements Store
+type store struct {
 	clientGetter ClientGetter
 	notifier     RelationshipNotifier
 }
 
-// NewStore returns a partition.UnstructuredStore directly on top of kubernetes.
-func NewStore(clientGetter ClientGetter, notifier RelationshipNotifier) *Store {
-	return &Store{
+// NewProxyStore returns a Store implemented directly on top of kubernetes.
+func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier) Store {
+	return &store{
 		clientGetter: clientGetter,
 		notifier:     notifier,
 	}
 }
 
 // ByID looks up a single object by its ID.
-func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (s *store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	return s.byID(apiOp, schema, apiOp.Namespace, id)
 }
 
@@ -100,7 +114,7 @@ func decodeParams(apiOp *types.APIRequest, target runtime.Object) error {
 	return paramCodec.DecodeParameters(apiOp.Request.URL.Query(), metav1.SchemeGroupVersion, target)
 }
 
-func (s *Store) byID(apiOp *types.APIRequest, schema *types.APISchema, namespace, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (s *store) byID(apiOp *types.APIRequest, schema *types.APISchema, namespace, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	buffer := WarningBuffer{}
 	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, namespace, &buffer))
 	if err != nil {
@@ -188,7 +202,7 @@ func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
 // to list *all* resources.
 // With this filter, the request can be performed successfully, and only the allowed resources will
 // be returned in the list.
-func (s *Store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names sets.String) (*unstructured.UnstructuredList, []types.Warning, error) {
+func (s *store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names sets.String) (*unstructured.UnstructuredList, []types.Warning, error) {
 	if apiOp.Namespace == "*" {
 		// This happens when you grant namespaced objects with "get" by name in a clusterrolebinding. We will treat
 		// this as an invalid situation instead of listing all objects in the cluster and filtering by name.
@@ -217,7 +231,7 @@ func (s *Store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names 
 }
 
 // List returns an unstructured list of resources.
-func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
+func (s *store) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
 	buffer := WarningBuffer{}
 	client, err := s.clientGetter.TableClient(apiOp, schema, apiOp.Namespace, &buffer)
 	if err != nil {
@@ -227,7 +241,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstruc
 	return result, buffer, err
 }
 
-func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dynamic.ResourceInterface) (*unstructured.UnstructuredList, error) {
+func (s *store) list(apiOp *types.APIRequest, schema *types.APISchema, client dynamic.ResourceInterface) (*unstructured.UnstructuredList, error) {
 	opts := metav1.ListOptions{}
 	if err := decodeParams(apiOp, &opts); err != nil {
 		return nil, nil
@@ -253,7 +267,7 @@ func returnErr(err error, c chan watch.Event) {
 	}
 }
 
-func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInterface, schema *types.APISchema, w types.WatchRequest, result chan watch.Event) {
+func (s *store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInterface, schema *types.APISchema, w types.WatchRequest, result chan watch.Event) {
 	rev := w.Revision
 	if rev == "-1" || rev == "0" {
 		rev = ""
@@ -335,7 +349,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 // to list *all* resources.
 // With this filter, the request can be performed successfully, and only the allowed resources will
 // be returned in watch.
-func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.String) (chan watch.Event, error) {
+func (s *store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.String) (chan watch.Event, error) {
 	buffer := &WarningBuffer{}
 	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
 	if err != nil {
@@ -365,7 +379,7 @@ func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w t
 }
 
 // Watch returns a channel of events for a list or resource.
-func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
+func (s *store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
 	buffer := &WarningBuffer{}
 	client, err := s.clientGetter.TableClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
 	if err != nil {
@@ -374,7 +388,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	return s.watch(apiOp, schema, w, client)
 }
 
-func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
+func (s *store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
 	result := make(chan watch.Event)
 	go func() {
 		s.listAndWatch(apiOp, client, schema, w, result)
@@ -385,7 +399,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 }
 
 // Create creates a single object in the store.
-func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
+func (s *store) Create(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
 	var (
 		resp *unstructured.Unstructured
 	)
@@ -426,7 +440,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 }
 
 // Update updates a single object in the store.
-func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (s *store) Update(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	var (
 		err   error
 		input = params.Data()
@@ -495,7 +509,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 }
 
 // Delete deletes an object from a store.
-func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (s *store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
 	opts := metav1.DeleteOptions{}
 	if err := decodeParams(apiOp, &opts); err != nil {
 		return nil, nil, nil
@@ -522,7 +536,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 }
 
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
+func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
 	opts := listprocessor.ParseQuery(apiOp)
 
 	list := []unstructured.Unstructured{}
@@ -555,7 +569,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 }
 
 // listByPartition returns an unstructured list of resources belonging to a specified partition
-func (s *Store) listByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
+func (s *store) listByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
 	if partition.Passthrough {
 		return s.List(apiOp, schema)
 	}
@@ -568,7 +582,7 @@ func (s *Store) listByPartition(partition listprocessor.Partition, apiOp *types.
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
-func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error) {
+func (s *store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error) {
 	ctx, cancel := context.WithCancel(apiOp.Context())
 	apiOp = apiOp.Clone().WithContext(ctx)
 
@@ -603,7 +617,7 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 }
 
 // watchByPartition returns a channel of events for a list or resource belonging to a specified partition
-func (s *Store) watchByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
+func (s *store) watchByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
 	if partition.Passthrough {
 		return s.Watch(apiOp, schema, wr)
 	}

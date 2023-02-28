@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxy"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -146,7 +147,7 @@ func TestList(t *testing.T) {
 }
 
 type mockPartitioner struct {
-	store      UnstructuredStore
+	store      proxy.Store
 	partitions map[string][]listprocessor.Partition
 }
 
@@ -159,7 +160,7 @@ func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, v
 	return m.partitions[user.GetName()], nil
 }
 
-func (m mockPartitioner) Store() UnstructuredStore {
+func (m mockPartitioner) Store() proxy.Store {
 	return m.store
 }
 
