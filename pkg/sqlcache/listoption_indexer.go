@@ -153,10 +153,6 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 	return nil
 }
 
-func sanitize(name string) string {
-	return strings.ReplaceAll(name, "\"", ".")
-}
-
 // ListByOptions returns objects according to the ListOptions struct
 func (l *ListOptionIndexer) ListByOptions(lo ListOptions) ([]any, error) {
 	// compute list of interesting fields (filtered or sorted)
@@ -263,4 +259,8 @@ func (l *ListOptionIndexer) ListByOptions(lo ListOptions) ([]any, error) {
 
 func toColumnName(s []string) string {
 	return sanitize(strings.Join(s, "."))
+}
+
+func sanitize(name string) string {
+	return strings.ReplaceAll(name, "\"", ".")
 }
