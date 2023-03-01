@@ -21,6 +21,9 @@ type VersionFunc func(obj any) (int, error)
 // NewVersionedIndexer returns an Indexer that also stores a range of versions in addition to the latest one
 func NewVersionedIndexer(example any, keyFunc cache.KeyFunc, versionFunc VersionFunc, path string, indexers cache.Indexers) (*VersionedIndexer, error) {
 	i, err := NewIndexer(example, keyFunc, path, indexers)
+	if err != nil {
+		return nil, err
+	}
 
 	err = i.InitExec(`CREATE TABLE object_history (
 			key VARCHAR NOT NULL,
