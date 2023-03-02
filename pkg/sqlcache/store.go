@@ -358,9 +358,9 @@ func (s *Store) fromBytes(buf sql.RawBytes) (reflect.Value, error) {
 func (s *Store) rollback(err error, tx *sql.Tx) error {
 	rerr := tx.Rollback()
 	if rerr != nil {
-		return errors.Wrapf(rerr, "Error while rolling back from: %v", err)
+		return errors.Wrapf(err, "Encountered error, then encountered another error while rolling back: %v", rerr)
 	}
-	return rerr
+	return errors.Wrapf(err, "Encountered error, successfully rolled back")
 }
 
 // RegisterAfterUpsert registers a func to be called after each upsert
