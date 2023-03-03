@@ -5,13 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
+
+	"github.com/rancher/steve/pkg/sqlcache"
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
@@ -81,27 +83,27 @@ type RelationshipNotifier interface {
 // This interface exists in order for store to be mocked in tests
 type Store interface {
 	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
-	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error)
 	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error)
 	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
 	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
-	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
 
-	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error)
+	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, string, error)
 	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error)
 }
 
 // store implements Store
 type store struct {
-	clientGetter ClientGetter
-	notifier     RelationshipNotifier
+	clientGetter    ClientGetter
+	notifier        RelationshipNotifier
+	informerFactory *sqlcache.InformerFactory
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier) Store {
 	return &store{
-		clientGetter: clientGetter,
-		notifier:     notifier,
+		clientGetter:    clientGetter,
+		notifier:        notifier,
+		informerFactory: sqlcache.NewInformerFactory(),
 	}
 }
 
@@ -194,68 +196,6 @@ func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
 	}
 
 	return result
-}
-
-// ByNames filters a list of objects by an allowed set of names.
-// In plain kubernetes, if a user has permission to 'list' or 'watch' a defined set of resource names,
-// performing the list or watch will result in a Forbidden error, because the user does not have permission
-// to list *all* resources.
-// With this filter, the request can be performed successfully, and only the allowed resources will
-// be returned in the list.
-func (s *store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names sets.String) (*unstructured.UnstructuredList, []types.Warning, error) {
-	if apiOp.Namespace == "*" {
-		// This happens when you grant namespaced objects with "get" by name in a clusterrolebinding. We will treat
-		// this as an invalid situation instead of listing all objects in the cluster and filtering by name.
-		return nil, nil, nil
-	}
-	buffer := WarningBuffer{}
-	adminClient, err := s.clientGetter.TableAdminClient(apiOp, schema, apiOp.Namespace, &buffer)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	objs, err := s.list(apiOp, schema, adminClient)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var filtered []unstructured.Unstructured
-	for _, obj := range objs.Items {
-		if names.Has(obj.GetName()) {
-			filtered = append(filtered, obj)
-		}
-	}
-
-	objs.Items = filtered
-	return objs, buffer, nil
-}
-
-// List returns an unstructured list of resources.
-func (s *store) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
-	buffer := WarningBuffer{}
-	client, err := s.clientGetter.TableClient(apiOp, schema, apiOp.Namespace, &buffer)
-	if err != nil {
-		return nil, nil, err
-	}
-	result, err := s.list(apiOp, schema, client)
-	return result, buffer, err
-}
-
-func (s *store) list(apiOp *types.APIRequest, schema *types.APISchema, client dynamic.ResourceInterface) (*unstructured.UnstructuredList, error) {
-	opts := metav1.ListOptions{}
-	if err := decodeParams(apiOp, &opts); err != nil {
-		return nil, nil
-	}
-
-	k8sClient, _ := metricsStore.Wrap(client, nil)
-	resultList, err := k8sClient.List(apiOp, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	tableToList(resultList)
-
-	return resultList, nil
 }
 
 func returnErr(err error, c chan watch.Event) {
@@ -536,49 +476,29 @@ func (s *store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 }
 
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
-func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
+func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, string, error) {
 	opts := listprocessor.ParseQuery(apiOp)
 
-	list := []unstructured.Unstructured{}
-	revision := ""
-	for _, partition := range partitions {
-
-		req := apiOp.Clone()
-		req.Request = req.Request.Clone(apiOp.Context())
-
-		values := req.Request.URL.Query()
-		values.Del("limit")
-		values.Del("continue")
-		if opts.Revision != "" {
-			values.Set("resourceVersion", opts.Revision)
-			values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
-		}
-
-		req.Request.URL.RawQuery = values.Encode()
-
-		partial, _, err := s.listByPartition(partition, req, schema)
-		if err != nil {
-			return nil, "", err
-		}
-
-		list = append(list, partial.Items...)
-		revision = partial.GetResourceVersion()
+	// warnings from inside the informer are discarded
+	buffer := WarningBuffer{}
+	client, err := s.clientGetter.AdminClient(apiOp, schema, "", &buffer)
+	if err != nil {
+		return nil, "", "", err
 	}
 
-	return list, revision, nil
-}
-
-// listByPartition returns an unstructured list of resources belonging to a specified partition
-func (s *store) listByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
-	if partition.Passthrough {
-		return s.List(apiOp, schema)
+	informer, err := s.informerFactory.InformerFor(apiOp, client, schema)
+	if err != nil {
+		return nil, "", "", err
 	}
 
-	apiOp.Namespace = partition.Namespace
-	if partition.All {
-		return s.List(apiOp, schema)
+	list, revision, continueToken, err := informer.ListByOptions(opts, partitions, apiOp.Namespace)
+	if err != nil {
+		return nil, "", "", err
 	}
-	return s.ByNames(apiOp, schema, partition.Names)
+
+	tableToList(list)
+
+	return list.Items, revision, continueToken, nil
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
