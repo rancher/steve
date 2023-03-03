@@ -114,7 +114,7 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 
 // ListByOptions returns objects according to the specified list options and partitions
 // result is an unstructured.UnstructuredList, a revision string or an error
-func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitions []listprocessor.Partition) (*unstructured.UnstructuredList, string, error) {
+func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
 	// compute list of "interesting" fields (default plus filtering or sorting fields)
 	fields := sets.NewString("metadata.name", "metadata.namespace")
 	for _, filter := range lo.Filters {
@@ -157,15 +157,25 @@ func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitio
 		params = append(params, version)
 	}
 
+	// compute WHERE clause for namespace
+	if namespace != "" && namespace != "*" {
+		whereClauses = append(whereClauses, fmt.Sprintf(`"f_metadata.namespace".value = ?`))
+		params = append(params, namespace)
+	}
+
 	// compute WHERE clauses from partitions and their corresponding parameters
 	partitionClauses := []string{}
 	for _, partition := range partitions {
 		if partition.Passthrough {
 			// nothing to do, no extra filtering to apply by definition
 		} else {
-			// always filter by namespace
-			singlePartitionClauses := []string{fmt.Sprintf(`"f_metadata.namespace".value = ?`)}
-			params = append(params, partition.Namespace)
+			singlePartitionClauses := []string{}
+
+			// filter by namespace
+			if partition.Namespace != "" && partition.Namespace != "*" {
+				singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`"f_metadata.namespace".value = ?`))
+				params = append(params, partition.Namespace)
+			}
 
 			// optionally filter by names
 			if !partition.All {
@@ -182,7 +192,9 @@ func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitio
 				}
 			}
 
-			partitionClauses = append(partitionClauses, strings.Join(singlePartitionClauses, " AND "))
+			if len(singlePartitionClauses) > 0 {
+				partitionClauses = append(partitionClauses, strings.Join(singlePartitionClauses, " AND "))
+			}
 		}
 	}
 	if len(partitions) == 0 {
