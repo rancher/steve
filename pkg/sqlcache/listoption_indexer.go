@@ -19,8 +19,9 @@ import (
 type ListOptionIndexer struct {
 	*VersionedIndexer
 
-	fields   [][]string
-	addField *sql.Stmt
+	fields      [][]string
+	addField    *sql.Stmt
+	lastVersion *sql.Stmt
 }
 
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
@@ -74,6 +75,7 @@ func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyF
 	}
 
 	l.addField = l.Prepare(`INSERT INTO fields(name, key, version, value) VALUES (?,?,?,?) ON CONFLICT DO UPDATE SET value = excluded.value`)
+	l.lastVersion = l.Prepare(`SELECT CAST(MAX(version) AS TEXT) FROM object_history`)
 
 	return l, nil
 }
@@ -110,8 +112,9 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 	return nil
 }
 
-// ListByOptions returns objects according to the ListOptions struct, optionally filtered byNames (if non-nil)
-func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitions []listprocessor.Partition) (*unstructured.UnstructuredList, error) {
+// ListByOptions returns objects according to the specified list options and partitions
+// result is an unstructured.UnstructuredList, a revision string or an error
+func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitions []listprocessor.Partition) (*unstructured.UnstructuredList, string, error) {
 	// compute list of "interesting" fields (default plus filtering or sorting fields)
 	fields := sets.NewString("metadata.name", "metadata.namespace")
 	for _, filter := range lo.Filters {
@@ -146,7 +149,7 @@ func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitio
 	} else {
 		version, err := strconv.Atoi(lo.Revision)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not parse Revision %s", lo.Revision)
+			return nil, "", errors.Wrapf(err, "Could not parse Revision %s", lo.Revision)
 		}
 		whereClauses = append(whereClauses, "o.version = (SELECT MAX(o2.version) FROM object_history o2 WHERE o2.key = o.key AND o2.version <= ?)")
 		params = append(params, version)
@@ -247,10 +250,20 @@ func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitio
 
 	items, err := l.QueryObjects(l.Prepare(stmt), params...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return toUnstructuredList(items), nil
+	version := lo.Revision
+
+	if version == "" {
+		versions, err := l.QueryStrings(l.lastVersion)
+		if err != nil {
+			return nil, "", err
+		}
+		version = versions[0]
+	}
+
+	return toUnstructuredList(items), version, nil
 }
 
 /* Utilities */

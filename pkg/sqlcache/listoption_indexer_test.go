@@ -73,21 +73,23 @@ func TestListOptionIndexer(t *testing.T) {
 		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
-	ul, err := l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err := l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 2)
+	assert.Equal("2", r)
 
 	// delete one and list again. Should be gone
 	err = l.Delete(red)
 	failOnError(t, err)
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 1)
 	assert.Equal(ul.Items[0].GetName(), "focus")
+	assert.Equal("2", r)
 	// gone also from most-recent store
-	r := l.List()
-	assert.Len(r, 1)
-	assert.Equal(r[0].(*unstructured.Unstructured).GetName(), "focus")
+	recent := l.List()
+	assert.Len(recent, 1)
+	assert.Equal(recent[0].(*unstructured.Unstructured).GetName(), "focus")
 
 	// updating the Pod brings it back
 	revision++
@@ -97,20 +99,21 @@ func TestListOptionIndexer(t *testing.T) {
 	red.SetLabels(labels)
 	err = l.Update(red)
 	failOnError(t, err)
-	r = l.List()
-	assert.Len(r, 2)
+	recent = l.List()
+	assert.Len(recent, 2)
 	lo = listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "ferrari"}},
 		Sort:       listprocessor.Sort{},
 		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 1)
 	assert.Equal(ul.Items[0].GetName(), "testa rossa")
 	assert.Equal(ul.Items[0].GetResourceVersion(), "3")
 	assert.Equal(ul.Items[0].GetLabels()["Wheels"], "3")
+	assert.Equal("3", r)
 
 	// historically, Pod still exists in version 1, gone in version 2, back in version 3
 	lo = listprocessor.ListOptions{
@@ -119,17 +122,20 @@ func TestListOptionIndexer(t *testing.T) {
 		Pagination: listprocessor.Pagination{},
 		Revision:   "1",
 	}
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 1)
+	assert.Equal("1", r)
 	lo.Revision = "2"
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 0)
+	assert.Equal("2", r)
 	lo.Revision = "3"
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 1)
+	assert.Equal("3", r)
 
 	// add another Pod, test filter by substring and sorting
 	revision++
@@ -152,11 +158,12 @@ func TestListOptionIndexer(t *testing.T) {
 		Pagination: listprocessor.Pagination{},
 		Revision:   "",
 	}
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 2)
 	assert.Equal(ul.Items[0].GetLabels()["Color"], "red")
 	assert.Equal(ul.Items[1].GetLabels()["Color"], "blue")
+	assert.Equal("4", r)
 
 	// test pagination
 	lo = listprocessor.ListOptions{
@@ -165,16 +172,18 @@ func TestListOptionIndexer(t *testing.T) {
 		Pagination: listprocessor.Pagination{PageSize: 2},
 		Revision:   "",
 	}
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 2)
 	assert.Equal(ul.Items[0].GetLabels()["Color"], "black")
 	assert.Equal(ul.Items[1].GetLabels()["Color"], "blue")
+	assert.Equal("4", r)
 	lo.Pagination.Page = 2
-	ul, err = l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err = l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 1)
 	assert.Equal(ul.Items[0].GetLabels()["Color"], "red")
+	assert.Equal("4", r)
 
 	// test filtering by name
 	lo = listprocessor.ListOptions{
@@ -186,18 +195,20 @@ func TestListOptionIndexer(t *testing.T) {
 	partitions := []listprocessor.Partition{
 		{Passthrough: false, Namespace: "", All: false, Names: sets.NewString("model 3")},
 	}
-	ul, err = l.ListByOptions(lo, partitions)
+	ul, r, err = l.ListByOptions(lo, partitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 1)
 	assert.Equal(ul.Items[0].GetLabels()["Color"], "black")
+	assert.Equal("4", r)
 
 	// test with empty name set
 	partitions = []listprocessor.Partition{
 		{Passthrough: false, Namespace: "", All: false, Names: sets.NewString()},
 	}
-	ul, err = l.ListByOptions(lo, partitions)
+	ul, r, err = l.ListByOptions(lo, partitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 0)
+	assert.Equal("4", r)
 
 	err = l.Close()
 	failOnError(t, err)
@@ -309,25 +320,28 @@ func TestListOptionIndexerWithPartitions(t *testing.T) {
 	}
 
 	// passthrough: get all 5 cars
-	ul, err := l.ListByOptions(lo, passthroughPartitions)
+	ul, r, err := l.ListByOptions(lo, passthroughPartitions)
 	failOnError(t, err)
 	assert.Len(ul.Items, 5)
+	assert.Equal("5", r)
 
 	// no partitions: no cars
-	ul, err = l.ListByOptions(lo, []listprocessor.Partition{})
+	ul, r, err = l.ListByOptions(lo, []listprocessor.Partition{})
 	failOnError(t, err)
 	assert.Len(ul.Items, 0)
+	assert.Equal("5", r)
 
 	// one partition on the garage namespace: 3 cars
-	ul, err = l.ListByOptions(lo, []listprocessor.Partition{{Namespace: "garage", All: true}})
+	ul, r, err = l.ListByOptions(lo, []listprocessor.Partition{{Namespace: "garage", All: true}})
 	failOnError(t, err)
 	assert.Len(ul.Items, 3)
 	assert.Equal(ul.Items[0].GetName(), "focus")
 	assert.Equal(ul.Items[1].GetName(), "model 3")
 	assert.Equal(ul.Items[2].GetName(), "testa rossa")
+	assert.Equal("5", r)
 
 	// two partition on the garage and yard namespaces: 4 cars
-	ul, err = l.ListByOptions(lo, []listprocessor.Partition{
+	ul, r, err = l.ListByOptions(lo, []listprocessor.Partition{
 		{Namespace: "garage", All: true},
 		{Namespace: "yard", All: true},
 	})
@@ -337,9 +351,10 @@ func TestListOptionIndexerWithPartitions(t *testing.T) {
 	assert.Equal(ul.Items[1].GetName(), "focus")
 	assert.Equal(ul.Items[2].GetName(), "model 3")
 	assert.Equal(ul.Items[3].GetName(), "testa rossa")
+	assert.Equal("5", r)
 
 	// two partitions, one limited to one car in the garage, one with full permission on yard: 2 cars
-	ul, err = l.ListByOptions(lo, []listprocessor.Partition{
+	ul, r, err = l.ListByOptions(lo, []listprocessor.Partition{
 		{Namespace: "garage", All: false, Names: sets.NewString("focus")},
 		{Namespace: "yard", All: true},
 	})
@@ -347,14 +362,16 @@ func TestListOptionIndexerWithPartitions(t *testing.T) {
 	assert.Len(ul.Items, 2)
 	assert.Equal(ul.Items[0].GetName(), "corolla")
 	assert.Equal(ul.Items[1].GetName(), "focus")
+	assert.Equal("5", r)
 
 	// two partitions, one limited to a car not in the set, one no specific permission: 0 cars
-	ul, err = l.ListByOptions(lo, []listprocessor.Partition{
+	ul, r, err = l.ListByOptions(lo, []listprocessor.Partition{
 		{Namespace: "garage", All: false, Names: sets.NewString("viper")},
 		{Namespace: "yard", All: false},
 	})
 	failOnError(t, err)
 	assert.Len(ul.Items, 0)
+	assert.Equal("5", r)
 
 	err = l.Close()
 	failOnError(t, err)
