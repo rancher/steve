@@ -114,7 +114,7 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 
 // ListByOptions returns objects according to the specified list options and partitions
 // result is an unstructured.UnstructuredList, a revision string or an error
-func (l *ListOptionIndexer) ListByOptions(lo listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
+func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
 	// compute list of "interesting" fields (default plus filtering or sorting fields)
 	fields := sets.NewString("metadata.name", "metadata.namespace")
 	for _, filter := range lo.Filters {

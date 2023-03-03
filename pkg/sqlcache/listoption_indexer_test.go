@@ -67,7 +67,7 @@ func TestListOptionIndexer(t *testing.T) {
 		{Passthrough: true},
 	}
 
-	lo := listprocessor.ListOptions{
+	lo := &listprocessor.ListOptions{
 		Filters:    nil,
 		Sort:       listprocessor.Sort{},
 		Pagination: listprocessor.Pagination{},
@@ -101,7 +101,7 @@ func TestListOptionIndexer(t *testing.T) {
 	failOnError(t, err)
 	recent = l.List()
 	assert.Len(recent, 2)
-	lo = listprocessor.ListOptions{
+	lo = &listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "ferrari"}},
 		Sort:       listprocessor.Sort{},
 		Pagination: listprocessor.Pagination{},
@@ -116,7 +116,7 @@ func TestListOptionIndexer(t *testing.T) {
 	assert.Equal("3", r)
 
 	// historically, Pod still exists in version 1, gone in version 2, back in version 3
-	lo = listprocessor.ListOptions{
+	lo = &listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "ferrari"}},
 		Sort:       listprocessor.Sort{},
 		Pagination: listprocessor.Pagination{},
@@ -152,7 +152,7 @@ func TestListOptionIndexer(t *testing.T) {
 	failOnError(t, err)
 	err = l.Add(black)
 	failOnError(t, err)
-	lo = listprocessor.ListOptions{
+	lo = &listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{{Field: []string{"metadata", "labels", "Brand"}, Match: "f"}}, // tesla filtered out
 		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "labels", "Color"}, PrimaryOrder: listprocessor.DESC},
 		Pagination: listprocessor.Pagination{},
@@ -166,7 +166,7 @@ func TestListOptionIndexer(t *testing.T) {
 	assert.Equal("4", r)
 
 	// test pagination
-	lo = listprocessor.ListOptions{
+	lo = &listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{},
 		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "labels", "Color"}},
 		Pagination: listprocessor.Pagination{PageSize: 2},
@@ -186,7 +186,7 @@ func TestListOptionIndexer(t *testing.T) {
 	assert.Equal("4", r)
 
 	// test filtering by name
-	lo = listprocessor.ListOptions{
+	lo = &listprocessor.ListOptions{
 		Filters:    []listprocessor.Filter{},
 		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "labels", "Color"}},
 		Pagination: listprocessor.Pagination{PageSize: 2},
@@ -321,7 +321,7 @@ func TestListOptionIndexerWithPartitions(t *testing.T) {
 		{Passthrough: true},
 	}
 
-	lo := listprocessor.ListOptions{
+	lo := &listprocessor.ListOptions{
 		Filters:    nil,
 		Sort:       listprocessor.Sort{PrimaryField: []string{"metadata", "name"}, PrimaryOrder: listprocessor.ASC},
 		Pagination: listprocessor.Pagination{},
