@@ -281,8 +281,20 @@ func TestList(t *testing.T) {
 				newRequest("filter=data.color=green,data.color=pink", "user1"),
 				newRequest("filter=data.color=green,data.color=pink&filter=metadata.name=fuji", "user1"),
 				newRequest("filter=data.color=green,data.color=pink&filter=metadata.name=crispin", "user1"),
+				newRequest("filter=data.color!=green", "user1"),
+				newRequest("filter=data.color!=green,metadata.name=granny-smith", "user1"),
+				newRequest("filter=data.color!=green&filter=metadata.name!=crispin", "user1"),
 			},
 			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
 				{
 					"user1": "roleA",
 				},
@@ -346,6 +358,27 @@ func TestList(t *testing.T) {
 				},
 				{
 					Count: 0,
+				},
+				{
+					Count: 2,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+						newApple("crispin").toObj(),
+					},
+				},
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+						newApple("granny-smith").toObj(),
+						newApple("crispin").toObj(),
+					},
+				},
+				{
+					Count: 1,
+					Objects: []types.APIObject{
+						newApple("fuji").toObj(),
+					},
 				},
 			},
 		},

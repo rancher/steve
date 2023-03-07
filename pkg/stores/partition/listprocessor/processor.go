@@ -2,6 +2,7 @@
 package listprocessor
 
 import (
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,15 @@ const (
 	orOp          = ","
 )
 
+var opReg = regexp.MustCompile(`[!]?=`)
+
+type op string
+
+const (
+	eq    op = ""
+	notEq op = "!="
+)
+
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
 	ChunkSize  int
@@ -40,6 +50,7 @@ type ListOptions struct {
 type Filter struct {
 	field []string
 	match string
+	op    op
 }
 
 // String returns the filter as a query string.
@@ -127,11 +138,15 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		orFilters := strings.Split(filters, orOp)
 		orFilter := OrFilter{}
 		for _, filter := range orFilters {
-			filter := strings.Split(filter, "=")
+			var op op
+			if strings.Contains(filter, "!=") {
+				op = "!="
+			}
+			filter := opReg.Split(filter, -1)
 			if len(filter) != 2 {
 				continue
 			}
-			orFilter.filters = append(orFilter.filters, Filter{field: strings.Split(filter[0], "."), match: filter[1]})
+			orFilter.filters = append(orFilter.filters, Filter{field: strings.Split(filter[0], "."), match: filter[1], op: op})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -251,7 +266,7 @@ func matchesOne(obj map[string]interface{}, filter Filter) bool {
 			return true
 		}
 	case []interface{}:
-		filter = Filter{field: subField, match: filter.match}
+		filter = Filter{field: subField, match: filter.match, op: filter.op}
 		if matchesOneInList(typedVal, filter) {
 			return true
 		}
@@ -282,7 +297,8 @@ func matchesOneInList(obj []interface{}, filter Filter) bool {
 
 func matchesAny(obj map[string]interface{}, filter OrFilter) bool {
 	for _, f := range filter.filters {
-		if matches := matchesOne(obj, f); matches {
+		matches := matchesOne(obj, f)
+		if (matches && f.op == eq) || (!matches && f.op == notEq) {
 			return true
 		}
 	}

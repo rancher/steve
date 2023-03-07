@@ -1070,6 +1070,658 @@ func TestFilterList(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "not filter",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "fuji",
+							},
+							"data": map[string]interface{}{
+								"color": "pink",
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "granny-smith",
+							},
+							"data": map[string]interface{}{
+								"color": "green",
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "color"},
+							match: "pink",
+							op:    "!=",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "or'ed not filter",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "fuji",
+							},
+							"data": map[string]interface{}{
+								"color": "pink",
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "granny-smith",
+							},
+							"data": map[string]interface{}{
+								"color": "green",
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "color"},
+							match: "pink",
+							op:    "!=",
+						},
+						{
+							field: []string{"data", "color"},
+							match: "green",
+							op:    "!=",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "mixed or'ed filter",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "fuji",
+							},
+							"data": map[string]interface{}{
+								"color": "pink",
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "granny-smith",
+							},
+							"data": map[string]interface{}{
+								"color": "green",
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "color"},
+							match: "pink",
+							op:    "!=",
+						},
+						{
+							field: []string{"metadata", "name"},
+							match: "fuji",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "anded and or'ed mixed equality filter",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "fuji",
+							},
+							"data": map[string]interface{}{
+								"color": "pink",
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "honeycrisp",
+							},
+							"data": map[string]interface{}{
+								"color": "pink",
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name": "granny-smith",
+							},
+							"data": map[string]interface{}{
+								"color": "green",
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"metadata", "name"},
+							match: "fuji",
+							op:    "!=",
+						},
+					},
+				},
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "color"},
+							match: "pink",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "match string array with not",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "apple",
+							},
+							"data": map[string]interface{}{
+								"colors": []interface{}{
+									"pink",
+									"red",
+									"green",
+									"yellow",
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "berry",
+							},
+							"data": map[string]interface{}{
+								"colors": []interface{}{
+									"blue",
+									"red",
+									"black",
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "banana",
+							},
+							"data": map[string]interface{}{
+								"colors": []interface{}{
+									"yellow",
+								},
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "colors"},
+							match: "yellow",
+							op:    "!=",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "fruit",
+						"metadata": map[string]interface{}{
+							"name": "berry",
+						},
+						"data": map[string]interface{}{
+							"colors": []interface{}{
+								"blue",
+								"red",
+								"black",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "match object array with not",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "apple",
+							},
+							"data": map[string]interface{}{
+								"varieties": []interface{}{
+									map[string]interface{}{
+										"name":  "fuji",
+										"color": "pink",
+									},
+									map[string]interface{}{
+										"name":  "granny-smith",
+										"color": "green",
+									},
+									map[string]interface{}{
+										"name":  "red-delicious",
+										"color": "red",
+									},
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "berry",
+							},
+							"data": map[string]interface{}{
+								"varieties": []interface{}{
+									map[string]interface{}{
+										"name":  "blueberry",
+										"color": "blue",
+									},
+									map[string]interface{}{
+										"name":  "raspberry",
+										"color": "red",
+									},
+									map[string]interface{}{
+										"name":  "blackberry",
+										"color": "black",
+									},
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "banana",
+							},
+							"data": map[string]interface{}{
+								"varieties": []interface{}{
+									map[string]interface{}{
+										"name":  "cavendish",
+										"color": "yellow",
+									},
+									map[string]interface{}{
+										"name":  "plantain",
+										"color": "green",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "varieties", "color"},
+							match: "red",
+							op:    "!=",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "fruit",
+						"metadata": map[string]interface{}{
+							"name": "banana",
+						},
+						"data": map[string]interface{}{
+							"varieties": []interface{}{
+								map[string]interface{}{
+									"name":  "cavendish",
+									"color": "yellow",
+								},
+								map[string]interface{}{
+									"name":  "plantain",
+									"color": "green",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "match nested array with not",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "apple",
+							},
+							"data": map[string]interface{}{
+								"attributes": []interface{}{
+									[]interface{}{
+										"pink",
+										"green",
+										"red",
+										"purple",
+									},
+									[]interface{}{
+										"fuji",
+										"granny-smith",
+										"red-delicious",
+										"black-diamond",
+									},
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "berry",
+							},
+							"data": map[string]interface{}{
+								"attributes": []interface{}{
+									[]interface{}{
+										"blue",
+										"red",
+										"black",
+									},
+									[]interface{}{
+										"blueberry",
+										"raspberry",
+										"blackberry",
+									},
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "banana",
+							},
+							"data": map[string]interface{}{
+								"attributes": []interface{}{
+									[]interface{}{
+										"yellow",
+										"green",
+									},
+									[]interface{}{
+										"cavendish",
+										"plantain",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "attributes"},
+							match: "black",
+							op:    "!=",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "fruit",
+						"metadata": map[string]interface{}{
+							"name": "banana",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								[]interface{}{
+									"yellow",
+									"green",
+								},
+								[]interface{}{
+									"cavendish",
+									"plantain",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "match nested object array with mixed equality",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "apple",
+							},
+							"data": map[string]interface{}{
+								"attributes": []interface{}{
+									[]interface{}{
+										map[string]interface{}{
+											"pink": "fuji",
+										},
+										map[string]interface{}{
+											"green": "granny-smith",
+										},
+										map[string]interface{}{
+											"pink": "honeycrisp",
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "berry",
+							},
+							"data": map[string]interface{}{
+								"attributes": []interface{}{
+									[]interface{}{
+										map[string]interface{}{
+											"blue": "blueberry",
+										},
+										map[string]interface{}{
+											"red": "raspberry",
+										},
+										map[string]interface{}{
+											"black": "blackberry",
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "banana",
+							},
+							"data": map[string]interface{}{
+								"attributes": []interface{}{
+									[]interface{}{
+										map[string]interface{}{
+											"yellow": "cavendish",
+										},
+										map[string]interface{}{
+											"green": "plantain",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "attributes", "green"},
+							match: "plantain",
+							op:    "!=",
+						},
+						{
+							field: []string{"data", "attributes", "green"},
+							match: "granny-smith",
+						},
+					},
+				},
+				{
+					filters: []Filter{
+						{
+							field: []string{"metadata", "name"},
+							match: "banana",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
