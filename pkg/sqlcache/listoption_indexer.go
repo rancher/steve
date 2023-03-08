@@ -19,9 +19,9 @@ import (
 type ListOptionIndexer struct {
 	*VersionedIndexer
 
-	fields      [][]string
-	addField    *sql.Stmt
-	lastVersion *sql.Stmt
+	indexedFields sets.String
+	addField      *sql.Stmt
+	lastVersion   *sql.Stmt
 }
 
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
@@ -47,14 +47,14 @@ func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyF
 		return nil, err
 	}
 
-	completedFields := [][]string{{"metadata", "name"}, {"metadata", "namespace"}}
+	indexedFields := sets.NewString("metadata.name", "metadata.namespace")
 	for _, f := range fields {
-		completedFields = append(completedFields, f)
+		indexedFields.Insert(toColumnName(f))
 	}
 
 	l := &ListOptionIndexer{
 		VersionedIndexer: v,
-		fields:           completedFields,
+		indexedFields:    indexedFields,
 	}
 	l.RegisterAfterUpsert(l.AfterUpsert)
 
@@ -89,20 +89,20 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 		return err
 	}
 
-	for _, field := range l.fields {
+	for field := range l.indexedFields {
 		value, err := getField(obj, field)
 		if err != nil {
 			return err
 		}
 		switch typedValue := value.(type) {
 		case nil:
-			_, err = tx.Stmt(l.addField).Exec(toColumnName(field), key, version, "")
+			_, err = tx.Stmt(l.addField).Exec(field, key, version, "")
 		case int, bool, string:
-			_, err = tx.Stmt(l.addField).Exec(toColumnName(field), key, version, fmt.Sprint(typedValue))
+			_, err = tx.Stmt(l.addField).Exec(field, key, version, fmt.Sprint(typedValue))
 		case []string:
-			_, err = tx.Stmt(l.addField).Exec(toColumnName(field), key, version, strings.Join(typedValue, "|"))
+			_, err = tx.Stmt(l.addField).Exec(field, key, version, strings.Join(typedValue, "|"))
 		default:
-			return errors.Errorf("%v has a non-supported type value: %v", toColumnName(field), value)
+			return errors.Errorf("%v has a non-supported type value: %v", field, value)
 		}
 		if err != nil {
 			return err
@@ -125,6 +125,13 @@ func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partiti
 	}
 	if len(lo.Sort.SecondaryField) > 0 {
 		fields.Insert(toColumnName(lo.Sort.SecondaryField))
+	}
+
+	// warn if there is a request to filter or sort by a field that has not been indexed
+	for f, _ := range fields {
+		if !l.indexedFields.Has(f) {
+			logrus.Errorf("ListOptionIndexer for type %v missing index on field %v", l.Store.typ.String(), f)
+		}
 	}
 
 	// compute join clauses (one per interesting field) and their corresponding parameters
@@ -285,13 +292,13 @@ func toColumnName(s []string) string {
 	return strings.ReplaceAll(strings.Join(s, "."), "\"", ".")
 }
 
-// getField extracts the value of a field expressed as a string slice from an unstructured object
-func getField(a any, field []string) (any, error) {
+// getField extracts the value of a field expressed as a string path from an unstructured object
+func getField(a any, field string) (any, error) {
 	o, ok := a.(*unstructured.Unstructured)
 	if !ok {
 		return nil, errors.Errorf("Unexpected object type, expected unstructured.Unstructured: %v", a)
 	}
-	result, ok, err := unstructured.NestedFieldNoCopy(o.Object, field...)
+	result, ok, err := unstructured.NestedFieldNoCopy(o.Object, strings.Split(field, ".")...)
 	if !ok || err != nil {
 		return nil, errors.Wrapf(err, "Could not extract field %v from object %v", field, o)
 	}
