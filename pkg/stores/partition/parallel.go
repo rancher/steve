@@ -35,7 +35,7 @@ type ParallelPartitionLister struct {
 }
 
 // PartitionLister lists objects for one partition.
-type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error)
+type PartitionLister func(ctx context.Context, partition Partition, cont string, revision string) (*unstructured.UnstructuredList, []types.Warning, error)
 
 // Err returns the latest error encountered.
 func (p *ParallelPartitionLister) Err() error {
@@ -71,10 +71,10 @@ func indexOrZero(partitions []Partition, name string) int {
 	return 0
 }
 
-// List returns a stream of objects up to the requested limit.
+// List returns a stream of objects.
 // If the continue token is not empty, it decodes it and returns the stream
 // starting at the indicated marker.
-func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume, revision string) (<-chan []unstructured.Unstructured, error) {
+func (p *ParallelPartitionLister) List(ctx context.Context, resume, revision string) (<-chan []unstructured.Unstructured, error) {
 	var state listState
 	if resume != "" {
 		bytes, err := base64.StdEncoding.DecodeString(resume)
@@ -84,16 +84,12 @@ func (p *ParallelPartitionLister) List(ctx context.Context, limit int, resume, r
 		if err := json.Unmarshal(bytes, &state); err != nil {
 			return nil, err
 		}
-
-		if state.Limit > 0 {
-			limit = state.Limit
-		}
 	} else {
 		state.Revision = revision
 	}
 
 	result := make(chan []unstructured.Unstructured)
-	go p.feeder(ctx, state, limit, result)
+	go p.feeder(ctx, state, result)
 	return result, nil
 }
 
@@ -119,16 +115,10 @@ type listState struct {
 
 // feeder spawns a goroutine to list resources in each partition and feeds the
 // results, in order by partition index, into a channel.
-// If the sum of the results from all partitions (by namespaces or names) is
-// greater than the limit parameter from the user request or the default of
-// 100000, the result is truncated and a continue token is generated that
-// indicates the partition and offset for the client to start on in the next
-// request.
-func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, limit int, result chan []unstructured.Unstructured) {
+func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, result chan []unstructured.Unstructured) {
 	var (
-		sem      = semaphore.NewWeighted(p.Concurrency)
-		capacity = limit
-		last     chan struct{}
+		sem  = semaphore.NewWeighted(p.Concurrency)
+		last chan struct{}
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -141,7 +131,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 	}()
 
 	for i := indexOrZero(p.Partitions, state.PartitionName); i < len(p.Partitions); i++ {
-		if (limit > 0 && capacity <= 0) || isDone(ctx) {
+		if isDone(ctx) {
 			break
 		}
 
@@ -176,7 +166,7 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 				if partition.Name() == state.PartitionName {
 					cont = state.Continue
 				}
-				list, _, err := p.Lister(ctx, partition, cont, state.Revision, limit)
+				list, _, err := p.Lister(ctx, partition, cont, state.Revision)
 				if err != nil {
 					return err
 				}
@@ -199,28 +189,13 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 					list.Items = list.Items[state.Offset:]
 				}
 
-				// Case 1: the capacity has been reached across all goroutines but the list is still only partial,
-				// so save the state so that the next page can be requested later.
-				if limit > 0 && len(list.Items) > capacity {
-					result <- list.Items[:capacity]
-					// save state to redo this list at this offset
-					p.state = &listState{
-						Revision:      list.GetResourceVersion(),
-						PartitionName: partition.Name(),
-						Continue:      cont,
-						Offset:        capacity,
-						Limit:         limit,
-					}
-					capacity = 0
-					return nil
-				}
 				result <- list.Items
-				capacity -= len(list.Items)
-				// Case 2: all objects have been returned, we are done.
+
+				// Case 1: all objects have been returned, we are done.
 				if list.GetContinue() == "" {
 					return nil
 				}
-				// Case 3: we started at an offset and truncated the list to skip the objects up to the offset.
+				// Case 2: we started at an offset and truncated the list to skip the objects up to the offset.
 				// We're not yet up to capacity and have not retrieved every object,
 				// so loop again and get more data.
 				state.Continue = list.GetContinue()

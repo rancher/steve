@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"reflect"
-	"strconv"
 )
 
 // Partitioner is an interface for interacting with partitions.
@@ -88,7 +87,7 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 }
 
 func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
-	cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
+	cont string, revision string) (*unstructured.UnstructuredList, []types.Warning, error) {
 	store, err := s.Partitioner.Store(apiOp, partition)
 	if err != nil {
 		return nil, nil, err
@@ -103,11 +102,8 @@ func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, sche
 		values.Set("resourceVersion", revision)
 		values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
 	}
-	if limit > 0 {
-		values.Set("limit", strconv.Itoa(limit))
-	} else {
-		values.Del("limit")
-	}
+	values.Del("limit")
+
 	req.Request.URL.RawQuery = values.Encode()
 
 	return store.List(req, schema)
@@ -126,8 +122,8 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	lister := ParallelPartitionLister{
-		Lister: func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
-			return s.listPartition(ctx, apiOp, schema, partition, cont, revision, limit)
+		Lister: func(ctx context.Context, partition Partition, cont string, revision string) (*unstructured.UnstructuredList, []types.Warning, error) {
+			return s.listPartition(ctx, apiOp, schema, partition, cont, revision)
 		},
 		Concurrency: 3,
 		Partitions:  partitions,
@@ -135,7 +131,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	opts := listprocessor.ParseQuery(apiOp)
 
-	stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume, opts.Revision)
+	stream, err := lister.List(apiOp.Context(), opts.Resume, opts.Revision)
 	if err != nil {
 		return result, err
 	}
