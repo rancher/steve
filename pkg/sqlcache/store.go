@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/gob"
+	"fmt"
+	"reflect"
+	"strings"
+
+	// NewStore will create a new SQLite DB
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/cache"
-	"os"
-	"reflect"
 )
 
 // Store is a SQLite-backed cache.Store
 type Store struct {
+	name    string
 	typ     reflect.Type
 	keyFunc cache.KeyFunc
 
@@ -28,17 +32,14 @@ type Store struct {
 }
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(example any, keyFunc cache.KeyFunc, path string) (*Store, error) {
-	err := os.RemoveAll(path)
-	if err != nil {
-		return nil, err
-	}
+func NewStore(example any, keyFunc cache.KeyFunc, name string, path string) (*Store, error) {
 	db, err := sql.Open("sqlite3", path+"?mode=rwc&_journal_mode=memory&_synchronous=off&_mutex=no&_foreign_keys=on")
 	if err != nil {
 		return nil, err
 	}
 
 	s := &Store{
+		name:        Sanitize(name),
 		typ:         reflect.TypeOf(example),
 		keyFunc:     keyFunc,
 		db:          db,
@@ -46,19 +47,19 @@ func NewStore(example any, keyFunc cache.KeyFunc, path string) (*Store, error) {
 		afterDelete: []func(key string, tx *sql.Tx) error{},
 	}
 
-	err = s.InitExec(`CREATE TABLE objects (
+	err = s.InitExec(fmt.Sprintf(`CREATE TABLE "%s" (
 		key VARCHAR UNIQUE NOT NULL PRIMARY KEY,
 		object BLOB
-	)`)
+	)`, s.name))
 	if err != nil {
 		return nil, err
 	}
 
-	s.upsertStmt = s.Prepare(`INSERT INTO objects(key, object) VALUES (?, ?) ON CONFLICT DO UPDATE SET object = excluded.object`)
-	s.deleteStmt = s.Prepare(`DELETE FROM objects WHERE key = ?`)
-	s.getStmt = s.Prepare(`SELECT object FROM objects WHERE key = ?`)
-	s.listStmt = s.Prepare(`SELECT object FROM objects`)
-	s.listKeysStmt = s.Prepare(`SELECT key FROM objects`)
+	s.upsertStmt = s.Prepare(fmt.Sprintf(`INSERT INTO "%s"(key, object) VALUES (?, ?) ON CONFLICT DO UPDATE SET object = excluded.object`, s.name))
+	s.deleteStmt = s.Prepare(fmt.Sprintf(`DELETE FROM "%s" WHERE key = ?`, s.name))
+	s.getStmt = s.Prepare(fmt.Sprintf(`SELECT object FROM "%s" WHERE key = ?`, s.name))
+	s.listStmt = s.Prepare(fmt.Sprintf(`SELECT object FROM "%s"`, s.name))
+	s.listKeysStmt = s.Prepare(fmt.Sprintf(`SELECT key FROM "%s"`, s.name))
 
 	return s, nil
 }
@@ -238,6 +239,11 @@ func (s *Store) Resync() error {
 }
 
 /* Utilities */
+
+// Sanitize returns a string  that can be used in SQL as a name
+func Sanitize(s string) string {
+	return strings.ReplaceAll(s, "\"", ".")
+}
 
 // InitExec executes a statement as part of the DB initialization, closing the connection on error
 func (s *Store) InitExec(stmt string) error {

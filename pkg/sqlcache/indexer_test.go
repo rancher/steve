@@ -8,6 +8,7 @@ package sqlcache
 
 import (
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -165,7 +166,8 @@ func testStoreIndexMultiFunc(obj interface{}) ([]string, error) {
 }
 
 func TestIndexer(t *testing.T) {
-	store, err := NewIndexer(testStoreObject{}, testStoreKeyFunc, TEST_DB_LOCATION, testStoreIndexers())
+	os.RemoveAll(TEST_DB_LOCATION)
+	store, err := NewIndexer(testStoreObject{}, testStoreKeyFunc, "testStoreObject", TEST_DB_LOCATION, testStoreIndexers())
 	if err != nil {
 		t.Error(err)
 	}
@@ -184,7 +186,8 @@ func testVersionFunc(obj any) (int, error) {
 }
 
 func TestVersionedIndexer(t *testing.T) {
-	store, err := NewVersionedIndexer(testStoreObject{}, testStoreKeyFunc, testVersionFunc, TEST_DB_LOCATION, testStoreIndexers())
+	os.RemoveAll(TEST_DB_LOCATION)
+	store, err := NewVersionedIndexer(testStoreObject{}, testStoreKeyFunc, testVersionFunc, "testStoreObject", TEST_DB_LOCATION, testStoreIndexers())
 	if err != nil {
 		t.Error(err)
 	}

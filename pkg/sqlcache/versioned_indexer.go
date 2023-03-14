@@ -2,7 +2,8 @@ package sqlcache
 
 import (
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"fmt"
+
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -19,23 +20,23 @@ type VersionedIndexer struct {
 type VersionFunc func(obj any) (int, error)
 
 // NewVersionedIndexer returns an Indexer that also stores a range of versions in addition to the latest one
-func NewVersionedIndexer(example any, keyFunc cache.KeyFunc, versionFunc VersionFunc, path string, indexers cache.Indexers) (*VersionedIndexer, error) {
-	i, err := NewIndexer(example, keyFunc, path, indexers)
+func NewVersionedIndexer(example any, keyFunc cache.KeyFunc, versionFunc VersionFunc, name string, path string, indexers cache.Indexers) (*VersionedIndexer, error) {
+	i, err := NewIndexer(example, keyFunc, name, path, indexers)
 	if err != nil {
 		return nil, err
 	}
 
-	err = i.InitExec(`CREATE TABLE object_history (
+	err = i.InitExec(fmt.Sprintf(`CREATE TABLE "%s_history" (
 			key VARCHAR NOT NULL,
 			version INTEGER NOT NULL,
 			deleted_version INTEGER DEFAULT NULL,
 			object BLOB NOT NULL,
 			PRIMARY KEY (key, version)
-	   )`)
+	   )`, i.name))
 	if err != nil {
 		return nil, err
 	}
-	err = i.InitExec(`CREATE INDEX object_history_version ON object_history(version)`)
+	err = i.InitExec(fmt.Sprintf(`CREATE INDEX "%s_history_version_index" ON "%s_history"(version)`, i.name, i.name))
 	if err != nil {
 		return nil, err
 	}
@@ -47,14 +48,14 @@ func NewVersionedIndexer(example any, keyFunc cache.KeyFunc, versionFunc Version
 	v.RegisterAfterUpsert(v.AfterUpsert)
 	v.RegisterAfterDelete(v.AfterDelete)
 
-	v.addHistoryStmt = v.Prepare(`INSERT INTO object_history(key, version, deleted_version, object)
+	v.addHistoryStmt = v.Prepare(fmt.Sprintf(`INSERT INTO "%s_history"(key, version, deleted_version, object)
 		SELECT ?, ?, NULL, object
-			FROM objects
+			FROM "%s"
 			WHERE key = ?
 			ON CONFLICT
-			    DO UPDATE SET object = excluded.object, deleted_version = NULL`)
-	v.deleteHistoryStmt = v.Prepare(`UPDATE object_history SET deleted_version = (SELECT MAX(version) FROM object_history) WHERE key = ?`)
-	v.getByVersionStmt = v.Prepare(`SELECT object FROM object_history WHERE key = ? AND version = ? AND (deleted_version IS NULL OR deleted_version > ?)`)
+			    DO UPDATE SET object = excluded.object, deleted_version = NULL`, i.name, i.name))
+	v.deleteHistoryStmt = v.Prepare(fmt.Sprintf(`UPDATE "%s_history" SET deleted_version = (SELECT MAX(version) FROM "%s_history") WHERE key = ?`, i.name, i.name))
+	v.getByVersionStmt = v.Prepare(fmt.Sprintf(`SELECT object FROM "%s_history" WHERE key = ? AND version = ? AND (deleted_version IS NULL OR deleted_version > ?)`, i.name))
 
 	return v, nil
 }

@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
+	"os"
 	"strconv"
 	"testing"
 )
@@ -25,7 +26,8 @@ func TestListOptionIndexer(t *testing.T) {
 	example, _ := u.ToUnstructured(&v1.Pod{})
 	fields := [][]string{{"metadata", "labels", "Brand"}, {"metadata", "labels", "Color"}}
 
-	l, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, TEST_DB_LOCATION)
+	os.RemoveAll(TEST_DB_LOCATION)
+	l, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, "pods", TEST_DB_LOCATION)
 	if err != nil {
 		t.Error(err)
 	}
@@ -229,7 +231,8 @@ func TestListOptionIndexerWithPartitions(t *testing.T) {
 	example, _ := u.ToUnstructured(&v1.Pod{})
 	fields := [][]string{{"metadata", "labels", "Brand"}, {"metadata", "labels", "Color"}}
 
-	l, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, TEST_DB_LOCATION)
+	os.RemoveAll(TEST_DB_LOCATION)
+	l, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, "pods", TEST_DB_LOCATION)
 	if err != nil {
 		t.Error(err)
 	}

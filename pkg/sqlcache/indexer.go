@@ -3,10 +3,10 @@ package sqlcache
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
+	"strings"
+
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/cache"
-	"strings"
 )
 
 // Indexer is a SQLite-backed cache.Indexer which builds upon Store adding an index table
@@ -22,7 +22,7 @@ type Indexer struct {
 }
 
 // NewIndexer returns a cache.Indexer backed by SQLite for objects of the given example type
-func NewIndexer(example any, keyFunc cache.KeyFunc, path string, indexers cache.Indexers) (*Indexer, error) {
+func NewIndexer(example any, keyFunc cache.KeyFunc, name string, path string, indexers cache.Indexers) (*Indexer, error) {
 	// sanity checks first
 	for key := range indexers {
 		if strings.Contains(key, `"`) {
@@ -30,21 +30,21 @@ func NewIndexer(example any, keyFunc cache.KeyFunc, path string, indexers cache.
 		}
 	}
 
-	s, err := NewStore(example, keyFunc, path)
+	s, err := NewStore(example, keyFunc, name, path)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.InitExec(`CREATE TABLE indices (
+	err = s.InitExec(fmt.Sprintf(`CREATE TABLE "%s_indices" (
 			name VARCHAR NOT NULL,
 			value VARCHAR NOT NULL,
-			key VARCHAR NOT NULL REFERENCES objects(key) ON DELETE CASCADE,
+			key VARCHAR NOT NULL REFERENCES "%s"(key) ON DELETE CASCADE,
 			PRIMARY KEY (name, value, key)
-        )`)
+        )`, s.name, s.name))
 	if err != nil {
 		return nil, err
 	}
-	err = s.InitExec(`CREATE INDEX indices_name_value_index ON indices(name, value)`)
+	err = s.InitExec(fmt.Sprintf(`CREATE INDEX "%s_indices_index" ON "%s_indices"(name, value)`, s.name, s.name))
 	if err != nil {
 		return nil, err
 	}
@@ -55,15 +55,15 @@ func NewIndexer(example any, keyFunc cache.KeyFunc, path string, indexers cache.
 	}
 	i.RegisterAfterUpsert(i.AfterUpsert)
 
-	i.deleteIndicesStmt = s.Prepare(`DELETE FROM indices WHERE key = ?`)
-	i.addIndexStmt = s.Prepare(`INSERT INTO indices(name, value, key) VALUES (?, ?, ?)`)
-	i.listByIndexStmt = s.Prepare(`SELECT object FROM objects
+	i.deleteIndicesStmt = s.Prepare(fmt.Sprintf(`DELETE FROM "%s_indices" WHERE key = ?`, s.name))
+	i.addIndexStmt = s.Prepare(fmt.Sprintf(`INSERT INTO "%s_indices"(name, value, key) VALUES (?, ?, ?)`, s.name))
+	i.listByIndexStmt = s.Prepare(fmt.Sprintf(`SELECT object FROM "%s"
 			WHERE key IN (
-			    SELECT key FROM indices
+			    SELECT key FROM "%s_indices"
 			    	WHERE name = ? AND value = ?
-			)`)
-	i.listKeysByIndexStmt = s.Prepare(`SELECT DISTINCT key FROM indices WHERE name = ? AND value = ?`)
-	i.listIndexValuesStmt = s.Prepare(`SELECT DISTINCT value FROM indices WHERE name = ?`)
+			)`, s.name, s.name))
+	i.listKeysByIndexStmt = s.Prepare(fmt.Sprintf(`SELECT DISTINCT key FROM "%s_indices" WHERE name = ? AND value = ?`, s.name))
+	i.listIndexValuesStmt = s.Prepare(fmt.Sprintf(`SELECT DISTINCT value FROM "%s_indices" WHERE name = ?`, s.name))
 
 	return i, nil
 }
@@ -120,13 +120,13 @@ func (i *Indexer) Index(indexName string, obj any) ([]any, error) {
 
 	// atypical case - more than one value to lookup
 	// HACK: sql.Statement.Query does not allow to pass slices in as of go 1.19 - create an ad-hoc statement
-	query := fmt.Sprintf(`
-			SELECT object FROM objects
+	query := fmt.Sprintf(fmt.Sprintf(`
+			SELECT object FROM "%s"
 				WHERE key IN (
-					SELECT key FROM indices
+					SELECT key FROM "%s_indices"
 						WHERE name = ? AND value IN (?%s)
 				)
-		`, strings.Repeat(", ?", len(values)-1))
+		`, i.name, i.name, strings.Repeat(", ?", len(values)-1)))
 	stmt := i.Prepare(query)
 
 	// HACK: Query will accept []any but not []string

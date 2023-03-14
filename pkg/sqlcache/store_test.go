@@ -135,7 +135,7 @@ type testStoreObject struct {
 }
 
 func TestStore(t *testing.T) {
-	store, err := NewStore(testStoreObject{}, testStoreKeyFunc, TEST_DB_LOCATION)
+	store, err := NewStore(testStoreObject{}, testStoreKeyFunc, "testStoreObject", TEST_DB_LOCATION)
 	if err != nil {
 		t.Error(err)
 	}

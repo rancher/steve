@@ -2,6 +2,8 @@ package sqlcache
 
 import (
 	"context"
+	"time"
+
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -10,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
 // Informer is a SQLite-backed cache.SharedIndexInformer that can execute queries on listprocessor structs
@@ -51,7 +52,8 @@ func NewInformer(client dynamic.ResourceInterface, gvk schema.GroupVersionKind, 
 	// temp: make a default selection of interesting indexedFields
 	fields := [][]string{{"metadata", "creationTimestamp"}}
 
-	loi, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, path)
+	name := gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
+	loi, err := NewListOptionIndexer(example, cache.DeletionHandlingMetaNamespaceKeyFunc, fields, name, path)
 	if err != nil {
 		return nil, err
 	}
