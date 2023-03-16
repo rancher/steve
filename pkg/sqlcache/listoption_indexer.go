@@ -146,29 +146,35 @@ func (l *ListOptionIndexer) AfterUpsert(key string, obj any, tx *sql.Tx) error {
 }
 
 // ListByOptions returns objects according to the specified list options and partitions
-// result is an unstructured.UnstructuredList, a revision string or an error
-func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
+// result is an unstructured.UnstructuredList, a revision string, the continue token for the next page (or an error)
+func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, string, error) {
 	// 1- Intro: SELECT and JOIN clauses
 	stmt := fmt.Sprintf(`SELECT o.object FROM "%s_history" o`, l.name)
 	stmt += "\n  "
 	stmt += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key AND o.version = f.version`, l.name)
 	params := []any{}
 
-	// 2- Filtering: WHERE clauses (from lo .Filters and .Revision)
+	// 2- Filtering: WHERE clauses (from lo.Filters)
 	whereClauses := []string{}
 	for _, filter := range lo.Filters {
 		columnName := toColumnName(filter.Field)
 		whereClauses = append(whereClauses, fmt.Sprintf(`f."%s" LIKE ?`, columnName))
 		params = append(params, fmt.Sprintf(`%%%s%%`, filter.Match))
 	}
-	if lo.Revision == "" {
+
+	// WHERE clauses (from lo.Revision or lo.Resume)
+	revision := lo.Revision
+	if lo.Resume != "" {
+		revision = strings.Split(lo.Resume, ",")[0]
+	}
+	if revision == "" {
 		// latest
 		whereClauses = append(whereClauses, fmt.Sprintf(`o.version = (SELECT MAX(o2.version) FROM "%s_history" o2 WHERE o2.key = o.key)`, l.name))
 		whereClauses = append(whereClauses, `o.deleted_version IS NULL`)
 	} else {
-		version, err := strconv.Atoi(lo.Revision)
+		version, err := strconv.Atoi(revision)
 		if err != nil {
-			return nil, "", errors.Wrapf(err, "Could not parse Revision %s", lo.Revision)
+			return nil, "", "", errors.Wrapf(err, "Could not parse Revision %s", lo.Revision)
 		}
 		whereClauses = append(whereClauses, fmt.Sprintf(`o.version = (SELECT MAX(o2.version) FROM "%s_history" o2 WHERE o2.key = o.key AND o2.version <= ?)`, l.name))
 		params = append(params, version)
@@ -254,19 +260,42 @@ func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partiti
 	if len(orderByClauses) > 0 {
 		stmt += "\n  ORDER BY "
 		stmt += strings.Join(orderByClauses, ", ")
+	} else {
+		// make sure one default order is always picked
+		stmt += "\n  ORDER BY f.\"metadata.name\" ASC "
 	}
 
-	// 3- Pagination: LIMIT/OFFSET clauses (from lo.Pagination)
+	// 3- Pagination: LIMIT clause (from lo.Pagination and/or lo.ChunkSize/lo.Resume)
 	limitClause := ""
 	offsetClause := ""
-	if lo.Pagination.PageSize >= 1 {
+	// take the smallest limit between lo.Pagination and lo.ChunkSize
+	limit := lo.Pagination.PageSize
+	if limit == 0 || (lo.ChunkSize > 0 && lo.ChunkSize < limit) {
+		limit = lo.ChunkSize
+	}
+	if limit > 0 {
 		limitClause = "\n  LIMIT ?"
-		params = append(params, lo.Pagination.PageSize)
+		// note: retrieve one extra row. If it comes back, then there are more pages and a continueToken should be created
+		params = append(params, limit+1)
+	}
 
-		if lo.Pagination.Page >= 1 {
-			offsetClause = "\n  OFFSET ?"
-			params = append(params, lo.Pagination.PageSize*(lo.Pagination.Page-1))
+	// OFFSET clause (from lo.Pagination and/or lo.Resume)
+	offset := 0
+	if lo.Resume != "" {
+		offsetString := strings.Split(lo.Resume, ",")[1]
+		offsetInt, err := strconv.Atoi(offsetString)
+		if err != nil {
+			return nil, "", "", err
 		}
+		offset = offsetInt
+	}
+	if lo.Pagination.Page >= 1 {
+		offset += lo.Pagination.PageSize * (lo.Pagination.Page - 1)
+	}
+
+	if offset > 0 {
+		offsetClause = "\n  OFFSET ?"
+		params = append(params, offset)
 	}
 
 	stmt += limitClause
@@ -279,20 +308,26 @@ func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partiti
 	// execute
 	items, err := l.QueryObjects(l.Prepare(stmt), params...)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 
 	version := lo.Revision
-
 	if version == "" {
 		versions, err := l.QueryStrings(l.lastVersion)
 		if err != nil {
-			return nil, "", err
+			return nil, "", "", err
 		}
 		version = versions[0]
 	}
 
-	return toUnstructuredList(items), version, nil
+	continueToken := ""
+	if limit > 0 && len(items) == limit+1 {
+		// remove extra row
+		items = items[:limit]
+		continueToken = fmt.Sprintf("%s,%d", version, offset+limit)
+	}
+
+	return toUnstructuredList(items), version, continueToken, nil
 }
 
 /* Utilities */

@@ -75,7 +75,10 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	store := s.Partitioner.Store()
 
-	list, revision, err := store.ListByPartitions(apiOp, schema, partitions)
+	list, revision, continueToken, err := store.ListByPartitions(apiOp, schema, partitions)
+	if err != nil {
+		return result, err
+	}
 
 	result.Count = len(list)
 
@@ -85,7 +88,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	}
 
 	result.Revision = revision
-	result.Pages = 0
+	result.Continue = continueToken
 	return result, nil
 }
 

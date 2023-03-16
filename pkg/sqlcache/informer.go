@@ -18,8 +18,8 @@ import (
 type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
-	// result is an unstructured.UnstructuredList, a revision string or an error
-	ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	// see ListOptionIndexer.ListByOptions
+	ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, string, error)
 }
 
 // informer implements Informer
@@ -68,7 +68,7 @@ func NewInformer(client dynamic.ResourceInterface, gvk schema.GroupVersionKind, 
 }
 
 // ListByOptions returns objects according to the specified list options and partitions
-// result is an unstructured.UnstructuredList, a revision string or an error
-func (i *informer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
+// see ListOptionIndexer.ListByOptions
+func (i *informer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, string, error) {
 	return i.indexer.ListByOptions(lo, partitions, namespace)
 }

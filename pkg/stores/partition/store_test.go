@@ -175,7 +175,7 @@ func (m *mockStore) WatchByPartitions(apiOp *types.APIRequest, schema *types.API
 	panic("implement me")
 }
 
-func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
+func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, string, error) {
 	list := []unstructured.Unstructured{}
 	revision := ""
 	for _, partition := range partitions {
@@ -183,13 +183,13 @@ func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APIS
 		apiOp.Namespace = partition.Namespace
 		partial, _, err := m.List(apiOp, schema)
 		if err != nil {
-			return nil, "", err
+			return nil, "", "", err
 		}
 
 		list = append(list, partial.Items...)
 		revision = partial.GetResourceVersion()
 	}
-	return list, revision, nil
+	return list, revision, "", nil
 }
 
 func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
