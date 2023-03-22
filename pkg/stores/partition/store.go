@@ -3,105 +3,45 @@
 package partition
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"reflect"
-	"strconv"
-	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
+	"github.com/rancher/steve/pkg/stores/proxy"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/apiserver/pkg/endpoints/request"
-)
-
-const (
-	// Number of list request entries to save before cache replacement.
-	// Not related to the total size in memory of the cache, as any item could take any amount of memory.
-	cacheSizeEnv     = "CATTLE_REQUEST_CACHE_SIZE_INT"
-	defaultCacheSize = 1000
-	// Set to non-empty to disable list request caching entirely.
-	cacheDisableEnv = "CATTLE_REQUEST_CACHE_DISABLED"
 )
 
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
-	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (Partition, error)
-	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]Partition, error)
-	Store(apiOp *types.APIRequest, partition Partition) (UnstructuredStore, error)
+	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error)
+	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error)
+	Store() proxy.Store
 }
 
-// Store implements types.Store for partitions.
+// Store implements types.proxyStore for partitions.
 type Store struct {
 	Partitioner Partitioner
-	listCache   *cache.LRUExpireCache
 	asl         accesscontrol.AccessSetLookup
 }
 
-// NewStore creates a types.Store implementation with a partitioner and an LRU expiring cache for list responses.
+// NewStore creates a types.proxyStore implementation with a partitioner
 func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup) *Store {
-	cacheSize := defaultCacheSize
-	if v := os.Getenv(cacheSizeEnv); v != "" {
-		sizeInt, err := strconv.Atoi(v)
-		if err == nil {
-			cacheSize = sizeInt
-		}
-	}
 	s := &Store{
 		Partitioner: partitioner,
 		asl:         asl,
 	}
-	if v := os.Getenv(cacheDisableEnv); v == "" {
-		s.listCache = cache.NewLRUExpireCache(cacheSize)
-	}
 	return s
-}
-
-type cacheKey struct {
-	chunkSize    int
-	resume       string
-	filters      string
-	sort         string
-	pageSize     int
-	accessID     string
-	resourcePath string
-	revision     string
-}
-
-// UnstructuredStore is like types.Store but deals in k8s unstructured objects instead of apiserver types.
-type UnstructuredStore interface {
-	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
-	List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error)
-	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error)
-	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
-	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
-	Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error)
-}
-
-func (s *Store) getStore(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (UnstructuredStore, error) {
-	p, err := s.Partitioner.Lookup(apiOp, schema, verb, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.Partitioner.Store(apiOp, p)
 }
 
 // Delete deletes an object from a store.
 func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "delete", id)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.Delete(apiOp, schema, id)
 	if err != nil {
@@ -112,42 +52,13 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 // ByID looks up a single object by its ID.
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "get", id)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.ByID(apiOp, schema, id)
 	if err != nil {
 		return types.APIObject{}, err
 	}
 	return toAPI(schema, obj, warnings), nil
-}
-
-func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
-	cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
-	store, err := s.Partitioner.Store(apiOp, partition)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	req := apiOp.Clone()
-	req.Request = req.Request.Clone(ctx)
-
-	values := req.Request.URL.Query()
-	values.Set("continue", cont)
-	if revision != "" && cont == "" {
-		values.Set("resourceVersion", revision)
-		values.Set("resourceVersionMatch", "Exact") // supported since k8s 1.19
-	}
-	if limit > 0 {
-		values.Set("limit", strconv.Itoa(limit))
-	} else {
-		values.Del("limit")
-	}
-	req.Request.URL.RawQuery = values.Encode()
-
-	return store.List(req, schema)
 }
 
 // List returns a list of objects across all applicable partitions.
@@ -162,97 +73,28 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		return result, err
 	}
 
-	lister := ParallelPartitionLister{
-		Lister: func(ctx context.Context, partition Partition, cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
-			return s.listPartition(ctx, apiOp, schema, partition, cont, revision, limit)
-		},
-		Concurrency: 3,
-		Partitions:  partitions,
-	}
+	store := s.Partitioner.Store()
 
-	opts := listprocessor.ParseQuery(apiOp)
-
-	key, err := s.getCacheKey(apiOp, opts)
+	list, revision, continueToken, err := store.ListByPartitions(apiOp, schema, partitions)
 	if err != nil {
 		return result, err
 	}
 
-	var list []unstructured.Unstructured
-	if key.revision != "" && s.listCache != nil {
-		cachedList, ok := s.listCache.Get(key)
-		if ok {
-			logrus.Tracef("found cached list for query %s?%s", apiOp.Request.URL.Path, apiOp.Request.URL.RawQuery)
-			list = cachedList.(*unstructured.UnstructuredList).Items
-			result.Continue = cachedList.(*unstructured.UnstructuredList).GetContinue()
-		}
-	}
-	if list == nil { // did not look in cache or was not found in cache
-		stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume, opts.Revision)
-		if err != nil {
-			return result, err
-		}
-		list = listprocessor.FilterList(stream, opts.Filters)
-		// Check for any errors returned during the parallel listing requests.
-		// We don't want to cache the list or bother with further processing if the list is empty or corrupt.
-		// FilterList guarantees that the stream has been consumed and the error is populated if there is any.
-		if lister.Err() != nil {
-			return result, lister.Err()
-		}
-		list = listprocessor.SortList(list, opts.Sort)
-		key.revision = lister.Revision()
-		listToCache := &unstructured.UnstructuredList{
-			Items: list,
-		}
-		c := lister.Continue()
-		if c != "" {
-			listToCache.SetContinue(c)
-		}
-		if s.listCache != nil {
-			s.listCache.Add(key, listToCache, 30*time.Minute)
-		}
-		result.Continue = lister.Continue()
-	}
 	result.Count = len(list)
-	list, pages := listprocessor.PaginateList(list, opts.Pagination)
 
 	for _, item := range list {
 		item := item
 		result.Objects = append(result.Objects, toAPI(schema, &item, nil))
 	}
 
-	result.Revision = key.revision
-	result.Pages = pages
-	return result, lister.Err()
-}
-
-// getCacheKey returns a hashable struct identifying a unique user and request.
-func (s *Store) getCacheKey(apiOp *types.APIRequest, opts *listprocessor.ListOptions) (cacheKey, error) {
-	user, ok := request.UserFrom(apiOp.Request.Context())
-	if !ok {
-		return cacheKey{}, fmt.Errorf("could not find user in request")
-	}
-	filters := ""
-	for _, f := range opts.Filters {
-		filters = filters + f.String()
-	}
-	return cacheKey{
-		chunkSize:    opts.ChunkSize,
-		resume:       opts.Resume,
-		filters:      filters,
-		sort:         opts.Sort.String(),
-		pageSize:     opts.Pagination.PageSize(),
-		accessID:     s.asl.AccessFor(user).ID,
-		resourcePath: apiOp.Request.URL.Path,
-		revision:     opts.Revision,
-	}, nil
+	result.Revision = revision
+	result.Continue = continueToken
+	return result, nil
 }
 
 // Create creates a single object in the store.
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "create", "")
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.Create(apiOp, schema, data)
 	if err != nil {
@@ -263,10 +105,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 
 // Update updates a single object in the store.
 func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (types.APIObject, error) {
-	target, err := s.getStore(apiOp, schema, "update", id)
-	if err != nil {
-		return types.APIObject{}, err
-	}
+	target := s.Partitioner.Store()
 
 	obj, warnings, err := target.Update(apiOp, schema, data, id)
 	if err != nil {
@@ -282,37 +121,20 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(apiOp.Context())
-	apiOp = apiOp.Clone().WithContext(ctx)
+	store := s.Partitioner.Store()
 
-	eg := errgroup.Group{}
 	response := make(chan types.APIEvent)
-
-	for _, partition := range partitions {
-		store, err := s.Partitioner.Store(apiOp, partition)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-
-		eg.Go(func() error {
-			defer cancel()
-			c, err := store.Watch(apiOp, schema, wr)
-			if err != nil {
-				return err
-			}
-			for i := range c {
-				response <- toAPIEvent(apiOp, schema, i)
-			}
-			return nil
-		})
+	c, err := store.WatchByPartitions(apiOp, schema, wr, partitions)
+	if err != nil {
+		return nil, err
 	}
 
 	go func() {
 		defer close(response)
-		<-ctx.Done()
-		eg.Wait()
-		cancel()
+
+		for i := range c {
+			response <- toAPIEvent(schema, i)
+		}
 	}()
 
 	return response, nil
@@ -364,7 +186,7 @@ func moveToUnderscore(obj *unstructured.Unstructured) *unstructured.Unstructured
 	return obj
 }
 
-func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Event) types.APIEvent {
+func toAPIEvent(schema *types.APISchema, event watch.Event) types.APIEvent {
 	name := types.ChangeAPIEvent
 	switch event.Type {
 	case watch.Deleted:
@@ -394,4 +216,21 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 
 	apiEvent.Revision = m.GetResourceVersion()
 	return apiEvent
+}
+
+// NewProxyStore returns a wrapped types.proxyStore.
+func NewProxyStore(clientGetter proxy.ClientGetter, notifier proxy.RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
+	return proxy.NewErrorStore(
+		proxy.NewWatchRefresh(
+			NewStore(
+				&rbacPartitioner{
+					proxyStore: proxy.NewProxyStore(
+						clientGetter, notifier,
+					),
+				},
+				lookup,
+			),
+			lookup,
+		),
+	)
 }
