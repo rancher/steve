@@ -7,7 +7,14 @@ replace (
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20190514055449-b30ab9de040e
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
 
-	k8s.io/client-go => github.com/rancher/client-go v1.25.4-rancher1
+	k8s.io/client-go => github.com/vardhaman22/rancher-client-go v1.26.4-rancher1
+)
+
+replace (
+	github.com/rancher/apiserver => github.com/vardhaman22/apiserver v1.26.4-rancher1
+	github.com/rancher/dynamiclistener => github.com/vardhaman22/dynamiclistener v1.26.4-rancher1
+	github.com/rancher/norman => github.com/vardhaman22/norman v1.26.4-rancher1
+	github.com/rancher/wrangler => github.com/vardhaman22/wrangler v1.26.4-rancher1
 )
 
 require (
@@ -24,11 +31,11 @@ require (
 	github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99
 	github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a
 	github.com/rancher/wrangler v1.1.0
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
-	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
+	golang.org/x/sync v0.1.0
 	k8s.io/api v0.26.4
 	k8s.io/apiextensions-apiserver v0.26.4
 	k8s.io/apimachinery v0.26.4
