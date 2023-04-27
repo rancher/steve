@@ -7,7 +7,7 @@ replace (
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20190514055449-b30ab9de040e
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
 
-	k8s.io/client-go => github.com/rancher/client-go v1.25.4-rancher1
+	k8s.io/client-go => github.com/rancher/client-go v11.0.0+incompatible
 )
 
 require (
