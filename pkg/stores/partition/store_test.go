@@ -1941,8 +1941,8 @@ func TestList(t *testing.T) {
 				}
 			}
 			asl := &mockAccessSetLookup{userRoles: test.access}
-			if test.disableCache {
-				t.Setenv("CATTLE_REQUEST_CACHE_DISABLED", "Y")
+			if !test.disableCache {
+				t.Setenv("CATTLE_REQUEST_CACHE_DISABLED", "false")
 			}
 			store := NewStore(mockPartitioner{
 				stores:     stores,
@@ -2024,7 +2024,6 @@ func TestListByRevision(t *testing.T) {
 		},
 	}, asl)
 	req := newRequest("", "user1")
-	t.Setenv("CATTLE_REQUEST_CACHE_DISABLED", "Y")
 
 	got, gotErr := store.List(req, schema)
 	assert.Nil(t, gotErr)
