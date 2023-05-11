@@ -29,7 +29,7 @@ const (
 	// Not related to the total size in memory of the cache, as any item could take any amount of memory.
 	cacheSizeEnv     = "CATTLE_REQUEST_CACHE_SIZE_INT"
 	defaultCacheSize = 1000
-	// Set to non-empty to disable list request caching entirely.
+	// Set to "false" to enable list request caching.
 	cacheDisableEnv = "CATTLE_REQUEST_CACHE_DISABLED"
 )
 
@@ -60,7 +60,7 @@ func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup) *Store
 		Partitioner: partitioner,
 		asl:         asl,
 	}
-	if v := os.Getenv(cacheDisableEnv); v == "" {
+	if v := os.Getenv(cacheDisableEnv); v == "false" {
 		s.listCache = cache.NewLRUExpireCache(cacheSize)
 	}
 	return s
