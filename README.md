@@ -117,6 +117,36 @@ item is included in the list.
 /v1/{type}?filter=spec.containers.image=alpine
 ```
 
+#### `projectsornamespaces`
+
+Resources can also be filtered by the Rancher projects their namespaces belong
+to. Since a project isn't an intrinsic part of the resource itself, the filter
+parameter for filtering by projects is separate from the main `filter`
+parameter. This query parameter is only applicable when steve is runnning in
+concert with Rancher.
+
+The list can be filtered by either projects or namespaces or both.
+
+Filtering by a single project or a single namespace:
+
+```
+/v1/{type}?projectsornamespaces=p1
+```
+
+Filtering by multiple projects or namespaces is done with a comma separated
+list. A resource matching any project or namespace in the list is included in
+the result:
+
+```
+/v1/{type}?projectsornamespaces=p1,n1,n2
+```
+
+The list can be negated to exclude results:
+
+```
+/v1/{type}?projectsornamespaces!=p1,n1,n2
+```
+
 #### `sort`
 
 Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).

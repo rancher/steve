@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -42,13 +43,14 @@ type Partitioner interface {
 
 // Store implements types.Store for partitions.
 type Store struct {
-	Partitioner Partitioner
-	listCache   *cache.LRUExpireCache
-	asl         accesscontrol.AccessSetLookup
+	Partitioner    Partitioner
+	listCache      *cache.LRUExpireCache
+	asl            accesscontrol.AccessSetLookup
+	namespaceCache corecontrollers.NamespaceCache
 }
 
 // NewStore creates a types.Store implementation with a partitioner and an LRU expiring cache for list responses.
-func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup) *Store {
+func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) *Store {
 	cacheSize := defaultCacheSize
 	if v := os.Getenv(cacheSizeEnv); v != "" {
 		sizeInt, err := strconv.Atoi(v)
@@ -57,8 +59,9 @@ func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup) *Store
 		}
 	}
 	s := &Store{
-		Partitioner: partitioner,
-		asl:         asl,
+		Partitioner:    partitioner,
+		asl:            asl,
+		namespaceCache: namespaceCache,
 	}
 	if v := os.Getenv(cacheDisableEnv); v == "false" {
 		s.listCache = cache.NewLRUExpireCache(cacheSize)
@@ -203,6 +206,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		listToCache := &unstructured.UnstructuredList{
 			Items: list,
 		}
+		list = listprocessor.FilterByProjectsAndNamespaces(list, opts.ProjectsOrNamespaces, s.namespaceCache)
 		c := lister.Continue()
 		if c != "" {
 			listToCache.SetContinue(c)

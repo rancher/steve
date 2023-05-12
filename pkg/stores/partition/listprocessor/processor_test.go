@@ -3,8 +3,12 @@ package listprocessor
 import (
 	"testing"
 
+	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 func TestFilterList(t *testing.T) {
@@ -2566,4 +2570,670 @@ func TestPaginateList(t *testing.T) {
 			assert.Equal(t, test.wantPages, gotPages)
 		})
 	}
+}
+
+func TestFilterByProjectsAndNamespaces(t *testing.T) {
+	tests := []struct {
+		name    string
+		objects []unstructured.Unstructured
+		filter  ProjectsOrNamespacesFilter
+		want    []unstructured.Unstructured
+	}{
+		{
+			name: "filter by one project",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"p-abcde": struct{}{},
+				},
+				op: eq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by multiple projects",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"p-abcde": struct{}{},
+					"p-fghij": struct{}{},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by one namespace",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"n1": struct{}{},
+				},
+				op: eq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by multiple namespaces",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"n1": struct{}{},
+					"n2": struct{}{},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by namespaces and projects",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"n1":      struct{}{},
+					"p-fghij": struct{}{},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no matches",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"foobar": struct{}{},
+				},
+			},
+			want: []unstructured.Unstructured{},
+		},
+		{
+			name: "no filters",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by one project negated",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"p-abcde": struct{}{},
+				},
+				op: notEq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by multiple projects negated",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"p-abcde": struct{}{},
+					"p-fghij": struct{}{},
+				},
+				op: notEq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by one namespace negated",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"n1": struct{}{},
+				},
+				op: notEq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by multiple namespaces negated",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"n1": struct{}{},
+					"n2": struct{}{},
+				},
+				op: notEq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filter by namespaces and projects negated",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "n1",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "honeycrisp",
+							"namespace": "n2",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+			filter: ProjectsOrNamespacesFilter{
+				filter: map[string]struct{}{
+					"n1":      struct{}{},
+					"p-fghij": struct{}{},
+				},
+				op: notEq,
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "granny-smith",
+							"namespace": "n3",
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := FilterByProjectsAndNamespaces(test.objects, test.filter, mockNamespaceCache{})
+			assert.Equal(t, test.want, got)
+		})
+	}
+}
+
+var namespaces = map[string]*corev1.Namespace{
+	"n1": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n1",
+			Labels: map[string]string{
+				"field.cattle.io/projectId": "p-abcde",
+			},
+		},
+	},
+	"n2": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n2",
+			Labels: map[string]string{
+				"field.cattle.io/projectId": "p-fghij",
+			},
+		},
+	},
+	"n3": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n3",
+			Labels: map[string]string{
+				"field.cattle.io/projectId": "p-klmno",
+			},
+		},
+	},
+	"n4": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n4",
+		},
+	},
+}
+
+type mockNamespaceCache struct{}
+
+func (m mockNamespaceCache) Get(name string) (*corev1.Namespace, error) {
+	return namespaces[name], nil
+}
+
+func (m mockNamespaceCache) List(selector labels.Selector) ([]*corev1.Namespace, error) {
+	panic("not implemented")
+}
+func (m mockNamespaceCache) AddIndexer(indexName string, indexer corecontrollers.NamespaceIndexer) {
+	panic("not implemented")
+}
+func (m mockNamespaceCache) GetByIndex(indexName, key string) ([]*corev1.Namespace, error) {
+	panic("not implemented")
 }

@@ -12,9 +12,13 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -1928,6 +1932,118 @@ func TestList(t *testing.T) {
 				{"all": 1},
 			},
 		},
+		{
+			name: "with project filters",
+			apiOps: []*types.APIRequest{
+				newRequest("projectsornamespaces=p-abcde", "user1"),
+				newRequest("projectsornamespaces=p-abcde,p-fghij", "user1"),
+				newRequest("projectsornamespaces=p-abcde,n2", "user1"),
+				newRequest("projectsornamespaces!=p-abcde", "user1"),
+				newRequest("projectsornamespaces!=p-abcde,p-fghij", "user1"),
+				newRequest("projectsornamespaces!=p-abcde,n2", "user1"),
+				newRequest("projectsornamespaces=foobar", "user1"),
+				newRequest("projectsornamespaces!=foobar", "user1"),
+			},
+			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+				{
+					"user1": "roleA",
+				},
+			},
+			partitions: map[string][]Partition{
+				"user1": {
+					mockPartition{
+						name: "all",
+					},
+				},
+			},
+			objects: map[string]*unstructured.UnstructuredList{
+				"all": {
+					Items: []unstructured.Unstructured{
+						newApple("fuji").withNamespace("n1").Unstructured,
+						newApple("granny-smith").withNamespace("n1").Unstructured,
+						newApple("bramley").withNamespace("n2").Unstructured,
+						newApple("crispin").withNamespace("n3").Unstructured,
+					},
+				},
+			},
+			want: []types.APIObjectList{
+				{
+					Count: 2,
+					Objects: []types.APIObject{
+						newApple("fuji").withNamespace("n1").toObj(),
+						newApple("granny-smith").withNamespace("n1").toObj(),
+					},
+				},
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").withNamespace("n1").toObj(),
+						newApple("granny-smith").withNamespace("n1").toObj(),
+						newApple("bramley").withNamespace("n2").toObj(),
+					},
+				},
+				{
+					Count: 3,
+					Objects: []types.APIObject{
+						newApple("fuji").withNamespace("n1").toObj(),
+						newApple("granny-smith").withNamespace("n1").toObj(),
+						newApple("bramley").withNamespace("n2").toObj(),
+					},
+				},
+				{
+					Count: 2,
+					Objects: []types.APIObject{
+						newApple("bramley").withNamespace("n2").toObj(),
+						newApple("crispin").withNamespace("n3").toObj(),
+					},
+				},
+				{
+					Count: 1,
+					Objects: []types.APIObject{
+						newApple("crispin").withNamespace("n3").toObj(),
+					},
+				},
+				{
+					Count: 1,
+					Objects: []types.APIObject{
+						newApple("crispin").withNamespace("n3").toObj(),
+					},
+				},
+				{
+					Count: 0,
+				},
+				{
+					Count: 4,
+					Objects: []types.APIObject{
+						newApple("fuji").withNamespace("n1").toObj(),
+						newApple("granny-smith").withNamespace("n1").toObj(),
+						newApple("bramley").withNamespace("n2").toObj(),
+						newApple("crispin").withNamespace("n3").toObj(),
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1947,7 +2063,7 @@ func TestList(t *testing.T) {
 			store := NewStore(mockPartitioner{
 				stores:     stores,
 				partitions: test.partitions,
-			}, asl)
+			}, asl, mockNamespaceCache{})
 			for i, req := range test.apiOps {
 				got, gotErr := store.List(req, schema)
 				assert.Nil(t, gotErr)
@@ -2022,7 +2138,7 @@ func TestListByRevision(t *testing.T) {
 				},
 			},
 		},
-	}, asl)
+	}, asl, mockNamespaceCache{})
 	req := newRequest("", "user1")
 
 	got, gotErr := store.List(req, schema)
@@ -2214,9 +2330,15 @@ func newApple(name string) apple {
 }
 
 func (a apple) toObj() types.APIObject {
+	meta := a.Object["metadata"].(map[string]interface{})
+	id := meta["name"].(string)
+	ns, ok := meta["namespace"]
+	if ok {
+		id = ns.(string) + "/" + id
+	}
 	return types.APIObject{
 		Type:   "apple",
-		ID:     a.Object["metadata"].(map[string]interface{})["name"].(string),
+		ID:     id,
 		Object: &a.Unstructured,
 	}
 }
@@ -2225,6 +2347,11 @@ func (a apple) with(data map[string]string) apple {
 	for k, v := range data {
 		a.Object["data"].(map[string]interface{})[k] = v
 	}
+	return a
+}
+
+func (a apple) withNamespace(namespace string) apple {
+	a.Object["metadata"].(map[string]interface{})["namespace"] = namespace
 	return a
 }
 
@@ -2249,4 +2376,52 @@ func (m *mockAccessSetLookup) PurgeUserData(_ string) {
 func getAccessID(user, role string) string {
 	h := sha256.Sum256([]byte(user + role))
 	return string(h[:])
+}
+
+var namespaces = map[string]*corev1.Namespace{
+	"n1": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n1",
+			Labels: map[string]string{
+				"field.cattle.io/projectId": "p-abcde",
+			},
+		},
+	},
+	"n2": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n2",
+			Labels: map[string]string{
+				"field.cattle.io/projectId": "p-fghij",
+			},
+		},
+	},
+	"n3": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n3",
+			Labels: map[string]string{
+				"field.cattle.io/projectId": "p-klmno",
+			},
+		},
+	},
+	"n4": &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "n4",
+		},
+	},
+}
+
+type mockNamespaceCache struct{}
+
+func (m mockNamespaceCache) Get(name string) (*corev1.Namespace, error) {
+	return namespaces[name], nil
+}
+
+func (m mockNamespaceCache) List(selector labels.Selector) ([]*corev1.Namespace, error) {
+	panic("not implemented")
+}
+func (m mockNamespaceCache) AddIndexer(indexName string, indexer corecontrollers.NamespaceIndexer) {
+	panic("not implemented")
+}
+func (m mockNamespaceCache) GetByIndex(indexName, key string) ([]*corev1.Namespace, error) {
+	panic("not implemented")
 }
