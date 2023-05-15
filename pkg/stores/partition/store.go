@@ -5,24 +5,18 @@ package partition
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
-	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
 const (
@@ -44,40 +38,16 @@ type Partitioner interface {
 // Store implements types.Store for partitions.
 type Store struct {
 	Partitioner    Partitioner
-	listCache      *cache.LRUExpireCache
-	asl            accesscontrol.AccessSetLookup
 	namespaceCache corecontrollers.NamespaceCache
 }
 
 // NewStore creates a types.Store implementation with a partitioner and an LRU expiring cache for list responses.
-func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) *Store {
-	cacheSize := defaultCacheSize
-	if v := os.Getenv(cacheSizeEnv); v != "" {
-		sizeInt, err := strconv.Atoi(v)
-		if err == nil {
-			cacheSize = sizeInt
-		}
-	}
+func NewStore(partitioner Partitioner, namespaceCache corecontrollers.NamespaceCache) *Store {
 	s := &Store{
 		Partitioner:    partitioner,
-		asl:            asl,
 		namespaceCache: namespaceCache,
 	}
-	if v := os.Getenv(cacheDisableEnv); v == "false" {
-		s.listCache = cache.NewLRUExpireCache(cacheSize)
-	}
 	return s
-}
-
-type cacheKey struct {
-	chunkSize    int
-	resume       string
-	filters      string
-	sort         string
-	pageSize     int
-	accessID     string
-	resourcePath string
-	revision     string
 }
 
 // UnstructuredStore is like types.Store but deals in k8s unstructured objects instead of apiserver types.
@@ -175,47 +145,25 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	opts := listprocessor.ParseQuery(apiOp)
 
-	key, err := s.getCacheKey(apiOp, opts)
+	var list []unstructured.Unstructured
+	stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume, opts.Revision)
 	if err != nil {
 		return result, err
 	}
+	list = listprocessor.FilterList(stream, opts.Filters)
+	// Check for any errors returned during the parallel listing requests.
+	// We don't want to cache the list or bother with further processing if the list is empty or corrupt.
+	// FilterList guarantees that the stream has been consumed and the error is populated if there is any.
+	if lister.Err() != nil {
+		return result, lister.Err()
+	}
+	list = listprocessor.SortList(list, opts.Sort)
+	result.Revision = lister.Revision()
 
-	var list []unstructured.Unstructured
-	if key.revision != "" && s.listCache != nil {
-		cachedList, ok := s.listCache.Get(key)
-		if ok {
-			logrus.Tracef("found cached list for query %s?%s", apiOp.Request.URL.Path, apiOp.Request.URL.RawQuery)
-			list = cachedList.(*unstructured.UnstructuredList).Items
-			result.Continue = cachedList.(*unstructured.UnstructuredList).GetContinue()
-		}
-	}
-	if list == nil { // did not look in cache or was not found in cache
-		stream, err := lister.List(apiOp.Context(), opts.ChunkSize, opts.Resume, opts.Revision)
-		if err != nil {
-			return result, err
-		}
-		list = listprocessor.FilterList(stream, opts.Filters)
-		// Check for any errors returned during the parallel listing requests.
-		// We don't want to cache the list or bother with further processing if the list is empty or corrupt.
-		// FilterList guarantees that the stream has been consumed and the error is populated if there is any.
-		if lister.Err() != nil {
-			return result, lister.Err()
-		}
-		list = listprocessor.SortList(list, opts.Sort)
-		key.revision = lister.Revision()
-		listToCache := &unstructured.UnstructuredList{
-			Items: list,
-		}
-		list = listprocessor.FilterByProjectsAndNamespaces(list, opts.ProjectsOrNamespaces, s.namespaceCache)
-		c := lister.Continue()
-		if c != "" {
-			listToCache.SetContinue(c)
-		}
-		if s.listCache != nil {
-			s.listCache.Add(key, listToCache, 30*time.Minute)
-		}
-		result.Continue = lister.Continue()
-	}
+	list = listprocessor.FilterByProjectsAndNamespaces(list, opts.ProjectsOrNamespaces, s.namespaceCache)
+
+	result.Continue = lister.Continue()
+
 	result.Count = len(list)
 	list, pages := listprocessor.PaginateList(list, opts.Pagination)
 
@@ -224,31 +172,8 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		result.Objects = append(result.Objects, toAPI(schema, item, nil))
 	}
 
-	result.Revision = key.revision
 	result.Pages = pages
 	return result, lister.Err()
-}
-
-// getCacheKey returns a hashable struct identifying a unique user and request.
-func (s *Store) getCacheKey(apiOp *types.APIRequest, opts *listprocessor.ListOptions) (cacheKey, error) {
-	user, ok := request.UserFrom(apiOp.Request.Context())
-	if !ok {
-		return cacheKey{}, fmt.Errorf("could not find user in request")
-	}
-	filters := ""
-	for _, f := range opts.Filters {
-		filters = filters + f.String()
-	}
-	return cacheKey{
-		chunkSize:    opts.ChunkSize,
-		resume:       opts.Resume,
-		filters:      filters,
-		sort:         opts.Sort.String(),
-		pageSize:     opts.Pagination.PageSize(),
-		accessID:     s.asl.AccessFor(user).ID,
-		resourcePath: apiOp.Request.URL.Path,
-		revision:     opts.Revision,
-	}, nil
 }
 
 // Create creates a single object in the store.
