@@ -25,7 +25,7 @@ require (
 	github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a
 	github.com/rancher/wrangler v1.1.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.2
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
