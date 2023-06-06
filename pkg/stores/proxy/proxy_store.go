@@ -311,7 +311,6 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 					rowToObject(obj)
 					result <- watch.Event{Type: watch.Modified, Object: obj}
 				} else {
-					logrus.Debugf("notifier watch error: %v", err)
 					returnErr(errors.Wrapf(err, "notifier watch error: %v", err), result)
 				}
 			}
@@ -323,7 +322,6 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 		for event := range watcher.ResultChan() {
 			if event.Type == watch.Error {
 				if status, ok := event.Object.(*metav1.Status); ok {
-					logrus.Debugf("event watch error: %s", status.Message)
 					returnErr(fmt.Errorf("event watch error: %s", status.Message), result)
 				} else {
 					logrus.Debugf("event watch error: could not decode event object %T", event.Object)
@@ -363,12 +361,22 @@ func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w t
 	go func() {
 		defer close(result)
 		for item := range c {
+			if item.Type == watch.Error {
+				if status, ok := item.Object.(*metav1.Status); ok {
+					logrus.Debugf("WatchNames received error: %s", status.Message)
+				} else {
+					logrus.Debugf("WatchNames received error: %v", item)
+				}
+				continue
+			}
 
 			m, err := meta.Accessor(item.Object)
 			if err != nil {
-				return
+				logrus.Debugf("WatchNames cannot process unexpected object: %s", err)
+				continue
 			}
-			if item.Type != watch.Error && names.Has(m.GetName()) {
+
+			if names.Has(m.GetName()) {
 				result <- item
 			}
 		}
