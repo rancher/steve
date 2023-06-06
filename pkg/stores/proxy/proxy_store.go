@@ -361,12 +361,22 @@ func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w t
 	go func() {
 		defer close(result)
 		for item := range c {
+			if item.Type == watch.Error {
+				if status, ok := item.Object.(*metav1.Status); ok {
+					logrus.Debugf("WatchNames received error: %s", status.Message)
+				} else {
+					logrus.Debugf("WatchNames received error: %s", item)
+				}
+				continue
+			}
 
 			m, err := meta.Accessor(item.Object)
 			if err != nil {
-				return
+				logrus.Debugf("WatchNames cannot process unexpected object: %s", err)
+				continue
 			}
-			if item.Type != watch.Error && names.Has(m.GetName()) {
+
+			if names.Has(m.GetName()) {
 				result <- item
 			}
 		}
