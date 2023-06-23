@@ -220,8 +220,8 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	list, pages := listprocessor.PaginateList(list, opts.Pagination)
 
 	for _, item := range list {
-		item := item
-		result.Objects = append(result.Objects, toAPI(schema, &item, nil))
+		item := item.DeepCopy()
+		result.Objects = append(result.Objects, toAPI(schema, item, nil))
 	}
 
 	result.Revision = key.revision
