@@ -1,3 +1,5 @@
+// Package cache implements the sized revision cache. The size revision cache maintains a cache of Unstructuredlists while
+// attempting to limit the aggregate values stored by the given memory size (in bytes) parameter.
 package cache
 
 import (
@@ -14,6 +16,8 @@ var (
 	ErrNotFound = errors.New("key was not found in cache")
 )
 
+// SizedRevisionCache maintains a cache of Unstructuredlists while attempting to limit the aggregate values stored by
+// the given memory size (in bytes) parameter.
 type SizedRevisionCache struct {
 	listRevisionCache *cache.LRUExpireCache
 	cacheLock         sync.Mutex
@@ -21,6 +25,7 @@ type SizedRevisionCache struct {
 	sizeLimit         int
 }
 
+// Cacher is a cache that stores and retrieves UnstructuredLists.
 type Cacher interface {
 	Get(key CacheKey) (*unstructured.UnstructuredList, error)
 	Add(key CacheKey, list *unstructured.UnstructuredList) error
@@ -38,6 +43,7 @@ type cacheObj struct {
 	obj  interface{}
 }
 
+// NewSizedRevisionCache accepts a sizeLimit, in bytes, and a maxElements parameter to create a SizedRevisionCache.
 func NewSizedRevisionCache(sizeLimit, maxElements int) *SizedRevisionCache {
 	return &SizedRevisionCache{
 		listRevisionCache: cache.NewLRUExpireCache(maxElements),
@@ -45,10 +51,12 @@ func NewSizedRevisionCache(sizeLimit, maxElements int) *SizedRevisionCache {
 	}
 }
 
+// String returns a string contains the fields values of the cacheKey receiver.
 func (c CacheKey) String() string {
 	return fmt.Sprintf("resourcePath: %s, revision: %s, namespace: %s, cont: %s", c.resourcePath, c.revision, c.namespace, c.cont)
 }
 
+// Get returns the UnstructuredList stored under the given cacheKey if available. If not, as error is returned.
 func (s *SizedRevisionCache) Get(key CacheKey) (*unstructured.UnstructuredList, error) {
 	s.cacheLock.Lock()
 	defer s.cacheLock.Unlock()
@@ -65,6 +73,7 @@ func (s *SizedRevisionCache) Get(key CacheKey) (*unstructured.UnstructuredList, 
 	return uList.obj.(*unstructured.UnstructuredList), nil
 }
 
+// Add attempts to add the given UnstructuredListed under the given key.
 func (s *SizedRevisionCache) Add(key CacheKey, list *unstructured.UnstructuredList) error {
 	s.cacheLock.Lock()
 	defer s.cacheLock.Unlock()
@@ -127,6 +136,7 @@ func (s *SizedRevisionCache) adjustSize(diff int) error {
 	return fmt.Errorf("[steve proxy cache]: cache is near full with a size of [%d] and limit of [%d], cannot increment size by [%d]", s.size, s.sizeLimit, diff)
 }
 
+// GetCacheKey returns a cacheKey with the given field values set.
 func GetCacheKey(resourcePath, revision, ns, cont string) CacheKey {
 	return CacheKey{
 		resourcePath: resourcePath,
