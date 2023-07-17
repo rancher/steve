@@ -88,18 +88,20 @@ type Store struct {
 // NewProxyStore returns a wrapped types.Store.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) types.Store {
 	return &errorStore{
-		Store: &WatchRefresh{
-			Store: partition.NewStore(
-				&rbacPartitioner{
-					proxyStore: &Store{
-						clientGetter: clientGetter,
-						notifier:     notifier,
+		Store: &unformatterStore{
+			Store: &WatchRefresh{
+				Store: partition.NewStore(
+					&rbacPartitioner{
+						proxyStore: &Store{
+							clientGetter: clientGetter,
+							notifier:     notifier,
+						},
 					},
-				},
-				lookup,
-				namespaceCache,
-			),
-			asl: lookup,
+					lookup,
+					namespaceCache,
+				),
+				asl: lookup,
+			},
 		},
 	}
 }
