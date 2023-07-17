@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/cache"
 )
@@ -32,10 +33,9 @@ type Cacher interface {
 }
 
 type CacheKey struct {
+	listOptions  v1.ListOptions
 	resourcePath string
-	revision     string
 	namespace    string
-	cont         string
 }
 
 type cacheObj struct {
@@ -53,7 +53,7 @@ func NewSizedRevisionCache(sizeLimit, maxElements int) *SizedRevisionCache {
 
 // String returns a string contains the fields values of the cacheKey receiver.
 func (c CacheKey) String() string {
-	return fmt.Sprintf("resourcePath: %s, revision: %s, namespace: %s, cont: %s", c.resourcePath, c.revision, c.namespace, c.cont)
+	return fmt.Sprintf("listOptions: %v, resourcePath: %s, namespace: %s", c.listOptions.String(), c.resourcePath, c.namespace)
 }
 
 // Get returns the UnstructuredList stored under the given cacheKey if available. If not, as error is returned.
@@ -126,6 +126,8 @@ func (s *SizedRevisionCache) adjustSize(diff int) error {
 		return nil
 	}
 
+	// the size is recalculated here to check whether entries have expired that would
+	// make s.size+diff stay below sizeLimit.
 	s.size = s.calculateSize()
 
 	if !(s.size+diff > s.sizeLimit) {
@@ -137,11 +139,10 @@ func (s *SizedRevisionCache) adjustSize(diff int) error {
 }
 
 // GetCacheKey returns a cacheKey with the given field values set.
-func GetCacheKey(resourcePath, revision, ns, cont string) CacheKey {
+func GetCacheKey(options v1.ListOptions, resourcePath, ns string) CacheKey {
 	return CacheKey{
+		listOptions:  options,
 		resourcePath: resourcePath,
-		revision:     revision,
 		namespace:    ns,
-		cont:         cont,
 	}
 }

@@ -39,7 +39,8 @@ import (
 
 const (
 	watchTimeoutEnv          = "CATTLE_WATCH_TIMEOUT_SECONDS"
-	revisionParam            = "revision"
+	bytesLimitEnv            = "CATTLE_STEVE_CACHE_LIMIT_BYTES"
+	elementsLimitEnv         = "CATTLE_STEVE_CACHE_LIMIT_ELEMENTS"
 	defaultCacheSizeLimit    = 100000
 	defaultCacheElementLimit = 120
 )
@@ -95,20 +96,20 @@ type Store struct {
 // NewProxyStore returns a wrapped types.Store.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) types.Store {
 	sizeLimit := defaultCacheSizeLimit
-	if providedSizeLimit := os.Getenv("CATTLE_STEVE_CACHE_SIZE_LIMIT"); providedSizeLimit != "" {
+	if providedSizeLimit := os.Getenv(bytesLimitEnv); providedSizeLimit != "" {
 		limit, err := strconv.Atoi(providedSizeLimit)
 		if err != nil {
-			logrus.Debugf("cannot convert CATTLE_STEVE_SIZE_LIMIT value [%s] to int: %v. Using default [%d] instead.", providedSizeLimit, err, sizeLimit)
+			logrus.Debugf("cannot convert %s value [%s] to int: %v. Using default [%d] instead.", bytesLimitEnv, providedSizeLimit, err, sizeLimit)
 		} else {
 			sizeLimit = limit
 		}
 	}
 
 	elementLimit := defaultCacheElementLimit
-	if providedElementLimit := os.Getenv("CATTLE_STEVE_CACHE_ELEMENT_MAX"); providedElementLimit != "" {
+	if providedElementLimit := os.Getenv(elementsLimitEnv); providedElementLimit != "" {
 		limit, err := strconv.Atoi(providedElementLimit)
 		if err != nil {
-			logrus.Debugf("cannot convert CATTLE_STEVE_SIZE_MAX value [%s] to int: %v", providedElementLimit, err)
+			logrus.Debugf("cannot convert %s value [%s] to int: %v", elementsLimitEnv, providedElementLimit, err)
 		} else {
 			elementLimit = limit
 		}
@@ -272,8 +273,8 @@ func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dy
 		return nil, nil
 	}
 
-	if revision := parseRevision(apiOp); revision != "" {
-		list, err := s.cacher.Get(cache.GetCacheKey(apiOp.Request.URL.Path, revision, apiOp.Namespace, opts.Continue))
+	if opts.ResourceVersion != "" {
+		list, err := s.cacher.Get(cache.GetCacheKey(opts, apiOp.Request.URL.Path, apiOp.Namespace))
 		if err != nil {
 			if !errors.Is(cache.ErrNotFound, err) {
 				return nil, err
@@ -293,22 +294,14 @@ func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dy
 	tableToList(resultList)
 
 	if resourceVersion := resultList.GetResourceVersion(); resourceVersion != "" {
-		key := cache.GetCacheKey(apiOp.Request.URL.Path, resourceVersion, apiOp.Namespace, opts.Continue)
+		opts.ResourceVersion = resourceVersion
+		key := cache.GetCacheKey(opts, apiOp.Request.URL.Path, apiOp.Namespace)
 		if err = s.cacher.Add(key, resultList); err != nil {
 			logrus.Errorf("[steve proxy store]: failed to cache obj for key [%s]: %v", key, err)
 		}
 	}
 
 	return resultList, nil
-}
-
-func parseRevision(apiOp *types.APIRequest) string {
-	if apiOp == nil {
-		return ""
-	}
-	q := apiOp.Request.URL.Query()
-	revision := q.Get(revisionParam)
-	return revision
 }
 
 func returnErr(err error, c chan watch.Event) {

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 	"testing"
 
@@ -10,17 +11,28 @@ import (
 )
 
 func TestGetCacheKey(t *testing.T) {
+	opts := v1.ListOptions{
+		LabelSelector:   "asd",
+		ResourceVersion: "1234",
+		FieldSelector:   "asdf",
+		Watch:           true,
+		Continue:        "abcdasdf",
+	}
 	resourcePath := "asdf"
-	revision := "1234"
 	ns := "default"
-	cont := "abcdasdf"
-	key := GetCacheKey(resourcePath, revision, ns, cont)
-	assert.Equal(t, CacheKey{resourcePath: resourcePath, revision: revision, namespace: ns, cont: cont}, key)
+	key := GetCacheKey(opts, resourcePath, ns)
+	assert.Equal(t, CacheKey{listOptions: opts, resourcePath: resourcePath, namespace: ns}, key)
 }
 
 func TestString(t *testing.T) {
-	key := CacheKey{resourcePath: "clusters", revision: "1000", namespace: "testns", cont: "asd"}
-	assert.Equal(t, "resourcePath: clusters, revision: 1000, namespace: testns, cont: asd", key.String())
+	key := CacheKey{listOptions: v1.ListOptions{
+		LabelSelector:   "asd",
+		ResourceVersion: "1234",
+		FieldSelector:   "asdf",
+		Watch:           true,
+		Continue:        "abcdasdf",
+	}, resourcePath: "clusters", namespace: "testns"}
+	assert.Equal(t, "listOptions: &ListOptions{LabelSelector:asd,FieldSelector:asdf,Watch:true,ResourceVersion:1234,TimeoutSeconds:nil,Limit:0,Continue:abcdasdf,AllowWatchBookmarks:false,ResourceVersionMatch:,}, resourcePath: clusters, namespace: testns", key.String())
 }
 
 func TestAdd(t *testing.T) {
@@ -58,7 +70,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj1",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 				},
 			},
@@ -87,7 +101,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj1",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 				},
 				{
@@ -115,7 +131,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj1",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 				},
 			},
@@ -144,7 +162,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj1",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 				},
 				{
@@ -172,7 +192,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj2",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 					expectedErr: true,
 				},
@@ -202,7 +224,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj1",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 				},
 				{
@@ -230,7 +254,9 @@ func TestAdd(t *testing.T) {
 					},
 					key: CacheKey{
 						resourcePath: "obj1",
-						revision:     "1",
+						listOptions: v1.ListOptions{
+							ResourceVersion: "1",
+						},
 					},
 				},
 			},
@@ -262,7 +288,9 @@ func TestAdd(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	c := NewSizedRevisionCache(10000, 10)
-	key := GetCacheKey("something", "1000", "default", "")
+	key := GetCacheKey(v1.ListOptions{
+		ResourceVersion: "1000",
+	}, "something", "default")
 	addedList := &unstructured.UnstructuredList{
 		Object: map[string]interface{}{
 			"somefakeobj": "asdf",
@@ -284,22 +312,31 @@ func TestGet(t *testing.T) {
 	assert.Equal(t, addedList, list)
 
 	// get existing list at different revision
-	list, err = c.Get(GetCacheKey("somethingelse", "900", "default", ""))
+	list, err = c.Get(GetCacheKey(v1.ListOptions{
+		ResourceVersion: "900",
+	}, "somethingelse", "default"))
 	assert.Nil(t, list)
 	assert.True(t, errors.Is(ErrNotFound, err))
 
 	// get existing list with different ns
-	list, err = c.Get(GetCacheKey("somethingelse", "1000", "asdf", ""))
+	list, err = c.Get(GetCacheKey(v1.ListOptions{
+		ResourceVersion: "1000",
+	}, "somethingelse", "asdf"))
 	assert.Nil(t, list)
 	assert.True(t, errors.Is(ErrNotFound, err))
 
 	// get existing list with different cont
-	list, err = c.Get(GetCacheKey("somethingelse", "1000", "default", "asdf"))
+	list, err = c.Get(GetCacheKey(v1.ListOptions{
+		ResourceVersion: "1000",
+		Continue:        "asdf",
+	}, "somethingelse", "default"))
 	assert.Nil(t, list)
 	assert.True(t, errors.Is(ErrNotFound, err))
 
 	// get list that does not exist
-	list, err = c.Get(GetCacheKey("somethingelse", "1000", "default", ""))
+	list, err = c.Get(GetCacheKey(v1.ListOptions{
+		ResourceVersion: "1000",
+	}, "somethingelse", "default"))
 	assert.Nil(t, list)
 	assert.True(t, errors.Is(ErrNotFound, err))
 }
