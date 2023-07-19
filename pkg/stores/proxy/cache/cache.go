@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/pkg/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,19 +79,14 @@ func (s *SizedRevisionCache) Add(key CacheKey, list *unstructured.UnstructuredLi
 	s.cacheLock.Lock()
 	defer s.cacheLock.Unlock()
 
-	objBytes, err := list.MarshalJSON()
-	if err != nil {
-		return err
-	}
-
 	cacheListObj := cacheObj{
-		size: len(objBytes),
+		size: getListSize(list),
 		obj:  list,
 	}
 
 	currentSize := s.sizeOfCurrentEntry(key)
 
-	if err = s.adjustSize(cacheListObj.size - currentSize); err != nil {
+	if err := s.adjustSize(cacheListObj.size - currentSize); err != nil {
 		return err
 	}
 	s.listRevisionCache.Add(key, cacheListObj, 30*time.Minute)
@@ -144,5 +140,46 @@ func GetCacheKey(options v1.ListOptions, resourcePath, ns string) CacheKey {
 		listOptions:  options,
 		resourcePath: resourcePath,
 		namespace:    ns,
+	}
+}
+
+func getListSize(ul *unstructured.UnstructuredList) int {
+	size := int(unsafe.Sizeof(ul))
+	for _, item := range ul.Items {
+		size += getSize(item)
+	}
+	return size
+}
+
+func getSize(i interface{}) int {
+	// sizeOf does not include size of objects pointed to for maps and slices. Therefore, it is necessary to recursively
+	// call sizeOf on nested slices, maps, and their respective items, [source](https://pkg.go.dev/unsafe?#Sizeof).
+	var size int
+	switch val := i.(type) {
+	// unstructured interfaces will have a type of string, float, int, bool, []interface{}, or map[string]interface{},
+	// [source](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured).
+
+	// Why use unsafe.sizeOf instead of Marshalling:
+	// Using unsafe.sizeOf recursively on items in an UnstructuredList has shown to be more performant during benchmarks.
+	// Using unsafe.sizeOf is more accurate because it evaluates the size of struct headers and json marshalling includes
+	// json related formatting that, other than for storing the json in a var for evaluation, would not be in memory.
+	case unstructured.Unstructured:
+		return int(unsafe.Sizeof(val)) + getSize(val.Object)
+	case []interface{}:
+		size += int(unsafe.Sizeof(val))
+		for _, v := range val {
+			size += getSize(v)
+		}
+		return size
+	case map[string]interface{}:
+		size += int(unsafe.Sizeof(val))
+		for key, v := range val {
+			size += int(unsafe.Sizeof(key)) + getSize(v)
+		}
+		return size
+	case string:
+		return int(unsafe.Sizeof(val)) + len(val)
+	default:
+		return int(unsafe.Sizeof(val))
 	}
 }
