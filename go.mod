@@ -27,7 +27,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.14
-	github.com/urfave/cli/v2 v2.1.1
+	github.com/urfave/cli/v2 v2.25.7
 	golang.org/x/sync v0.3.0
 	k8s.io/api v0.25.12
 	k8s.io/apiextensions-apiserver v0.25.12
@@ -79,6 +79,7 @@ require (
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.opentelemetry.io/contrib v0.20.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.20.0 // indirect
 	go.opentelemetry.io/otel v0.20.0 // indirect
