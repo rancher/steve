@@ -12,7 +12,7 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -2419,7 +2419,7 @@ func (m mockNamespaceCache) Get(name string) (*corev1.Namespace, error) {
 func (m mockNamespaceCache) List(selector labels.Selector) ([]*corev1.Namespace, error) {
 	panic("not implemented")
 }
-func (m mockNamespaceCache) AddIndexer(indexName string, indexer corecontrollers.NamespaceIndexer) {
+func (m mockNamespaceCache) AddIndexer(indexName string, indexer generic.Indexer[*corev1.Namespace]) {
 	panic("not implemented")
 }
 func (m mockNamespaceCache) GetByIndex(indexName, key string) ([]*corev1.Namespace, error) {
