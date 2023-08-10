@@ -24,7 +24,7 @@ require (
 	github.com/rancher/norman v0.0.0-20230809232250-ccd31a468197
 	github.com/rancher/remotedialer v0.3.0
 	github.com/rancher/wrangler v1.1.1
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.14
 	github.com/urfave/cli/v2 v2.25.7
