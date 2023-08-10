@@ -25,8 +25,8 @@ require (
 	github.com/rancher/remotedialer v0.3.0
 	github.com/rancher/wrangler v1.1.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.8.1
-	github.com/urfave/cli v1.22.2
+	github.com/stretchr/testify v1.8.4
+	github.com/urfave/cli v1.22.14
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/sync v0.3.0
 	k8s.io/api v0.25.12
@@ -45,7 +45,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
