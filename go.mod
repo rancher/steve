@@ -21,7 +21,7 @@ require (
 	github.com/rancher/apiserver v0.0.0-20230120214941-e88c32739dc7
 	github.com/rancher/dynamiclistener v0.3.5
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99
+	github.com/rancher/norman v0.0.0-20230809232250-ccd31a468197
 	github.com/rancher/remotedialer v0.3.0
 	github.com/rancher/wrangler v1.1.1
 	github.com/sirupsen/logrus v1.8.1
