@@ -33,7 +33,7 @@ name: validate
 
 steps:
   - name: validate
-    image: registry.suse.com/bci/bci-base:15.4
+    image: registry.suse.com/bci/bci-base:15.5
     commands:
       - zypper in -y "golang(API)=1.19" git tar gzip make
       - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.49.0
