@@ -18,7 +18,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/rancher/apiserver v0.0.0-20230809162532-de731cd43b96
+	github.com/rancher/apiserver v0.0.0-20230810214006-d134152ce6fb
 	github.com/rancher/dynamiclistener v0.3.5
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20230809232250-ccd31a468197
@@ -76,7 +76,6 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
