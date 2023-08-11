@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/partition"
+	"github.com/rancher/steve/pkg/stores/proxy/cache"
 	"github.com/rancher/wrangler/pkg/data"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
@@ -36,7 +37,13 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const watchTimeoutEnv = "CATTLE_WATCH_TIMEOUT_SECONDS"
+const (
+	watchTimeoutEnv          = "CATTLE_WATCH_TIMEOUT_SECONDS"
+	bytesLimitEnv            = "CATTLE_STEVE_CACHE_LIMIT_BYTES"
+	elementsLimitEnv         = "CATTLE_STEVE_CACHE_LIMIT_ELEMENTS"
+	defaultCacheSizeLimit    = 100000
+	defaultCacheElementLimit = 120
+)
 
 var (
 	lowerChars  = regexp.MustCompile("[a-z]+")
@@ -83,23 +90,41 @@ type RelationshipNotifier interface {
 type Store struct {
 	clientGetter ClientGetter
 	notifier     RelationshipNotifier
+	cacher       cache.Cacher
 }
 
 // NewProxyStore returns a wrapped types.Store.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) types.Store {
+	sizeLimit := defaultCacheSizeLimit
+	if providedSizeLimit := os.Getenv(bytesLimitEnv); providedSizeLimit != "" {
+		limit, err := strconv.Atoi(providedSizeLimit)
+		if err != nil {
+			logrus.Debugf("cannot convert %s value [%s] to int: %v. Using default [%d] instead.", bytesLimitEnv, providedSizeLimit, err, sizeLimit)
+		} else {
+			sizeLimit = limit
+		}
+	}
+
+	elementLimit := defaultCacheElementLimit
+	if providedElementLimit := os.Getenv(elementsLimitEnv); providedElementLimit != "" {
+		limit, err := strconv.Atoi(providedElementLimit)
+		if err != nil {
+			logrus.Debugf("cannot convert %s value [%s] to int: %v", elementsLimitEnv, providedElementLimit, err)
+		} else {
+			elementLimit = limit
+		}
+	}
+
 	return &errorStore{
 		Store: &unformatterStore{
 			Store: &WatchRefresh{
-				Store: partition.NewStore(
-					&rbacPartitioner{
-						proxyStore: &Store{
-							clientGetter: clientGetter,
-							notifier:     notifier,
-						},
+				Store: partition.NewStore(&rbacPartitioner{
+					proxyStore: &Store{
+						clientGetter: clientGetter,
+						notifier:     notifier,
+						cacher:       cache.NewSizedRevisionCache(sizeLimit, elementLimit),
 					},
-					lookup,
-					namespaceCache,
-				),
+				}, namespaceCache),
 				asl: lookup,
 			},
 		},
@@ -248,6 +273,18 @@ func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dy
 		return nil, nil
 	}
 
+	if opts.ResourceVersion != "" {
+		list, err := s.cacher.Get(cache.GetCacheKey(opts, apiOp.Request.URL.Path, apiOp.Namespace))
+		if err != nil {
+			if !errors.Is(cache.ErrNotFound, err) {
+				return nil, err
+			}
+		}
+		if list != nil {
+			return list, nil
+		}
+	}
+
 	k8sClient, _ := metricsStore.Wrap(client, nil)
 	resultList, err := k8sClient.List(apiOp, opts)
 	if err != nil {
@@ -255,6 +292,14 @@ func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dy
 	}
 
 	tableToList(resultList)
+
+	if resourceVersion := resultList.GetResourceVersion(); resourceVersion != "" {
+		opts.ResourceVersion = resourceVersion
+		key := cache.GetCacheKey(opts, apiOp.Request.URL.Path, apiOp.Namespace)
+		if err = s.cacher.Add(key, resultList); err != nil {
+			logrus.Errorf("[steve proxy store]: failed to cache obj for key [%s]: %v", key, err)
+		}
+	}
 
 	return resultList, nil
 }
