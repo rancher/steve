@@ -6,11 +6,7 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
-	github.com/rancher/apiserver => github.com/vardhaman22/apiserver v1.27.4-rancher1
-	github.com/rancher/dynamiclistener => github.com/vardhaman22/dynamiclistener v1.27.4-rancher1
-	github.com/rancher/lasso => github.com/vardhaman22/lasso v1.27.4-rancher2
-	github.com/rancher/wrangler => github.com/vardhaman22/wrangler v1.27.4-rancher1
-	k8s.io/client-go => github.com/vardhaman22/rancher-client-go v1.27.4-rancher1
+	k8s.io/client-go => github.com/rancher/client-go v1.27.4-rancher1
 )
 
 require (
@@ -21,12 +17,12 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/rancher/apiserver v0.0.0-20230810214006-d134152ce6fb
-	github.com/rancher/dynamiclistener v0.3.5
+	github.com/rancher/apiserver v0.0.0-20240129215928-48d53835ea4e
+	github.com/rancher/dynamiclistener v0.3.6
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/norman v0.0.0-20230811152901-078862e5648c
+	github.com/rancher/norman v0.0.0-20240129215925-f4006b7033e8
 	github.com/rancher/remotedialer v0.3.0
-	github.com/rancher/wrangler v1.1.1
+	github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.14
@@ -78,7 +74,7 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
-	github.com/rancher/lasso v0.0.0-20230810170912-a86ba6c749aa // indirect
+	github.com/rancher/lasso v0.0.0-20230830164424-d684fdeb6f29 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
