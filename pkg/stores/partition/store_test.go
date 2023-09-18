@@ -288,8 +288,12 @@ func TestList(t *testing.T) {
 				newRequest("filter=data.color!=green", "user1"),
 				newRequest("filter=data.color!=green,metadata.name=granny-smith", "user1"),
 				newRequest("filter=data.color!=green&filter=metadata.name!=crispin", "user1"),
+				newRequest("filter=_type=baking", "user1"), // type is a reserved word and gets transmuted to _type
 			},
 			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
 				{
 					"user1": "roleA",
 				},
@@ -325,10 +329,10 @@ func TestList(t *testing.T) {
 			objects: map[string]*unstructured.UnstructuredList{
 				"all": {
 					Items: []unstructured.Unstructured{
-						newApple("fuji").Unstructured,
-						newApple("granny-smith").Unstructured,
-						newApple("bramley").Unstructured,
-						newApple("crispin").Unstructured,
+						newApple("fuji").withType("snacking").Unstructured,
+						newApple("granny-smith").withType("baking").Unstructured,
+						newApple("bramley").withType("cooking").Unstructured,
+						newApple("crispin").withType("snacking").Unstructured,
 					},
 				},
 			},
@@ -336,28 +340,28 @@ func TestList(t *testing.T) {
 				{
 					Count: 2,
 					Objects: []types.APIObject{
-						newApple("granny-smith").toObj(),
-						newApple("bramley").toObj(),
+						newApple("granny-smith").withUnderType("baking").toObj(),
+						newApple("bramley").withUnderType("cooking").toObj(),
 					},
 				},
 				{
 					Count: 1,
 					Objects: []types.APIObject{
-						newApple("bramley").toObj(),
+						newApple("bramley").withUnderType("cooking").toObj(),
 					},
 				},
 				{
 					Count: 3,
 					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-						newApple("granny-smith").toObj(),
-						newApple("bramley").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+						newApple("granny-smith").withUnderType("baking").toObj(),
+						newApple("bramley").withUnderType("cooking").toObj(),
 					},
 				},
 				{
 					Count: 1,
 					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
 					},
 				},
 				{
@@ -366,22 +370,28 @@ func TestList(t *testing.T) {
 				{
 					Count: 2,
 					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-						newApple("crispin").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+						newApple("crispin").withUnderType("snacking").toObj(),
 					},
 				},
 				{
 					Count: 3,
 					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-						newApple("granny-smith").toObj(),
-						newApple("crispin").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+						newApple("granny-smith").withUnderType("baking").toObj(),
+						newApple("crispin").withUnderType("snacking").toObj(),
 					},
 				},
 				{
 					Count: 1,
 					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+					},
+				},
+				{
+					Count: 1,
+					Objects: []types.APIObject{
+						newApple("granny-smith").withUnderType("baking").toObj(),
 					},
 				},
 			},
@@ -444,8 +454,12 @@ func TestList(t *testing.T) {
 			apiOps: []*types.APIRequest{
 				newRequest("sort=metadata.name", "user1"),
 				newRequest("sort=-metadata.name", "user1"),
+				newRequest("sort=_type", "user1"),
 			},
 			access: []map[string]string{
+				{
+					"user1": "roleA",
+				},
 				{
 					"user1": "roleA",
 				},
@@ -463,10 +477,10 @@ func TestList(t *testing.T) {
 			objects: map[string]*unstructured.UnstructuredList{
 				"all": {
 					Items: []unstructured.Unstructured{
-						newApple("fuji").Unstructured,
-						newApple("granny-smith").Unstructured,
-						newApple("bramley").Unstructured,
-						newApple("crispin").Unstructured,
+						newApple("fuji").withType("snacking").Unstructured,
+						newApple("granny-smith").withType("baking").Unstructured,
+						newApple("bramley").withType("cooking").Unstructured,
+						newApple("crispin").withType("snacking").Unstructured,
 					},
 				},
 			},
@@ -474,19 +488,28 @@ func TestList(t *testing.T) {
 				{
 					Count: 4,
 					Objects: []types.APIObject{
-						newApple("bramley").toObj(),
-						newApple("crispin").toObj(),
-						newApple("fuji").toObj(),
-						newApple("granny-smith").toObj(),
+						newApple("bramley").withUnderType("cooking").toObj(),
+						newApple("crispin").withUnderType("snacking").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+						newApple("granny-smith").withUnderType("baking").toObj(),
 					},
 				},
 				{
 					Count: 4,
 					Objects: []types.APIObject{
-						newApple("granny-smith").toObj(),
-						newApple("fuji").toObj(),
-						newApple("crispin").toObj(),
-						newApple("bramley").toObj(),
+						newApple("granny-smith").withUnderType("baking").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+						newApple("crispin").withUnderType("snacking").toObj(),
+						newApple("bramley").withUnderType("cooking").toObj(),
+					},
+				},
+				{
+					Count: 4,
+					Objects: []types.APIObject{
+						newApple("granny-smith").withUnderType("baking").toObj(),
+						newApple("bramley").withUnderType("cooking").toObj(),
+						newApple("fuji").withUnderType("snacking").toObj(),
+						newApple("crispin").withUnderType("snacking").toObj(),
 					},
 				},
 			},
@@ -2352,6 +2375,16 @@ func (a apple) with(data map[string]string) apple {
 
 func (a apple) withNamespace(namespace string) apple {
 	a.Object["metadata"].(map[string]interface{})["namespace"] = namespace
+	return a
+}
+
+func (a apple) withType(typ string) apple {
+	a.Object["type"] = typ
+	return a
+}
+
+func (a apple) withUnderType(typ string) apple {
+	a.Object["_type"] = typ
 	return a
 }
 
