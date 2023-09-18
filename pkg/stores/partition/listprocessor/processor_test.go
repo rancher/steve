@@ -830,6 +830,100 @@ func TestFilterList(t *testing.T) {
 			},
 		},
 		{
+			name: "match element in array",
+			objects: [][]unstructured.Unstructured{
+				{
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "apple",
+							},
+							"data": map[string]interface{}{
+								"colors": []interface{}{
+									"pink",
+									"red",
+									"green",
+									"yellow",
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "berry",
+							},
+							"data": map[string]interface{}{
+								"colors": []interface{}{
+									"blue",
+									"red",
+									"black",
+								},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"kind": "fruit",
+							"metadata": map[string]interface{}{
+								"name": "banana",
+							},
+							"data": map[string]interface{}{
+								"colors": []interface{}{
+									"yellow",
+								},
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "colors", "1"},
+							match: "red",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "fruit",
+						"metadata": map[string]interface{}{
+							"name": "apple",
+						},
+						"data": map[string]interface{}{
+							"colors": []interface{}{
+								"pink",
+								"red",
+								"green",
+								"yellow",
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "fruit",
+						"metadata": map[string]interface{}{
+							"name": "berry",
+						},
+						"data": map[string]interface{}{
+							"colors": []interface{}{
+								"blue",
+								"red",
+								"black",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "single or filter, filter on one value",
 			objects: [][]unstructured.Unstructured{
 				{
@@ -2359,6 +2453,106 @@ func TestSortList(t *testing.T) {
 						},
 						"data": map[string]interface{}{
 							"color": "green",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sort by array index",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								"small",
+								"pink",
+								"sweet",
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "red-delicious",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								"large",
+								"red",
+								"bland",
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								"medium",
+								"green",
+								"tart",
+							},
+						},
+					},
+				},
+			},
+			sort: Sort{
+				primaryField: []string{"data", "attributes", "1"},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								"medium",
+								"green",
+								"tart",
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								"small",
+								"pink",
+								"sweet",
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "red-delicious",
+						},
+						"data": map[string]interface{}{
+							"attributes": []interface{}{
+								"large",
+								"red",
+								"bland",
+							},
 						},
 					},
 				},
