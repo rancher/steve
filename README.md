@@ -651,3 +651,94 @@ to defined endpoints. The external services follow the same process of using a
 defined secret containing a URL and token to connect and authenticate to
 Rancher. This aggregation is defined independently and does not use steve's
 aggregation client.
+
+### Design of List Processing API
+
+Steve supports query parameters `filter`, `sort`, `page`/`pagesize`/`revision`,
+and `projectsornamespaces` for list requests as described
+[above](#query-parameters). These formatting options exist to allow user
+interfaces like dashboards to easily consume and display list data in a
+friendly way.
+
+This feature relies on the concept of [stores](#stores) and the RBAC
+partitioner. The [proxy
+store](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#Store)
+provides raw access to Kubernetes and returns data as an
+[unstructured.UnstructuredList](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#UnstructuredList).
+The
+[partitioner](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#Partitioner)
+calls the
+proxy store in parallel for each segment of resources the user has access to,
+such as for each namespace. The partitioner feeds the results of each parallelized
+request into a stream of
+[unstructured.Unstructured](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured).
+From here, the list is passed to the
+[listprocessor](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition/listprocessor)
+to filter, sort, and paginate the list. The partition store formats the list as
+a
+[types.APIObjectList](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types#APIObjectList)
+and it is returned up the chain of nested stores.
+
+Most stores in steve are implementations of the apiserver
+[Store](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types#Store)
+interface, which returns apiserver
+[types](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types). The
+partitioner implements its own store type called
+[UnstructuredStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#UnstructuredStore)
+which returns
+[unstructured.Unstructured](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured)
+objects. The reason for this is that the filtering and sorting functions in the
+listprocessor package need to operate on unstructured data because they work on
+arbitrary fields. However, it also needs to be run after the parallelized
+partitioner has accumulated all the results, because each concurrent fetcher
+will only contain partial results. Therefore, the data remains in an
+unstructured format until after the listprocessor has been run, then the data
+is converted to a structured type. The below diagram illustrates the conversion
+sequence.
+
+![](./docs/store-flow.svg)
+
+#### Unit tests
+
+The unit tests for these API features are located in two places:
+
+##### listprocessor unit tests
+
+[pkg/stores/partition/listprocessor/processor_test.go](./pkg/stores/partition/listprocessor/processor_test.go)
+contains tests for each individual query handler. All changes to
+[listprocessor](./pkg/stores/partition/listprocessor/) should include a unit
+test in this file.
+
+##### partition store unit tests
+
+[pkg/stores/partition/store_test.go](./pkg/stores/partition/store_test.go)
+contains tests for the `List` operation of the partition store. This is
+especially important for testing the functionality for multiple partitions. It
+also tests all supported query parameters, not limited to the
+pagination-related ones, and tests them in combination with one another. Tests
+should be added here when:
+
+  - the change is related to partitioning
+  - the change is related to parsing the query parameters
+  - the change is related to the `limit` or `continue` parameters
+  - the listprocessor change should be tested with other query parameters
+
+It doesn't hurt to add a test here for any other listprocessor change.
+
+Each table test runs several requests, so they are effectively each a bundle of
+tests. Each table test has a list of `apiOps` which each specify the request
+and the user running it, a list of `access` maps which declares the users
+corresponding to each request and controls the
+[AccessSet](https://pkg.go.dev/github.com/rancher/steve/pkg/accesscontrol#AccessSet)
+the user has, the `partitions` the users have access to, and the `objects` in
+each partition. The requests in `apiOps` are run sequentially, and each item in
+the lists `want`, `wantCache`, and `wantListCalls` correlate to the expected
+results and side effects of each request. `partitions` and `objects` apply to
+all requests in the table test.
+
+#### Integration tests
+
+Integration tests for the steve API are located among the [rancher integration
+tests](ihttps://github.com/rancher/rancher/tree/release/v2.8/tests/v2/integration/steveapi).
+See the documentation included there for running the tests and using them to
+generate API documentation.
