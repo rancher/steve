@@ -29,7 +29,8 @@ what the underlying Kubernetes endpoint supports and the user's permissions.
 ### Query parameters
 
 Steve supports query parameters to perform actions or process data on top of
-what Kubernetes supports.
+what Kubernetes supports. In-depth, auto-generated API examples can be found in
+[rancher](https://github.com/rancher/rancher/tree/release/v2.8/tests/v2/integration/steveapi#api-examples).
 
 #### `link`
 
@@ -108,6 +109,12 @@ included in the list.
 
 ```
 /v1/{type}?filter=metadata.name=foo&filter=metadata.namespace=bar
+```
+
+Filters can be negated to exclude results:
+
+```
+/v1/{type}?filter=metadata.name!=foo
 ```
 
 Arrays are searched for matching items. If any item in the array matches, the
