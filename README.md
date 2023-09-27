@@ -646,7 +646,7 @@ the user can define endpoints via a
 [v3.APIService](https://pkg.go.dev/github.com/rancher/rancher/pkg/apis/management.cattle.io/v3#APIService)
 custom resource (which is distinct from the built-in Kubernetes
 [v1.APIService](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/api-service-v1/)
-resource. Then Rancher runs a middleware handler that routes incoming requests
+resource). Then Rancher runs a middleware handler that routes incoming requests
 to defined endpoints. The external services follow the same process of using a
 defined secret containing a URL and token to connect and authenticate to
 Rancher. This aggregation is defined independently and does not use steve's
