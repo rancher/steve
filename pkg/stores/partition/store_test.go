@@ -45,12 +45,6 @@ func TestList(t *testing.T) {
 				{
 					"user1": "roleA",
 				},
-				{
-					"user1": "roleA",
-				},
-				{
-					"user1": "roleA",
-				},
 			},
 			partitions: map[string][]Partition{
 				"user1": {
