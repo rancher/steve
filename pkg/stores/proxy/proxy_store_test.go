@@ -68,6 +68,18 @@ func TestWatchNamesErrReceive(t *testing.T) {
 	assert.Equal(t, 0, len(c.ResultChan()), "Expected all secrets to have been received")
 }
 
+func TestByNames(t *testing.T) {
+	s := Store{}
+	apiSchema := &types.APISchema{Schema: &schemas.Schema{}}
+	apiOp := &types.APIRequest{Namespace: "*", Schema: apiSchema, Request: &http.Request{}}
+	names := sets.NewString("some-resource", "some-other-resource")
+	result, warn, err := s.ByNames(apiOp, apiSchema, names)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Items, 0)
+	assert.Nil(t, err)
+	assert.Nil(t, warn)
+}
+
 func (t *testFactory) TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	return t.fakeClient.Resource(schema2.GroupVersionResource{}), nil
 }

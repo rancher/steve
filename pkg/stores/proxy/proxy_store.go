@@ -205,9 +205,10 @@ func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
 // be returned in the list.
 func (s *Store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names sets.String) (*unstructured.UnstructuredList, []types.Warning, error) {
 	if apiOp.Namespace == "*" {
-		// This happens when you grant namespaced objects with "get" by name in a clusterrolebinding. We will treat
-		// this as an invalid situation instead of listing all objects in the cluster and filtering by name.
-		return nil, nil, nil
+		// This happens when you grant namespaced objects with "get" or "list "by name in a clusterrolebinding.
+		// We will treat this as an invalid situation instead of listing all objects in the cluster
+		// and filtering by name.
+		return &unstructured.UnstructuredList{}, nil, nil
 	}
 	buffer := WarningBuffer{}
 	adminClient, err := s.clientGetter.TableAdminClient(apiOp, schema, apiOp.Namespace, &buffer)
