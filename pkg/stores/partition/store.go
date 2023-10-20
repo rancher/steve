@@ -110,7 +110,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return toAPI(schema, moveToUnderscore(obj), warnings), nil
 }
 
 // ByID looks up a single object by its ID.
@@ -124,7 +124,7 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return toAPI(schema, moveToUnderscore(obj), warnings), nil
 }
 
 func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
@@ -194,7 +194,8 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		if err != nil {
 			return result, err
 		}
-		list = listprocessor.FilterList(stream, opts.Filters)
+		list = preprocessList(stream)
+		list = listprocessor.FilterList(list, opts.Filters)
 		// Check for any errors returned during the parallel listing requests.
 		// We don't want to cache the list or bother with further processing if the list is empty or corrupt.
 		// FilterList guarantees that the stream has been consumed and the error is populated if there is any.
@@ -262,7 +263,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return toAPI(schema, moveToUnderscore(obj), warnings), nil
 }
 
 // Update updates a single object in the store.
@@ -276,7 +277,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data ty
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return toAPI(schema, moveToUnderscore(obj), warnings), nil
 }
 
 // Watch returns a channel of events for a list or resource.
@@ -325,10 +326,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 func toAPI(schema *types.APISchema, obj runtime.Object, warnings []types.Warning) types.APIObject {
 	if obj == nil || reflect.ValueOf(obj).IsNil() {
 		return types.APIObject{}
-	}
-
-	if unstr, ok := obj.(*unstructured.Unstructured); ok {
-		obj = moveToUnderscore(unstr)
 	}
 
 	apiObject := types.APIObject{
@@ -389,7 +386,11 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 		return apiEvent
 	}
 
-	apiEvent.Object = toAPI(schema, event.Object, nil)
+	obj := event.Object
+	if unst, ok := event.Object.(*unstructured.Unstructured); ok {
+		obj = moveToUnderscore(unst)
+	}
+	apiEvent.Object = toAPI(schema, obj, nil)
 
 	m, err := meta.Accessor(event.Object)
 	if err != nil {
@@ -398,4 +399,15 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 
 	apiEvent.Revision = m.GetResourceVersion()
 	return apiEvent
+}
+
+func preprocessList(list <-chan []unstructured.Unstructured) []unstructured.Unstructured {
+	result := []unstructured.Unstructured{}
+	for items := range list {
+		for _, item := range items {
+			processed := moveToUnderscore(&item)
+			result = append(result, *processed)
+		}
+	}
+	return result
 }
