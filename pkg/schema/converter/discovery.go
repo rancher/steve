@@ -22,7 +22,9 @@ var (
 	}
 )
 
-func AddDiscovery(client discovery.DiscoveryInterface, schemasMap map[string]*types.APISchema) error {
+// addDiscovery uses a k8s discovery client to create very basic schemas for all registered groups/resources. Other
+// functions, such as AddCustomResources are used to add more details to these schemas later on.
+func addDiscovery(client discovery.DiscoveryInterface, schemasMap map[string]*types.APISchema) error {
 	groups, resourceLists, err := client.ServerGroupsAndResources()
 	if gd, ok := err.(*discovery.ErrGroupDiscoveryFailed); ok {
 		logrus.Errorf("Failed to read API for groups %v", gd.Groups)
