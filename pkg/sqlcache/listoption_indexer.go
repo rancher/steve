@@ -135,12 +135,10 @@ func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partiti
 
 	// 2- Filtering: WHERE clauses (from lo.Filters)
 	whereClauses := []string{}
-	for _, filter := range lo.Filters {
-		/*
-			columnName := toColumnName(filter[0]Field)
-			whereClauses = append(whereClauses, fmt.Sprintf(`f."%s" LIKE ?`, columnName))
-			params = append(params, fmt.Sprintf(`%%%s%%`, filter[0].Match))*/
-		fmt.Println(filter.String())
+	for _, orFilters := range lo.Filters {
+		orClause, orParams := buildORClause(orFilters)
+		whereClauses = append(whereClauses, orClause)
+		params = append(params, orParams...)
 	}
 
 	// WHERE clauses (from namespace)
@@ -283,6 +281,26 @@ func (l *ListOptionIndexer) ListByOptions(lo *listprocessor.ListOptions, partiti
 }
 
 /* Utilities */
+
+// buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
+func buildORClause(orFilters listprocessor.OrFilter) (string, []any) {
+	var orWhereClause string
+	var params []any
+	for index, filter := range orFilters.Filters {
+		opString := "LIKE"
+		if filter.Op == "!=" {
+			opString = "NOT LIKE"
+		}
+		columnName := toColumnName(filter.Field)
+		orWhereClause += fmt.Sprintf(`f."%s" %s ?`, columnName, opString)
+		params = append(params, fmt.Sprintf(`%%%s%%`, filter.Match))
+		if index == len(orFilters.Filters)-1 {
+			continue
+		}
+		orWhereClause += " OR "
+	}
+	return orWhereClause, params
+}
 
 // toColumnName returns the column name corresponding to a field expressed as string slice
 func toColumnName(s []string) string {
