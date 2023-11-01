@@ -59,7 +59,6 @@ type Partition struct {
 	Names       sets.String
 }
 
-// TODO: make sure Op filter is supported by vai
 // Filter represents a field to filter by.
 // A subfield in an object is represented in a request query using . notation, e.g. 'metadata.name'.
 // The subfield is internally represented as a slice, e.g. [metadata, name].
@@ -77,17 +76,17 @@ func (f Filter) String() string {
 
 // OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
 type OrFilter struct {
-	filters []Filter
+	Filters []Filter
 }
 
 // String returns the filter as a query string.
 func (f OrFilter) String() string {
 	var fields strings.Builder
-	for i, field := range f.filters {
+	for i, field := range f.Filters {
 		fields.WriteString(strings.Join(field.Field, "."))
 		fields.WriteByte('=')
 		fields.WriteString(field.Match)
-		if i < len(f.filters)-1 {
+		if i < len(f.Filters)-1 {
 			fields.WriteByte(',')
 		}
 	}
@@ -167,24 +166,24 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 			if len(filter) != 2 {
 				continue
 			}
-			orFilter.filters = append(orFilter.filters, Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op})
+			orFilter.Filters = append(orFilter.Filters, Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
 	// sort the filter fields so they can be used as a cache key in the store
 	for _, orFilter := range filterOpts {
-		sort.Slice(orFilter.filters, func(i, j int) bool {
-			fieldI := strings.Join(orFilter.filters[i].Field, ".")
-			fieldJ := strings.Join(orFilter.filters[j].Field, ".")
+		sort.Slice(orFilter.Filters, func(i, j int) bool {
+			fieldI := strings.Join(orFilter.Filters[i].Field, ".")
+			fieldJ := strings.Join(orFilter.Filters[j].Field, ".")
 			return fieldI < fieldJ
 		})
 	}
 	sort.Slice(filterOpts, func(i, j int) bool {
 		var fieldI, fieldJ strings.Builder
-		for _, f := range filterOpts[i].filters {
+		for _, f := range filterOpts[i].Filters {
 			fieldI.WriteString(strings.Join(f.Field, "."))
 		}
-		for _, f := range filterOpts[j].filters {
+		for _, f := range filterOpts[j].Filters {
 			fieldJ.WriteString(strings.Join(f.Field, "."))
 		}
 		return fieldI.String() < fieldJ.String()
@@ -326,7 +325,7 @@ func matchesOneInList(obj []interface{}, filter Filter) bool {
 }
 
 func matchesAny(obj map[string]interface{}, filter OrFilter) bool {
-	for _, f := range filter.filters {
+	for _, f := range filter.Filters {
 		matches := matchesOne(obj, f)
 		if (matches && f.Op == eq) || (!matches && f.Op == notEq) {
 			return true
