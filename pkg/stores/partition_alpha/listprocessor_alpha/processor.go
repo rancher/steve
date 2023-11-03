@@ -7,13 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -43,12 +42,11 @@ const (
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
-	ChunkSize            int
-	Resume               string
-	Filters              []OrFilter
-	Sort                 Sort
-	Pagination           Pagination
-	ProjectsOrNamespaces ProjectsOrNamespacesFilter
+	ChunkSize  int
+	Resume     string
+	Filters    []OrFilter
+	Sort       Sort
+	Pagination Pagination
 }
 
 // Partition represents filtering of a request's results by namespace or a list of resource names
@@ -57,6 +55,13 @@ type Partition struct {
 	All         bool
 	Passthrough bool
 	Names       sets.String
+}
+
+type Informer interface {
+	cache.SharedIndexInformer
+	// ListByOptions returns objects according to the specified list options and partitions
+	// see ListOptionIndexer.ListByOptions
+	ListByOptions(lo *ListOptions, partitions []Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // Filter represents a field to filter by.
@@ -137,13 +142,8 @@ type Pagination struct {
 	Page     int
 }
 
-type ProjectsOrNamespacesFilter struct {
-	filter map[string]struct{}
-	op     op
-}
-
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest) *ListOptions {
+func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions, error) {
 	opts := ListOptions{}
 
 	opts.ChunkSize = getLimit(apiOp)
@@ -227,7 +227,6 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 	}
 	opts.Pagination = pagination
 
-	projectsOptions := ProjectsOrNamespacesFilter{}
 	var op op
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
@@ -237,14 +236,19 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 		}
 	}
 	if projectsOrNamespaces != "" {
-		projectsOptions.filter = make(map[string]struct{})
-		for _, pn := range strings.Split(projectsOrNamespaces, ",") {
-			projectsOptions.filter[pn] = struct{}{}
+		projOrNSFilters, err := parseNamespaceOrProjectFilters(projectsOrNamespaces, op, namespaceCache)
+		if err != nil {
+			return nil, err
 		}
-		projectsOptions.op = op
-		opts.ProjectsOrNamespaces = projectsOptions
+		if op == notEq {
+			for _, filter := range projOrNSFilters {
+				opts.Filters = append(opts.Filters, OrFilter{Filters: []Filter{filter}})
+			}
+		} else {
+			opts.Filters = append(opts.Filters, OrFilter{Filters: projOrNSFilters})
+		}
 	}
-	return &opts
+	return &opts, nil
 }
 
 // getLimit extracts the limit parameter from the request or sets a default of 100000.
@@ -343,31 +347,38 @@ func matchesAll(obj map[string]interface{}, filters []OrFilter) bool {
 	return true
 }
 
-// TODO: add support for project filter via vai
-func FilterByProjectsAndNamespaces(list []unstructured.Unstructured, projectsOrNamespaces ProjectsOrNamespacesFilter, namespaceCache corecontrollers.NamespaceCache) []unstructured.Unstructured {
-	if len(projectsOrNamespaces.filter) == 0 {
-		return list
+func parseNamespaceOrProjectFilters(projOrNS string, op op, namespaceInformer Informer) ([]Filter, error) {
+	var filters []Filter
+	for _, pn := range strings.Split(projOrNS, ",") {
+		uList, _, err := namespaceInformer.ListByOptions(&ListOptions{
+			Filters: []OrFilter{
+				{
+					Filters: []Filter{
+						{
+							Field: []string{"metadata", "name"},
+							Match: pn,
+							Op:    eq,
+						},
+						{
+							Field: []string{"metadata", "labels", "field.cattle.io/projectId"},
+							Match: pn,
+							Op:    eq,
+						},
+					},
+				},
+			},
+		}, []Partition{{Passthrough: true}}, "")
+		if err != nil {
+			return filters, err
+		}
+		for _, item := range uList.Items {
+			filters = append(filters, Filter{
+				Field: []string{"metadata", "namespace"},
+				Match: item.GetName(),
+				Op:    op,
+			})
+		}
+		continue
 	}
-	result := []unstructured.Unstructured{}
-	for _, obj := range list {
-		namespaceName := obj.GetNamespace()
-		if namespaceName == "" {
-			continue
-		}
-		namespace, err := namespaceCache.Get(namespaceName)
-		if namespace == nil || err != nil {
-			continue
-		}
-		projectLabel, _ := namespace.GetLabels()[projectIDFieldLabel]
-		_, matchesProject := projectsOrNamespaces.filter[projectLabel]
-		_, matchesNamespace := projectsOrNamespaces.filter[namespaceName]
-		matches := matchesProject || matchesNamespace
-		if projectsOrNamespaces.op == eq && matches {
-			result = append(result, obj)
-		}
-		if projectsOrNamespaces.op == notEq && !matches {
-			result = append(result, obj)
-		}
-	}
-	return result
+	return filters, nil
 }

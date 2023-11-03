@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/gob"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -22,13 +23,19 @@ type ListOptionIndexer struct {
 	addField      *sql.Stmt
 }
 
+var (
+	typeSpecificIndexedFields = map[string][]string{
+		"_v1_Namespace": {`metadata.labels."field.cattle.io/projectId"`},
+	}
+	subfieldRegex = regexp.MustCompile(`([a-zA-Z]+)|("[a-zA-Z./]+")`)
+)
+
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields
 // Fields are specified as slices (eg. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyFunc, fields [][]string, name string, path string) (*ListOptionIndexer, error) {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]interface{}{})
-
 	v, err := NewIndexer(example, keyFunc, name, path, cache.Indexers{})
 	if err != nil {
 		return nil, err
@@ -39,16 +46,25 @@ func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyF
 		indexedFields = append(indexedFields, toColumnName(f))
 	}
 
+	if _, ok := typeSpecificIndexedFields[v.name]; ok {
+		for _, f := range typeSpecificIndexedFields[v.name] {
+			indexedFields = append(indexedFields, f)
+		}
+	}
+
 	l := &ListOptionIndexer{
 		Indexer:       v,
 		indexedFields: indexedFields,
 	}
 	l.RegisterAfterUpsert(l.AfterUpsert)
 
-	columnDefs := []string{}
-	for _, field := range indexedFields {
-		column := fmt.Sprintf(`"%s" VARCHAR`, field)
-		columnDefs = append(columnDefs, column)
+	columnDefs := make([]string, len(indexedFields))
+	sanitizedIndexFields := make([]string, len(indexedFields))
+	for index, field := range indexedFields {
+		sanitizedIndexField := Sanitize(field)
+		column := fmt.Sprintf(`"%s" VARCHAR`, sanitizedIndexField)
+		sanitizedIndexFields[index] = sanitizedIndexField
+		columnDefs[index] = column
 	}
 
 	err = l.InitExec(fmt.Sprintf(`CREATE TABLE "%s_fields" (
@@ -59,28 +75,28 @@ func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyF
 		return nil, err
 	}
 
-	for _, field := range indexedFields {
-		err = l.InitExec(fmt.Sprintf(`CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`, v.name, field, v.name, field))
+	for _, sanitizedField := range sanitizedIndexFields {
+		err = l.InitExec(fmt.Sprintf(`CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`, v.name, sanitizedField, v.name, sanitizedField))
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	columns := []string{}
-	for _, field := range indexedFields {
+	columns := make([]string, len(indexedFields))
+	for index, field := range sanitizedIndexFields {
 		column := fmt.Sprintf(`"%s"`, field)
-		columns = append(columns, column)
+		columns[index] = column
 	}
 
-	qmarks := []string{}
-	for _ = range indexedFields {
-		qmarks = append(qmarks, "?")
+	qmarks := make([]string, len(indexedFields))
+	for index := range indexedFields {
+		qmarks[index] = "?"
 	}
 
-	setStatements := []string{}
-	for _, field := range indexedFields {
-		setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
-		setStatements = append(setStatements, setStatement)
+	setStatements := make([]string, len(indexedFields))
+	for index, sanitizedField := range sanitizedIndexFields {
+		setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, sanitizedField, sanitizedField)
+		setStatements[index] = setStatement
 	}
 
 	l.addField = l.Prepare(fmt.Sprintf(
@@ -90,7 +106,6 @@ func NewListOptionIndexer(example *unstructured.Unstructured, keyFunc cache.KeyF
 		strings.Join(qmarks, ", "),
 		strings.Join(setStatements, ", "),
 	))
-
 	return l, nil
 }
 
@@ -304,20 +319,34 @@ func buildORClause(orFilters listprocessor.OrFilter) (string, []any) {
 
 // toColumnName returns the column name corresponding to a field expressed as string slice
 func toColumnName(s []string) string {
-	return Sanitize(strings.Join(s, "."))
+	return strings.Join(s, ".")
 }
 
 // getField extracts the value of a field expressed as a string path from an unstructured object
 func getField(a any, field string) (any, error) {
+	subFields := extractSubFields(field)
+
 	o, ok := a.(*unstructured.Unstructured)
 	if !ok {
 		return nil, errors.Errorf("Unexpected object type, expected unstructured.Unstructured: %v", a)
 	}
-	result, ok, err := unstructured.NestedFieldNoCopy(o.Object, strings.Split(field, ".")...)
+
+	result, ok, err := unstructured.NestedFieldNoCopy(o.Object, subFields...)
 	if !ok || err != nil {
+		if !ok {
+			return "", nil
+		}
 		return nil, errors.Wrapf(err, "Could not extract field %v from object %v", field, o)
 	}
 	return result, nil
+}
+
+func extractSubFields(fields string) []string {
+	subfields := make([]string, 0)
+	for _, subField := range subfieldRegex.FindAllString(fields, -1) {
+		subfields = append(subfields, strings.TrimSuffix(Sanitize(subField), "."))
+	}
+	return subfields
 }
 
 // toUnstructuredList turns a slice of unstructured objects into an unstructured.UnstructuredList

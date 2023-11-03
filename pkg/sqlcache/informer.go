@@ -14,23 +14,23 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Informer is a SQLite-backed cache.SharedIndexInformer that can execute queries on listprocessor structs
+/*
 type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
 	ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
-}
+}*/
 
-// informer implements Informer
-type informer struct {
+// Informer is a SQLite-backed cache.SharedIndexInformer that can execute queries on listprocessor structs
+type Informer struct {
 	cache.SharedIndexInformer
 	indexer *ListOptionIndexer
 }
 
 // NewInformer returns a new SQLite-backed Informer for the type specified by schema in unstructured.Unstructured form
 // using the specified client
-func NewInformer(client dynamic.ResourceInterface, gvk schema.GroupVersionKind, path string) (Informer, error) {
+func NewInformer(client dynamic.ResourceInterface, gvk schema.GroupVersionKind, path string) (*Informer, error) {
 	listWatcher := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return client.List(context.TODO(), options)
@@ -61,7 +61,7 @@ func NewInformer(client dynamic.ResourceInterface, gvk schema.GroupVersionKind, 
 	// HACK: replace the default informer's indexer with the SQL based one
 	UnsafeSet(sii, "indexer", loi)
 
-	return &informer{
+	return &Informer{
 		SharedIndexInformer: sii,
 		indexer:             loi,
 	}, nil
@@ -69,6 +69,6 @@ func NewInformer(client dynamic.ResourceInterface, gvk schema.GroupVersionKind, 
 
 // ListByOptions returns objects according to the specified list options and partitions
 // see ListOptionIndexer.ListByOptions
-func (i *informer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
+func (i *Informer) ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error) {
 	return i.indexer.ListByOptions(lo, partitions, namespace)
 }

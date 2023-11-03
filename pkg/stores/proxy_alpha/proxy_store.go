@@ -7,19 +7,21 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/cache"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 
-	"github.com/rancher/steve/pkg/sqlcache"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
-
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/sqlcache"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"github.com/rancher/wrangler/pkg/data"
+	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
 	"github.com/rancher/wrangler/pkg/summary"
 	"github.com/sirupsen/logrus"
@@ -62,6 +64,13 @@ type ClientGetter interface {
 	TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
 }
 
+type Informer interface {
+	cache.SharedIndexInformer
+	// ListByOptions returns objects according to the specified list options and partitions
+	// see ListOptionIndexer.ListByOptions
+	ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+}
+
 // WarningBuffer holds warnings that may be returned from the kubernetes api
 type WarningBuffer []types.Warning
 
@@ -93,17 +102,39 @@ type Store interface {
 
 // store implements Store
 type store struct {
-	clientGetter    ClientGetter
-	notifier        RelationshipNotifier
-	informerFactory *sqlcache.InformerFactory
+	clientGetter      ClientGetter
+	notifier          RelationshipNotifier
+	informerFactory   *sqlcache.InformerFactory
+	namespaceInformer Informer
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier) Store {
+	informerFactory := sqlcache.NewInformerFactory()
+	buffer := WarningBuffer{}
+	s := &types.APISchema{
+		Schema: &schemas.Schema{},
+	}
+	attributes.SetGVK(s, schema.GroupVersionKind{
+		Version: "v1",
+		Kind:    "Namespace",
+	})
+	attributes.SetResource(s, "namespaces")
+	client, err := clientGetter.AdminClient(nil, s, "", &buffer)
+	if err != nil {
+		return nil
+	}
+
+	nsInformer, err := informerFactory.InformerFor(nil, client, s)
+	if err != nil {
+		return nil
+	}
+
 	return &store{
-		clientGetter:    clientGetter,
-		notifier:        notifier,
-		informerFactory: sqlcache.NewInformerFactory(),
+		clientGetter:      clientGetter,
+		notifier:          notifier,
+		informerFactory:   informerFactory,
+		namespaceInformer: nsInformer,
 	}
 }
 
@@ -485,7 +516,7 @@ func (s *store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
 func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
-	opts := listprocessor.ParseQuery(apiOp)
+	opts, _ := listprocessor.ParseQuery(apiOp, s.namespaceInformer)
 
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}

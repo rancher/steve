@@ -19,7 +19,7 @@ type InformerFactory struct {
 	wg     wait.Group
 	stopCh chan struct{}
 
-	cache map[schema.GroupVersionKind]Informer
+	cache map[schema.GroupVersionKind]*Informer
 }
 
 const InformerCacheDbPath = "informer_cache.db"
@@ -29,12 +29,12 @@ func NewInformerFactory() *InformerFactory {
 	return &InformerFactory{
 		wg:     wait.Group{},
 		stopCh: make(chan struct{}),
-		cache:  map[schema.GroupVersionKind]Informer{},
+		cache:  map[schema.GroupVersionKind]*Informer{},
 	}
 }
 
 // InformerFor returns an informer for a given user (taken from apiOp), GVK (taken from schema) using the specified client
-func (f *InformerFactory) InformerFor(apiOp *types.APIRequest, client dynamic.ResourceInterface, schema *types.APISchema) (Informer, error) {
+func (f *InformerFactory) InformerFor(apiOp *types.APIRequest, client dynamic.ResourceInterface, schema *types.APISchema) (*Informer, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 

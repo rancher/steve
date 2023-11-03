@@ -1,10 +1,6 @@
 package common
 
 import (
-	"github.com/rancher/steve/pkg/stores/partition_alpha"
-	"github.com/rancher/steve/pkg/stores/proxy"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha"
-	v1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -12,6 +8,9 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/v2/pkg/data"
 	corecontrollers "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
@@ -23,7 +22,7 @@ import (
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func DefaultTemplate(clientGetter proxy_alpha.ClientGetter,
+func DefaultTemplate(clientGetter proxy.ClientGetter,
 	summaryCache *summarycache.SummaryCache,
 	asl accesscontrol.AccessSetLookup, namespaceCache v1.NamespaceCache) schema.Template {
 	return schema.Template{
