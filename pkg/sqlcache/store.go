@@ -242,7 +242,8 @@ func (s *Store) Resync() error {
 
 // Sanitize returns a string  that can be used in SQL as a name
 func Sanitize(s string) string {
-	return strings.ReplaceAll(s, "\"", ".")
+	fmt.Println("was sanitize used? ", strings.Contains(s, "\""))
+	return strings.ReplaceAll(s, "\"", "")
 }
 
 // InitExec executes a statement as part of the DB initialization, closing the connection on error
