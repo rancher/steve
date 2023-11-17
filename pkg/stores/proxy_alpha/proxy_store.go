@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/tools/cache"
 	"net/http"
 	"os"
 	"regexp"
@@ -16,8 +14,10 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/lasso/pkg/cache/sql/informer"
+	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/sqlcache"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
 	"github.com/rancher/wrangler/pkg/data"
@@ -30,12 +30,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 )
 
 const watchTimeoutEnv = "CATTLE_WATCH_TIMEOUT_SECONDS"
@@ -68,7 +70,7 @@ type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(lo *listprocessor.ListOptions, partitions []listprocessor.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	ListByOptions(lo *informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -96,21 +98,24 @@ type Store interface {
 	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
 	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
 
-	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error)
-	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error)
+	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error)
+	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error)
 }
 
 // store implements Store
 type store struct {
 	clientGetter      ClientGetter
 	notifier          RelationshipNotifier
-	informerFactory   *sqlcache.InformerFactory
+	informerFactory   *factory.InformerFactory
 	namespaceInformer Informer
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier) Store {
-	informerFactory := sqlcache.NewInformerFactory()
+	informerFactory, err := factory.NewInformerFactory()
+	if err != nil {
+		return nil
+	}
 	buffer := WarningBuffer{}
 	s := &types.APISchema{
 		Schema: &schemas.Schema{},
@@ -515,7 +520,7 @@ func (s *store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 }
 
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
-func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, error) {
+func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
 	opts, _ := listprocessor.ParseQuery(apiOp, s.namespaceInformer)
 
 	// warnings from inside the informer are discarded
@@ -541,7 +546,7 @@ func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
-func (s *store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error) {
+func (s *store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error) {
 	ctx, cancel := context.WithCancel(apiOp.Context())
 	apiOp = apiOp.Clone().WithContext(ctx)
 
@@ -576,7 +581,7 @@ func (s *store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 }
 
 // watchByPartition returns a channel of events for a list or resource belonging to a specified partition
-func (s *store) watchByPartition(partition listprocessor.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
+func (s *store) watchByPartition(partition partition.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
 	if partition.Passthrough {
 		return s.Watch(apiOp, schema, wr)
 	}

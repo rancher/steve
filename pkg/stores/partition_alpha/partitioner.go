@@ -5,15 +5,16 @@ import (
 	"sort"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/wrangler/pkg/kv"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 var (
-	passthroughPartitions = []listprocessor.Partition{
+	passthroughPartitions = []partition.Partition{
 		{Passthrough: true},
 	}
 )
@@ -25,7 +26,7 @@ type rbacPartitioner struct {
 
 // Lookup returns the default passthrough partition which is used only for retrieving single resources.
 // Listing or watching resources require custom partitions.
-func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error) {
+func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error) {
 	switch verb {
 	case "create":
 		fallthrough
@@ -36,21 +37,21 @@ func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchem
 	case "delete":
 		return passthroughPartitions[0], nil
 	default:
-		return listprocessor.Partition{}, fmt.Errorf("partition list: invalid verb %s", verb)
+		return partition.Partition{}, fmt.Errorf("partition list: invalid verb %s", verb)
 	}
 }
 
 // All returns a slice of partitions applicable to the API schema and the user's access level.
 // For watching individual resources or for blanket access permissions, it returns the passthrough partition.
 // For more granular permissions, it returns a slice of partitions matching an allowed namespace or resource names.
-func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error) {
+func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error) {
 	switch verb {
 	case "list":
 		fallthrough
 	case "watch":
 		if id != "" {
 			ns, name := kv.RSplit(id, "/")
-			return []listprocessor.Partition{
+			return []partition.Partition{
 				{
 					Namespace:   ns,
 					All:         false,
@@ -79,7 +80,7 @@ func (p *rbacPartitioner) Store() proxy_alpha.Store {
 
 // isPassthrough determines whether a request can be passed through directly to the underlying store
 // or if the results need to be partitioned by namespace and name based on the requester's access.
-func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string) ([]listprocessor.Partition, bool) {
+func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string) ([]partition.Partition, bool) {
 	accessListByVerb, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
 	if accessListByVerb.All(verb) {
 		return nil, true
@@ -90,7 +91,7 @@ func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string
 		if resources[apiOp.Namespace].All {
 			return nil, true
 		}
-		return []listprocessor.Partition{
+		return []partition.Partition{
 			{
 				Namespace: apiOp.Namespace,
 				Names:     resources[apiOp.Namespace].Names,
@@ -98,11 +99,11 @@ func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string
 		}, false
 	}
 
-	var result []listprocessor.Partition
+	var result []partition.Partition
 
 	if attributes.Namespaced(schema) {
 		for k, v := range resources {
-			result = append(result, listprocessor.Partition{
+			result = append(result, partition.Partition{
 				Namespace: k,
 				All:       v.All,
 				Names:     v.Names,
@@ -110,7 +111,7 @@ func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string
 		}
 	} else {
 		for _, v := range resources {
-			result = append(result, listprocessor.Partition{
+			result = append(result, partition.Partition{
 				All:   v.All,
 				Names: v.Names,
 			})

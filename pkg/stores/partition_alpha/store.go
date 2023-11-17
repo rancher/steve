@@ -5,8 +5,9 @@ package partition_alpha
 import (
 	"fmt"
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -26,8 +27,8 @@ const (
 
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
-	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error)
-	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error)
+	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error)
+	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error)
 	Store() proxy_alpha.Store
 }
 
