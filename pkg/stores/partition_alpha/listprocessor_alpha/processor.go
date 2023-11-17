@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/lasso/pkg/cache/sql"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -33,118 +34,25 @@ const (
 
 var opReg = regexp.MustCompile(`[!]?=`)
 
-type op string
-
-const (
-	eq    op = ""
-	notEq op = "!="
-)
-
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
 	ChunkSize  int
 	Resume     string
-	Filters    []OrFilter
-	Sort       Sort
-	Pagination Pagination
-}
-
-// Partition represents filtering of a request's results by namespace or a list of resource names
-type Partition struct {
-	Namespace   string
-	All         bool
-	Passthrough bool
-	Names       sets.String
+	Filters    []sql.OrFilter
+	Sort       sql.Sort
+	Pagination sql.Pagination
 }
 
 type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(lo *ListOptions, partitions []Partition, namespace string) (*unstructured.UnstructuredList, string, error)
-}
-
-// Filter represents a field to filter by.
-// A subfield in an object is represented in a request query using . notation, e.g. 'metadata.name'.
-// The subfield is internally represented as a slice, e.g. [metadata, name].
-type Filter struct {
-	Field []string
-	Match string
-	Op    op
-}
-
-// String returns the filter as a query string.
-func (f Filter) String() string {
-	field := strings.Join(f.Field, ".")
-	return field + "=" + f.Match
-}
-
-// OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
-type OrFilter struct {
-	Filters []Filter
-}
-
-// String returns the filter as a query string.
-func (f OrFilter) String() string {
-	var fields strings.Builder
-	for i, field := range f.Filters {
-		fields.WriteString(strings.Join(field.Field, "."))
-		fields.WriteByte('=')
-		fields.WriteString(field.Match)
-		if i < len(f.Filters)-1 {
-			fields.WriteByte(',')
-		}
-	}
-	return fields.String()
-}
-
-// SortOrder represents whether the list should be ascending or descending.
-type SortOrder int
-
-const (
-	// ASC stands for ascending order.
-	ASC SortOrder = iota
-	// DESC stands for descending (reverse) order.
-	DESC
-)
-
-// Sort represents the criteria to sort on.
-// The subfield to sort by is represented in a request query using . notation, e.g. 'metadata.name'.
-// The subfield is internally represented as a slice, e.g. [metadata, name].
-// The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
-type Sort struct {
-	PrimaryField   []string
-	SecondaryField []string
-	PrimaryOrder   SortOrder
-	SecondaryOrder SortOrder
-}
-
-// String returns the sort parameters as a query string.
-func (s Sort) String() string {
-	field := ""
-	if s.PrimaryOrder == DESC {
-		field = "-" + field
-	}
-	field += strings.Join(s.PrimaryField, ".")
-	if len(s.SecondaryField) > 0 {
-		field += ","
-		if s.SecondaryOrder == DESC {
-			field += "-"
-		}
-		field += strings.Join(s.SecondaryField, ".")
-	}
-	return field
-}
-
-// Pagination represents how to return paginated results.
-type Pagination struct {
-	PageSize int
-	Page     int
+	ListByOptions(lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions, error) {
-	opts := ListOptions{}
+func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOptions, error) {
+	opts := sql.ListOptions{}
 
 	opts.ChunkSize = getLimit(apiOp)
 
@@ -153,12 +61,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 	opts.Resume = cont
 
 	filterParams := q[filterParam]
-	filterOpts := []OrFilter{}
+	filterOpts := []sql.OrFilter{}
 	for _, filters := range filterParams {
 		orFilters := strings.Split(filters, orOp)
-		orFilter := OrFilter{}
+		orFilter := sql.OrFilter{}
 		for _, filter := range orFilters {
-			var op op
+			var op sql.Op
 			if strings.Contains(filter, "!=") {
 				op = "!="
 			}
@@ -166,7 +74,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 			if len(filter) != 2 {
 				continue
 			}
-			orFilter.Filters = append(orFilter.Filters, Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op})
+			orFilter.Filters = append(orFilter.Filters, sql.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -190,13 +98,13 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 	})
 	opts.Filters = filterOpts
 
-	sortOpts := Sort{}
+	sortOpts := sql.Sort{}
 	sortKeys := q.Get(sortParam)
 	if sortKeys != "" {
 		sortParts := strings.SplitN(sortKeys, ",", 2)
 		primaryField := sortParts[0]
 		if primaryField != "" && primaryField[0] == '-' {
-			sortOpts.PrimaryOrder = DESC
+			sortOpts.PrimaryOrder = sql.DESC
 			primaryField = primaryField[1:]
 		}
 		if primaryField != "" {
@@ -205,7 +113,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 		if len(sortParts) > 1 {
 			secondaryField := sortParts[1]
 			if secondaryField != "" && secondaryField[0] == '-' {
-				sortOpts.SecondaryOrder = DESC
+				sortOpts.SecondaryOrder = sql.DESC
 				secondaryField = secondaryField[1:]
 			}
 			if secondaryField != "" {
@@ -216,7 +124,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 	opts.Sort = sortOpts
 
 	var err error
-	pagination := Pagination{}
+	pagination := sql.Pagination{}
 	pagination.PageSize, err = strconv.Atoi(q.Get(pageSizeParam))
 	if err != nil {
 		pagination.PageSize = 0
@@ -227,12 +135,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 	}
 	opts.Pagination = pagination
 
-	var op op
+	var op sql.Op
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
 		if projectsOrNamespaces != "" {
-			op = notEq
+			op = sql.NotEq
 		}
 	}
 	if projectsOrNamespaces != "" {
@@ -240,12 +148,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*ListOptions,
 		if err != nil {
 			return nil, err
 		}
-		if op == notEq {
+		if op == sql.NotEq {
 			for _, filter := range projOrNSFilters {
-				opts.Filters = append(opts.Filters, OrFilter{Filters: []Filter{filter}})
+				opts.Filters = append(opts.Filters, sql.OrFilter{Filters: []sql.Filter{filter}})
 			}
 		} else {
-			opts.Filters = append(opts.Filters, OrFilter{Filters: projOrNSFilters})
+			opts.Filters = append(opts.Filters, sql.OrFilter{Filters: projOrNSFilters})
 		}
 	}
 	return &opts, nil
@@ -275,7 +183,7 @@ func ToList(list <-chan []unstructured.Unstructured) []unstructured.Unstructured
 	return result
 }
 
-func matchesOne(obj map[string]interface{}, filter Filter) bool {
+func matchesOne(obj map[string]interface{}, filter sql.Filter) bool {
 	var objValue interface{}
 	var ok bool
 	subField := []string{}
@@ -299,7 +207,7 @@ func matchesOne(obj map[string]interface{}, filter Filter) bool {
 			return true
 		}
 	case []interface{}:
-		filter = Filter{Field: subField, Match: filter.Match, Op: filter.Op}
+		filter = sql.Filter{Field: subField, Match: filter.Match, Op: filter.Op}
 		if matchesOneInList(typedVal, filter) {
 			return true
 		}
@@ -307,7 +215,7 @@ func matchesOne(obj map[string]interface{}, filter Filter) bool {
 	return false
 }
 
-func matchesOneInList(obj []interface{}, filter Filter) bool {
+func matchesOneInList(obj []interface{}, filter sql.Filter) bool {
 	for _, v := range obj {
 		switch typedItem := v.(type) {
 		case string, int, bool:
@@ -328,17 +236,17 @@ func matchesOneInList(obj []interface{}, filter Filter) bool {
 	return false
 }
 
-func matchesAny(obj map[string]interface{}, filter OrFilter) bool {
+func matchesAny(obj map[string]interface{}, filter sql.OrFilter) bool {
 	for _, f := range filter.Filters {
 		matches := matchesOne(obj, f)
-		if (matches && f.Op == eq) || (!matches && f.Op == notEq) {
+		if (matches && f.Op == sql.Eq) || (!matches && f.Op == sql.NotEq) {
 			return true
 		}
 	}
 	return false
 }
 
-func matchesAll(obj map[string]interface{}, filters []OrFilter) bool {
+func matchesAll(obj map[string]interface{}, filters []sql.OrFilter) bool {
 	for _, f := range filters {
 		if !matchesAny(obj, f) {
 			return false
@@ -347,32 +255,32 @@ func matchesAll(obj map[string]interface{}, filters []OrFilter) bool {
 	return true
 }
 
-func parseNamespaceOrProjectFilters(projOrNS string, op op, namespaceInformer Informer) ([]Filter, error) {
-	var filters []Filter
+func parseNamespaceOrProjectFilters(projOrNS string, op sql.Op, namespaceInformer Informer) ([]sql.Filter, error) {
+	var filters []sql.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, err := namespaceInformer.ListByOptions(&ListOptions{
-			Filters: []OrFilter{
+		uList, _, err := namespaceInformer.ListByOptions(&sql.ListOptions{
+			Filters: []sql.OrFilter{
 				{
-					Filters: []Filter{
+					Filters: []sql.Filter{
 						{
 							Field: []string{"metadata", "name"},
 							Match: pn,
-							Op:    eq,
+							Op:    sql.Eq,
 						},
 						{
 							Field: []string{"metadata", "labels", "field.cattle.io/projectId"},
 							Match: pn,
-							Op:    eq,
+							Op:    sql.Eq,
 						},
 					},
 				},
 			},
-		}, []Partition{{Passthrough: true}}, "")
+		}, []partition.Partition{{Passthrough: true}}, "")
 		if err != nil {
 			return filters, err
 		}
 		for _, item := range uList.Items {
-			filters = append(filters, Filter{
+			filters = append(filters, sql.Filter{
 				Field: []string{"metadata", "namespace"},
 				Match: item.GetName(),
 				Op:    op,
