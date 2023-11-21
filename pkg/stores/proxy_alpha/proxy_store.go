@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/partition_alpha/listprocessor_alpha"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/schemas"
 	"github.com/rancher/wrangler/pkg/schemas/validation"
@@ -517,7 +517,7 @@ func (s *store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
 func (s *store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
-	opts, _ := listprocessor.ParseQuery(apiOp, s.namespaceInformer)
+	opts, _ := listprocessor_alpha.ParseQuery(apiOp, s.namespaceInformer)
 
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}

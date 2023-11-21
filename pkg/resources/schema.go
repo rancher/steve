@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+
 	"github.com/rancher/apiserver/pkg/store/apiroot"
 	"github.com/rancher/apiserver/pkg/subscribe"
 	"github.com/rancher/apiserver/pkg/types"
@@ -18,6 +19,7 @@ import (
 	steveschema "github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/discovery"
 )
@@ -45,9 +47,10 @@ func DefaultSchemaTemplates(cf *client.Factory,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
 	lookup accesscontrol.AccessSetLookup,
-	discovery discovery.DiscoveryInterface) []schema.Template {
+	discovery discovery.DiscoveryInterface,
+	namespaceCache corecontrollers.NamespaceCache) []schema.Template {
 	return []schema.Template{
-		common.DefaultTemplate(cf, summaryCache, lookup),
+		common.DefaultTemplate(cf, summaryCache, lookup, namespaceCache),
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
