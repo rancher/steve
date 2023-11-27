@@ -2,8 +2,9 @@ package schema
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/v2/pkg/schemas"

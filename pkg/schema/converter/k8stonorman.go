@@ -70,7 +70,7 @@ func GetGVKForKind(kind *proto.Kind) *schema.GroupVersionKind {
 }
 
 // ToSchemas creates the schemas for a K8s server, using client to discover groups/resources, and crd to potentially
-// add additional information about new fields/resources. Mostly ties together AddDiscovery and AddCustomResources.
+// add additional information about new fields/resources. Mostly ties together addDiscovery and addCustomResources.
 func ToSchemas(crd v1.CustomResourceDefinitionClient, client discovery.DiscoveryInterface) (map[string]*types.APISchema, error) {
 	result := map[string]*types.APISchema{}
 
