@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/schemas"
 	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schema/definitions"
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
 	"github.com/rancher/steve/pkg/summarycache"
@@ -141,6 +142,7 @@ func setup(ctx context.Context, server *Server) error {
 	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
 		return err
 	}
+	definitions.Register(server.BaseSchemas, server.controllers.K8s.Discovery())
 
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
