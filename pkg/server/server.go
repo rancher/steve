@@ -3,8 +3,9 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/rancher/steve/pkg/resources/common"
+	"fmt"
 	"net/http"
+	"time"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
@@ -16,6 +17,7 @@ import (
 	"github.com/rancher/steve/pkg/clustercache"
 	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources"
+	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/schemas"
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/server/handler"
@@ -191,6 +193,7 @@ func setup(ctx context.Context, server *Server) error {
 		ccache,
 		sf)
 
+	fmt.Println("SF ON HANDLER.NEW: ", sf.Len())
 	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
 	if err != nil {
 		return err
@@ -230,16 +233,17 @@ func setupAlpha(ctx context.Context, server *Server) error {
 		return err
 	}
 
+	fmt.Println("BASE SCHEMA LEN: ", len(server.BaseSchemas.Schemas))
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
-
-	for _, template := range resources.DefaultSchemaTemplatesAlpha(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
-		sf.AddTemplate(template)
-	}
 
 	cols, err := common.NewDynamicColumns(server.RESTConfig)
 	if err != nil {
 		return err
+	}
+
+	for _, template := range resources.DefaultSchemaTemplatesAlpha(cols, cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
+		sf.AddTemplate(template)
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
@@ -261,6 +265,10 @@ func setupAlpha(ctx context.Context, server *Server) error {
 	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
+	go func() {
+		time.Sleep(30 * time.Second)
+		fmt.Println("SF LEN SCHEMAS AFTER 5 seconds: ", sf.Len())
+	}()
 	return nil
 }
 

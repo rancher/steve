@@ -8,9 +8,7 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition_alpha"
 	"github.com/rancher/steve/pkg/stores/proxy"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/pkg/data"
 	v1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
@@ -31,11 +29,10 @@ func DefaultTemplate(clientGetter proxy.ClientGetter,
 	}
 }
 
-func DefaultTemplateAlpha(clientGetter proxy_alpha.ClientGetter,
-	summaryCache *summarycache.SummaryCache,
-	asl accesscontrol.AccessSetLookup) schema.Template {
+func DefaultTemplateAlpha(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
+
 	return schema.Template{
-		Store:     metricsStore.NewMetricsStore(partition_alpha.NewProxyStore(clientGetter, summaryCache, asl)),
+		Store:     store,
 		Formatter: formatter(summaryCache),
 	}
 }

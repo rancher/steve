@@ -2,6 +2,9 @@ package resources
 
 import (
 	"context"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 
 	"github.com/rancher/apiserver/pkg/store/apiroot"
 	"github.com/rancher/apiserver/pkg/subscribe"
@@ -73,13 +76,33 @@ func DefaultSchemaTemplates(cf *client.Factory,
 	}
 }
 
-func DefaultSchemaTemplatesAlpha(cf *client.Factory,
+func DefaultSchemaTemplatesAlpha(c *common.DynamicColumns, cf *client.Factory,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
 	lookup accesscontrol.AccessSetLookup,
 	discovery discovery.DiscoveryInterface) []schema.Template {
+
+	// move store setup to function
+	s, err := proxy_alpha.NewProxyStore(c, cf, summaryCache)
+	if err != nil {
+		panic(err)
+	}
+
+	errStore := proxy_alpha.NewErrorStore(
+		proxy_alpha.NewUnformatterStore(
+			proxy_alpha.NewWatchRefresh(
+				partition_alpha.NewStore(
+					s,
+					lookup,
+				),
+				lookup,
+			),
+		),
+	)
+	store := metricsStore.NewMetricsStore(partition_alpha.NewStore(s, c, cf, summaryCache, lookup))
+	// end function
 	return []schema.Template{
-		common.DefaultTemplateAlpha(cf, summaryCache, lookup),
+		common.DefaultTemplateAlpha(store, summaryCache),
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
