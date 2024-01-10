@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"net/http"
 	"time"
 
@@ -49,6 +52,10 @@ type Server struct {
 
 	aggregationSecretNamespace string
 	aggregationSecretName      string
+}
+
+type serverSchemaHandler struct {
+	SchemasFunc func(schemas *schema.Collection) error
 }
 
 type Options struct {
@@ -242,8 +249,40 @@ func setupAlpha(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	for _, template := range resources.DefaultSchemaTemplatesAlpha(cols, cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
+	// move to store code
+	s, err := proxy_alpha.NewProxyStore(cols, cf, summaryCache)
+	if err != nil {
+		panic(err)
+	}
+
+	errStore := proxy_alpha.NewErrorStore(
+		proxy_alpha.NewUnformatterStore(
+			proxy_alpha.NewWatchRefresh(
+				partition_alpha.NewStore(
+					s,
+					asl,
+				),
+				asl,
+			),
+		),
+	)
+	store := metricsStore.NewMetricsStore(errStore)
+	// end store setup code
+
+	for _, template := range resources.DefaultSchemaTemplatesAlpha(store, cols, cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
 		sf.AddTemplate(template)
+	}
+
+	onSchemasHandler := &serverSchemaHandler{
+		SchemasFunc: func(schemas *schema.Collection) error {
+			if err := ccache.OnSchemas(schemas); err != nil {
+				return err
+			}
+			if err := s.Reset(); err != nil {
+				return err
+			}
+			return nil
+		},
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
@@ -254,7 +293,7 @@ func setupAlpha(ctx context.Context, server *Server) error {
 		server.controllers.CRD.CustomResourceDefinition(),
 		server.controllers.API.APIService(),
 		server.controllers.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
-		ccache,
+		onSchemasHandler,
 		sf)
 
 	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
@@ -305,4 +344,8 @@ func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, op
 
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+func (s *serverSchemaHandler) OnSchemas(schemas *schema.Collection) error {
+	return s.SchemasFunc(schemas)
 }
