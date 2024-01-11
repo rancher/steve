@@ -239,7 +239,7 @@ import (
 	"context"
 
 	"github.com/rancher/steve/pkg/server"
-	"github.com/rancher/wrangler/pkg/kubeconfig"
+	"github.com/rancher/wrangler/v2/pkg/kubeconfig"
 )
 
 func steve() error {
