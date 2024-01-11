@@ -511,12 +511,12 @@ github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1
 github.com/prometheus/procfs v0.10.1 h1:kYK1Va/YMlutzCGazswoHKo//tZVlFpKYh+PymziUAg=
 github.com/prometheus/procfs v0.10.1/go.mod h1:nwNm2aOCAYw8uTR/9bWRREkZFxAUcWzPHWJq+XBB/FM=
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
-github.com/rancher/apiserver v0.0.0-20230831052300-120e615b17ba h1:ceAHvddZkuNbUTuMgqxYAcUSQ/+YtJQO9Z1PHjmQZBY=
-github.com/rancher/apiserver v0.0.0-20230831052300-120e615b17ba/go.mod h1:1m5KKYXq6iMZFQ5kiC9rBgVLfGRNR8E+lp88f5tEAsI=
+github.com/rancher/apiserver v0.0.0-20240124133512-e93bfa07e5f1 h1:RM0EOF/4aEbbb7x8VsBAKUG3hcuDOmp2aLqgXa7XqfM=
+github.com/rancher/apiserver v0.0.0-20240124133512-e93bfa07e5f1/go.mod h1:JaFbxL5U5YH72tCeKkDM9kM8238hCyOKocr/S2T3wus=
 github.com/rancher/client-go v1.27.4-rancher1 h1:1W1A0bV6KXYbu1z+KIezlfLsHPc1wiasAM42BICVKBM=
 github.com/rancher/client-go v1.27.4-rancher1/go.mod h1:ragcly7lUlN0SRPk5/ZkGnDjPknzb37TICq07WhI6Xc=
-github.com/rancher/dynamiclistener v0.3.6-rc2.0.20230831052350-0132d96ec2c5 h1:qmGPmNYbW2SQwlou9oOjDYbHwU+iAfw1FVMGqv+aDsM=
-github.com/rancher/dynamiclistener v0.3.6-rc2.0.20230831052350-0132d96ec2c5/go.mod h1:VqBaJNi+bZmre0+gi+2Jb6jbn7ovHzRueW+M7QhVKsk=
+github.com/rancher/dynamiclistener v0.5.0-rc1 h1:ax9/IFFfL3svjQwA8bTY6XKG26vwmdPsCV0v00S7hSY=
+github.com/rancher/dynamiclistener v0.5.0-rc1/go.mod h1:RX6NcryWL1ew6wngAx0R478Q0DTtTthvxI+9+fAqZHM=
 github.com/rancher/kubernetes-provider-detector v0.1.5 h1:hWRAsWuJOemzGjz/XrbTlM7QmfO4OedvFE3QwXiH60I=
 github.com/rancher/kubernetes-provider-detector v0.1.5/go.mod h1:ypuJS7kP7rUiAn330xG46mj+Nhvym05GM8NqMVekpH0=
 github.com/rancher/lasso v0.0.0-20230830164424-d684fdeb6f29 h1:+kige/h8/LnzWgPjB5NUIHz/pWiW/lFpqcTUkN5uulY=
@@ -525,8 +525,8 @@ github.com/rancher/norman v0.0.0-20230831160711-5de27f66385d h1:Ft/iTH91TlE2oBGm
 github.com/rancher/norman v0.0.0-20230831160711-5de27f66385d/go.mod h1:Sm2Xqai+aecgmJ86ygyEe+TdPMLkauEpykSstBAu4Ko=
 github.com/rancher/remotedialer v0.3.0 h1:y1EO8JCsgZo0RcqTUp6U8FXcBAv27R+TLnWRcpvX1sM=
 github.com/rancher/remotedialer v0.3.0/go.mod h1:BwwztuvViX2JrLLUwDlsYt5DiyUwHLlzynRwkZLAY0Q=
-github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df h1:WJ+aaUICHPX8HeLmHE9JL/RFHhilMfcJlqmhgpc7gJU=
-github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df/go.mod h1:4T80p+rLh2OLbjCjdExIjRHKNBgK9NUAd7eIU/gRPKk=
+github.com/rancher/wrangler/v2 v2.0.2 h1:EWaWaD5Gnh8gGcLzglf/zktyuaiTi6e95c0T2RivVi8=
+github.com/rancher/wrangler/v2 v2.0.2/go.mod h1:p0YJmpbUbEQ1CE1GIbhwa9gCXeBJOBsQ6F6+Nf3LeLo=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=

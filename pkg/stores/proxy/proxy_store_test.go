@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/client"
-	"github.com/rancher/wrangler/pkg/schemas"
+	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
