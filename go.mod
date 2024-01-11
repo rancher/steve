@@ -3,6 +3,11 @@ module github.com/rancher/steve
 go 1.20
 
 replace (
+	github.com/rancher/apiserver v0.0.0-20230831052300-120e615b17ba => github.com/KevinJoiner/rancher-apiserver v0.0.0-20240111144620-faf8426fbfac
+	github.com/rancher/dynamiclistener v0.3.6-rc2.0.20230831052350-0132d96ec2c5 => github.com/KevinJoiner/rancher-dynamiclistener v0.3.4-0.20240111212255-e6451ba1e8e0
+)
+
+replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
@@ -22,7 +27,7 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20230831160711-5de27f66385d
 	github.com/rancher/remotedialer v0.3.0
-	github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df
+	github.com/rancher/wrangler/v2 v2.0.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.14
