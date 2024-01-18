@@ -6,6 +6,8 @@ package tablelistconvert
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/data"
 	"k8s.io/apimachinery/pkg/watch"
@@ -17,6 +19,10 @@ import (
 
 type Client struct {
 	dynamic.ResourceInterface
+}
+
+type Watch struct {
+	watch.Interface
 }
 
 type WarningBuffer []types.Warning
@@ -32,19 +38,47 @@ func (c *Client) List(ctx context.Context, opts metav1.ListOptions) (*unstructur
 	return list, nil
 }
 
+func (c *Client) Get(ctx context.Context, name string, options metav1.GetOptions, subresources ...string) (*unstructured.Unstructured, error) {
+	u, e := c.ResourceInterface.Get(ctx, name, options)
+	fmt.Printf("", u, e)
+	return &unstructured.Unstructured{}, nil
+}
 func (c *Client) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	buffer := &WarningBuffer{}
-	w, err := c.Watch(ctx, opts)
+	w, err := c.ResourceInterface.Watch(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	result := make(chan watch.Event)
+	return &Watch{Interface: w}, nil
+}
+
+func (w *Watch) ResultChan() <-chan watch.Event {
+	events := make(chan watch.Event)
+	tableEvents := w.Interface.ResultChan()
 	go func() {
-		for e := range w.ResultChan() {
-			e.Object
+		for e := range tableEvents {
+			if unstr, ok := e.Object.(*unstructured.Unstructured); ok {
+				rowToObject(unstr)
+			}
+			events <- e
 		}
 	}()
-	return result, nil
+	return events
+}
+
+func rowToObject(obj *unstructured.Unstructured) {
+	if obj == nil {
+		return
+	}
+	if obj.Object["kind"] != "Table" ||
+		(obj.Object["apiVersion"] != "meta.k8s.io/v1" &&
+			obj.Object["apiVersion"] != "meta.k8s.io/v1beta1") {
+		return
+	}
+
+	items := tableToObjects(obj.Object)
+	if len(items) == 1 {
+		obj.Object = items[0].Object
+	}
 }
 
 func tableToList(obj *unstructured.UnstructuredList) {
