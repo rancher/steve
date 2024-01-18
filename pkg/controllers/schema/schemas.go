@@ -189,7 +189,10 @@ func (h *handler) refreshAll(ctx context.Context) error {
 
 	h.watchableSchemas.Reset(filteredSchemas)
 	if h.handler != nil {
-		return h.handler.OnSchemas(h.watchableSchemas)
+		if err := h.handler.OnSchemas(h.watchableSchemas); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	// reset sql cache and pass schemas here

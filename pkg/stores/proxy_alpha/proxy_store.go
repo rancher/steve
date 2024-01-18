@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -94,13 +97,13 @@ type RelationshipNotifier interface {
 	OnInboundRelationshipChange(ctx context.Context, schema *types.APISchema, namespace string) <-chan *summary.Relationship
 }
 
-// store implements Store
 type Store struct {
 	clientGetter      ClientGetter
 	notifier          RelationshipNotifier
 	informerFactory   *sql.InformerFactory
 	namespaceInformer Informer
 	lock              sync.Mutex
+	columnSetter      SchemaColumnSetter
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
@@ -109,7 +112,6 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 	if err != nil {
 		return nil, err
 	}
-	buffer := WarningBuffer{}
 	s := &types.APISchema{
 		Schema: &schemas.Schema{},
 	}
@@ -118,27 +120,29 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 		Kind:    "Namespace",
 	})
 	attributes.SetResource(s, "namespaces")
-	client, err := clientGetter.AdminClient(nil, s, "", &buffer)
-	if err != nil {
-		return nil, err
+	if err := c.SetColumns(context.TODO(), s); err != nil {
+		return nil, fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
 	}
 
-	nsInformer, err := informerFactory.InformerFor(nil, client, s)
-	if err != nil {
-		return nil, err
+	store := &Store{
+		clientGetter:    clientGetter,
+		notifier:        notifier,
+		informerFactory: informerFactory,
+		columnSetter:    c,
 	}
 
-	return &Store{
-		clientGetter:      clientGetter,
-		notifier:          notifier,
-		informerFactory:   informerFactory,
-		namespaceInformer: nsInformer,
-	}, nil
+	if err := store.initializeNamespaceInformer(); err != nil {
+		logrus.Infof("failed to intialize namespace informer for proxy store in steve, will try again on next ns request")
+	}
+	return store, nil
 }
 
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if err := s.informerFactory.Close(); err != nil {
+		return err
+	}
 	if err := s.initializeInformerFactory(); err != nil {
 		return err
 	}
@@ -167,20 +171,39 @@ func (s *Store) initializeNamespaceInformer() error {
 	})
 	buffer := WarningBuffer{}
 	attributes.SetResource(nsSchema, "namespaces")
-	client, err := s.clientGetter.AdminClient(nil, nsSchema, "", &buffer)
+	if err := s.columnSetter.SetColumns(context.TODO(), nsSchema); err != nil {
+		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
+	}
+	client, err := s.clientGetter.TableAdminClient(nil, nsSchema, "", &buffer)
 	if err != nil {
 		return err
 	}
 
-	nsInformer, err := s.informerFactory.InformerFor(nil, client, nsSchema)
+	fields := getFieldsFromSchema(nsSchema)
+	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, nsSchema)
 	if err != nil {
 		return err
 	}
 
-	s.lock.Lock()
-	defer s.lock.Unlock()
 	s.namespaceInformer = nsInformer
 	return nil
+}
+
+func getFieldsFromSchema(schema *types.APISchema) [][]string {
+	var fields [][]string
+	columns := attributes.Columns(schema)
+	if columns == nil {
+		return nil
+	}
+	colDefs, ok := columns.([]common.ColumnDefinition)
+	if !ok {
+		return nil
+	}
+	for _, colDef := range colDefs {
+		field := strings.TrimPrefix(colDef.Field, "$.")
+		fields = append(fields, strings.Split(field, "."))
+	}
+	return fields
 }
 
 // ByID looks up a single object by its ID.
@@ -565,12 +588,12 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
-	client, err := s.clientGetter.AdminClient(apiOp, schema, "", &buffer)
+	client, err := s.clientGetter.TableAdminClient(apiOp, schema, "", &buffer)
 	if err != nil {
 		return nil, "", err
 	}
 
-	informer, err := s.informerFactory.InformerFor(apiOp, client, schema)
+	informer, err := s.informerFactory.InformerFor(getFieldsFromSchema(schema), &tablelistconvert.Client{ResourceInterface: client}, schema)
 	if err != nil {
 		return nil, "", err
 	}
