@@ -142,7 +142,8 @@ func setup(ctx context.Context, server *Server) error {
 	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
 		return err
 	}
-	definitions.Register(server.BaseSchemas, server.controllers.K8s.Discovery())
+	definitions.Register(ctx, server.BaseSchemas, server.controllers.K8s.Discovery(),
+		server.controllers.CRD.CustomResourceDefinition(), server.controllers.API.APIService())
 
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)

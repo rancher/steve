@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/schema/converter"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/kube-openapi/pkg/util/proto"
@@ -28,15 +26,11 @@ var (
 	}
 )
 
-// schemaDefinitionHandler is a byID handler for a specific schema, which provides field definitions for all schemas.
+// SchemaDefinitionHandler is a byID handler for a specific schema, which provides field definitions for all schemas.
 // Does not implement any method allowing a caller to list definitions for all schemas.
-type schemaDefinitionHandler struct {
+type SchemaDefinitionHandler struct {
 	sync.RWMutex
 
-	// lastRefresh is the last time that the handler retrieved models from kubernetes.
-	lastRefresh time.Time
-	// refreshStale is the duration between lastRefresh and the next refresh of models.
-	refreshStale time.Duration
 	// client is the discovery client used to get the groups/resources/fields from kubernetes.
 	client discovery.DiscoveryInterface
 	// models are the cached models from the last response from kubernetes.
@@ -46,22 +40,40 @@ type schemaDefinitionHandler struct {
 	schemaToModel map[string]string
 }
 
+// Refresh writeLocks and updates the cache with new schemaDefinitions. Will result in a call to kubernetes to retrieve
+// the openAPI schemas.
+func (s *SchemaDefinitionHandler) Refresh() error {
+	s.Lock()
+	defer s.Unlock()
+	openapi, err := s.client.OpenAPISchema()
+	if err != nil {
+		return fmt.Errorf("unable to fetch openapi definition: %w", err)
+	}
+	models, err := proto.NewOpenAPIData(openapi)
+	if err != nil {
+		return fmt.Errorf("unable to parse openapi definition into models: %w", err)
+	}
+	s.models = &models
+	nameIndex, err := s.indexSchemaNames(models)
+	// indexSchemaNames may successfully refresh some definitions, but still return an error
+	// in these cases, store what we could find, but still return up an error
+	if nameIndex != nil {
+		s.schemaToModel = nameIndex
+	}
+	if err != nil {
+		return fmt.Errorf("unable to index schema name to model name: %w", err)
+	}
+	return nil
+}
+
 // byIDHandler is the Handler method for a request to get the schema definition for a specifc schema. Will use the
 // cached models found during the last refresh as part of this process.
-func (s *schemaDefinitionHandler) byIDHandler(request *types.APIRequest) (types.APIObject, error) {
+func (s *SchemaDefinitionHandler) byIDHandler(request *types.APIRequest) (types.APIObject, error) {
 	// pseudo-access check, designed to make sure that users have access to the schema for the definition that they
 	// are accessing.
 	requestSchema := request.Schemas.LookupSchema(request.Name)
 	if requestSchema == nil {
 		return types.APIObject{}, apierror.NewAPIError(validation.NotFound, "no such schema")
-	}
-
-	if s.needsRefresh() {
-		err := s.refresh()
-		if err != nil {
-			logrus.Errorf("error refreshing schemas %s", err.Error())
-			return types.APIObject{}, apierror.NewAPIError(internalServerErrorCode, "error refreshing schemas")
-		}
 	}
 
 	// lock only in read-mode so that we don't read while refresh writes. Only use a read-lock - using a write lock
@@ -100,46 +112,9 @@ func (s *schemaDefinitionHandler) byIDHandler(request *types.APIRequest) (types.
 	}, nil
 }
 
-// needsRefresh readLocks and checks if the cache needs to be refreshed.
-func (s *schemaDefinitionHandler) needsRefresh() bool {
-	s.RLock()
-	defer s.RUnlock()
-	if s.lastRefresh.IsZero() {
-		return true
-	}
-	return s.lastRefresh.Add(s.refreshStale).Before(time.Now())
-}
-
-// refresh writeLocks and updates the cache with new schemaDefinitions. Will result in a call to kubernetes to retrieve
-// the openAPI schemas.
-func (s *schemaDefinitionHandler) refresh() error {
-	s.Lock()
-	defer s.Unlock()
-	openapi, err := s.client.OpenAPISchema()
-	if err != nil {
-		return fmt.Errorf("unable to fetch openapi definition: %w", err)
-	}
-	models, err := proto.NewOpenAPIData(openapi)
-	if err != nil {
-		return fmt.Errorf("unable to parse openapi definition into models: %w", err)
-	}
-	s.models = &models
-	nameIndex, err := s.indexSchemaNames(models)
-	// indexSchemaNames may successfully refresh some definitions, but still return an error
-	// in these cases, store what we could find, but still return up an error
-	if nameIndex != nil {
-		s.schemaToModel = nameIndex
-		s.lastRefresh = time.Now()
-	}
-	if err != nil {
-		return fmt.Errorf("unable to index schema name to model name: %w", err)
-	}
-	return nil
-}
-
 // indexSchemaNames returns a map of schemaID to the modelName for a given schema. Will use the preferred version of a
 // resource if possible. May return a map and an error if it was able to index some schemas but not others.
-func (s *schemaDefinitionHandler) indexSchemaNames(models proto.Models) (map[string]string, error) {
+func (s *SchemaDefinitionHandler) indexSchemaNames(models proto.Models) (map[string]string, error) {
 	_, resourceLists, err := s.client.ServerGroupsAndResources()
 	// this may occasionally fail to discover certain groups, but we still can refresh the others in those cases
 	if _, ok := err.(*discovery.ErrGroupDiscoveryFailed); err != nil && !ok {
