@@ -58,6 +58,7 @@ func TestSchemas(t *testing.T) {
 		})
 	}
 }
+
 func TestSchemaCache(t *testing.T) {
 	// Schemas are a frequently used resource. It's important that the cache doesn't have a leak given size/frequency of resource
 	tests := []struct {
@@ -116,6 +117,43 @@ func TestSchemaCache(t *testing.T) {
 			mockLookup.Clear()
 			runSchemaTest(t, test.after, mockLookup, collection, &testUser)
 			assert.Len(t, collection.cache.Keys(), 1, "expected cache to be size 1")
+		})
+	}
+}
+
+func TestUniq(t *testing.T) {
+	tests := []struct {
+		name          string
+		param         []string
+		desiredResult []string
+	}{
+		{
+			name:          "remove duplicates [1/4]",
+			param:         []string{"GET", "POST", "PUT"},
+			desiredResult: []string{"GET", "POST", "PUT"},
+		},
+		{
+			name:          "remove duplicates [2/4]",
+			param:         []string{"GET", "GET", "POST"},
+			desiredResult: []string{"GET", "POST"},
+		},
+		{
+			name:          "remove duplicates [3/4]",
+			param:         []string{"DELETE"},
+			desiredResult: []string{"DELETE"},
+		},
+		{
+			name:          "remove duplicates [4/4]",
+			param:         []string{},
+			desiredResult: []string{},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			result := uniq(test.param)
+			assert.Equal(t, result, test.desiredResult)
 		})
 	}
 }

@@ -32,6 +32,23 @@ func newSchemas() (*types.APISchemas, error) {
 	return apiSchemas, nil
 }
 
+// Returns the new duplicate free slice.
+func uniq(s []string) []string {
+	length := len(s)
+	found := make(map[string]struct{})
+	result := make([]string, 0, length)
+
+	for i := 0; i < length; i++ {
+		v := s[i]
+		if _, ok := found[v]; !ok {
+			found[v] = struct{}{}
+			result = append(result, v)
+		}
+	}
+
+	return result
+}
+
 func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	access := c.as.AccessFor(user)
 	c.removeOldRecords(access, user)
@@ -128,7 +145,8 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 				verbAccess["get"] = accessList
 				verbAccess["watch"] = accessList
 				if len(accessList) == 0 {
-					// always allow list
+					// always allow list. note, this can lead to duplicates
+					// which will be removed later.
 					s.CollectionMethods = append(s.CollectionMethods, http.MethodGet)
 				}
 			}
@@ -161,6 +179,8 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 		if len(s.CollectionMethods) == 0 && len(s.ResourceMethods) == 0 {
 			continue
 		}
+
+		s.CollectionMethods = uniq(s.CollectionMethods)
 
 		if err := result.AddSchema(*s); err != nil {
 			return nil, err
