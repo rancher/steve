@@ -275,12 +275,14 @@ func setupAlpha(ctx context.Context, server *Server) error {
 
 	onSchemasHandler := &serverSchemaHandler{
 		SchemasFunc: func(schemas *schema.Collection) error {
+			fmt.Println("resetting db!!!!")
 			if err := ccache.OnSchemas(schemas); err != nil {
 				return err
 			}
 			if err := s.Reset(); err != nil {
 				return err
 			}
+			fmt.Println("db reset was successful!!!!")
 			return nil
 		},
 	}
