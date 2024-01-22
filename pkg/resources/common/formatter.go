@@ -11,7 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/pkg/data"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	v1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/rancher/wrangler/pkg/summary"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -22,10 +22,17 @@ import (
 
 func DefaultTemplate(clientGetter proxy.ClientGetter,
 	summaryCache *summarycache.SummaryCache,
-	asl accesscontrol.AccessSetLookup,
-	namespaceCache corecontrollers.NamespaceCache) schema.Template {
+	asl accesscontrol.AccessSetLookup, namespaceCache v1.NamespaceCache) schema.Template {
 	return schema.Template{
 		Store:     metricsStore.NewMetricsStore(proxy.NewProxyStore(clientGetter, summaryCache, asl, namespaceCache)),
+		Formatter: formatter(summaryCache),
+	}
+}
+
+func DefaultTemplateAlpha(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
+
+	return schema.Template{
+		Store:     store,
 		Formatter: formatter(summaryCache),
 	}
 }

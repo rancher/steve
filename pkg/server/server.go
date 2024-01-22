@@ -3,7 +3,12 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"net/http"
+	"time"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
@@ -49,6 +54,10 @@ type Server struct {
 	aggregationSecretName      string
 }
 
+type serverSchemaHandler struct {
+	SchemasFunc func(schemas *schema.Collection) error
+}
+
 type Options struct {
 	// Controllers If the controllers are passed in the caller must also start the controllers
 	Controllers                *Controllers
@@ -83,6 +92,32 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 	}
 
 	if err := setup(ctx, server); err != nil {
+		return nil, err
+	}
+
+	return server, server.start(ctx)
+}
+
+func NewAlpha(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
+	if opts == nil {
+		opts = &Options{}
+	}
+
+	server := &Server{
+		RESTConfig:                 restConfig,
+		ClientFactory:              opts.ClientFactory,
+		AccessSetLookup:            opts.AccessSetLookup,
+		authMiddleware:             opts.AuthMiddleware,
+		controllers:                opts.Controllers,
+		next:                       opts.Next,
+		router:                     opts.Router,
+		aggregationSecretNamespace: opts.AggregationSecretNamespace,
+		aggregationSecretName:      opts.AggregationSecretName,
+		ClusterRegistry:            opts.ClusterRegistry,
+		Version:                    opts.ServerVersion,
+	}
+
+	if err := setupAlpha(ctx, server); err != nil {
 		return nil, err
 	}
 
@@ -165,6 +200,7 @@ func setup(ctx context.Context, server *Server) error {
 		ccache,
 		sf)
 
+	fmt.Println("SF ON HANDLER.NEW: ", sf.Len())
 	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
 	if err != nil {
 		return err
@@ -173,6 +209,107 @@ func setup(ctx context.Context, server *Server) error {
 	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
+	return nil
+}
+
+func setupAlpha(ctx context.Context, server *Server) error {
+	err := setDefaults(server)
+	if err != nil {
+		return err
+	}
+
+	cf := server.ClientFactory
+	if cf == nil {
+		cf, err = client.NewFactory(server.RESTConfig, server.authMiddleware != nil)
+		if err != nil {
+			return err
+		}
+		server.ClientFactory = cf
+	}
+
+	asl := server.AccessSetLookup
+	if asl == nil {
+		asl = accesscontrol.NewAccessStore(ctx, true, server.controllers.RBAC)
+	}
+
+	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
+	server.ClusterCache = ccache
+	sf := schema.NewCollection(ctx, server.BaseSchemas, asl)
+
+	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
+		return err
+	}
+
+	fmt.Println("BASE SCHEMA LEN: ", len(server.BaseSchemas.Schemas))
+	summaryCache := summarycache.New(sf, ccache)
+	summaryCache.Start(ctx)
+
+	cols, err := common.NewDynamicColumns(server.RESTConfig)
+	if err != nil {
+		return err
+	}
+
+	// move to store code
+	s, err := proxy_alpha.NewProxyStore(cols, cf, summaryCache)
+	if err != nil {
+		panic(err)
+	}
+
+	errStore := proxy_alpha.NewErrorStore(
+		proxy_alpha.NewUnformatterStore(
+			proxy_alpha.NewWatchRefresh(
+				partition_alpha.NewStore(
+					s,
+					asl,
+				),
+				asl,
+			),
+		),
+	)
+	store := metricsStore.NewMetricsStore(errStore)
+	// end store setup code
+
+	for _, template := range resources.DefaultSchemaTemplatesAlpha(store, cols, cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
+		sf.AddTemplate(template)
+	}
+
+	onSchemasHandler := &serverSchemaHandler{
+		SchemasFunc: func(schemas *schema.Collection) error {
+			fmt.Println("resetting db!!!!")
+			if err := ccache.OnSchemas(schemas); err != nil {
+				return err
+			}
+			if err := s.Reset(); err != nil {
+				return err
+			}
+			fmt.Println("db reset was successful!!!!")
+			return nil
+		},
+	}
+
+	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
+
+	schemacontroller.Register(ctx,
+		cols,
+		server.controllers.K8s.Discovery(),
+		server.controllers.CRD.CustomResourceDefinition(),
+		server.controllers.API.APIService(),
+		server.controllers.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
+	if err != nil {
+		return err
+	}
+
+	server.APIServer = apiServer
+	server.Handler = handler
+	server.SchemaFactory = sf
+	go func() {
+		time.Sleep(30 * time.Second)
+		fmt.Println("SF LEN SCHEMAS AFTER 5 seconds: ", sf.Len())
+	}()
 	return nil
 }
 
@@ -209,4 +346,8 @@ func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, op
 
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+func (s *serverSchemaHandler) OnSchemas(schemas *schema.Collection) error {
+	return s.SchemasFunc(schemas)
 }
