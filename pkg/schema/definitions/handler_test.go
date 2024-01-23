@@ -3,7 +3,6 @@ package definitions
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	openapi_v2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/apiserver/pkg/apierror"
@@ -16,166 +15,50 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/openapi"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/kube-openapi/pkg/util/proto"
 )
 
-var globalRoleObject = types.APIObject{
-	ID:   "management.cattle.io.globalrole",
-	Type: "schemaDefinition",
-	Object: schemaDefinition{
-		DefinitionType: "io.cattle.management.v2.GlobalRole",
-		Definitions: map[string]definition{
-			"io.cattle.management.v2.GlobalRole": {
-				ResourceFields: map[string]definitionField{
-					"apiVersion": {
-						Type:        "string",
-						Description: "The APIVersion of this resource",
-					},
-					"kind": {
-						Type:        "string",
-						Description: "The kind",
-					},
-					"metadata": {
-						Type:        "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-						Description: "The metadata",
-					},
-					"spec": {
-						Type: "io.cattle.management.v2.GlobalRole.spec", Description: "The spec for the project",
-					},
-				},
-				Type:        "io.cattle.management.v2.GlobalRole",
-				Description: "A Global Role V2 provides Global Permissions in Rancher",
-			},
-			"io.cattle.management.v2.GlobalRole.spec": {
-				ResourceFields: map[string]definitionField{
-					"clusterName": {
-						Type:        "string",
-						Description: "The name of the cluster",
-						Required:    true,
-					},
-					"displayName": {
-						Type:        "string",
-						Description: "The UI readable name",
-						Required:    true,
-					},
-					"newField": {
-						Type:        "string",
-						Description: "A new field not present in v1",
-					},
-					"notRequired": {
-						Type:        "boolean",
-						Description: "Some field that isn't required",
-					},
-				},
-				Type:        "io.cattle.management.v2.GlobalRole.spec",
-				Description: "The spec for the project",
-			},
-			"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
-				ResourceFields: map[string]definitionField{
-					"annotations": {
-						Type:        "map",
-						SubType:     "string",
-						Description: "annotations of the resource",
-					},
-					"name": {
-						Type:        "string",
-						SubType:     "",
-						Description: "name of the resource",
-					},
-				},
-				Type:        "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
-				Description: "Object Metadata",
-			},
-		},
-	},
-}
-
-func TestByID(t *testing.T) {
-	schemas := types.EmptyAPISchemas()
-	addBaseSchema := func(names ...string) {
-		for _, name := range names {
-			schemas.MustAddSchema(types.APISchema{
-				Schema: &wschemas.Schema{
-					ID:                name,
-					CollectionMethods: []string{"get"},
-					ResourceMethods:   []string{"get"},
-				},
-			})
-		}
+func TestRefresh(t *testing.T) {
+	defaultDocument, err := openapi_v2.ParseDocument([]byte(openapi_raw))
+	require.NoError(t, err)
+	defaultModels, err := proto.NewOpenAPIData(defaultDocument)
+	require.NoError(t, err)
+	defaultSchemaToModel := map[string]string{
+		"management.cattle.io.globalrole": "io.cattle.management.v2.GlobalRole",
 	}
-
-	intPtr := func(input int) *int {
-		return &input
-	}
-
-	addBaseSchema("management.cattle.io.globalrole", "management.cattle.io.missingfrommodel")
-
 	tests := []struct {
 		name                     string
-		schemaName               string
-		needsRefresh             bool
 		openapiError             error
 		serverGroupsResourcesErr error
 		useBadOpenApiDoc         bool
 		unparseableGV            bool
-		wantObject               *types.APIObject
+		wantModels               *proto.Models
+		wantSchemaToModel        map[string]string
 		wantError                bool
-		wantErrorCode            *int
 	}{
 		{
-			name:         "global role definition",
-			schemaName:   "management.cattle.io.globalrole",
-			needsRefresh: true,
-			wantObject:   &globalRoleObject,
+			name:              "success",
+			wantModels:        &defaultModels,
+			wantSchemaToModel: defaultSchemaToModel,
 		},
 		{
-			name:          "missing definition",
-			schemaName:    "management.cattle.io.cluster",
-			needsRefresh:  true,
-			wantError:     true,
-			wantErrorCode: intPtr(404),
+			name:         "error - openapi doc unavailable",
+			openapiError: fmt.Errorf("server unavailable"),
+			wantError:    true,
 		},
 		{
-			name:          "not refreshed",
-			schemaName:    "management.cattle.io.globalrole",
-			needsRefresh:  false,
-			wantError:     true,
-			wantErrorCode: intPtr(503),
-		},
-		{
-			name:          "missing from model",
-			schemaName:    "management.cattle.io.missingfrommodel",
-			needsRefresh:  true,
-			wantError:     true,
-			wantErrorCode: intPtr(503),
-		},
-		{
-			name:          "refresh error - openapi doc unavailable",
-			schemaName:    "management.cattle.io.globalrole",
-			needsRefresh:  true,
-			openapiError:  fmt.Errorf("server unavailable"),
-			wantError:     true,
-			wantErrorCode: intPtr(500),
-		},
-		{
-			name:             "refresh error - unable to parse openapi doc",
-			schemaName:       "management.cattle.io.globalrole",
-			needsRefresh:     true,
+			name:             "error - unable to parse openapi doc",
 			useBadOpenApiDoc: true,
 			wantError:        true,
-			wantErrorCode:    intPtr(500),
 		},
 		{
-			name:                     "refresh error - unable to retrieve groups and resources",
-			schemaName:               "management.cattle.io.globalrole",
-			needsRefresh:             true,
+			name:                     "error - unable to retrieve groups and resources",
 			serverGroupsResourcesErr: fmt.Errorf("server not available"),
+			wantModels:               &defaultModels,
 			wantError:                true,
-			wantErrorCode:            intPtr(500),
 		},
 		{
-			name:         "refresh error - unable to retrieve all groups and resources",
-			schemaName:   "management.cattle.io.globalrole",
-			needsRefresh: true,
+			name: "error - unable to retrieve all groups and resources",
 			serverGroupsResourcesErr: &discovery.ErrGroupDiscoveryFailed{
 				Groups: map[schema.GroupVersion]error{
 					{
@@ -184,19 +67,18 @@ func TestByID(t *testing.T) {
 					}: fmt.Errorf("some group error"),
 				},
 			},
-			wantError:     true,
-			wantErrorCode: intPtr(500),
+			wantModels:        &defaultModels,
+			wantSchemaToModel: defaultSchemaToModel,
+			wantError:         true,
 		},
 		{
-			name:          "refresh error - unparesable gv",
-			schemaName:    "management.cattle.io.globalrole",
-			needsRefresh:  true,
-			unparseableGV: true,
-			wantError:     true,
-			wantErrorCode: intPtr(500),
+			name:              "error - unparesable gv",
+			unparseableGV:     true,
+			wantModels:        &defaultModels,
+			wantSchemaToModel: defaultSchemaToModel,
+			wantError:         true,
 		},
 	}
-
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
@@ -216,12 +98,175 @@ func TestByID(t *testing.T) {
 				})
 			}
 			require.Nil(t, err)
-			handler := schemaDefinitionHandler{
+			handler := SchemaDefinitionHandler{
 				client: client,
 			}
-			if !test.needsRefresh {
-				handler.lastRefresh = time.Now()
-				handler.refreshStale = time.Minute * 1
+			err = handler.Refresh()
+			if test.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, test.wantModels, handler.models)
+			require.Equal(t, test.wantSchemaToModel, handler.schemaToModel)
+		})
+
+	}
+}
+
+func Test_byID(t *testing.T) {
+	defaultDocument, err := openapi_v2.ParseDocument([]byte(openapi_raw))
+	require.NoError(t, err)
+	defaultModels, err := proto.NewOpenAPIData(defaultDocument)
+	require.NoError(t, err)
+	defaultSchemaToModel := map[string]string{
+		"management.cattle.io.globalrole": "io.cattle.management.v2.GlobalRole",
+	}
+	schemas := types.EmptyAPISchemas()
+	addBaseSchema := func(names ...string) {
+		for _, name := range names {
+			schemas.MustAddSchema(types.APISchema{
+				Schema: &wschemas.Schema{
+					ID:                name,
+					CollectionMethods: []string{"get"},
+					ResourceMethods:   []string{"get"},
+				},
+			})
+		}
+	}
+
+	intPtr := func(input int) *int {
+		return &input
+	}
+
+	addBaseSchema("management.cattle.io.globalrole", "management.cattle.io.missingfrommodel", "management.cattle.io.notakind")
+
+	tests := []struct {
+		name          string
+		schemaName    string
+		models        *proto.Models
+		schemaToModel map[string]string
+		wantObject    *types.APIObject
+		wantError     bool
+		wantErrorCode *int
+	}{
+		{
+			name:          "global role definition",
+			schemaName:    "management.cattle.io.globalrole",
+			models:        &defaultModels,
+			schemaToModel: defaultSchemaToModel,
+			wantObject: &types.APIObject{
+				ID:   "management.cattle.io.globalrole",
+				Type: "schemaDefinition",
+				Object: schemaDefinition{
+					DefinitionType: "io.cattle.management.v2.GlobalRole",
+					Definitions: map[string]definition{
+						"io.cattle.management.v2.GlobalRole": {
+							ResourceFields: map[string]definitionField{
+								"apiVersion": {
+									Type:        "string",
+									Description: "The APIVersion of this resource",
+								},
+								"kind": {
+									Type:        "string",
+									Description: "The kind",
+								},
+								"metadata": {
+									Type:        "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+									Description: "The metadata",
+								},
+								"spec": {
+									Type: "io.cattle.management.v2.GlobalRole.spec", Description: "The spec for the project",
+								},
+							},
+							Type:        "io.cattle.management.v2.GlobalRole",
+							Description: "A Global Role V2 provides Global Permissions in Rancher",
+						},
+						"io.cattle.management.v2.GlobalRole.spec": {
+							ResourceFields: map[string]definitionField{
+								"clusterName": {
+									Type:        "string",
+									Description: "The name of the cluster",
+									Required:    true,
+								},
+								"displayName": {
+									Type:        "string",
+									Description: "The UI readable name",
+									Required:    true,
+								},
+								"newField": {
+									Type:        "string",
+									Description: "A new field not present in v1",
+								},
+								"notRequired": {
+									Type:        "boolean",
+									Description: "Some field that isn't required",
+								},
+							},
+							Type:        "io.cattle.management.v2.GlobalRole.spec",
+							Description: "The spec for the project",
+						},
+						"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
+							ResourceFields: map[string]definitionField{
+								"annotations": {
+									Type:        "map",
+									SubType:     "string",
+									Description: "annotations of the resource",
+								},
+								"name": {
+									Type:        "string",
+									SubType:     "",
+									Description: "name of the resource",
+								},
+							},
+							Type:        "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta",
+							Description: "Object Metadata",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "missing definition",
+			schemaName:    "management.cattle.io.cluster",
+			models:        &defaultModels,
+			schemaToModel: defaultSchemaToModel,
+			wantError:     true,
+			wantErrorCode: intPtr(404),
+		},
+		{
+			name:          "not refreshed",
+			schemaName:    "management.cattle.io.globalrole",
+			wantError:     true,
+			wantErrorCode: intPtr(503),
+		},
+		{
+			name:          "has schema, missing from model",
+			schemaName:    "management.cattle.io.missingfrommodel",
+			models:        &defaultModels,
+			schemaToModel: defaultSchemaToModel,
+			wantError:     true,
+			wantErrorCode: intPtr(503),
+		},
+		{
+			name:       "has schema, model is not a kind",
+			schemaName: "management.cattle.io.notakind",
+			models:     &defaultModels,
+			schemaToModel: map[string]string{
+				"management.cattle.io.notakind": "io.management.cattle.NotAKind",
+			},
+			wantError:     true,
+			wantErrorCode: intPtr(500),
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			handler := SchemaDefinitionHandler{
+				models:        test.models,
+				schemaToModel: test.schemaToModel,
 			}
 			request := types.APIRequest{
 				Schemas: schemas,

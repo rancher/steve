@@ -82,7 +82,7 @@ definitions:
     - group: "management.cattle.io"
       version: "v2"
       kind: "GlobalRole"
-  io.management.cattle.NotAKind:
+  io.cattle.management.NotAKind:
     type: "string"
     description: "Some string which isn't a kind"
   io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta:
