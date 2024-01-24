@@ -15,7 +15,7 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/schemas"
 	schemafake "github.com/rancher/steve/pkg/schema/fake"
-	v1schema "github.com/rancher/wrangler/pkg/schemas"
+	v1schema "github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"

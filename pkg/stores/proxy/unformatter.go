@@ -2,8 +2,8 @@ package proxy
 
 import (
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/wrangler/pkg/data"
-	"github.com/rancher/wrangler/pkg/data/convert"
+	"github.com/rancher/wrangler/v2/pkg/data"
+	"github.com/rancher/wrangler/v2/pkg/data/convert"
 )
 
 // unformatterStore removes fields added by the formatter that kubernetes cannot recognize.
