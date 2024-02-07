@@ -17,10 +17,10 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
-	github.com/rancher/apiserver v0.0.0-20210922180056-297b6df8d714
+	github.com/rancher/apiserver v0.0.0-20240205164636-4df268e250f6
 	github.com/rancher/dynamiclistener v0.3.5
 	github.com/rancher/kubernetes-provider-detector v0.1.2
-	github.com/rancher/norman v0.0.0-20210423002317-8e6ffc77a819
+	github.com/rancher/norman v0.0.0-20240205164525-bd13c653293b
 	github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a
 	github.com/rancher/wrangler v0.8.11-0.20211214201934-f5aa5d9f2e81
 	github.com/sirupsen/logrus v1.8.1
@@ -74,7 +74,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08 // indirect
+	github.com/rancher/lasso v0.0.0-20220519004610-700f167d8324 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.opentelemetry.io/contrib v0.20.0 // indirect
