@@ -2,13 +2,14 @@ package partition_alpha
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/watch"
 	"sort"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/wrangler/pkg/kv"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -19,9 +20,21 @@ var (
 	}
 )
 
+// UnstructuredStore is like types.Store but deals in k8s unstructured objects instead of apiserver types.
+// This interface exists in order for store to be mocked in tests
+type UnstructuredStore interface {
+	ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
+	Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error)
+	Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error)
+	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
+
+	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error)
+	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error)
+}
+
 // rbacPartitioner is an implementation of the partition.Partitioner interface.
 type rbacPartitioner struct {
-	proxyStore proxy_alpha.Store
+	proxyStore UnstructuredStore
 }
 
 // Lookup returns the default passthrough partition which is used only for retrieving single resources.
@@ -74,7 +87,7 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 }
 
 // Store returns an Store suited to listing and watching resources by partition.
-func (p *rbacPartitioner) Store() proxy_alpha.Store {
+func (p *rbacPartitioner) Store() UnstructuredStore {
 	return p.proxyStore
 }
 

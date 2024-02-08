@@ -1,13 +1,14 @@
-// Package partition implements a store with parallel partitioning of data
+// Package partition_alpha implements a store with parallel partitioning of data
 // so that segmented data can be concurrently collected and returned as a single data set.
 package partition_alpha
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,7 +30,11 @@ const (
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error)
 	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error)
-	Store() proxy_alpha.Store
+	Store() UnstructuredStore
+}
+
+type SchemaColumnSetter interface {
+	SetColumns(ctx context.Context, schema *types.APISchema) error
 }
 
 // Store implements types.proxyStore for partitions.
@@ -39,10 +44,12 @@ type Store struct {
 }
 
 // NewStore creates a types.proxyStore implementation with a partitioner
-func NewStore(partitioner Partitioner, asl accesscontrol.AccessSetLookup) *Store {
+func NewStore(store UnstructuredStore, asl accesscontrol.AccessSetLookup) *Store {
 	s := &Store{
-		Partitioner: partitioner,
-		asl:         asl,
+		Partitioner: &rbacPartitioner{
+			proxyStore: store,
+		},
+		asl: asl,
 	}
 
 	return s
@@ -96,6 +103,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		result.Objects = append(result.Objects, toAPI(schema, item, nil))
 	}
 
+	result.Revision = ""
 	result.Continue = continueToken
 	return result, nil
 }
@@ -226,21 +234,23 @@ func toAPIEvent(schema *types.APISchema, event watch.Event) types.APIEvent {
 	return apiEvent
 }
 
-// NewProxyStore returns a wrapped types.proxyStore.
-func NewProxyStore(clientGetter proxy_alpha.ClientGetter, notifier proxy_alpha.RelationshipNotifier, lookup accesscontrol.AccessSetLookup) types.Store {
+/*
+// NewStore returns a wrapped types.proxyStore.
+func NewStore(c proxy_alpha.SchemaColumnSetter, clientGetter proxy_alpha.ClientGetter, notifier proxy_alpha.RelationshipNotifier, lookup accesscontrol.AccessSetLookup) *proxy_alpha.ErrorStore {
+	s, err := proxy_alpha.NewProxyStore(c, clientGetter, notifier)
+	if err != nil {
+		panic(err)
+	}
+
 	return proxy_alpha.NewErrorStore(
 		proxy_alpha.NewUnformatterStore(
 			proxy_alpha.NewWatchRefresh(
 				NewStore(
-					&rbacPartitioner{
-						proxyStore: proxy_alpha.NewProxyStore(
-							clientGetter, notifier,
-						),
-					},
+					s,
 					lookup,
 				),
 				lookup,
 			),
 		),
 	)
-}
+}*/

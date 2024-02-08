@@ -74,7 +74,8 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 			if len(filter) != 2 {
 				continue
 			}
-			orFilter.Filters = append(orFilter.Filters, sql.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op})
+			usePartialMatch := strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`)
+			orFilter.Filters = append(orFilter.Filters, sql.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -268,7 +269,7 @@ func parseNamespaceOrProjectFilters(projOrNS string, op sql.Op, namespaceInforme
 							Op:    sql.Eq,
 						},
 						{
-							Field: []string{"metadata", "labels", "field.cattle.io/projectId"},
+							Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
 							Match: pn,
 							Op:    sql.Eq,
 						},
@@ -281,9 +282,10 @@ func parseNamespaceOrProjectFilters(projOrNS string, op sql.Op, namespaceInforme
 		}
 		for _, item := range uList.Items {
 			filters = append(filters, sql.Filter{
-				Field: []string{"metadata", "namespace"},
-				Match: item.GetName(),
-				Op:    op,
+				Field:   []string{"metadata", "namespace"},
+				Match:   item.GetName(),
+				Op:      op,
+				Partial: false,
 			})
 		}
 		continue
