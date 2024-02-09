@@ -18,7 +18,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rancher/apiserver v0.0.0-20240207153957-4fd7d821d952
-	github.com/rancher/dynamiclistener v0.5.0-rc1
+	github.com/rancher/dynamiclistener v0.5.0-rc2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20240207153100-3bb70b772b52
 	github.com/rancher/remotedialer v0.3.0
