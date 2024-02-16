@@ -74,7 +74,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 			if len(filter) != 2 {
 				continue
 			}
-			usePartialMatch := strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`)
+			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
 			orFilter.Filters = append(orFilter.Filters, sql.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
