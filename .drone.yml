@@ -20,7 +20,7 @@ name: build
 
 steps:
   - name: build
-    image: registry.suse.com/bci/golang:1.20
+    image: registry.suse.com/bci/golang:1.22
     commands:
       - make build-bin
     when:
@@ -50,7 +50,7 @@ name: test
 
 steps:
   - name: test
-    image: registry.suse.com/bci/golang:1.20
+    image: registry.suse.com/bci/golang:1.22
     commands:
       - make test
     when:
