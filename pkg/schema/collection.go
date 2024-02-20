@@ -27,8 +27,9 @@ type Collection struct {
 	byGVR      map[schema.GroupVersionResource]string
 	byGVK      map[schema.GroupVersionKind]string
 	cache      *cache.LRUExpireCache
-	userCache  *cache.LRUExpireCache
-	lock       sync.RWMutex
+	// holds user access hash
+	userCache *cache.LRUExpireCache
+	lock      sync.RWMutex
 
 	ctx     context.Context
 	running map[string]func()

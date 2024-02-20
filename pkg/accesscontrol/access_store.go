@@ -43,10 +43,8 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 }
 
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
-	var cacheKey string
 	if l.cache != nil {
-		cacheKey = l.CacheKey(user)
-		val, ok := l.cache.Get(cacheKey)
+		val, ok := l.cache.Get(user.GetName())
 		if ok {
 			as, _ := val.(*AccessSet)
 			return as
@@ -58,9 +56,11 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 		result.Merge(l.groups.get(group))
 	}
 
+	result.ID = user.GetName()
+	result.Hash = l.Hash(user)
+
 	if l.cache != nil {
-		result.ID = cacheKey
-		l.cache.Add(cacheKey, result, 24*time.Hour)
+		l.cache.Add(user.GetName(), result, 24*time.Hour)
 	}
 
 	return result
@@ -70,7 +70,7 @@ func (l *AccessStore) PurgeUserData(id string) {
 	l.cache.Remove(id)
 }
 
-func (l *AccessStore) CacheKey(user user.Info) string {
+func (l *AccessStore) Hash(user user.Info) string {
 	d := sha256.New()
 
 	l.users.addRolesToHash(d, user.GetName())
