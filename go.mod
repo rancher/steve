@@ -6,8 +6,7 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
-	github.com/rancher/wrangler => github.com/cmurphy/wrangler v0.8.1-0.20230919185257-312ca830e7fd
-	k8s.io/client-go => github.com/rancher/client-go v1.27.4-rancher1
+	k8s.io/client-go => github.com/rancher/client-go v1.28.6-rancher1
 )
 
 require (
@@ -24,7 +23,7 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20240326183200-dd207ee11dda
 	github.com/rancher/remotedialer v0.3.1
-	github.com/rancher/wrangler/v2 v2.2.0-rc1
+	github.com/rancher/wrangler/v2 v2.2.0-rc2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
@@ -59,7 +58,6 @@ require (
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect

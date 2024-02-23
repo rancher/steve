@@ -1772,6 +1772,91 @@ func TestFilterList(t *testing.T) {
 			},
 			want: []unstructured.Unstructured{},
 		},
+		{
+			name: "match nested objects/arrays",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "priceList",
+						"metadata": map[string]interface{}{
+							"name": "apple",
+						},
+						"data": map[string]interface{}{
+							"sortedPrices": []interface{}{
+								map[string]interface{}{
+									"price": "0.99",
+									"locations": []interface{}{
+										map[string]interface{}{
+											"id": "genericGrocers-1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "priceList",
+						"metadata": map[string]interface{}{
+							"name": "berry",
+						},
+						"data": map[string]interface{}{
+							"sortedPrices": []interface{}{
+								map[string]interface{}{
+									"price": "0.99",
+									"locations": []interface{}{
+										map[string]interface{}{
+											"id": "genericGrocers-4",
+										},
+									},
+								},
+								map[string]interface{}{
+									"price": "1.99",
+									"locations": []interface{}{
+										map[string]interface{}{
+											"id": "genericGrocers-1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filters: []OrFilter{
+				{
+					filters: []Filter{
+						{
+							field: []string{"data", "sortedPrices", "0", "locations", "0", "id"},
+							match: "genericGrocers-1",
+						},
+					},
+				},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "priceList",
+						"metadata": map[string]interface{}{
+							"name": "apple",
+						},
+						"data": map[string]interface{}{
+							"sortedPrices": []interface{}{
+								map[string]interface{}{
+									"price": "0.99",
+									"locations": []interface{}{
+										map[string]interface{}{
+											"id": "genericGrocers-1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
