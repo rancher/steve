@@ -82,6 +82,128 @@ definitions:
     - group: "management.cattle.io"
       version: "v2"
       kind: "GlobalRole"
+  io.cattle.noversion.v2.Resource:
+    description: "A No Version V2 resource is for a group with no preferred version"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the resource"
+        type: "object"
+        required:
+        - "name"
+        properties:
+          name:
+            description: "The name of the resource"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+          newField:
+            description: "A new field not present in v1"
+            type: "string"
+    x-kubernetes-group-version-kind:
+    - group: "noversion.cattle.io"
+      version: "v2"
+      kind: "Resource"
+  io.cattle.noversion.v1.Resource:
+    description: "A No Version V1 resource is for a group with no preferred version"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the resource"
+        type: "object"
+        required:
+        - "name"
+        properties:
+          name:
+            description: "The name of the resource"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+    x-kubernetes-group-version-kind:
+    - group: "noversion.cattle.io"
+      version: "v1"
+      kind: "Resource"
+  io.cattle.missinggroup.v2.Resource:
+    description: "A Missing Group V2 resource is for a group not listed by server groups"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the resource"
+        type: "object"
+        required:
+        - "name"
+        properties:
+          name:
+            description: "The name of the resource"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+          newField:
+            description: "A new field not present in v1"
+            type: "string"
+    x-kubernetes-group-version-kind:
+    - group: "missinggroup.cattle.io"
+      version: "v2"
+      kind: "Resource"
+  io.cattle.missinggroup.v1.Resource:
+    description: "A Missing Group V1 resource is for a group not listed by server groups"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the resource"
+        type: "object"
+        required:
+        - "name"
+        properties:
+          name:
+            description: "The name of the resource"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+    x-kubernetes-group-version-kind:
+    - group: "missinggroup.cattle.io"
+      version: "v1"
+      kind: "Resource"
   io.cattle.management.NotAKind:
     type: "string"
     description: "Some string which isn't a kind"

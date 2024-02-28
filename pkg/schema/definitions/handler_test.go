@@ -10,7 +10,6 @@ import (
 	wschemas "github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/openapi"
@@ -24,17 +23,19 @@ func TestRefresh(t *testing.T) {
 	defaultModels, err := proto.NewOpenAPIData(defaultDocument)
 	require.NoError(t, err)
 	defaultSchemaToModel := map[string]string{
-		"management.cattle.io.globalrole": "io.cattle.management.v2.GlobalRole",
+		"management.cattle.io.globalrole": "io.cattle.management.v1.GlobalRole",
+		"noversion.cattle.io.resource":    "io.cattle.noversion.v2.Resource",
+		"missinggroup.cattle.io.resource": "io.cattle.missinggroup.v2.Resource",
 	}
 	tests := []struct {
-		name                     string
-		openapiError             error
-		serverGroupsResourcesErr error
-		useBadOpenApiDoc         bool
-		unparseableGV            bool
-		wantModels               *proto.Models
-		wantSchemaToModel        map[string]string
-		wantError                bool
+		name              string
+		openapiError      error
+		serverGroupsErr   error
+		useBadOpenApiDoc  bool
+		nilGroups         bool
+		wantModels        *proto.Models
+		wantSchemaToModel map[string]string
+		wantError         bool
 	}{
 		{
 			name:              "success",
@@ -52,31 +53,19 @@ func TestRefresh(t *testing.T) {
 			wantError:        true,
 		},
 		{
-			name:                     "error - unable to retrieve groups and resources",
-			serverGroupsResourcesErr: fmt.Errorf("server not available"),
-			wantModels:               &defaultModels,
-			wantError:                true,
+			name:            "error - unable to retrieve groups and resources",
+			serverGroupsErr: fmt.Errorf("server not available"),
+			wantError:       true,
 		},
 		{
-			name: "error - unable to retrieve all groups and resources",
-			serverGroupsResourcesErr: &discovery.ErrGroupDiscoveryFailed{
-				Groups: map[schema.GroupVersion]error{
-					{
-						Group:   "other.cattle.io",
-						Version: "v1",
-					}: fmt.Errorf("some group error"),
-				},
+			name:       "no groups or error from server",
+			nilGroups:  true,
+			wantModels: &defaultModels,
+			wantSchemaToModel: map[string]string{
+				"management.cattle.io.globalrole": "io.cattle.management.v2.GlobalRole",
+				"noversion.cattle.io.resource":    "io.cattle.noversion.v2.Resource",
+				"missinggroup.cattle.io.resource": "io.cattle.missinggroup.v2.Resource",
 			},
-			wantModels:        &defaultModels,
-			wantSchemaToModel: defaultSchemaToModel,
-			wantError:         true,
-		},
-		{
-			name:              "error - unparesable gv",
-			unparseableGV:     true,
-			wantModels:        &defaultModels,
-			wantSchemaToModel: defaultSchemaToModel,
-			wantError:         true,
 		},
 	}
 	for _, test := range tests {
@@ -85,17 +74,15 @@ func TestRefresh(t *testing.T) {
 			t.Parallel()
 			client, err := buildDefaultDiscovery()
 			client.DocumentErr = test.openapiError
-			client.GroupResourcesErr = test.serverGroupsResourcesErr
+			client.GroupsErr = test.serverGroupsErr
 			if test.useBadOpenApiDoc {
 				schema := client.Document.Definitions.AdditionalProperties[0]
 				schema.Value.Type = &openapi_v2.TypeItem{
 					Value: []string{"multiple", "entries"},
 				}
 			}
-			if test.unparseableGV {
-				client.Resources = append(client.Resources, &metav1.APIResourceList{
-					GroupVersion: "not/parse/able",
-				})
+			if test.nilGroups {
+				client.Groups = nil
 			}
 			require.Nil(t, err)
 			handler := SchemaDefinitionHandler{
@@ -293,66 +280,64 @@ func buildDefaultDiscovery() (*fakeDiscovery, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse openapi document %w", err)
 	}
-	groups := []*metav1.APIGroup{
+	groups := []metav1.APIGroup{
 		{
 			Name: "management.cattle.io",
 			PreferredVersion: metav1.GroupVersionForDiscovery{
-				Version: "v2",
+				GroupVersion: "management.cattle.io/v2",
+				Version:      "v1",
 			},
-		},
-	}
-	resources := []*metav1.APIResourceList{
-		{
-			GroupVersion: schema.GroupVersion{
-				Group:   "management.cattle.io",
-				Version: "v2",
-			}.String(),
-			APIResources: []metav1.APIResource{
+			Versions: []metav1.GroupVersionForDiscovery{
 				{
-					Group:   "management.cattle.io",
-					Kind:    "GlobalRole",
-					Version: "v2",
+					GroupVersion: "management.cattle.io/v1",
+					Version:      "v1",
+				},
+				{
+					GroupVersion: "management.cattle.io/v2",
+					Version:      "v2",
 				},
 			},
 		},
 		{
-			GroupVersion: schema.GroupVersion{
-				Group:   "management.cattle.io",
-				Version: "v1",
-			}.String(),
-			APIResources: []metav1.APIResource{
+			Name: "noversion.cattle.io",
+			Versions: []metav1.GroupVersionForDiscovery{
 				{
-					Group:   "management.cattle.io",
-					Kind:    "GlobalRole",
-					Version: "v2",
+					GroupVersion: "noversion.cattle.io/v1",
+					Version:      "v1",
+				},
+				{
+					GroupVersion: "noversion.cattle.io/v2",
+					Version:      "v2",
 				},
 			},
 		},
-		nil,
 	}
 	return &fakeDiscovery{
-		Groups:    groups,
-		Resources: resources,
-		Document:  document,
+		Groups: &metav1.APIGroupList{
+			Groups: groups,
+		},
+		Document: document,
 	}, nil
 }
 
 type fakeDiscovery struct {
-	Groups            []*metav1.APIGroup
-	Resources         []*metav1.APIResourceList
-	Document          *openapi_v2.Document
-	GroupResourcesErr error
-	DocumentErr       error
+	Groups      *metav1.APIGroupList
+	Document    *openapi_v2.Document
+	GroupsErr   error
+	DocumentErr error
 }
 
-// ServerGroupsAndResources is the only method we actually need for the test - just returns what is on the struct
-func (f *fakeDiscovery) ServerGroupsAndResources() ([]*metav1.APIGroup, []*metav1.APIResourceList, error) {
-	return f.Groups, f.Resources, f.GroupResourcesErr
+// ServerGroups is the only method that needs to be mocked
+func (f *fakeDiscovery) ServerGroups() (*metav1.APIGroupList, error) {
+	return f.Groups, f.GroupsErr
 }
 
 // The rest of these methods are just here to conform to discovery.DiscoveryInterface
-func (f *fakeDiscovery) RESTClient() restclient.Interface            { return nil }
-func (f *fakeDiscovery) ServerGroups() (*metav1.APIGroupList, error) { return nil, nil }
+func (f *fakeDiscovery) ServerGroupsAndResources() ([]*metav1.APIGroup, []*metav1.APIResourceList, error) {
+	return nil, nil, nil
+}
+
+func (f *fakeDiscovery) RESTClient() restclient.Interface { return nil }
 func (f *fakeDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
 	return nil, nil
 }
