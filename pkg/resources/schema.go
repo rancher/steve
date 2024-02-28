@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/steve/pkg/resources/formatters"
 	"github.com/rancher/steve/pkg/resources/userpreferences"
 	"github.com/rancher/steve/pkg/schema"
-	steveschema "github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	corecontrollers "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
@@ -25,7 +24,7 @@ import (
 )
 
 func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache clustercache.ClusterCache,
-	cg proxy.ClientGetter, schemaFactory steveschema.Factory, serverVersion string) error {
+	cg proxy.ClientGetter, schemaFactory schema.Factory, serverVersion string) error {
 	counts.Register(baseSchema, ccache)
 	subscribe.Register(baseSchema, func(apiOp *types.APIRequest) *types.APISchemas {
 		user, ok := request.UserFrom(apiOp.Context())
