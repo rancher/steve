@@ -13,7 +13,7 @@ require (
 	github.com/adrg/xdg v0.4.0
 	github.com/golang/mock v1.6.0
 	github.com/google/gnostic-models v0.6.8
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
