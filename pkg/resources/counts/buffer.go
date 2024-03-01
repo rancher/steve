@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"golang.design/x/reflect"
 )
 
 // debounceDuration determines how long events will be held before they are sent to the consumer
@@ -49,7 +50,7 @@ func debounceCounts(result chan types.APIEvent, input chan Count) {
 			}
 		case <-t.C:
 			if currentCount != nil {
-				result <- toAPIEvent(*currentCount)
+				result <- toAPIEvent(reflect.DeepCopy(*currentCount))
 				currentCount = nil
 			}
 		}
