@@ -48,6 +48,17 @@ type Count struct {
 	Counts map[string]ItemCount `json:"counts"`
 }
 
+func (c *Count) DeepCopy() *Count {
+	r := *c
+	if r.Counts != nil {
+		r.Counts = map[string]ItemCount{}
+		for k, v := range c.Counts {
+			r.Counts[k] = *v.DeepCopy()
+		}
+	}
+	return &r
+}
+
 type Summary struct {
 	Count         int            `json:"count,omitempty"`
 	States        map[string]int `json:"states,omitempty"`
