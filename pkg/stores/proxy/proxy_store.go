@@ -370,6 +370,7 @@ func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w t
 				} else {
 					logrus.Debugf("WatchNames received error: %v", item)
 				}
+				result <- item
 				continue
 			}
 
