@@ -573,6 +573,9 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 				continue
 			}
 
+			//This mounts two volumes, one configMap and one emptyDir.
+			//The reason for this is that we need to change the permissions on the kubeconfig file
+			//and, since a configMap volume is always read-only, we need an emptyDir volume as well.
 			vmount := v1.VolumeMount{
 				Name:      "user-kubeconfig",
 				MountPath: "/tmp/.kube",
@@ -583,21 +586,18 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 				SubPath:   "config",
 			}
 
-			pod.Spec.InitContainers = []v1.Container{
-				{
-					Name:            "init-kubeconfig-volume",
-					Image:           image,
-					Command:         []string{"sh", "-c", fmt.Sprintf("cp %s %s && chown %d %s/config", cfgVMount.MountPath, vmount.MountPath, shellUser, vmount.MountPath)},
-					Resources:       v1.ResourceRequirements{},
-					ResizePolicy:    nil,
-					ImagePullPolicy: v1.PullIfNotPresent,
-					SecurityContext: &v1.SecurityContext{
-						RunAsUser:  &zero,
-						RunAsGroup: &zero,
-					},
-					VolumeMounts: []v1.VolumeMount{cfgVMount, vmount},
+			pod.Spec.InitContainers = append(pod.Spec.InitContainers, v1.Container{
+				Name:            "init-kubeconfig-volume",
+				Image:           image,
+				Command:         []string{"sh", "-c", fmt.Sprintf("cp %s %s && chown %d %s/config", cfgVMount.MountPath, vmount.MountPath, shellUser, vmount.MountPath)},
+				ImagePullPolicy: v1.PullIfNotPresent,
+				SecurityContext: &v1.SecurityContext{
+					RunAsUser:  &zero,
+					RunAsGroup: &zero,
 				},
-			}
+				VolumeMounts: []v1.VolumeMount{cfgVMount, vmount},
+			},
+			)
 
 			pod.Spec.Containers[i].VolumeMounts = append(container.VolumeMounts, v1.VolumeMount{
 				Name:      "user-kubeconfig",
