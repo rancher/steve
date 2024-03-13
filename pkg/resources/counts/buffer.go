@@ -49,7 +49,7 @@ func debounceCounts(result chan types.APIEvent, input chan Count) {
 			}
 		case <-t.C:
 			if currentCount != nil {
-				result <- toAPIEvent(*currentCount.DeepCopy())
+				result <- toAPIEvent(*currentCount)
 				currentCount = nil
 			}
 		}
