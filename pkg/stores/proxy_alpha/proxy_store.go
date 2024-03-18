@@ -77,7 +77,7 @@ type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	ListByOptions(ctx context.Context, lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -140,7 +140,7 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if err := s.informerFactory.Close(); err != nil {
+	if err := s.informerFactory.Reset(); err != nil {
 		return err
 	}
 	if err := s.initializeInformerFactory(); err != nil {
@@ -601,7 +601,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		return nil, "", err
 	}
 
-	list, continueToken, err := informer.ListByOptions(opts, partitions, apiOp.Namespace)
+	list, continueToken, err := informer.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
 	if err != nil {
 		return nil, "", err
 	}

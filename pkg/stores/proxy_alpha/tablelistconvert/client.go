@@ -61,12 +61,18 @@ func (w *Watch) feed() {
 	go func() {
 		for {
 			select {
-			case e := <-tableEvents:
+			case e, ok := <-tableEvents:
+				if !ok {
+					fmt.Println("tableEvents closed!")
+					close(w.events)
+					return
+				}
 				if unstr, ok := e.Object.(*unstructured.Unstructured); ok {
 					rowToObject(unstr)
 					w.events <- e
 				}
 			case <-w.done:
+				fmt.Println("TABLE CONVERT CLIENT HAS BEEN CLOSED")
 				close(w.events)
 				return
 			}
