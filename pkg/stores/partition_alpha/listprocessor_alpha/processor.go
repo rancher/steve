@@ -2,6 +2,10 @@
 package listprocessor_alpha
 
 import (
+	"context"
+	"fmt"
+	"github.com/rancher/apiserver/pkg/apierror"
+	"github.com/rancher/wrangler/pkg/schemas/validation"
 	"regexp"
 	"sort"
 	"strconv"
@@ -47,7 +51,7 @@ type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	ListByOptions(ctx context.Context, lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
@@ -145,9 +149,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 		}
 	}
 	if projectsOrNamespaces != "" {
-		projOrNSFilters, err := parseNamespaceOrProjectFilters(projectsOrNamespaces, op, namespaceCache)
+		projOrNSFilters, err := parseNamespaceOrProjectFilters(apiOp.Context(), projectsOrNamespaces, op, namespaceCache)
 		if err != nil {
 			return nil, err
+		}
+		if projOrNSFilters == nil {
+			return nil, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespacess named [%s] or namespaces belonging to project named [%s]", projOrNSFilters, projOrNSFilters))
 		}
 		if op == sql.NotEq {
 			for _, filter := range projOrNSFilters {
@@ -157,6 +164,10 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 			opts.Filters = append(opts.Filters, sql.OrFilter{Filters: projOrNSFilters})
 		}
 	}
+	/* TODO: come back to this
+	if len(opts.Filters) == 1 && opts.Filters[0].Filters[0] == nil {
+		fmt.Println("debug")
+	}*/
 	return &opts, nil
 }
 
@@ -256,10 +267,10 @@ func matchesAll(obj map[string]interface{}, filters []sql.OrFilter) bool {
 	return true
 }
 
-func parseNamespaceOrProjectFilters(projOrNS string, op sql.Op, namespaceInformer Informer) ([]sql.Filter, error) {
+func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sql.Op, namespaceInformer Informer) ([]sql.Filter, error) {
 	var filters []sql.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, err := namespaceInformer.ListByOptions(&sql.ListOptions{
+		uList, _, err := namespaceInformer.ListByOptions(ctx, &sql.ListOptions{
 			Filters: []sql.OrFilter{
 				{
 					Filters: []sql.Filter{
@@ -290,5 +301,6 @@ func parseNamespaceOrProjectFilters(projOrNS string, op sql.Op, namespaceInforme
 		}
 		continue
 	}
+
 	return filters, nil
 }

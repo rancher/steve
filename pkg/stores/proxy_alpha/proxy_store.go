@@ -141,7 +141,7 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if err := s.informerFactory.Close(); err != nil {
+	if err := s.informerFactory.Reset(); err != nil {
 		return err
 	}
 	if err := s.initializeInformerFactory(); err != nil {
@@ -602,7 +602,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		return nil, "", err
 	}
 
-	list, continueToken, err := informer.ListByOptions(opts, partitions, apiOp.Namespace)
+	list, continueToken, err := informer.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
 	if err != nil {
 		return nil, "", err
 	}
