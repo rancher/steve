@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-go generate ./..
+go generate ./...
 golangci-lint run
 go mod tidy
 go mod verify
