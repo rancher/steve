@@ -21,7 +21,7 @@ require (
 	github.com/rancher/apiserver v0.0.0-20240326184108-0dbf81039822
 	github.com/rancher/dynamiclistener v0.5.0-rc3
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/norman v0.0.0-20240207153100-3bb70b772b52
+	github.com/rancher/norman v0.0.0-20240326183200-dd207ee11dda
 	github.com/rancher/remotedialer v0.3.0
 	github.com/rancher/wrangler/v2 v2.2.0-rc1
 	github.com/sirupsen/logrus v1.9.3
@@ -88,7 +88,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.10.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
