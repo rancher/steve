@@ -334,34 +334,7 @@ func (s *PodImpersonation) createPod(ctx context.Context, user user.Info, role *
 		return nil, err
 	}
 
-	sc := v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            sa.Name + "-token",
-			OwnerReferences: ref(role),
-			Annotations: map[string]string{
-				"kubernetes.io/service-account.name": sa.Name,
-			},
-		},
-		Type: v1.SecretTypeServiceAccountToken,
-	}
-	tokenSecret, err := client.CoreV1().Secrets(sa.Namespace).Create(ctx, &sc, metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-	if _, ok := tokenSecret.Data[v1.ServiceAccountTokenKey]; !ok {
-		for {
-			logrus.Debugf("wait for svc account secret to be populated with token %s", tokenSecret.Name)
-			time.Sleep(2 * time.Second)
-			tokenSecret, err = client.CoreV1().Secrets(sa.Namespace).Get(ctx, sc.Name, metav1.GetOptions{})
-			if err != nil {
-				return nil, err
-			}
-			if _, ok := tokenSecret.Data[v1.ServiceAccountTokenKey]; ok {
-				break
-			}
-		}
-	}
-	pod = s.augmentPod(pod, sa, tokenSecret, podOptions.ImageOverride)
+	pod = s.augmentPod(pod, sa, podOptions.ImageOverride)
 
 	if err := s.createConfigMaps(ctx, user, role, pod, podOptions, client); err != nil {
 		return nil, err
@@ -510,17 +483,16 @@ func (s *PodImpersonation) adminKubeConfig(user user.Info, role *rbacv1.ClusterR
 	}, nil
 }
 
-func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret *v1.Secret, imageOverride string) *v1.Pod {
+func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, imageOverride string) *v1.Pod {
 	var (
 		zero = int64(0)
 		t    = true
-		f    = false
-		m    = int32(420)
+		f    = true
 	)
 
 	pod = pod.DeepCopy()
 
-	pod.Spec.ServiceAccountName = ""
+	pod.Spec.ServiceAccountName = sa.Name
 	pod.Spec.AutomountServiceAccountToken = &f
 	pod.Spec.Volumes = append(pod.Spec.Volumes,
 		v1.Volume{
@@ -543,15 +515,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 				},
 			},
 		},
-		v1.Volume{
-			Name: secret.Name,
-			VolumeSource: v1.VolumeSource{
-				Secret: &v1.SecretVolumeSource{
-					SecretName:  secret.Name,
-					DefaultMode: &m,
-				},
-			},
-		})
+	)
 
 	for i, container := range pod.Spec.Containers {
 		for _, envvar := range container.Env {
@@ -596,11 +560,6 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 				ReadOnly:  true,
 				MountPath: "/root/.kube/config",
 				SubPath:   "config",
-			},
-			{
-				Name:      secret.Name,
-				MountPath: "/var/run/secrets/kubernetes.io/serviceaccount",
-				ReadOnly:  true,
 			},
 		},
 	})
