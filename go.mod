@@ -22,7 +22,7 @@ require (
 	github.com/rancher/dynamiclistener v0.5.0-rc3
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20240326183200-dd207ee11dda
-	github.com/rancher/remotedialer v0.3.0
+	github.com/rancher/remotedialer v0.3.1
 	github.com/rancher/wrangler/v2 v2.2.0-rc1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
