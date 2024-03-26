@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"github.com/rancher/steve/pkg/controllers/access"
 	"net/http"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
@@ -167,6 +168,8 @@ func setup(ctx context.Context, server *Server) error {
 		server.controllers.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
 		ccache,
 		sf)
+
+	access.Register(ctx, server.controllers.RBAC.RoleBinding(), server.controllers.RBAC.ClusterRoleBinding(), server.controllers.RBAC.Role(), server.controllers.RBAC.ClusterRole(), asl)
 
 	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
 	if err != nil {

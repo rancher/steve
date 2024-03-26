@@ -10,8 +10,9 @@ import (
 )
 
 type AccessSet struct {
-	ID  string
-	set map[key]resourceAccessSet
+	ID   string
+	Hash string
+	set  map[key]resourceAccessSet
 }
 
 type resourceAccessSet map[Access]bool
