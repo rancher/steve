@@ -18,12 +18,12 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.0
-	github.com/rancher/apiserver v0.0.0-20240207153957-4fd7d821d952
-	github.com/rancher/dynamiclistener v0.5.0-rc2
+	github.com/rancher/apiserver v0.0.0-20240326184108-0dbf81039822
+	github.com/rancher/dynamiclistener v0.5.0-rc3
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/norman v0.0.0-20240207153100-3bb70b772b52
-	github.com/rancher/remotedialer v0.3.0
-	github.com/rancher/wrangler/v2 v2.1.4
+	github.com/rancher/norman v0.0.0-20240326183200-dd207ee11dda
+	github.com/rancher/remotedialer v0.3.1
+	github.com/rancher/wrangler/v2 v2.2.0-rc1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
@@ -74,7 +74,7 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
-	github.com/rancher/lasso v0.0.0-20240123150939-7055397d6dfa // indirect
+	github.com/rancher/lasso v0.0.0-20240325194215-0064abcb8aee // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
@@ -87,11 +87,11 @@ require (
 	go.opentelemetry.io/otel/sdk v1.10.0 // indirect
 	go.opentelemetry.io/otel/trace v1.10.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
-	golang.org/x/crypto v0.19.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
-	golang.org/x/term v0.17.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
