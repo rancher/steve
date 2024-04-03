@@ -19,6 +19,7 @@ type DebounceableRefresher struct {
 	// Refreshable is any type that can be refreshed. The refresh method should by protected by a mutex internally.
 	Refreshable Refreshable
 	current     context.CancelFunc
+	onCancel    func()
 }
 
 // RefreshAfter requests a refresh after a certain time has passed. Subsequent calls to this method will
@@ -39,7 +40,10 @@ func (d *DebounceableRefresher) RefreshAfter(duration time.Duration) {
 		defer timer.Stop()
 		select {
 		case <-ctx.Done():
-			// this indicates that the context was cancelled. Do nothing.
+			// this indicates that the context was cancelled.
+			if d.onCancel != nil {
+				d.onCancel()
+			}
 		case <-timer.C:
 			// note this can cause multiple refreshes to happen concurrently
 			err := d.Refreshable.Refresh()
