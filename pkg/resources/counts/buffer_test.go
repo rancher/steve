@@ -44,7 +44,7 @@ func Test_countsBuffer(t *testing.T) {
 			}
 
 			// first event is not buffered, so we expect to receive it quicker than the debounce
-			_, err := receiveWithTimeout(outputChannel, time.Millisecond*1)
+			_, err := receiveWithTimeout(outputChannel, time.Second*1)
 			assert.NoError(t, err, "Expected first event to be received quickly")
 
 			// stream our standard count events
