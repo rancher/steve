@@ -6,9 +6,10 @@
     "master"
   ],
   "prHourlyLimit": 5,
+  "branchConcurrentLimit": 50,
   "packageRules": [
     {
-      "groupName": "rancher repositories",
+      "groupName": "rancher repository dependencies",
       "matchPackagePatterns": [
         "rancher"
       ]
