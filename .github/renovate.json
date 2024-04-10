@@ -12,10 +12,6 @@
       "matchPackagePrefixes": [
         "github.com/rancher"
       ]
-    },
-    {
-      "extends": "group:gomod-k8sio-dependencies",
-      "allowedVersions": "<0.30.0"
     }
   ]
 }
