@@ -8,7 +8,7 @@
   "prHourlyLimit": 2,
   "packageRules": [
     {
-      "groupName": "rancherRepositories",
+      "groupName": "rancher",
       "matchPackagePatterns": [
         "rancher"
       ]
