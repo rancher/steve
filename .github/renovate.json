@@ -8,9 +8,9 @@
   "prHourlyLimit": 2,
   "packageRules": [
     {
-      "groupName": "rancher",
-      "matchPackagePatterns": [
-        "rancher"
+      "groupName": "rancher repositories",
+      "matchSourceUrlPrefixes": [
+        "https://github.com/rancher/"
       ]
     }
   ]
