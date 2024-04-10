@@ -9,11 +9,8 @@
   "packageRules": [
     {
       "groupName": "rancher repositories",
-      "matchSourceUrls": [
-        "https://github.com/rancher/wrangler/v2",
-        "https://github.com/rancher/dynamiclistener",
-        "https://github.com/rancher/apiserver",
-        "https://github.com/rancher/norman"
+      "matchPackageNames": [
+        "rancher"
       ]
     }
   ]
