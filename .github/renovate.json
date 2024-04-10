@@ -5,5 +5,17 @@
   "baseBranches": [
     "master"
   ],
-  "prHourlyLimit": 2
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {
+      "groupName": "rancher",
+      "matchPackagePrefixes": [
+        "github.com/rancher"
+      ]
+    },
+    {
+      "extends": "group:gomod-k8sio-dependencies",
+      "allowedVersions": "<0.30.0"
+    }
+  ]
 }
