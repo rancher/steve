@@ -9,8 +9,8 @@
   "packageRules": [
     {
       "groupName": "rancher repositories",
-      "matchSourceUrlPrefixes": [
-        "https://github.com/rancher/"
+      "matchPackagePatterns": [
+        "github.com/rancher"
       ]
     }
   ]
