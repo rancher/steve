@@ -5,10 +5,10 @@
   "baseBranches": [
     "master"
   ],
-  "prHourlyLimit": 2,
+  "prHourlyLimit": 5,
   "packageRules": [
     {
-      "groupName": "rancher",
+      "groupName": "rancher repositories",
       "matchPackagePatterns": [
         "rancher"
       ]
