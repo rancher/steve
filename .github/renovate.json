@@ -9,7 +9,7 @@
   "packageRules": [
     {
       "groupName": "rancher",
-      "matchPackagePrefixes": [
+      "matchPackagePatterns": [
         "rancher"
       ]
     }
