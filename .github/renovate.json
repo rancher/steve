@@ -9,7 +9,7 @@
   "packageRules": [
     {
       "groupName": "rancher repositories",
-      "matchPackageNames": [
+      "matchPackagePatterns": [
         "rancher"
       ]
     }
