@@ -181,7 +181,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 		counts[schema.ID] = itemCount
 		changedCount := map[string]ItemCount{
-			schema.ID: itemCount,
+			schema.ID: *itemCount.DeepCopy(),
 		}
 
 		result <- Count{
