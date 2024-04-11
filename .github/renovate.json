@@ -3,16 +3,52 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "master"
+    "master",
+    "release/v2.8",
+    "release/v2.7"
   ],
-  "prHourlyLimit": 5,
-  "branchConcurrentLimit": 50,
+  "prHourlyLimit": 0,
+  "prConcurrentLimit":0,
+  "branchConcurrentLimit": 0,
   "packageRules": [
     {
-      "groupName": "rancher repository dependencies",
-      "matchPackagePatterns": [
-        "rancher"
-      ]
+      "groupName": "rancher 2.9 packages",
+      "matchBaseBranches": ["master"],
+      "matchPackagePrefixes": [
+        "github.com/rancher/remotedialer",
+        "github.com/rancher/dynamiclistener",
+        "github.com/rancher/norman",
+        "github.com/rancher/steve",
+        "github.com/rancher/apiserver",
+        "github.com/rancher/webhook"
+      ],
+      "allowedVersions":"<0.6.0"
+    },
+    {
+      "groupName": "rancher 2.8 packages",
+      "matchBaseBranches": ["release/v2.8"],
+      "matchPackagePrefixes": [
+        "github.com/rancher/remotedialer",
+        "github.com/rancher/dynamiclistener",
+        "github.com/rancher/norman",
+        "github.com/rancher/steve",
+        "github.com/rancher/apiserver",
+        "github.com/rancher/webhook"
+      ],
+      "allowedVersions":"<0.5.0"
+    },
+    {
+      "groupName": "rancher 2.7 packages",
+      "matchBaseBranches": ["release/v2.7"],
+      "matchPackagePrefixes": [
+        "github.com/rancher/remotedialer",
+        "github.com/rancher/dynamiclistener",
+        "github.com/rancher/norman",
+        "github.com/rancher/steve",
+        "github.com/rancher/apiserver",
+        "github.com/rancher/webhook"
+      ],
+      "allowedVersions":"<0.4.0"
     }
   ]
 }
