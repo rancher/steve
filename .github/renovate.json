@@ -17,7 +17,8 @@
         "github.com/rancher/norman",
         "github.com/rancher/steve",
         "github.com/rancher/apiserver",
-        "github.com/rancher/webhook"
+        "github.com/rancher/webhook",
+        "github.com/rancher/wrangler"
       ]
     }
   ]
