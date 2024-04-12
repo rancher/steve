@@ -3,7 +3,22 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "master"
+    "master",
+    "release/v2.8",
+    "release/v2.7"
   ],
-  "prHourlyLimit": 2
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {
+      "groupName": "rancher packages",
+      "matchPackagePrefixes": [
+        "github.com/rancher/remotedialer",
+        "github.com/rancher/dynamiclistener",
+        "github.com/rancher/norman",
+        "github.com/rancher/steve",
+        "github.com/rancher/apiserver",
+        "github.com/rancher/webhook"
+      ]
+    }
+  ]
 }
