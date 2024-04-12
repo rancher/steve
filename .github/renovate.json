@@ -3,7 +3,8 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "use-renovate-groups",
+    "master",
+    "release/v2.8",
     "release/v2.7"
   ],
   "prHourlyLimit": 0,
@@ -11,8 +12,21 @@
   "branchConcurrentLimit": 0,
   "packageRules": [
     {
-      "groupName": "rancher groups packages",
-      "matchBaseBranches": ["use-renovate-groups"],
+      "groupName": "rancher 2.9 packages",
+      "matchBaseBranches": ["master"],
+      "matchPackagePrefixes": [
+        "github.com/rancher/remotedialer",
+        "github.com/rancher/dynamiclistener",
+        "github.com/rancher/norman",
+        "github.com/rancher/steve",
+        "github.com/rancher/apiserver",
+        "github.com/rancher/webhook"
+      ],
+      "allowedVersions":"<0.6.0"
+    },
+    {
+      "groupName": "rancher 2.8 packages",
+      "matchBaseBranches": ["release/v2.8"],
       "matchPackagePrefixes": [
         "github.com/rancher/remotedialer",
         "github.com/rancher/dynamiclistener",
