@@ -319,8 +319,8 @@ github.com/rancher/apiserver v0.0.0-20240410190409-3141cfd0e5b2 h1:EL3A3tBHwd7b+
 github.com/rancher/apiserver v0.0.0-20240410190409-3141cfd0e5b2/go.mod h1:dJb7/AzOcMoBmrXi0GGtqsg1KmJE/r8myhkMFu5sMOQ=
 github.com/rancher/client-go v1.28.6-rancher1 h1:nSoGKs12BuPviZtzemO7wTX8jxABaLqfYKFLRBV8MI0=
 github.com/rancher/client-go v1.28.6-rancher1/go.mod h1:+nu0Yp21Oeo/cBCsprNVXB2BfJTV51lFfe5tXl2rUL8=
-github.com/rancher/dynamiclistener v0.5.0-rc3 h1:NQReluE94a9ylLeBZ5nRkCS8FQBeC+Cg82yh065U+4g=
-github.com/rancher/dynamiclistener v0.5.0-rc3/go.mod h1:w3lJ1h9bLEbvJE6ATaaOMZjc3Hn6Xx6BcP7YZUIEz3o=
+github.com/rancher/dynamiclistener v0.5.0-rc4 h1:TAo0YLt7TcipjY31R4hxieGCrTxQLcKPZlYLyBUm8kg=
+github.com/rancher/dynamiclistener v0.5.0-rc4/go.mod h1:DmZNnUMdO3iATkDm5pqbkO2SsEgfo6N/6quISUju1jY=
 github.com/rancher/kubernetes-provider-detector v0.1.5 h1:hWRAsWuJOemzGjz/XrbTlM7QmfO4OedvFE3QwXiH60I=
 github.com/rancher/kubernetes-provider-detector v0.1.5/go.mod h1:ypuJS7kP7rUiAn330xG46mj+Nhvym05GM8NqMVekpH0=
 github.com/rancher/lasso v0.0.0-20240325194215-0064abcb8aee h1:3BgZZIJQABqFxfgjAPchBm9afHQ1Vj7QDywZnKyWlQw=
