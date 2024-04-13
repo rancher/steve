@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
 	"io"
@@ -78,7 +79,7 @@ type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(lo *informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -154,7 +155,7 @@ func (s *Store) Reset() error {
 }
 
 func (s *Store) initializeInformerFactory() error {
-	informerFactory, err := sql.NewInformerFactory()
+	informerFactory, err := factory.NewInformerFactory()
 	if err != nil {
 		return err
 	}

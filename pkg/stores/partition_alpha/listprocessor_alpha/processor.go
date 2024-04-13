@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/lasso/pkg/cache/sql"
+	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
@@ -42,21 +42,21 @@ var opReg = regexp.MustCompile(`[!]?=`)
 type ListOptions struct {
 	ChunkSize  int
 	Resume     string
-	Filters    []sql.OrFilter
-	Sort       sql.Sort
-	Pagination sql.Pagination
+	Filters    []informer.OrFilter
+	Sort       informer.Sort
+	Pagination informer.Pagination
 }
 
 type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(ctx context.Context, lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOptions, error) {
-	opts := sql.ListOptions{}
+func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.ListOptions, error) {
+	opts := informer.ListOptions{}
 
 	opts.ChunkSize = getLimit(apiOp)
 
@@ -65,12 +65,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 	opts.Resume = cont
 
 	filterParams := q[filterParam]
-	filterOpts := []sql.OrFilter{}
+	filterOpts := []informer.OrFilter{}
 	for _, filters := range filterParams {
 		orFilters := strings.Split(filters, orOp)
-		orFilter := sql.OrFilter{}
+		orFilter := informer.OrFilter{}
 		for _, filter := range orFilters {
-			var op sql.Op
+			var op informer.Op
 			if strings.Contains(filter, "!=") {
 				op = "!="
 			}
@@ -79,7 +79,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 				continue
 			}
 			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
-			orFilter.Filters = append(orFilter.Filters, sql.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op, Partial: usePartialMatch})
+			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -103,13 +103,13 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 	})
 	opts.Filters = filterOpts
 
-	sortOpts := sql.Sort{}
+	sortOpts := informer.Sort{}
 	sortKeys := q.Get(sortParam)
 	if sortKeys != "" {
 		sortParts := strings.SplitN(sortKeys, ",", 2)
 		primaryField := sortParts[0]
 		if primaryField != "" && primaryField[0] == '-' {
-			sortOpts.PrimaryOrder = sql.DESC
+			sortOpts.PrimaryOrder = informer.DESC
 			primaryField = primaryField[1:]
 		}
 		if primaryField != "" {
@@ -118,7 +118,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 		if len(sortParts) > 1 {
 			secondaryField := sortParts[1]
 			if secondaryField != "" && secondaryField[0] == '-' {
-				sortOpts.SecondaryOrder = sql.DESC
+				sortOpts.SecondaryOrder = informer.DESC
 				secondaryField = secondaryField[1:]
 			}
 			if secondaryField != "" {
@@ -129,7 +129,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 	opts.Sort = sortOpts
 
 	var err error
-	pagination := sql.Pagination{}
+	pagination := informer.Pagination{}
 	pagination.PageSize, err = strconv.Atoi(q.Get(pageSizeParam))
 	if err != nil {
 		pagination.PageSize = 0
@@ -140,35 +140,35 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (*sql.ListOpti
 	}
 	opts.Pagination = pagination
 
-	var op sql.Op
+	var op informer.Op
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
 		if projectsOrNamespaces != "" {
-			op = sql.NotEq
+			op = informer.NotEq
 		}
 	}
 	if projectsOrNamespaces != "" {
 		projOrNSFilters, err := parseNamespaceOrProjectFilters(apiOp.Context(), projectsOrNamespaces, op, namespaceCache)
 		if err != nil {
-			return nil, err
+			return opts, err
 		}
 		if projOrNSFilters == nil {
-			return nil, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespacess named [%s] or namespaces belonging to project named [%s]", projOrNSFilters, projOrNSFilters))
+			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespacess named [%s] or namespaces belonging to project named [%s]", projOrNSFilters, projOrNSFilters))
 		}
-		if op == sql.NotEq {
+		if op == informer.NotEq {
 			for _, filter := range projOrNSFilters {
-				opts.Filters = append(opts.Filters, sql.OrFilter{Filters: []sql.Filter{filter}})
+				opts.Filters = append(opts.Filters, informer.OrFilter{Filters: []informer.Filter{filter}})
 			}
 		} else {
-			opts.Filters = append(opts.Filters, sql.OrFilter{Filters: projOrNSFilters})
+			opts.Filters = append(opts.Filters, informer.OrFilter{Filters: projOrNSFilters})
 		}
 	}
 	/* TODO: come back to this
 	if len(opts.Filters) == 1 && opts.Filters[0].Filters[0] == nil {
 		fmt.Println("debug")
 	}*/
-	return &opts, nil
+	return opts, nil
 }
 
 // getLimit extracts the limit parameter from the request or sets a default of 100000.
@@ -195,7 +195,7 @@ func ToList(list <-chan []unstructured.Unstructured) []unstructured.Unstructured
 	return result
 }
 
-func matchesOne(obj map[string]interface{}, filter sql.Filter) bool {
+func matchesOne(obj map[string]interface{}, filter informer.Filter) bool {
 	var objValue interface{}
 	var ok bool
 	subField := []string{}
@@ -219,7 +219,7 @@ func matchesOne(obj map[string]interface{}, filter sql.Filter) bool {
 			return true
 		}
 	case []interface{}:
-		filter = sql.Filter{Field: subField, Match: filter.Match, Op: filter.Op}
+		filter = informer.Filter{Field: subField, Match: filter.Match, Op: filter.Op}
 		if matchesOneInList(typedVal, filter) {
 			return true
 		}
@@ -227,7 +227,7 @@ func matchesOne(obj map[string]interface{}, filter sql.Filter) bool {
 	return false
 }
 
-func matchesOneInList(obj []interface{}, filter sql.Filter) bool {
+func matchesOneInList(obj []interface{}, filter informer.Filter) bool {
 	for _, v := range obj {
 		switch typedItem := v.(type) {
 		case string, int, bool:
@@ -248,17 +248,17 @@ func matchesOneInList(obj []interface{}, filter sql.Filter) bool {
 	return false
 }
 
-func matchesAny(obj map[string]interface{}, filter sql.OrFilter) bool {
+func matchesAny(obj map[string]interface{}, filter informer.OrFilter) bool {
 	for _, f := range filter.Filters {
 		matches := matchesOne(obj, f)
-		if (matches && f.Op == sql.Eq) || (!matches && f.Op == sql.NotEq) {
+		if (matches && f.Op == informer.Eq) || (!matches && f.Op == informer.NotEq) {
 			return true
 		}
 	}
 	return false
 }
 
-func matchesAll(obj map[string]interface{}, filters []sql.OrFilter) bool {
+func matchesAll(obj map[string]interface{}, filters []informer.OrFilter) bool {
 	for _, f := range filters {
 		if !matchesAny(obj, f) {
 			return false
@@ -267,22 +267,22 @@ func matchesAll(obj map[string]interface{}, filters []sql.OrFilter) bool {
 	return true
 }
 
-func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sql.Op, namespaceInformer Informer) ([]sql.Filter, error) {
-	var filters []sql.Filter
+func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Informer) ([]informer.Filter, error) {
+	var filters []informer.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, err := namespaceInformer.ListByOptions(ctx, &sql.ListOptions{
-			Filters: []sql.OrFilter{
+		uList, _, err := namespaceInformer.ListByOptions(ctx, informer.ListOptions{
+			Filters: []informer.OrFilter{
 				{
-					Filters: []sql.Filter{
+					Filters: []informer.Filter{
 						{
 							Field: []string{"metadata", "name"},
 							Match: pn,
-							Op:    sql.Eq,
+							Op:    informer.Eq,
 						},
 						{
 							Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
 							Match: pn,
-							Op:    sql.Eq,
+							Op:    informer.Eq,
 						},
 					},
 				},
@@ -292,7 +292,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sql
 			return filters, err
 		}
 		for _, item := range uList.Items {
-			filters = append(filters, sql.Filter{
+			filters = append(filters, informer.Filter{
 				Field:   []string{"metadata", "namespace"},
 				Match:   item.GetName(),
 				Op:      op,
