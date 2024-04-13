@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
 	"io"
@@ -18,7 +19,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/lasso/pkg/cache/sql"
+	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
@@ -77,7 +78,7 @@ type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
-	ListByOptions(ctx context.Context, lo *sql.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -100,7 +101,7 @@ type RelationshipNotifier interface {
 type Store struct {
 	clientGetter      ClientGetter
 	notifier          RelationshipNotifier
-	informerFactory   *sql.InformerFactory
+	informerFactory   *factory.InformerFactory
 	namespaceInformer Informer
 	lock              sync.Mutex
 	columnSetter      SchemaColumnSetter
@@ -108,7 +109,7 @@ type Store struct {
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
 func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier) (*Store, error) {
-	informerFactory, err := sql.NewInformerFactory()
+	informerFactory, err := factory.NewInformerFactory()
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +154,7 @@ func (s *Store) Reset() error {
 }
 
 func (s *Store) initializeInformerFactory() error {
-	informerFactory, err := sql.NewInformerFactory()
+	informerFactory, err := factory.NewInformerFactory()
 	if err != nil {
 		return err
 	}
