@@ -181,7 +181,7 @@ func (s *Store) initializeNamespaceInformer() error {
 	}
 
 	fields := getFieldsFromSchema(nsSchema)
-	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, nsSchema)
+	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(nsSchema))
 	if err != nil {
 		return err
 	}
@@ -597,7 +597,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		return nil, "", err
 	}
 
-	informer, err := s.informerFactory.InformerFor(getFieldsFromSchema(schema), &tablelistconvert.Client{ResourceInterface: client}, schema)
+	informer, err := s.informerFactory.InformerFor(getFieldsFromSchema(schema), &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema))
 	if err != nil {
 		return nil, "", err
 	}
