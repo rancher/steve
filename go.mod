@@ -17,13 +17,13 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.19.0
-	github.com/rancher/apiserver v0.0.0-20240410190409-3141cfd0e5b2
-	github.com/rancher/dynamiclistener v0.5.0-rc4
+	github.com/prometheus/client_golang v1.16.0
+	github.com/rancher/apiserver v0.0.0-20240417185102-844817b6e863
+	github.com/rancher/dynamiclistener v0.5.0-rc5
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/norman v0.0.0-20240410185903-a9e04c653a51
-	github.com/rancher/remotedialer v0.3.1
-	github.com/rancher/wrangler/v2 v2.2.0-rc3
+	github.com/rancher/norman v0.0.0-20240417185323-cf0f9cc85249
+	github.com/rancher/remotedialer v0.3.2
+	github.com/rancher/wrangler/v2 v2.2.0-rc5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
@@ -66,15 +66,16 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.48.0 // indirect
-	github.com/prometheus/procfs v0.12.0 // indirect
-	github.com/rancher/lasso v0.0.0-20240325194215-0064abcb8aee // indirect
+	github.com/prometheus/client_model v0.4.0 // indirect
+	github.com/prometheus/common v0.44.0 // indirect
+	github.com/prometheus/procfs v0.10.1 // indirect
+	github.com/rancher/lasso v0.0.0-20240415182150-5993b260dd08 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
