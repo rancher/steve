@@ -175,18 +175,22 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	opts := listprocessor.ParseQuery(apiOp)
 
-	key, err := s.getCacheKey(apiOp, opts)
-	if err != nil {
-		return result, err
-	}
-
 	var list []unstructured.Unstructured
-	if key.revision != "" && s.listCache != nil {
-		cachedList, ok := s.listCache.Get(key)
-		if ok {
-			logrus.Tracef("found cached list for query %s?%s", apiOp.Request.URL.Path, apiOp.Request.URL.RawQuery)
-			list = cachedList.(*unstructured.UnstructuredList).Items
-			result.Continue = cachedList.(*unstructured.UnstructuredList).GetContinue()
+	var key cacheKey
+	if s.listCache != nil {
+		key, err = s.getCacheKey(apiOp, opts)
+		if err != nil {
+			return result, err
+		}
+
+		if key.revision != "" {
+			cachedList, ok := s.listCache.Get(key)
+			if ok {
+				logrus.Tracef("found cached list for query %s?%s", apiOp.Request.URL.Path, apiOp.Request.URL.RawQuery)
+				list = cachedList.(*unstructured.UnstructuredList).Items
+				result.Continue = cachedList.(*unstructured.UnstructuredList).GetContinue()
+				result.Revision = key.revision
+			}
 		}
 	}
 	if list == nil { // did not look in cache or was not found in cache
@@ -202,7 +206,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 			return result, lister.Err()
 		}
 		list = listprocessor.SortList(list, opts.Sort)
-		key.revision = lister.Revision()
+		result.Revision = lister.Revision()
 		listToCache := &unstructured.UnstructuredList{
 			Items: list,
 		}
@@ -212,6 +216,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 			listToCache.SetContinue(c)
 		}
 		if s.listCache != nil {
+			key.revision = result.Revision
 			s.listCache.Add(key, listToCache, 30*time.Minute)
 		}
 		result.Continue = lister.Continue()
@@ -224,7 +229,6 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 		result.Objects = append(result.Objects, toAPI(schema, item, nil))
 	}
 
-	result.Revision = key.revision
 	result.Pages = pages
 	return result, lister.Err()
 }
