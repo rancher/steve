@@ -436,7 +436,7 @@ then add the template to the schema factory:
 schemaFactory.AddTemplate(template)
 ```
 
-As another example, if you wanted to add custom field to all objects in a
+As another example, if you wanted to add a custom field to all objects in a
 collection response, you can add a schema template with a collection formatter
 to omit the ID or the group and kind:
 
@@ -444,11 +444,9 @@ to omit the ID or the group and kind:
 template := schema.Template{
 	Customize: func(schema *types.APISchema) {
 		schema.CollectionFormatter = func(apiOp *types.APIRequest, collection *types.GenericCollection) {
-			schema.CollectionFormatter = func(apiOp *types.APIRequest, collection *types.GenericCollection) {
-				for _, d := range collection.Data {
-					obj := d.APIObject.Object.(*unstructured.Unstructured)
-					obj.Object["tag"] = "custom"
-				}
+			for _, d := range collection.Data {
+				obj := d.APIObject.Object.(*unstructured.Unstructured)
+				obj.Object["tag"] = "custom"
 			}
 		}
 	}
