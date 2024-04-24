@@ -8,7 +8,6 @@ import (
 type schemaFieldVisitor struct {
 	field       definitionField
 	definitions map[string]definition
-	models      proto.Models
 }
 
 // VisitArray turns an array into a definitionField (stored on the receiver). For arrays of complex types, will also
@@ -46,11 +45,7 @@ func (s *schemaFieldVisitor) VisitPrimitive(primitive *proto.Primitive) {
 	field := definitionField{
 		Description: primitive.GetDescription(),
 	}
-	if primitive.Type == "number" || primitive.Type == "integer" {
-		field.Type = "int"
-	} else {
-		field.Type = primitive.Type
-	}
+	field.Type = getPrimitiveType(primitive.Type)
 	s.field = field
 }
 
