@@ -79,7 +79,8 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.List
 				continue
 			}
 			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
-			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Match: filter[1], Op: op, Partial: usePartialMatch})
+			value := strings.TrimSuffix(strings.TrimPrefix(filter[1], "'"), "'")
+			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Match: value, Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
