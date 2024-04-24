@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,9 +46,16 @@ import (
 const watchTimeoutEnv = "CATTLE_WATCH_TIMEOUT_SECONDS"
 
 var (
-	lowerChars  = regexp.MustCompile("[a-z]+")
-	paramScheme = runtime.NewScheme()
-	paramCodec  = runtime.NewParameterCodec(paramScheme)
+	paramScheme               = runtime.NewScheme()
+	paramCodec                = runtime.NewParameterCodec(paramScheme)
+	typeSpecificIndexedFields = map[string][][]string{
+		"_v1_Namespace": {{`metadata`, `labels["field.cattle.io/projectId"]`}},
+		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
+		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
+		"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},
+
+		"management.cattle.io_v1_Node": {{`status`, `nodeName`}},
+	}
 )
 
 func init() {
@@ -181,6 +187,7 @@ func (s *Store) initializeNamespaceInformer() error {
 	}
 
 	fields := getFieldsFromSchema(nsSchema)
+	fields = append(fields, getFieldForGVK(attributes.GVK(nsSchema))...)
 	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(nsSchema))
 	if err != nil {
 		return err
@@ -188,6 +195,14 @@ func (s *Store) initializeNamespaceInformer() error {
 
 	s.namespaceInformer = nsInformer
 	return nil
+}
+
+func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
+	return typeSpecificIndexedFields[keyFromGVK(gvk)]
+}
+
+func keyFromGVK(gvk schema.GroupVersionKind) string {
+	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
 }
 
 func getFieldsFromSchema(schema *types.APISchema) [][]string {
@@ -596,8 +611,9 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	if err != nil {
 		return nil, "", err
 	}
-
-	informer, err := s.informerFactory.InformerFor(getFieldsFromSchema(schema), &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema))
+	fields := getFieldsFromSchema(schema)
+	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
+	informer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema))
 	if err != nil {
 		return nil, "", err
 	}
