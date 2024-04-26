@@ -82,6 +82,35 @@ definitions:
     - group: "management.cattle.io"
       version: "v2"
       kind: "GlobalRole"
+  io.cattle.management.v2.NewResource:
+    description: "A resource that's in the v2 group, but not v1"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the new resource"
+        type: "object"
+        required:
+        - "someRequired"
+        properties:
+          someRequired:
+            description: "A required field"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+    x-kubernetes-group-version-kind:
+    - group: "management.cattle.io"
+      version: "v2"
+      kind: "NewResource"
   io.cattle.noversion.v2.Resource:
     description: "A No Version V2 resource is for a group with no preferred version"
     type: "object"

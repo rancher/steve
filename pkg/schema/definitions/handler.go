@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/schema/converter"
+	wranglerDefinition "github.com/rancher/wrangler/v2/pkg/schemas/definition"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
@@ -30,6 +31,8 @@ var (
 type SchemaDefinitionHandler struct {
 	sync.RWMutex
 
+	// baseSchema are the schemas (which may not represent a real CRD) added to the server
+	baseSchema *types.APISchemas
 	// client is the discovery client used to get the groups/resources/fields from kubernetes.
 	client discovery.DiscoveryInterface
 	// models are the cached models from the last response from kubernetes.
@@ -76,6 +79,20 @@ func (s *SchemaDefinitionHandler) byIDHandler(request *types.APIRequest) (types.
 	// would make this endpoint only usable by one caller at a time
 	s.RLock()
 	defer s.RUnlock()
+
+	if baseSchema := s.baseSchema.LookupSchema(requestSchema.ID); baseSchema != nil {
+		// if this schema is a base schema it won't be in the model cache. In this case, and only this case, we process
+		// the fields independently
+		definitions := baseSchemaToDefinition(*requestSchema)
+		return types.APIObject{
+			ID:   request.Name,
+			Type: "schemaDefinition",
+			Object: schemaDefinition{
+				DefinitionType: requestSchema.ID,
+				Definitions:    definitions,
+			},
+		}, nil
+	}
 
 	if s.models == nil {
 		return types.APIObject{}, apierror.NewAPIError(notRefreshedErrorCode, "schema definitions not yet refreshed")
@@ -130,13 +147,53 @@ func (s *SchemaDefinitionHandler) indexSchemaNames(models proto.Models, groups *
 			// we can safely continue
 			continue
 		}
+		schemaID := converter.GVKToSchemaID(*gvk)
 		prefVersion := preferredResourceVersions[gvk.Group]
-		// if we don't have a known preferred version for this group or we are the preferred version
-		// add this as the model name for the schema
-		if prefVersion == "" || prefVersion == gvk.Version {
-			schemaID := converter.GVKToSchemaID(*gvk)
+		_, ok = schemaToModel[schemaID]
+		// we always add the preferred version to the map. However, if this isn't the preferred version the preferred group could
+		// be missing this resource (e.x. v1alpha1 has a resource, it's removed in v1). In those cases, we add the model name
+		// only if we don't already have an entry. This way we always choose the preferred, if possible, but still have 1 version
+		// for everything
+		if !ok || prefVersion == gvk.Version {
 			schemaToModel[schemaID] = modelName
 		}
 	}
 	return schemaToModel
+}
+
+// baseSchemaToDefinition converts a given schema to the definition map. This should only be used with baseSchemas, whose definitions
+// are expected to be set by another application and may not be k8s resources.
+func baseSchemaToDefinition(schema types.APISchema) map[string]definition {
+	definitions := map[string]definition{}
+	def := definition{
+		Description:    schema.Description,
+		Type:           schema.ID,
+		ResourceFields: map[string]definitionField{},
+	}
+	for fieldName, field := range schema.ResourceFields {
+		fieldType, subType := parseFieldType(field.Type)
+		def.ResourceFields[fieldName] = definitionField{
+			Type:        fieldType,
+			SubType:     subType,
+			Description: field.Description,
+			Required:    field.Required,
+		}
+	}
+	definitions[schema.ID] = def
+	return definitions
+}
+
+// parseFieldType parses a schemas.Field's type to a type (first return) and subType (second return)
+func parseFieldType(fieldType string) (string, string) {
+	subType := wranglerDefinition.SubType(fieldType)
+	if wranglerDefinition.IsMapType(fieldType) {
+		return "map", subType
+	}
+	if wranglerDefinition.IsArrayType(fieldType) {
+		return "array", subType
+	}
+	if wranglerDefinition.IsReferenceType(fieldType) {
+		return "reference", subType
+	}
+	return fieldType, ""
 }
