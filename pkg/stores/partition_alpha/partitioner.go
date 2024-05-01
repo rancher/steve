@@ -2,8 +2,6 @@ package partition_alpha
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/watch"
 	"sort"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -11,7 +9,9 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/wrangler/pkg/kv"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 var (
@@ -37,6 +37,7 @@ type rbacPartitioner struct {
 	proxyStore UnstructuredStore
 }
 
+// TODO: add tests
 // Lookup returns the default passthrough partition which is used only for retrieving single resources.
 // Listing or watching resources require custom partitions.
 func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error) {
@@ -86,6 +87,7 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 	}
 }
 
+// TODO: add tests
 // Store returns an Store suited to listing and watching resources by partition.
 func (p *rbacPartitioner) Store() UnstructuredStore {
 	return p.proxyStore

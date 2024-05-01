@@ -1,13 +1,14 @@
 package partition_alpha
 
 import (
+	"testing"
+
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
-	"github.com/rancher/wrangler/pkg/schemas"
+	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"testing"
 )
 
 func TestAll(t *testing.T) {
@@ -16,7 +17,7 @@ func TestAll(t *testing.T) {
 		apiOp          *types.APIRequest
 		id             string
 		schema         *types.APISchema
-		wantPartitions []listprocessor.Partition
+		wantPartitions []partition.Partition
 	}{
 		{
 			name:  "all passthrough",
@@ -60,7 +61,7 @@ func TestAll(t *testing.T) {
 					},
 				},
 			},
-			wantPartitions: []listprocessor.Partition{
+			wantPartitions: []partition.Partition{
 				{
 					Names: sets.NewString("r1", "r2"),
 				},
@@ -89,7 +90,7 @@ func TestAll(t *testing.T) {
 					},
 				},
 			},
-			wantPartitions: []listprocessor.Partition{
+			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
 					All:       true,
@@ -145,7 +146,7 @@ func TestAll(t *testing.T) {
 					},
 				},
 			},
-			wantPartitions: []listprocessor.Partition{
+			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n2",
 				},
@@ -178,7 +179,7 @@ func TestAll(t *testing.T) {
 					},
 				},
 			},
-			wantPartitions: []listprocessor.Partition{
+			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
 					Names:     sets.NewString("r1", "r2"),
@@ -214,7 +215,7 @@ func TestAll(t *testing.T) {
 					},
 				},
 			},
-			wantPartitions: []listprocessor.Partition{
+			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
 					Names:     sets.NewString("r1"),
@@ -230,7 +231,7 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 				},
 			},
-			wantPartitions: []listprocessor.Partition{
+			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
 					Names:     sets.NewString("r1"),

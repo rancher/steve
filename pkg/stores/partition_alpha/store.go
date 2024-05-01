@@ -17,15 +17,6 @@ import (
 	"reflect"
 )
 
-const (
-	// Number of list request entries to save before cache replacement.
-	// Not related to the total size in memory of the cache, as any item could take any amount of memory.
-	cacheSizeEnv     = "CATTLE_REQUEST_CACHE_SIZE_INT"
-	defaultCacheSize = 1000
-	// Set to "false" to enable list request caching.
-	cacheDisableEnv = "CATTLE_REQUEST_CACHE_DISABLED"
-)
-
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
 	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error)
@@ -233,24 +224,3 @@ func toAPIEvent(schema *types.APISchema, event watch.Event) types.APIEvent {
 	apiEvent.Revision = m.GetResourceVersion()
 	return apiEvent
 }
-
-/*
-// NewStore returns a wrapped types.proxyStore.
-func NewStore(c proxy_alpha.SchemaColumnSetter, clientGetter proxy_alpha.ClientGetter, notifier proxy_alpha.RelationshipNotifier, lookup accesscontrol.AccessSetLookup) *proxy_alpha.ErrorStore {
-	s, err := proxy_alpha.NewProxyStore(c, clientGetter, notifier)
-	if err != nil {
-		panic(err)
-	}
-
-	return proxy_alpha.NewErrorStore(
-		proxy_alpha.NewUnformatterStore(
-			proxy_alpha.NewWatchRefresh(
-				NewStore(
-					s,
-					lookup,
-				),
-				lookup,
-			),
-		),
-	)
-}*/

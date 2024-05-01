@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -21,8 +19,10 @@ import (
 	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/common"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/partition_alpha/listprocessor_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
 	"github.com/rancher/wrangler/v2/pkg/data"
 	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
@@ -50,9 +50,11 @@ var (
 	paramCodec                = runtime.NewParameterCodec(paramScheme)
 	typeSpecificIndexedFields = map[string][][]string{
 		"_v1_Namespace": {{`metadata`, `labels["field.cattle.io/projectId"]`}},
-		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
 		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
-		"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},
+		/*
+			"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
+			"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
+			"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},*/
 
 		"management.cattle.io_v1_Node": {{`status`, `nodeName`}},
 	}
@@ -113,6 +115,7 @@ type Store struct {
 	columnSetter      SchemaColumnSetter
 }
 
+// TODO: add tests to cover new functionality
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
 func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier) (*Store, error) {
 	informerFactory, err := factory.NewInformerFactory()
@@ -144,6 +147,7 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 	return store, nil
 }
 
+// TODO: Add tests and comments
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -188,7 +192,7 @@ func (s *Store) initializeNamespaceInformer() error {
 
 	fields := getFieldsFromSchema(nsSchema)
 	fields = append(fields, getFieldForGVK(attributes.GVK(nsSchema))...)
-	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(nsSchema))
+	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(nsSchema), false)
 	if err != nil {
 		return err
 	}
@@ -613,7 +617,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	}
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
-	informer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema))
+
+	informer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
 	if err != nil {
 		return nil, "", err
 	}

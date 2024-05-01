@@ -54,6 +54,7 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 	})
 }
 
+// TODO: add tests
 func (c *Config) ToServerAlpha(ctx context.Context) (*server.Server, error) {
 	var (
 		auth steveauth.Middleware

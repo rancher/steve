@@ -10,8 +10,9 @@ import (
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/stores/partition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/wrangler/v2/pkg/generic"
 	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/stretchr/testify/assert"
@@ -24,12 +25,13 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
+// TODO: review these tests
 func TestList(t *testing.T) {
 	tests := []struct {
 		name          string
 		apiOps        []*types.APIRequest
 		access        []map[string]string
-		partitions    map[string][]listprocessor.Partition
+		partitions    map[string][]partition.Partition
 		objects       map[string]*unstructured.UnstructuredList
 		want          []types.APIObjectList
 		wantListCalls []map[string]int
@@ -44,9 +46,9 @@ func TestList(t *testing.T) {
 					"user1": "roleA",
 				},
 			},
-			partitions: map[string][]listprocessor.Partition{
+			partitions: map[string][]partition.Partition{
 				"user1": {
-					listprocessor.Partition{
+					partition.Partition{
 						Namespace: "all",
 						All:       true,
 					},
@@ -78,13 +80,13 @@ func TestList(t *testing.T) {
 					"user1": "roleA",
 				},
 			},
-			partitions: map[string][]listprocessor.Partition{
+			partitions: map[string][]partition.Partition{
 				"user1": {
-					listprocessor.Partition{
+					partition.Partition{
 						Namespace: "green",
 						All:       true,
 					},
-					listprocessor.Partition{
+					partition.Partition{
 						Namespace: "yellow",
 						All:       true,
 					},
@@ -145,14 +147,14 @@ func TestList(t *testing.T) {
 
 type mockPartitioner struct {
 	store      proxy_alpha.Store
-	partitions map[string][]listprocessor.Partition
+	partitions map[string][]partition.Partition
 }
 
-func (m mockPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (listprocessor.Partition, error) {
+func (m mockPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error) {
 	panic("not implemented")
 }
 
-func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]listprocessor.Partition, error) {
+func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error) {
 	user, _ := request.UserFrom(apiOp.Request.Context())
 	return m.partitions[user.GetName()], nil
 }
@@ -163,16 +165,16 @@ func (m mockPartitioner) Store() proxy_alpha.Store {
 
 type mockStore struct {
 	contents  map[string]*unstructured.UnstructuredList
-	partition listprocessor.Partition
+	partition partition.Partition
 	called    map[string]int
 }
 
-func (m *mockStore) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []listprocessor.Partition) (chan watch.Event, error) {
+func (m *mockStore) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []listprocessor.Partition) ([]unstructured.Unstructured, string, string, error) {
+func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, string, error) {
 	list := []unstructured.Unstructured{}
 	revision := ""
 	for _, partition := range partitions {

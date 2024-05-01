@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+
 	"github.com/rancher/apiserver/pkg/store/apiroot"
 	"github.com/rancher/apiserver/pkg/subscribe"
 	"github.com/rancher/apiserver/pkg/types"
@@ -71,10 +72,10 @@ func DefaultSchemaTemplates(cf *client.Factory,
 	}
 }
 
-func DefaultSchemaTemplatesAlpha(store types.Store, c *common.DynamicColumns, cf *client.Factory,
+// TODO: add tests
+func DefaultSchemaTemplatesAlpha(store types.Store,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
-	lookup accesscontrol.AccessSetLookup,
 	discovery discovery.DiscoveryInterface) []schema.Template {
 
 	return []schema.Template{

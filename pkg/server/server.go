@@ -4,12 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition_alpha"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha"
-	"net/http"
-	"time"
-
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/dynamiclistener/server"
@@ -26,8 +20,12 @@ import (
 	"github.com/rancher/steve/pkg/schema/definitions"
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/client-go/rest"
+	"net/http"
 )
 
 var ErrConfigRequired = errors.New("rest config is required")
@@ -272,20 +270,18 @@ func setupAlpha(ctx context.Context, server *Server) error {
 	store := metricsStore.NewMetricsStore(errStore)
 	// end store setup code
 
-	for _, template := range resources.DefaultSchemaTemplatesAlpha(store, cols, cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
+	for _, template := range resources.DefaultSchemaTemplatesAlpha(store, server.BaseSchemas, summaryCache, server.controllers.K8s.Discovery()) {
 		sf.AddTemplate(template)
 	}
 
 	onSchemasHandler := &serverSchemaHandler{
 		SchemasFunc: func(schemas *schema.Collection) error {
-			fmt.Println("resetting db!!!!")
 			if err := ccache.OnSchemas(schemas); err != nil {
 				return err
 			}
 			if err := s.Reset(); err != nil {
 				return err
 			}
-			fmt.Println("db reset was successful!!!!")
 			return nil
 		},
 	}
@@ -309,10 +305,7 @@ func setupAlpha(ctx context.Context, server *Server) error {
 	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
-	go func() {
-		time.Sleep(30 * time.Second)
-		fmt.Println("SF LEN SCHEMAS AFTER 5 seconds: ", sf.Len())
-	}()
+
 	return nil
 }
 
@@ -351,6 +344,7 @@ func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, op
 	return ctx.Err()
 }
 
+// TODO: add tests
 func (s *serverSchemaHandler) OnSchemas(schemas *schema.Collection) error {
 	return s.SchemasFunc(schemas)
 }

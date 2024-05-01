@@ -1,21 +1,21 @@
-// Package listprocessor contains methods for filtering, sorting, and paginating lists of objects.
+// Package listprocessor_alpha contains methods for filtering, sorting, and paginating lists of objects.
 package listprocessor_alpha
 
 import (
 	"context"
 	"fmt"
-	"github.com/rancher/apiserver/pkg/apierror"
-	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
+	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
 )
@@ -50,10 +50,10 @@ type ListOptions struct {
 type Informer interface {
 	cache.SharedIndexInformer
 	// ListByOptions returns objects according to the specified list options and partitions
-	// see ListOptionIndexer.ListByOptions
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
+// TODO: add tests
 // ParseQuery parses the query params of a request and returns a ListOptions.
 func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.ListOptions, error) {
 	opts := informer.ListOptions{}
@@ -165,10 +165,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.List
 			opts.Filters = append(opts.Filters, informer.OrFilter{Filters: projOrNSFilters})
 		}
 	}
-	/* TODO: come back to this
-	if len(opts.Filters) == 1 && opts.Filters[0].Filters[0] == nil {
-		fmt.Println("debug")
-	}*/
+
 	return opts, nil
 }
 
@@ -182,18 +179,6 @@ func getLimit(apiOp *types.APIRequest) int {
 		limit = defaultLimit
 	}
 	return limit
-}
-
-// ToList accepts a channel of unstructured objects and returns its contents as a list.
-func ToList(list <-chan []unstructured.Unstructured) []unstructured.Unstructured {
-	result := []unstructured.Unstructured{}
-	for items := range list {
-		for _, item := range items {
-			result = append(result, item)
-			continue
-		}
-	}
-	return result
 }
 
 func matchesOne(obj map[string]interface{}, filter informer.Filter) bool {
@@ -247,25 +232,6 @@ func matchesOneInList(obj []interface{}, filter informer.Filter) bool {
 		}
 	}
 	return false
-}
-
-func matchesAny(obj map[string]interface{}, filter informer.OrFilter) bool {
-	for _, f := range filter.Filters {
-		matches := matchesOne(obj, f)
-		if (matches && f.Op == informer.Eq) || (!matches && f.Op == informer.NotEq) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesAll(obj map[string]interface{}, filters []informer.OrFilter) bool {
-	for _, f := range filters {
-		if !matchesAny(obj, f) {
-			return false
-		}
-	}
-	return true
 }
 
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Informer) ([]informer.Filter, error) {
