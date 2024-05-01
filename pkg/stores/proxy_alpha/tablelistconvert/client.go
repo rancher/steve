@@ -4,12 +4,13 @@ returned by ByID and List to resemble those returned by non-table clients while 
 */
 package tablelistconvert
 
+// TODO: test whole package
 import (
 	"context"
 	"fmt"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/data"
-	"k8s.io/apimachinery/pkg/watch"
+	k8sWatch "k8s.io/apimachinery/pkg/watch"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,10 +21,12 @@ type Client struct {
 	dynamic.ResourceInterface
 }
 
-type Watch struct {
+var _ dynamic.ResourceInterface = (*Client)(nil)
+
+type tableConvertWatch struct {
 	done   chan struct{}
-	events chan watch.Event
-	watch.Interface
+	events chan k8sWatch.Event
+	k8sWatch.Interface
 }
 
 type WarningBuffer []types.Warning
@@ -39,24 +42,19 @@ func (c *Client) List(ctx context.Context, opts metav1.ListOptions) (*unstructur
 	return list, nil
 }
 
-func (c *Client) Get(ctx context.Context, name string, options metav1.GetOptions, subresources ...string) (*unstructured.Unstructured, error) {
-	u, e := c.ResourceInterface.Get(ctx, name, options)
-	fmt.Printf("", u, e)
-	return &unstructured.Unstructured{}, nil
-}
-func (c *Client) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+func (c *Client) Watch(ctx context.Context, opts metav1.ListOptions) (k8sWatch.Interface, error) {
 	w, err := c.ResourceInterface.Watch(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	events := make(chan watch.Event)
+	events := make(chan k8sWatch.Event)
 	done := make(chan struct{})
-	eventWatch := &Watch{done: done, events: events, Interface: w}
+	eventWatch := &tableConvertWatch{done: done, events: events, Interface: w}
 	eventWatch.feed()
 	return eventWatch, nil
 }
 
-func (w *Watch) feed() {
+func (w *tableConvertWatch) feed() {
 	tableEvents := w.Interface.ResultChan()
 	go func() {
 		for {
@@ -80,15 +78,16 @@ func (w *Watch) feed() {
 	}()
 }
 
-func (w *Watch) ResultChan() <-chan watch.Event {
+func (w *tableConvertWatch) ResultChan() <-chan k8sWatch.Event {
 	return w.events
 }
 
-func (w *Watch) Stop() {
+func (w *tableConvertWatch) Stop() {
 	fmt.Println("stop")
 	close(w.done)
 	w.Interface.Stop()
 }
+
 func rowToObject(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
