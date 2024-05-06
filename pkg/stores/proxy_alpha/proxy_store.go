@@ -109,10 +109,15 @@ type RelationshipNotifier interface {
 type Store struct {
 	clientGetter      ClientGetter
 	notifier          RelationshipNotifier
-	informerFactory   *factory.InformerFactory
+	informerFactory   InformerFactory
 	namespaceInformer Informer
 	lock              sync.Mutex
 	columnSetter      SchemaColumnSetter
+}
+
+type InformerFactory interface {
+	InformerFor(fields [][]string, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (*informer.Informer, error)
+	Reset() error
 }
 
 // TODO: add tests to cover new functionality
@@ -602,6 +607,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
+// TODO: test any additional functionality
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
 	opts, err := listprocessor_alpha.ParseQuery(apiOp, s.namespaceInformer)
