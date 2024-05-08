@@ -1,10 +1,16 @@
 package proxy_alpha
 
 import (
+	"context"
 	"fmt"
 	"github.com/golang/mock/gomock"
+	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/stores/partition_alpha/listprocessor_alpha"
+	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"net/http"
 	"net/url"
 	"testing"
@@ -28,7 +34,9 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Informer,ClientGetter,InformerFactory
+//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Informer,ClientGetter,InformerFactory,SchemaColumnSetter,RelationshipNotifier
+//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
+//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
 var c *watch.FakeWatcher
 
@@ -39,6 +47,110 @@ type testFactory struct {
 }
 
 func TestNewProxyStore(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "NewProxyStore() with no errors returned should returned no errors. Should initialize and assign" +
+			" a namespace informer.",
+		test: func(t *testing.T) {
+			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			rn := NewMockRelationshipNotifier(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+
+			nsSchema := baseNSSchema
+			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(inf, nil)
+
+			s, err := NewProxyStore(scc, cg, rn, ifa)
+			assert.Nil(t, err)
+			assert.Equal(t, scc, s.columnSetter)
+			assert.Equal(t, cg, s.clientGetter)
+			assert.Equal(t, rn, s.notifier)
+			assert.Equal(t, s.informerFactory, ifa)
+			assert.NotNil(t, s.namespaceInformer)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "NewProxyStore() with schema column setter SetColumns() error returned should return not return and error" +
+			" and not set namespace informer.",
+		test: func(t *testing.T) {
+			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			rn := NewMockRelationshipNotifier(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+
+			nsSchema := baseNSSchema
+			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(fmt.Errorf("error"))
+
+			s, err := NewProxyStore(scc, cg, rn, ifa)
+			assert.Nil(t, err)
+			assert.Equal(t, scc, s.columnSetter)
+			assert.Equal(t, cg, s.clientGetter)
+			assert.Equal(t, rn, s.notifier)
+			assert.Equal(t, s.informerFactory, ifa)
+			assert.Nil(t, s.namespaceInformer)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "NewProxyStore() with client getter TableAdminClient() error returned should return not return and error" +
+			" and not set namespace informer.",
+		test: func(t *testing.T) {
+			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			rn := NewMockRelationshipNotifier(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+
+			nsSchema := baseNSSchema
+			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
+
+			s, err := NewProxyStore(scc, cg, rn, ifa)
+			assert.Nil(t, err)
+			assert.Equal(t, scc, s.columnSetter)
+			assert.Equal(t, cg, s.clientGetter)
+			assert.Equal(t, rn, s.notifier)
+			assert.Equal(t, s.informerFactory, ifa)
+			assert.Nil(t, s.namespaceInformer)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "NewProxyStore() with client getter TableAdminClient() error returned should return not return and error" +
+			" and not set namespace informer.",
+		test: func(t *testing.T) {
+			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			rn := NewMockRelationshipNotifier(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+
+			nsSchema := baseNSSchema
+			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nil, fmt.Errorf("error"))
+
+			s, err := NewProxyStore(scc, cg, rn, ifa)
+			assert.Nil(t, err)
+			assert.Equal(t, scc, s.columnSetter)
+			assert.Equal(t, cg, s.clientGetter)
+			assert.Equal(t, rn, s.notifier)
+			assert.Equal(t, s.informerFactory, ifa)
+			assert.Nil(t, s.namespaceInformer)
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) { test.test(t) })
+	}
 }
 
 func TestListByPartitions(t *testing.T) {
@@ -47,28 +159,22 @@ func TestListByPartitions(t *testing.T) {
 		test        func(t *testing.T)
 	}
 	var tests []testCase
-	/*
-			what to test:
-		    * no error
-				* gets fields from schema
-				* gets fields from gvk
-				* clears resource version
-				* table to list
-			* parse query error
-			* clientgetter error
-			* informerfor error
-			* list by options error
-	*/
 	tests = append(tests, testCase{
 		description: "client ListByPartitions() with no errors returned should returned no errors. Should pass fields" +
-			" from schema and gvk. Should clear resource version. Should set metadata.fields ",
+			" from schema.",
 		test: func(t *testing.T) {
 			nsi := NewMockInformer(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
 			s := &Store{
 				namespaceInformer: nsi,
 				clientGetter:      cg,
-				informerFactory:   NewMockInformerFactory(gomock.NewController(t)),
+				informerFactory:   ifa,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -85,10 +191,304 @@ func TestListByPartitions(t *testing.T) {
 					},
 				}},
 			}
-			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{})
-			_, _, err := s.ListByPartitions(req, schema, partitions)
-			assert.Nil(t, err)
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+			opts, err := listprocessor_alpha.ParseQuery(req, nil)
+			assert.Nil(t, err)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
+			// This tests that fields are being extracted from schema columns and the type specific fields map
+			ifa.EXPECT().InformerFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(inf, nil)
+			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, "", nil)
+			list, contToken, err := s.ListByPartitions(req, schema, partitions)
+			assert.Nil(t, err)
+			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, "", contToken)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client ListByPartitions() with ParseQuery error returned should return an error.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+				}},
+			}
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+
+			nsi.EXPECT().ListByOptions(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", fmt.Errorf("error")).Times(2)
+			_, err := listprocessor_alpha.ParseQuery(req, nsi)
+			assert.NotNil(t, err)
+
+			_, _, err = s.ListByPartitions(req, schema, partitions)
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client ListByPartitions() with no errors returned should returned no errors. Should pass fields" +
+			" from schema.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+				}},
+			}
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+			_, err := listprocessor_alpha.ParseQuery(req, nil)
+			assert.Nil(t, err)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
+
+			_, _, err = s.ListByPartitions(req, schema, partitions)
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client ListByPartitions() with InformerFor() error returned should returned an errors. Should pass fields",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+				}},
+			}
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+			_, err := listprocessor_alpha.ParseQuery(req, nil)
+			assert.Nil(t, err)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
+			// This tests that fields are being extracted from schema columns and the type specific fields map
+			ifa.EXPECT().InformerFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(nil, fmt.Errorf("error"))
+
+			_, _, err = s.ListByPartitions(req, schema, partitions)
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields" +
+			" from schema.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+				}},
+			}
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+			opts, err := listprocessor_alpha.ParseQuery(req, nil)
+			assert.Nil(t, err)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
+			// This tests that fields are being extracted from schema columns and the type specific fields map
+			ifa.EXPECT().InformerFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(inf, nil)
+			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(nil, "", fmt.Errorf("error"))
+
+			_, _, err = s.ListByPartitions(req, schema, partitions)
+			assert.NotNil(t, err)
 		},
 	})
 	t.Parallel()
@@ -98,7 +498,134 @@ func TestListByPartitions(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "client Reset() with no errors returned should returned no errors.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			nsi2 := &informer.Informer{}
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+				columnSetter:      cs,
+				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+			}
+			nsSchema := baseNSSchema
+			ifa.EXPECT().Reset().Return(nil)
+			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nsi2, nil)
+			err := s.Reset()
+			assert.Nil(t, err)
+			assert.Equal(t, nsi2, s.namespaceInformer)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client Reset() with informer factory Reset() error returned, should return an error.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+				columnSetter:      cs,
+				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+			}
+
+			ifa.EXPECT().Reset().Return(fmt.Errorf("error"))
+			err := s.Reset()
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client Reset() with column setter error returned, should return an error.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+				columnSetter:      cs,
+				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+			}
+
+			ifa.EXPECT().Reset().Return(nil)
+			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(fmt.Errorf("error"))
+			err := s.Reset()
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client Reset() with column getter TableAdminClient() error returned, should return an error.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+				columnSetter:      cs,
+				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+			}
+			nsSchema := baseNSSchema
+
+			ifa.EXPECT().Reset().Return(nil)
+			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
+			err := s.Reset()
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client Reset() with informer factory InformerFor() error returned, should return an error.",
+		test: func(t *testing.T) {
+			nsi := NewMockInformer(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+
+			s := &Store{
+				namespaceInformer: nsi,
+				clientGetter:      cg,
+				informerFactory:   ifa,
+				columnSetter:      cs,
+				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+			}
+			nsSchema := baseNSSchema
+
+			ifa.EXPECT().Reset().Return(nil)
+			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nil, fmt.Errorf("error"))
+			err := s.Reset()
+			assert.NotNil(t, err)
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) { test.test(t) })
+	}
 }
 
 func TestWatchNamesErrReceive(t *testing.T) {

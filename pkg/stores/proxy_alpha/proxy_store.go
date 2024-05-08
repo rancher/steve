@@ -50,13 +50,21 @@ var (
 	paramCodec                = runtime.NewParameterCodec(paramScheme)
 	typeSpecificIndexedFields = map[string][][]string{
 		"_v1_Namespace": {{`metadata`, `labels["field.cattle.io/projectId"]`}},
+		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
 		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
-		/*
-			"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
-			"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
-			"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},*/
+		"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},
 
 		"management.cattle.io_v1_Node": {{`status`, `nodeName`}},
+	}
+	baseNSSchema = types.APISchema{
+		Schema: &schemas.Schema{
+			Attributes: map[string]interface{}{
+				"group":    "",
+				"version":  "v1",
+				"kind":     "Namespace",
+				"resource": "namespaces",
+			},
+		},
 	}
 )
 
@@ -110,10 +118,13 @@ type Store struct {
 	clientGetter      ClientGetter
 	notifier          RelationshipNotifier
 	informerFactory   InformerFactory
+	ifInitializer     InformerFactoryInitializer
 	namespaceInformer Informer
 	lock              sync.Mutex
 	columnSetter      SchemaColumnSetter
 }
+
+type InformerFactoryInitializer func() (InformerFactory, error)
 
 type InformerFactory interface {
 	InformerFor(fields [][]string, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (*informer.Informer, error)
@@ -122,32 +133,24 @@ type InformerFactory interface {
 
 // TODO: add tests to cover new functionality
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier) (*Store, error) {
-	informerFactory, err := factory.NewInformerFactory()
-	if err != nil {
-		return nil, err
-	}
-	s := &types.APISchema{
-		Schema: &schemas.Schema{},
-	}
-	attributes.SetGVK(s, schema.GroupVersionKind{
-		Version: "v1",
-		Kind:    "Namespace",
-	})
-	attributes.SetResource(s, "namespaces")
-	if err := c.SetColumns(context.TODO(), s); err != nil {
-		return nil, fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
-	}
-
+func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory InformerFactory) (*Store, error) {
 	store := &Store{
-		clientGetter:    clientGetter,
-		notifier:        notifier,
-		informerFactory: informerFactory,
-		columnSetter:    c,
+		clientGetter: clientGetter,
+		notifier:     notifier,
+		columnSetter: c,
 	}
 
+	if factory == nil {
+		var err error
+		factory, err = defaultInitializeInformerFactory()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	store.informerFactory = factory
 	if err := store.initializeNamespaceInformer(); err != nil {
-		logrus.Infof("failed to intialize namespace informer for proxy store in steve, will try again on next ns request")
+		logrus.Infof("failed to warm up namespace informer for proxy store in steve, will try again on next ns request")
 	}
 	return store, nil
 }
@@ -159,45 +162,40 @@ func (s *Store) Reset() error {
 	if err := s.informerFactory.Reset(); err != nil {
 		return err
 	}
-	if err := s.initializeInformerFactory(); err != nil {
-		return err
-	}
+	/*
+		infF, err := s.ifInitializer()
+		if err != nil {
+			return err
+		}
+		s.informerFactory = infF*/
 	if err := s.initializeNamespaceInformer(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Store) initializeInformerFactory() error {
+func defaultInitializeInformerFactory() (InformerFactory, error) {
 	informerFactory, err := factory.NewInformerFactory()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	s.informerFactory = informerFactory
-	return nil
+	return informerFactory, nil
 }
 
 func (s *Store) initializeNamespaceInformer() error {
-	nsSchema := &types.APISchema{
-		Schema: &schemas.Schema{},
-	}
-	attributes.SetGVK(nsSchema, schema.GroupVersionKind{
-		Version: "v1",
-		Kind:    "Namespace",
-	})
 	buffer := WarningBuffer{}
-	attributes.SetResource(nsSchema, "namespaces")
-	if err := s.columnSetter.SetColumns(context.TODO(), nsSchema); err != nil {
+	nsSchema := baseNSSchema
+	if err := s.columnSetter.SetColumns(context.TODO(), &nsSchema); err != nil {
 		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
 	}
-	client, err := s.clientGetter.TableAdminClient(nil, nsSchema, "", &buffer)
+	client, err := s.clientGetter.TableAdminClient(nil, &nsSchema, "", &buffer)
 	if err != nil {
 		return err
 	}
 
-	fields := getFieldsFromSchema(nsSchema)
-	fields = append(fields, getFieldForGVK(attributes.GVK(nsSchema))...)
-	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(nsSchema), false)
+	fields := getFieldsFromSchema(&nsSchema)
+	fields = append(fields, getFieldForGVK(attributes.GVK(&nsSchema))...)
+	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
 	if err != nil {
 		return err
 	}
@@ -612,8 +610,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
 	opts, err := listprocessor_alpha.ParseQuery(apiOp, s.namespaceInformer)
 	if err != nil {
-		fmt.Println(err)
-		panic(err)
+		return nil, "", err
 	}
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
@@ -633,9 +630,6 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	if err != nil {
 		return nil, "", err
 	}
-
-	list.SetResourceVersion("")
-	tableToList(list)
 
 	return list.Items, continueToken, nil
 }
