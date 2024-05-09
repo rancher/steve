@@ -4,6 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
+	"github.com/golang/mock/gomock"
+	"github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,8 +18,6 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/wrangler/v2/pkg/generic"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
-	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -25,123 +27,112 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -package partition_alpha -destination partition_mocks.go "github.com/rancher/steve/pkg/stores/partition_alpha" Partitioner,UnstructuredStore
+
 // TODO: review these tests
 func TestList(t *testing.T) {
-	tests := []struct {
-		name          string
-		apiOps        []*types.APIRequest
-		access        []map[string]string
-		partitions    map[string][]partition.Partition
-		objects       map[string]*unstructured.UnstructuredList
-		want          []types.APIObjectList
-		wantListCalls []map[string]int
-	}{
-		{
-			name: "basic",
-			apiOps: []*types.APIRequest{
-				newRequest("", "user1"),
-			},
-			access: []map[string]string{
-				{
-					"user1": "roleA",
-				},
-			},
-			partitions: map[string][]partition.Partition{
-				"user1": {
-					partition.Partition{
-						Namespace: "all",
-						All:       true,
-					},
-				},
-			},
-			objects: map[string]*unstructured.UnstructuredList{
-				"all": {
-					Items: []unstructured.Unstructured{
-						newApple("fuji").Unstructured,
-					},
-				},
-			},
-			want: []types.APIObjectList{
-				{
-					Count: 1,
-					Objects: []types.APIObject{
-						newApple("fuji").toObj(),
-					},
-				},
-			},
-		},
-		{
-			name: "multi-partition",
-			apiOps: []*types.APIRequest{
-				newRequest("", "user1"),
-			},
-			access: []map[string]string{
-				{
-					"user1": "roleA",
-				},
-			},
-			partitions: map[string][]partition.Partition{
-				"user1": {
-					partition.Partition{
-						Namespace: "green",
-						All:       true,
-					},
-					partition.Partition{
-						Namespace: "yellow",
-						All:       true,
-					},
-				},
-			},
-			objects: map[string]*unstructured.UnstructuredList{
-				"pink": {
-					Items: []unstructured.Unstructured{
-						newApple("fuji").Unstructured,
-					},
-				},
-				"green": {
-					Items: []unstructured.Unstructured{
-						newApple("granny-smith").Unstructured,
-					},
-				},
-				"yellow": {
-					Items: []unstructured.Unstructured{
-						newApple("crispin").Unstructured,
-					},
-				},
-			},
-			want: []types.APIObjectList{
-				{
-					Count: 2,
-					Objects: []types.APIObject{
-						newApple("granny-smith").toObj(),
-						newApple("crispin").toObj(),
-					},
-				},
-			},
-		},
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			schema := &types.APISchema{Schema: &schemas.Schema{ID: "apple"}}
-			asl := &mockAccessSetLookup{userRoles: test.access}
-			store := NewStore(mockPartitioner{
-				store: &mockStore{
-					contents: test.objects,
-					called:   map[string]int{},
-				},
-				partitions: test.partitions,
-			}, asl)
-			for i, req := range test.apiOps {
-				got, gotErr := store.List(req, schema)
-				assert.Nil(t, gotErr)
-				assert.Equal(t, test.want[i], got)
-				if len(test.wantListCalls) > 0 {
-					for name, called := range store.Partitioner.(mockPartitioner).store.(*mockStore).called {
-						assert.Equal(t, test.wantListCalls[i][name], called)
-					}
-				}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "List() with no errors returned should returned no errors. Should have empty reivsion, count " +
+			"should match number of items in list, and id should include namespace (if applicable) and name, separated" +
+			" by a '/'.",
+		test: func(t *testing.T) {
+			p := NewMockPartitioner(gomock.NewController(t))
+			us := NewMockUnstructuredStore(gomock.NewController(t))
+			s := Store{
+				Partitioner: p,
 			}
-		})
+			req := &types.APIRequest{}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{},
+			}
+			partitions := make([]partition.Partition, 0)
+			uListToReturn := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name":      "fuji",
+							"namespace": "fruitsnamespace",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			expectedAPIObjList := types.APIObjectList{
+				Count:    1,
+				Revision: "",
+				Objects: []types.APIObject{
+					{
+						Object: &unstructured.Unstructured{
+							Object: map[string]interface{}{
+								"kind": "apple",
+								"metadata": map[string]interface{}{
+									"name":      "fuji",
+									"namespace": "fruitsnamespace",
+								},
+								"data": map[string]interface{}{
+									"color": "pink",
+								},
+							},
+						},
+						ID: "fruitsnamespace/fuji",
+					},
+				},
+			}
+			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
+			p.EXPECT().Store().Return(us)
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, "", nil)
+			l, err := s.List(req, schema)
+			assert.Nil(t, err)
+			assert.Equal(t, expectedAPIObjList, l)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "List() with partitioner All() error returned should returned an error.",
+		test: func(t *testing.T) {
+			p := NewMockPartitioner(gomock.NewController(t))
+			s := Store{
+				Partitioner: p,
+			}
+			req := &types.APIRequest{}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{},
+			}
+			p.EXPECT().All(req, schema, "list", "").Return(nil, fmt.Errorf("error"))
+			_, err := s.List(req, schema)
+			assert.NotNil(t, err)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "List() with unstructured store ListByPartitions() error returned should returned an error.",
+		test: func(t *testing.T) {
+			p := NewMockPartitioner(gomock.NewController(t))
+			us := NewMockUnstructuredStore(gomock.NewController(t))
+			s := Store{
+				Partitioner: p,
+			}
+			req := &types.APIRequest{}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{},
+			}
+			partitions := make([]partition.Partition, 0)
+			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
+			p.EXPECT().Store().Return(us)
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(nil, "", fmt.Errorf("error"))
+			_, err := s.List(req, schema)
+			assert.NotNil(t, err)
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
 }
 

@@ -1,6 +1,7 @@
 package partition_alpha
 
 import (
+	"github.com/golang/mock/gomock"
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -249,4 +250,13 @@ func TestAll(t *testing.T) {
 			assert.Equal(t, test.wantPartitions, gotPartitions)
 		})
 	}
+}
+
+func TestStore(t *testing.T) {
+	expectedStore := NewMockUnstructuredStore(gomock.NewController(t))
+	rp := rbacPartitioner{
+		proxyStore: expectedStore,
+	}
+	store := rp.Store()
+	assert.Equal(t, expectedStore, store)
 }

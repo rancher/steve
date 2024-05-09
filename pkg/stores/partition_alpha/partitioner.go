@@ -37,7 +37,6 @@ type rbacPartitioner struct {
 	proxyStore UnstructuredStore
 }
 
-// TODO: add tests
 // Lookup returns the default passthrough partition which is used only for retrieving single resources.
 // Listing or watching resources require custom partitions.
 func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error) {

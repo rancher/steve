@@ -251,7 +251,7 @@ func setupAlpha(ctx context.Context, server *Server) error {
 	}
 
 	// move to store code
-	s, err := proxy_alpha.NewProxyStore(cols, cf, summaryCache)
+	s, err := proxy_alpha.NewProxyStore(cols, cf, summaryCache, nil)
 	if err != nil {
 		panic(err)
 	}
