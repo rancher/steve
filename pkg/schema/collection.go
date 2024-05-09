@@ -3,6 +3,8 @@ package schema
 import (
 	"context"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -16,6 +18,25 @@ import (
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
+
+const (
+	defaultUserSchemasCacheSize = 1000
+)
+
+var (
+	userSchemasCacheSize = defaultUserSchemasCacheSize
+)
+
+func init() {
+	if size := os.Getenv("CATTLE_USER_SCHEMAS_CACHE_SIZE"); size != "" {
+		sizeInt, err := strconv.Atoi(size)
+		if err != nil {
+			logrus.Errorf("failed to set user schemas cache size: %v", err)
+			return
+		}
+		userSchemasCacheSize = sizeInt
+	}
+}
 
 type Collection struct {
 	toSync     int32
@@ -75,8 +96,8 @@ func NewCollection(ctx context.Context, baseSchema *types.APISchemas, access acc
 		templates:  map[string][]*Template{},
 		byGVR:      map[schema.GroupVersionResource]string{},
 		byGVK:      map[schema.GroupVersionKind]string{},
-		cache:      cache.NewLRUExpireCache(1000),
-		userCache:  cache.NewLRUExpireCache(1000),
+		cache:      cache.NewLRUExpireCache(userSchemasCacheSize),
+		userCache:  cache.NewLRUExpireCache(userSchemasCacheSize),
 		notifiers:  map[int]func(){},
 		ctx:        ctx,
 		as:         access,
