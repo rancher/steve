@@ -24,15 +24,16 @@ const (
 )
 
 var (
+	DetailedLogDebug = false
+
 	schemasExpiryHour = defaultExpiryHour
-	logSizeDebug      = false
 	jitterExpiry      = false
 	expiryLowerBound  = 0
 )
 
 func init() {
-	if showSizeDebug := os.Getenv("CATTLE_LOG_CACHE_SIZE_DEBUG"); showSizeDebug == "true" {
-		logSizeDebug = true
+	if showDetailedDebug := os.Getenv("CATTLE_DETAILED_SCHEMAS_DEBUG"); showDetailedDebug == "true" {
+		DetailedLogDebug = true
 	}
 	if expiry := os.Getenv("CATTLE_SCHEMAS_CACHE_EXPIRY"); expiry != "" {
 		expInt, err := strconv.Atoi(expiry)
@@ -84,6 +85,10 @@ func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 		return schemas, nil
 	}
 
+	if DetailedLogDebug {
+		logrus.Debugf("Cache miss for Schemas(<user>) for user [%s], cache ID [%s]", user.GetName(), access.ID)
+	}
+
 	schemas, err := c.schemasForSubject(access)
 	if err != nil {
 		return nil, err
@@ -110,7 +115,7 @@ func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info,
 	if cacheSize >= userSchemasCacheSize {
 		logrus.Debugf("user schemas cache is full. set size limit [%d], records will be evicted", userSchemasCacheSize)
 	}
-	if logSizeDebug {
+	if DetailedLogDebug {
 		logrus.Debugf("current size of schemas cache [%d], access ID being added [%s]", cacheSize, access.ID)
 	}
 	expiry := schemasExpiryHour
