@@ -155,7 +155,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.List
 			return opts, err
 		}
 		if projOrNSFilters == nil {
-			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespacess named [%s] or namespaces belonging to project named [%s]", projOrNSFilters, projOrNSFilters))
+			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespacess named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
 		}
 		if op == informer.NotEq {
 			for _, filter := range projOrNSFilters {
