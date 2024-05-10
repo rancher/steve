@@ -15,16 +15,19 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 const (
-	defaultExpiry = 24 * time.Hour
+	defaultExpiryHour = 24
 )
 
 var (
-	schemasExpiry = defaultExpiry
-	logSizeDebug  = false
+	schemasExpiryHour = defaultExpiryHour
+	logSizeDebug      = false
+	jitterExpiry      = false
+	expiryLowerBound  = 0
 )
 
 func init() {
@@ -34,11 +37,25 @@ func init() {
 	if expiry := os.Getenv("CATTLE_SCHEMAS_CACHE_EXPIRY"); expiry != "" {
 		expInt, err := strconv.Atoi(expiry)
 		if err != nil {
-			logrus.Errorf("failed to set user schemas cache size: %v", err)
+			logrus.Errorf("failed to set user schemas cache expiry: %v", err)
 			return
 		}
-		schemasExpiry = time.Duration(expInt) * time.Hour
+		schemasExpiryHour = expInt
 	}
+	if lowerBound := os.Getenv("CATTLE_SCHEMA_CACHE_EXPIRY_LOWER"); lowerBound != "" {
+		lb, err := strconv.Atoi(lowerBound)
+		if err != nil {
+			logrus.Errorf("failed to set user schemas cache expiry lower bound: %v", err)
+			return
+		}
+		if lb >= schemasExpiryHour {
+			logrus.Errorf("failed to set user schema cache expiry lower bound, bound must be lower than expiry [%d]", schemasExpiryHour)
+			return
+		}
+		jitterExpiry = true
+		expiryLowerBound = lb
+	}
+
 }
 
 type Factory interface {
@@ -96,8 +113,12 @@ func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info,
 	if logSizeDebug {
 		logrus.Debugf("current size of schemas cache [%d], access ID being added [%s]", cacheSize, access.ID)
 	}
-	c.cache.Add(access.ID, schemas, schemasExpiry)
-	c.userCache.Add(user.GetName(), access.ID, schemasExpiry)
+	expiry := schemasExpiryHour
+	if jitterExpiry {
+		expiry = rand.IntnRange(expiryLowerBound, schemasExpiryHour)
+	}
+	c.cache.Add(access.ID, schemas, time.Duration(expiry)*time.Hour)
+	c.userCache.Add(user.GetName(), access.ID, time.Duration(expiry)*time.Hour)
 }
 
 // PurgeUserRecords removes a record from the backing LRU cache before expiry
