@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -84,24 +83,6 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.List
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
-	// sort the filter fields so they can be used as a cache key in the store
-	for _, orFilter := range filterOpts {
-		sort.Slice(orFilter.Filters, func(i, j int) bool {
-			fieldI := strings.Join(orFilter.Filters[i].Field, ".")
-			fieldJ := strings.Join(orFilter.Filters[j].Field, ".")
-			return fieldI < fieldJ
-		})
-	}
-	sort.Slice(filterOpts, func(i, j int) bool {
-		var fieldI, fieldJ strings.Builder
-		for _, f := range filterOpts[i].Filters {
-			fieldI.WriteString(strings.Join(f.Field, "."))
-		}
-		for _, f := range filterOpts[j].Filters {
-			fieldJ.WriteString(strings.Join(f.Field, "."))
-		}
-		return fieldI.String() < fieldJ.String()
-	})
 	opts.Filters = filterOpts
 
 	sortOpts := informer.Sort{}
