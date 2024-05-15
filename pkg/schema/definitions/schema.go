@@ -50,7 +50,8 @@ func Register(ctx context.Context,
 	crd apiextcontrollerv1.CustomResourceDefinitionController,
 	apiService v1.APIServiceController) {
 	handler := SchemaDefinitionHandler{
-		client: client,
+		baseSchema: baseSchema,
+		client:     client,
 	}
 	baseSchema.MustAddSchema(types.APISchema{
 		Schema: &schemas.Schema{

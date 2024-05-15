@@ -23,9 +23,10 @@ func TestRefresh(t *testing.T) {
 	defaultModels, err := proto.NewOpenAPIData(defaultDocument)
 	require.NoError(t, err)
 	defaultSchemaToModel := map[string]string{
-		"management.cattle.io.globalrole": "io.cattle.management.v1.GlobalRole",
-		"noversion.cattle.io.resource":    "io.cattle.noversion.v2.Resource",
-		"missinggroup.cattle.io.resource": "io.cattle.missinggroup.v2.Resource",
+		"management.cattle.io.globalrole":  "io.cattle.management.v2.GlobalRole",
+		"management.cattle.io.newresource": "io.cattle.management.v2.NewResource",
+		"noversion.cattle.io.resource":     "io.cattle.noversion.v1.Resource",
+		"missinggroup.cattle.io.resource":  "io.cattle.missinggroup.v1.Resource",
 	}
 	tests := []struct {
 		name              string
@@ -62,9 +63,10 @@ func TestRefresh(t *testing.T) {
 			nilGroups:  true,
 			wantModels: &defaultModels,
 			wantSchemaToModel: map[string]string{
-				"management.cattle.io.globalrole": "io.cattle.management.v2.GlobalRole",
-				"noversion.cattle.io.resource":    "io.cattle.noversion.v2.Resource",
-				"missinggroup.cattle.io.resource": "io.cattle.missinggroup.v2.Resource",
+				"management.cattle.io.globalrole":  "io.cattle.management.v1.GlobalRole",
+				"management.cattle.io.newresource": "io.cattle.management.v2.NewResource",
+				"noversion.cattle.io.resource":     "io.cattle.noversion.v1.Resource",
+				"missinggroup.cattle.io.resource":  "io.cattle.missinggroup.v1.Resource",
 			},
 		},
 	}
@@ -110,7 +112,7 @@ func Test_byID(t *testing.T) {
 		"management.cattle.io.globalrole": "io.cattle.management.v2.GlobalRole",
 	}
 	schemas := types.EmptyAPISchemas()
-	addBaseSchema := func(names ...string) {
+	addSchema := func(names ...string) {
 		for _, name := range names {
 			schemas.MustAddSchema(types.APISchema{
 				Schema: &wschemas.Schema{
@@ -125,8 +127,41 @@ func Test_byID(t *testing.T) {
 	intPtr := func(input int) *int {
 		return &input
 	}
-
-	addBaseSchema("management.cattle.io.globalrole", "management.cattle.io.missingfrommodel", "management.cattle.io.notakind")
+	builtinSchema := types.APISchema{
+		Schema: &wschemas.Schema{
+			ID:                "builtin",
+			Description:       "some builtin type",
+			CollectionMethods: []string{"get"},
+			ResourceMethods:   []string{"get"},
+			ResourceFields: map[string]wschemas.Field{
+				"complex": {
+					Type:        "map[string]",
+					Description: "some complex field",
+				},
+				"complexArray": {
+					Type:        "array[string]",
+					Description: "some complex array field",
+				},
+				"complexRef": {
+					Type:        "reference[complex]",
+					Description: "some complex reference field",
+				},
+				"simple": {
+					Type:        "string",
+					Description: "some simple field",
+					Required:    true,
+				},
+				"leftBracket": {
+					Type:        "test[",
+					Description: "some field with a open bracket but no close bracket",
+				},
+			},
+		},
+	}
+	addSchema("management.cattle.io.globalrole", "management.cattle.io.missingfrommodel", "management.cattle.io.notakind")
+	baseSchemas := types.EmptyAPISchemas()
+	baseSchemas.MustAddSchema(builtinSchema)
+	schemas.MustAddSchema(builtinSchema)
 
 	tests := []struct {
 		name          string
@@ -214,6 +249,51 @@ func Test_byID(t *testing.T) {
 			},
 		},
 		{
+			name:          "baseSchema",
+			schemaName:    "builtin",
+			models:        &defaultModels,
+			schemaToModel: defaultSchemaToModel,
+			wantObject: &types.APIObject{
+				ID:   "builtin",
+				Type: "schemaDefinition",
+				Object: schemaDefinition{
+					DefinitionType: "builtin",
+					Definitions: map[string]definition{
+						"builtin": {
+							ResourceFields: map[string]definitionField{
+								"complex": {
+									Type:        "map",
+									SubType:     "string",
+									Description: "some complex field",
+								},
+								"complexArray": {
+									Type:        "array",
+									SubType:     "string",
+									Description: "some complex array field",
+								},
+								"complexRef": {
+									Type:        "reference",
+									SubType:     "complex",
+									Description: "some complex reference field",
+								},
+								"simple": {
+									Type:        "string",
+									Description: "some simple field",
+									Required:    true,
+								},
+								"leftBracket": {
+									Type:        "test[",
+									Description: "some field with a open bracket but no close bracket",
+								},
+							},
+							Type:        "builtin",
+							Description: "some builtin type",
+						},
+					},
+				},
+			},
+		},
+		{
 			name:          "missing definition",
 			schemaName:    "management.cattle.io.cluster",
 			models:        &defaultModels,
@@ -252,6 +332,7 @@ func Test_byID(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			handler := SchemaDefinitionHandler{
+				baseSchema:    baseSchemas,
 				models:        test.models,
 				schemaToModel: test.schemaToModel,
 			}
@@ -285,7 +366,7 @@ func buildDefaultDiscovery() (*fakeDiscovery, error) {
 			Name: "management.cattle.io",
 			PreferredVersion: metav1.GroupVersionForDiscovery{
 				GroupVersion: "management.cattle.io/v2",
-				Version:      "v1",
+				Version:      "v2",
 			},
 			Versions: []metav1.GroupVersionForDiscovery{
 				{
