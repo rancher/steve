@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
+	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
@@ -34,7 +35,7 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Informer,ClientGetter,InformerFactory,SchemaColumnSetter,RelationshipNotifier
+//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier
 //go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
 //go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
@@ -54,97 +55,99 @@ func TestNewProxyStore(t *testing.T) {
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "NewProxyStore() with no errors returned should returned no errors. Should initialize and assign" +
-			" a namespace informer.",
+			" a namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			bloi := NewMockByOptionsLister(gomock.NewController(t))
-			inf := &informer.Informer{
-				ByOptionsLister: bloi,
+			c := factory.Cache{
+				ByOptionsLister: &informer.Informer{
+					ByOptionsLister: bloi,
+				},
 			}
 
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(inf, nil)
+			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(c, nil)
 
-			s, err := NewProxyStore(scc, cg, rn, ifa)
+			s, err := NewProxyStore(scc, cg, rn, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
 			assert.Equal(t, rn, s.notifier)
-			assert.Equal(t, s.informerFactory, ifa)
-			assert.NotNil(t, s.namespaceInformer)
+			assert.Equal(t, s.cacheFactory, cf)
+			assert.NotNil(t, s.namespaceCache)
 		},
 	})
 	tests = append(tests, testCase{
 		description: "NewProxyStore() with schema column setter SetColumns() error returned should return not return and error" +
-			" and not set namespace informer.",
+			" and not set namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, ifa)
+			s, err := NewProxyStore(scc, cg, rn, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
 			assert.Equal(t, rn, s.notifier)
-			assert.Equal(t, s.informerFactory, ifa)
-			assert.Nil(t, s.namespaceInformer)
+			assert.Equal(t, s.cacheFactory, cf)
+			assert.Nil(t, s.namespaceCache)
 		},
 	})
 	tests = append(tests, testCase{
 		description: "NewProxyStore() with client getter TableAdminClient() error returned should return not return and error" +
-			" and not set namespace informer.",
+			" and not set namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, ifa)
+			s, err := NewProxyStore(scc, cg, rn, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
 			assert.Equal(t, rn, s.notifier)
-			assert.Equal(t, s.informerFactory, ifa)
-			assert.Nil(t, s.namespaceInformer)
+			assert.Equal(t, s.cacheFactory, cf)
+			assert.Nil(t, s.namespaceCache)
 		},
 	})
 	tests = append(tests, testCase{
 		description: "NewProxyStore() with client getter TableAdminClient() error returned should return not return and error" +
-			" and not set namespace informer.",
+			" and not set namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nil, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, ifa)
+			s, err := NewProxyStore(scc, cg, rn, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
 			assert.Equal(t, rn, s.notifier)
-			assert.Equal(t, s.informerFactory, ifa)
-			assert.Nil(t, s.namespaceInformer)
+			assert.Equal(t, s.cacheFactory, cf)
+			assert.Nil(t, s.namespaceCache)
 		},
 	})
 	t.Parallel()
@@ -163,18 +166,21 @@ func TestListByPartitions(t *testing.T) {
 		description: "client ListByPartitions() with no errors returned should returned no errors. Should pass fields" +
 			" from schema.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			bloi := NewMockByOptionsLister(gomock.NewController(t))
 			inf := &informer.Informer{
 				ByOptionsLister: bloi,
 			}
+			c := factory.Cache{
+				ByOptionsLister: inf,
+			}
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -222,7 +228,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			ifa.EXPECT().InformerFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(inf, nil)
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
 			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, "", nil)
 			list, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
@@ -233,14 +239,14 @@ func TestListByPartitions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "client ListByPartitions() with ParseQuery error returned should return an error.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -297,14 +303,14 @@ func TestListByPartitions(t *testing.T) {
 		description: "client ListByPartitions() with no errors returned should returned no errors. Should pass fields" +
 			" from schema.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -357,17 +363,17 @@ func TestListByPartitions(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "client ListByPartitions() with InformerFor() error returned should returned an errors. Should pass fields",
+		description: "client ListByPartitions() with CacheFor() error returned should returned an errors. Should pass fields",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -415,7 +421,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			ifa.EXPECT().InformerFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(nil, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(factory.Cache{}, fmt.Errorf("error"))
 
 			_, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
@@ -425,18 +431,21 @@ func TestListByPartitions(t *testing.T) {
 		description: "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields" +
 			" from schema.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			bloi := NewMockByOptionsLister(gomock.NewController(t))
 			inf := &informer.Informer{
 				ByOptionsLister: bloi,
 			}
+			c := factory.Cache{
+				ByOptionsLister: inf,
+			}
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -484,7 +493,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			ifa.EXPECT().InformerFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(inf, nil)
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
 			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(nil, "", fmt.Errorf("error"))
 
 			_, _, err = s.ListByPartitions(req, schema, partitions)
@@ -506,46 +515,46 @@ func TestReset(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "client Reset() with no errors returned should returned no errors.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsc := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
-			nsi2 := &informer.Informer{}
+			nsc2 := factory.Cache{}
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
-				columnSetter:      cs,
-				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+				namespaceCache: nsc,
+				clientGetter:   cg,
+				cacheFactory:   cf,
+				columnSetter:   cs,
+				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
 			}
 			nsSchema := baseNSSchema
-			ifa.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nsi2, nil)
+			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nsc2, nil)
 			err := s.Reset()
 			assert.Nil(t, err)
-			assert.Equal(t, nsi2, s.namespaceInformer)
+			assert.Equal(t, nsc2, s.namespaceCache)
 		},
 	})
 	tests = append(tests, testCase{
-		description: "client Reset() with informer factory Reset() error returned, should return an error.",
+		description: "client Reset() with cache factory Reset() error returned, should return an error.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
-				columnSetter:      cs,
-				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
+				columnSetter:   cs,
+				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
 			}
 
-			ifa.EXPECT().Reset().Return(fmt.Errorf("error"))
+			cf.EXPECT().Reset().Return(fmt.Errorf("error"))
 			err := s.Reset()
 			assert.NotNil(t, err)
 		},
@@ -553,20 +562,20 @@ func TestReset(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "client Reset() with column setter error returned, should return an error.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
-				columnSetter:      cs,
-				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
+				columnSetter:   cs,
+				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
 			}
 
-			ifa.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(fmt.Errorf("error"))
 			err := s.Reset()
 			assert.NotNil(t, err)
@@ -575,21 +584,21 @@ func TestReset(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "client Reset() with column getter TableAdminClient() error returned, should return an error.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
-				columnSetter:      cs,
-				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
+				columnSetter:   cs,
+				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
 			}
 			nsSchema := baseNSSchema
 
-			ifa.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 			err := s.Reset()
@@ -597,27 +606,27 @@ func TestReset(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "client Reset() with informer factory InformerFor() error returned, should return an error.",
+		description: "client Reset() with cache factory CacheFor() error returned, should return an error.",
 		test: func(t *testing.T) {
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsc := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
-			ifa := NewMockInformerFactory(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 
 			s := &Store{
-				namespaceInformer: nsi,
-				clientGetter:      cg,
-				informerFactory:   ifa,
-				columnSetter:      cs,
-				ifInitializer:     func() (InformerFactory, error) { return ifa, nil },
+				namespaceCache: nsc,
+				clientGetter:   cg,
+				cacheFactory:   cf,
+				columnSetter:   cs,
+				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
 			}
 			nsSchema := baseNSSchema
 
-			ifa.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			ifa.EXPECT().InformerFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nil, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[\"field.cattle.io/projectId\"]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
 			err := s.Reset()
 			assert.NotNil(t, err)
 		},

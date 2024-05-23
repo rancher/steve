@@ -241,7 +241,6 @@ func setupAlpha(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	fmt.Println("BASE SCHEMA LEN: ", len(server.BaseSchemas.Schemas))
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
 
@@ -250,7 +249,6 @@ func setupAlpha(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	// move to store code
 	s, err := proxy_alpha.NewProxyStore(cols, cf, summaryCache, nil)
 	if err != nil {
 		panic(err)

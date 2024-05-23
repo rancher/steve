@@ -69,7 +69,7 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 					Namespace:   ns,
 					All:         false,
 					Passthrough: false,
-					Names:       sets.NewString(name),
+					Names:       sets.New[string](name),
 				},
 			}, nil
 		}
@@ -108,7 +108,7 @@ func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string
 		return []partition.Partition{
 			{
 				Namespace: apiOp.Namespace,
-				Names:     resources[apiOp.Namespace].Names,
+				Names:     sets.Set[string](resources[apiOp.Namespace].Names),
 			},
 		}, false
 	}
@@ -120,14 +120,14 @@ func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string
 			result = append(result, partition.Partition{
 				Namespace: k,
 				All:       v.All,
-				Names:     v.Names,
+				Names:     sets.Set[string](v.Names),
 			})
 		}
 	} else {
 		for _, v := range resources {
 			result = append(result, partition.Partition{
 				All:   v.All,
-				Names: v.Names,
+				Names: sets.Set[string](v.Names),
 			})
 		}
 	}

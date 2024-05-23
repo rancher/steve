@@ -15,16 +15,16 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package listprocessor_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Informer
+//go:generate mockgen --build_flags=--mod=mod -package listprocessor_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Cache
 
 func TestParseQuery(t *testing.T) {
 	type testCase struct {
-		description     string
-		setupNSInformer func() Informer
-		nsi             Informer
-		req             *types.APIRequest
-		expectedLO      informer.ListOptions
-		errExpected     bool
+		description  string
+		setupNSCache func() Cache
+		nsc          Cache
+		req          *types.APIRequest
+		expectedLO   informer.ListOptions
+		errExpected  bool
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -41,13 +41,13 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If projectsornamespaces is not empty" +
-			" and nsi returns namespaces, they should be included as filters.",
+			" and nsc returns namespaces, they should be included as filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
@@ -71,7 +71,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			list := &unstructured.UnstructuredList{
 				Items: []unstructured.Unstructured{
 					{
@@ -83,8 +83,8 @@ func TestParseQuery(t *testing.T) {
 					},
 				},
 			}
-			nsi := NewMockInformer(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
+			nsc := NewMockCache(gomock.NewController(t))
+			nsc.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
 				Filters: []informer.OrFilter{
 					{
 						Filters: []informer.Filter{
@@ -102,7 +102,7 @@ func TestParseQuery(t *testing.T) {
 					},
 				},
 			}, []partition.Partition{{Passthrough: true}}, "").Return(list, "", nil)
-			return nsi
+			return nsc
 		},
 	})
 	tests = append(tests, testCase{
@@ -132,8 +132,8 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		errExpected: true,
-		setupNSInformer: func() Informer {
-			nsi := NewMockInformer(gomock.NewController(t))
+		setupNSCache: func() Cache {
+			nsi := NewMockCache(gomock.NewController(t))
 			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
 				Filters: []informer.OrFilter{
 					{
@@ -157,7 +157,7 @@ func TestParseQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If projectsornamespaces is not empty" +
-			" and nsi does not return namespaces, an error should be returned.",
+			" and nsc does not return namespaces, an error should be returned.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
@@ -182,11 +182,11 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		errExpected: true,
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			list := &unstructured.UnstructuredList{
 				Items: []unstructured.Unstructured{},
 			}
-			nsi := NewMockInformer(gomock.NewController(t))
+			nsi := NewMockCache(gomock.NewController(t))
 			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
 				Filters: []informer.OrFilter{
 					{
@@ -233,7 +233,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -262,7 +262,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -301,7 +301,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -337,7 +337,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -359,7 +359,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -382,7 +382,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -407,7 +407,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -427,7 +427,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -447,7 +447,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -466,7 +466,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -485,7 +485,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 3,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
@@ -505,15 +505,15 @@ func TestParseQuery(t *testing.T) {
 				Page:     1,
 			},
 		},
-		setupNSInformer: func() Informer {
+		setupNSCache: func() Cache {
 			return nil
 		},
 	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			test.nsi = test.setupNSInformer()
-			lo, err := ParseQuery(test.req, test.nsi)
+			test.nsc = test.setupNSCache()
+			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)
 				return

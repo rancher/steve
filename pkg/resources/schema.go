@@ -72,7 +72,6 @@ func DefaultSchemaTemplates(cf *client.Factory,
 	}
 }
 
-// TODO: add tests
 func DefaultSchemaTemplatesAlpha(store types.Store,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,

@@ -29,7 +29,6 @@ func DefaultTemplate(clientGetter proxy.ClientGetter,
 	}
 }
 
-// TODO: Add test
 func DefaultTemplateAlpha(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
 	return schema.Template{
 		Store:     store,

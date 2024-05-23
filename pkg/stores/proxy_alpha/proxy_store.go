@@ -40,7 +40,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 )
 
 const watchTimeoutEnv = "CATTLE_WATCH_TIMEOUT_SECONDS"
@@ -49,7 +48,7 @@ var (
 	paramScheme               = runtime.NewScheme()
 	paramCodec                = runtime.NewParameterCodec(paramScheme)
 	typeSpecificIndexedFields = map[string][][]string{
-		"_v1_Namespace": {{`metadata`, `labels["field.cattle.io/projectId"]`}},
+		"_v1_Namespace": {{`metadata`, `labels[field.cattle.io/projectId]`}},
 		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
 		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
 		"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},
@@ -90,8 +89,7 @@ type SchemaColumnSetter interface {
 	SetColumns(ctx context.Context, schema *types.APISchema) error
 }
 
-type Informer interface {
-	cache.SharedIndexInformer
+type Cache interface {
 	// ListByOptions returns objects according to the specified list options and partitions
 	// see ListOptionIndexer.ListByOptions
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
@@ -115,25 +113,25 @@ type RelationshipNotifier interface {
 }
 
 type Store struct {
-	clientGetter      ClientGetter
-	notifier          RelationshipNotifier
-	informerFactory   InformerFactory
-	ifInitializer     InformerFactoryInitializer
-	namespaceInformer Informer
-	lock              sync.Mutex
-	columnSetter      SchemaColumnSetter
+	clientGetter   ClientGetter
+	notifier       RelationshipNotifier
+	cacheFactory   CacheFactory
+	cfInitializer  CacheFactoryInitializer
+	namespaceCache Cache
+	lock           sync.Mutex
+	columnSetter   SchemaColumnSetter
 }
 
-type InformerFactoryInitializer func() (InformerFactory, error)
+type CacheFactoryInitializer func() (CacheFactory, error)
 
-type InformerFactory interface {
-	InformerFor(fields [][]string, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (*informer.Informer, error)
+type CacheFactory interface {
+	CacheFor(fields [][]string, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (factory.Cache, error)
 	Reset() error
 }
 
 // TODO: add tests to cover new functionality
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory InformerFactory) (*Store, error) {
+func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory CacheFactory) (*Store, error) {
 	store := &Store{
 		clientGetter: clientGetter,
 		notifier:     notifier,
@@ -142,14 +140,14 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 
 	if factory == nil {
 		var err error
-		factory, err = defaultInitializeInformerFactory()
+		factory, err = defaultInitializeCacheFactory()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	store.informerFactory = factory
-	if err := store.initializeNamespaceInformer(); err != nil {
+	store.cacheFactory = factory
+	if err := store.initializeNamespaceCache(); err != nil {
 		logrus.Infof("failed to warm up namespace informer for proxy store in steve, will try again on next ns request")
 	}
 	return store, nil
@@ -159,30 +157,25 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if err := s.informerFactory.Reset(); err != nil {
+	if err := s.cacheFactory.Reset(); err != nil {
 		return err
 	}
-	/*
-		infF, err := s.ifInitializer()
-		if err != nil {
-			return err
-		}
-		s.informerFactory = infF*/
-	if err := s.initializeNamespaceInformer(); err != nil {
+
+	if err := s.initializeNamespaceCache(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func defaultInitializeInformerFactory() (InformerFactory, error) {
-	informerFactory, err := factory.NewInformerFactory()
+func defaultInitializeCacheFactory() (CacheFactory, error) {
+	informerFactory, err := factory.NewCacheFactory()
 	if err != nil {
 		return nil, err
 	}
 	return informerFactory, nil
 }
 
-func (s *Store) initializeNamespaceInformer() error {
+func (s *Store) initializeNamespaceCache() error {
 	buffer := WarningBuffer{}
 	nsSchema := baseNSSchema
 	if err := s.columnSetter.SetColumns(context.TODO(), &nsSchema); err != nil {
@@ -195,12 +188,12 @@ func (s *Store) initializeNamespaceInformer() error {
 
 	fields := getFieldsFromSchema(&nsSchema)
 	fields = append(fields, getFieldForGVK(attributes.GVK(&nsSchema))...)
-	nsInformer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
+	nsInformer, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
 	if err != nil {
 		return err
 	}
 
-	s.namespaceInformer = nsInformer
+	s.namespaceCache = nsInformer
 	return nil
 }
 
@@ -409,7 +402,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 // to list *all* resources.
 // With this filter, the request can be performed successfully, and only the allowed resources will
 // be returned in watch.
-func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.String) (chan watch.Event, error) {
+func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.Set[string]) (chan watch.Event, error) {
 	buffer := &WarningBuffer{}
 	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
 	if err != nil {
@@ -608,7 +601,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 // TODO: test any additional functionality
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
-	opts, err := listprocessor_alpha.ParseQuery(apiOp, s.namespaceInformer)
+	opts, err := listprocessor_alpha.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		return nil, "", err
 	}
@@ -621,7 +614,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
 
-	informer, err := s.informerFactory.InformerFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
+	informer, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
 	if err != nil {
 		return nil, "", err
 	}

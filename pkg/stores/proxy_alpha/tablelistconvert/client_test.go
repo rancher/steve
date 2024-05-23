@@ -257,22 +257,7 @@ func TestList(t *testing.T) {
 		test: func(t *testing.T) {
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			opts := metav1.ListOptions{}
-			initialList := &unstructured.UnstructuredList{
-				Object: map[string]interface{}{
-					"kind":       "NotTable",
-					"apiVersion": "meta.k8s.io/v1",
-					"rows": []interface{}{
-						map[string]interface{}{
-							"cells":  []interface{}{"cell1", "cell2"},
-							"object": map[string]interface{}{},
-						},
-					},
-				},
-				Items: []unstructured.Unstructured{
-					{},
-				},
-			}
-			ri.EXPECT().List(context.TODO(), opts).Return(initialList, nil)
+			ri.EXPECT().List(context.TODO(), opts).Return(nil, fmt.Errorf("error"))
 			client := &Client{ResourceInterface: ri}
 			_, err := client.List(context.TODO(), opts)
 			assert.NotNil(t, err)

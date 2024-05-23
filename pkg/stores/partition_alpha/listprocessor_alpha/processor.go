@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/wrangler/pkg/data/convert"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -46,15 +45,14 @@ type ListOptions struct {
 	Pagination informer.Pagination
 }
 
-type Informer interface {
-	cache.SharedIndexInformer
+type Cache interface {
 	// ListByOptions returns objects according to the specified list options and partitions
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
 // TODO: add tests
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest, namespaceCache Informer) (informer.ListOptions, error) {
+func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOptions, error) {
 	opts := informer.ListOptions{}
 
 	opts.ChunkSize = getLimit(apiOp)
@@ -215,7 +213,7 @@ func matchesOneInList(obj []interface{}, filter informer.Filter) bool {
 	return false
 }
 
-func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Informer) ([]informer.Filter, error) {
+func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Cache) ([]informer.Filter, error) {
 	var filters []informer.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
 		uList, _, err := namespaceInformer.ListByOptions(ctx, informer.ListOptions{
