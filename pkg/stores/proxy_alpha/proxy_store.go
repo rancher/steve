@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
@@ -51,7 +52,7 @@ var (
 		"_v1_Namespace": {{`metadata`, `labels[field.cattle.io/projectId]`}},
 		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
 		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
-		"_v1_ConfigMap": {{`metadata`, `labels["harvesterhci.io/cloud-init-template"]`}},
+		"_v1_ConfigMap": {{`metadata`, `labels[harvesterhci.io/cloud-init-template]`}},
 
 		"management.cattle.io_v1_Node": {{`status`, `nodeName`}},
 	}
@@ -614,13 +615,16 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
 
-	informer, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
+	inf, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
 	if err != nil {
 		return nil, "", err
 	}
 
-	list, continueToken, err := informer.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
+	list, continueToken, err := inf.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
 	if err != nil {
+		if errors.Is(err, informer.InvalidColumnErr) {
+			return nil, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+		}
 		return nil, "", err
 	}
 
