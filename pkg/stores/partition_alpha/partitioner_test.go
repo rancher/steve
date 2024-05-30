@@ -64,7 +64,7 @@ func TestAll(t *testing.T) {
 			},
 			wantPartitions: []partition.Partition{
 				{
-					Names: sets.NewString("r1", "r2"),
+					Names: sets.New[string]("r1", "r2"),
 				},
 			},
 		},
@@ -183,11 +183,11 @@ func TestAll(t *testing.T) {
 			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
-					Names:     sets.NewString("r1", "r2"),
+					Names:     sets.New[string]("r1", "r2"),
 				},
 				{
 					Namespace: "n2",
-					Names:     sets.NewString("r1"),
+					Names:     sets.New[string]("r1"),
 				},
 			},
 		},
@@ -219,7 +219,7 @@ func TestAll(t *testing.T) {
 			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
-					Names:     sets.NewString("r1"),
+					Names:     sets.New[string]("r1"),
 				},
 			},
 		},
@@ -235,7 +235,7 @@ func TestAll(t *testing.T) {
 			wantPartitions: []partition.Partition{
 				{
 					Namespace: "n1",
-					Names:     sets.NewString("r1"),
+					Names:     sets.New[string]("r1"),
 				},
 			},
 		},
