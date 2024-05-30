@@ -1,6 +1,8 @@
 module github.com/rancher/steve
 
-go 1.22
+go 1.22.0
+
+toolchain go1.22.2
 
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
@@ -33,9 +35,9 @@ require (
 	github.com/urfave/cli/v2 v2.27.1
 	golang.org/x/sync v0.7.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.29.3
+	k8s.io/api v0.30.0
 	k8s.io/apiextensions-apiserver v0.29.3
-	k8s.io/apimachinery v0.29.3
+	k8s.io/apimachinery v0.30.0
 	k8s.io/apiserver v0.29.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
