@@ -661,7 +661,7 @@ func TestWatchNamesErrReceive(t *testing.T) {
 		},
 	}
 	apiSchema := &types.APISchema{Schema: &schemas.Schema{Attributes: map[string]interface{}{"table": "something"}}}
-	wc, err := testStore.WatchNames(&types.APIRequest{Namespace: "", Schema: apiSchema, Request: &http.Request{}}, apiSchema, types.WatchRequest{}, sets.NewString("testsecret1", "testsecret2"))
+	wc, err := testStore.WatchNames(&types.APIRequest{Namespace: "", Schema: apiSchema, Request: &http.Request{}}, apiSchema, types.WatchRequest{}, sets.New[string]("testsecret1", "testsecret2"))
 	assert.Nil(t, err)
 
 	eg := errgroup.Group{}

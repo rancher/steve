@@ -50,7 +50,6 @@ type Cache interface {
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
 }
 
-// TODO: add tests
 // ParseQuery parses the query params of a request and returns a ListOptions.
 func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOptions, error) {
 	opts := informer.ListOptions{}

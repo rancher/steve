@@ -130,7 +130,6 @@ type CacheFactory interface {
 	Reset() error
 }
 
-// TODO: add tests to cover new functionality
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
 func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory CacheFactory) (*Store, error) {
 	store := &Store{
@@ -154,7 +153,7 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 	return store, nil
 }
 
-// TODO: Add tests and comments
+// Reset locks the store, resets the underlying cache factory, and warm the namespace cache.
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -599,7 +598,6 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-// TODO: test any additional functionality
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
 	opts, err := listprocessor_alpha.ParseQuery(apiOp, s.namespaceCache)

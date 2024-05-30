@@ -342,7 +342,6 @@ func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, op
 	return ctx.Err()
 }
 
-// TODO: add tests
 func (s *serverSchemaHandler) OnSchemas(schemas *schema.Collection) error {
 	return s.SchemasFunc(schemas)
 }

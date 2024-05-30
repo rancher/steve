@@ -4,7 +4,6 @@ returned by ByID and List to resemble those returned by non-table clients while 
 */
 package tablelistconvert
 
-// TODO: test whole package
 import (
 	"context"
 	"fmt"

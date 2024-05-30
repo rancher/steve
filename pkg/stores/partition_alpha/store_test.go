@@ -29,7 +29,6 @@ import (
 
 //go:generate mockgen --build_flags=--mod=mod -package partition_alpha -destination partition_mocks.go "github.com/rancher/steve/pkg/stores/partition_alpha" Partitioner,UnstructuredStore
 
-// TODO: review these tests
 func TestList(t *testing.T) {
 	type testCase struct {
 		description string

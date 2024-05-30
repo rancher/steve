@@ -232,7 +232,6 @@ func (c *Collection) AddTemplate(templates ...Template) {
 	}
 }
 
-// TODO: add tests
 func (c *Collection) Len() int {
 	return len(c.schemas)
 }

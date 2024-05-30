@@ -86,7 +86,6 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 	}
 }
 
-// TODO: add tests
 // Store returns an Store suited to listing and watching resources by partition.
 func (p *rbacPartitioner) Store() UnstructuredStore {
 	return p.proxyStore
