@@ -1034,6 +1034,8 @@ github.com/rancher/wrangler/v2 v2.2.0-rc6/go.mod h1:rFxhBR+PpC1MuJli+JeMpxoGxfV7
 github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
+github.com/rmweir/lasso v0.0.0-20240530231637-904ac862fca4 h1:RIvkll0hyQ7/X1qhjMqxcyo7QzRly2KOtKVdVRaxO6k=
+github.com/rmweir/lasso v0.0.0-20240530231637-904ac862fca4/go.mod h1:v0FJLrmL4m6zdWfIB0/qo7qN5QIjVMFyvFGaw8uyWsA=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.6.1/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTEfhy4qGm1nDQc=
