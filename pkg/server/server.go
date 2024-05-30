@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/dynamiclistener/server"
@@ -25,7 +27,6 @@ import (
 	"github.com/rancher/steve/pkg/stores/proxy_alpha"
 	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/client-go/rest"
-	"net/http"
 )
 
 var ErrConfigRequired = errors.New("rest config is required")

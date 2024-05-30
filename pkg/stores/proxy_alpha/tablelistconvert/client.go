@@ -7,12 +7,12 @@ package tablelistconvert
 import (
 	"context"
 	"fmt"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/data"
-	k8sWatch "k8s.io/apimachinery/pkg/watch"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8sWatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 )
 

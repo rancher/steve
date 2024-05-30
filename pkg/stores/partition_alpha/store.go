@@ -5,6 +5,7 @@ package partition_alpha
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
@@ -14,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"reflect"
 )
 
 // Partitioner is an interface for interacting with partitions.
