@@ -1,4 +1,4 @@
-package proxy_alpha
+package proxyalpha
 
 import (
 	"github.com/rancher/apiserver/pkg/types"

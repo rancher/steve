@@ -1,5 +1,5 @@
-// Package listprocessor_alpha contains methods for filtering, sorting, and paginating lists of objects.
-package listprocessor_alpha
+// Package listprocessor contains methods for filtering, sorting, and paginating lists of objects.
+package listprocessor
 
 import (
 	"context"

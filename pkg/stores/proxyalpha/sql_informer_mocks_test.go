@@ -2,7 +2,7 @@
 // Source: github.com/rancher/lasso/pkg/cache/sql/informer (interfaces: ByOptionsLister)
 
 // Package proxy_alpha is a generated GoMock package.
-package proxy_alpha
+package proxyalpha
 
 import (
 	context "context"

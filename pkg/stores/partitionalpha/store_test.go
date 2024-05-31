@@ -1,22 +1,23 @@
-package partition_alpha
+package partitionalpha
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"github.com/golang/mock/gomock"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/url"
 	"strconv"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha"
+	"github.com/rancher/steve/pkg/stores/proxyalpha"
 	"github.com/rancher/wrangler/v2/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package partition_alpha -destination partition_mocks.go "github.com/rancher/steve/pkg/stores/partition_alpha" Partitioner,UnstructuredStore
+//go:generate mockgen --build_flags=--mod=mod -package partitionalpha -destination partition_mocks.go "github.com/rancher/steve/pkg/stores/partitionalpha" Partitioner,UnstructuredStore
 
 func TestList(t *testing.T) {
 	type testCase struct {
@@ -136,7 +137,7 @@ func TestList(t *testing.T) {
 }
 
 type mockPartitioner struct {
-	store      proxy_alpha.Store
+	store      proxyalpha.Store
 	partitions map[string][]partition.Partition
 }
 
@@ -149,7 +150,7 @@ func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, v
 	return m.partitions[user.GetName()], nil
 }
 
-func (m mockPartitioner) Store() proxy_alpha.Store {
+func (m mockPartitioner) Store() proxyalpha.Store {
 	return m.store
 }
 

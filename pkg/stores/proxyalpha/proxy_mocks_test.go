@@ -2,7 +2,7 @@
 // Source: github.com/rancher/steve/pkg/stores/proxy_alpha (interfaces: Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier)
 
 // Package proxy_alpha is a generated GoMock package.
-package proxy_alpha
+package proxyalpha
 
 import (
 	context "context"

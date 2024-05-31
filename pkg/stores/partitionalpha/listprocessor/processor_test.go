@@ -1,4 +1,4 @@
-package listprocessor_alpha
+package listprocessor
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package listprocessor_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Cache
+//go:generate mockgen --build_flags=--mod=mod -package listprocessor -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxyalpha Cache
 
 func TestParseQuery(t *testing.T) {
 	type testCase struct {

@@ -1,5 +1,5 @@
 // Package proxy implements the proxy store, which is responsible for interfacing directly with Kubernetes.
-package proxy_alpha
+package proxyalpha
 
 import (
 	"context"
@@ -22,8 +22,8 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition_alpha/listprocessor_alpha"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
+	"github.com/rancher/steve/pkg/stores/partitionalpha/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxyalpha/tablelistconvert"
 	"github.com/rancher/wrangler/v2/pkg/data"
 	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
@@ -600,7 +600,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 // ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
-	opts, err := listprocessor_alpha.ParseQuery(apiOp, s.namespaceCache)
+	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		return nil, "", err
 	}

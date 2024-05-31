@@ -1,21 +1,22 @@
-package proxy_alpha
+package proxyalpha
 
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"testing"
+	"time"
+
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/stores/partition_alpha/listprocessor_alpha"
-	"github.com/rancher/steve/pkg/stores/proxy_alpha/tablelistconvert"
+	"github.com/rancher/steve/pkg/stores/partitionalpha/listprocessor"
+	"github.com/rancher/steve/pkg/stores/proxyalpha/tablelistconvert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"net/http"
-	"net/url"
-	"testing"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
@@ -224,7 +225,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			opts, err := listprocessor_alpha.ParseQuery(req, nil)
+			opts, err := listprocessor.ParseQuery(req, nil)
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
@@ -292,7 +293,7 @@ func TestListByPartitions(t *testing.T) {
 			copy(listToReturn.Items, expectedItems)
 
 			nsi.EXPECT().ListByOptions(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", fmt.Errorf("error")).Times(2)
-			_, err := listprocessor_alpha.ParseQuery(req, nsi)
+			_, err := listprocessor.ParseQuery(req, nsi)
 			assert.NotNil(t, err)
 
 			_, _, err = s.ListByPartitions(req, schema, partitions)
@@ -354,7 +355,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			_, err := listprocessor_alpha.ParseQuery(req, nil)
+			_, err := listprocessor.ParseQuery(req, nil)
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
@@ -417,7 +418,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			_, err := listprocessor_alpha.ParseQuery(req, nil)
+			_, err := listprocessor.ParseQuery(req, nil)
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
@@ -489,7 +490,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			opts, err := listprocessor_alpha.ParseQuery(req, nil)
+			opts, err := listprocessor.ParseQuery(req, nil)
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map

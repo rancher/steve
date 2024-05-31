@@ -1,6 +1,6 @@
-// Package partition_alpha implements a store with parallel partitioning of data
+// Package partitionalpha implements a store with parallel partitioning of data
 // so that segmented data can be concurrently collected and returned as a single data set.
-package partition_alpha
+package partitionalpha
 
 import (
 	"context"

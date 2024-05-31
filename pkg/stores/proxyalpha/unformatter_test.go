@@ -1,4 +1,4 @@
-package proxy_alpha
+package proxyalpha
 
 import (
 	"testing"

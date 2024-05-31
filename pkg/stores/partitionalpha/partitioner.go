@@ -1,4 +1,4 @@
-package partition_alpha
+package partitionalpha
 
 import (
 	"fmt"
