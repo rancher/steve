@@ -36,9 +36,9 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxy_alpha Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier
-//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
-//go:generate mockgen --build_flags=--mod=mod -package proxy_alpha -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
+//go:generate mockgen --build_flags=--mod=mod -package proxyalpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxyalpha Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier
+//go:generate mockgen --build_flags=--mod=mod -package proxyalpha -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
+//go:generate mockgen --build_flags=--mod=mod -package proxyalpha -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
 var c *watch.FakeWatcher
 
