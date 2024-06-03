@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/pkg/data"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -27,8 +26,6 @@ type tableConvertWatch struct {
 	events chan k8sWatch.Event
 	k8sWatch.Interface
 }
-
-type WarningBuffer []types.Warning
 
 // List will return an *UnstructuredList that contains Items instead of just using the Object field to store a table as
 // Table Clients do. The items will preserve values for columns in the form of metadata.fields.
