@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
@@ -202,7 +201,6 @@ func setup(ctx context.Context, server *Server) error {
 		ccache,
 		sf)
 
-	fmt.Println("SF ON HANDLER.NEW: ", sf.Len())
 	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
 	if err != nil {
 		return err
