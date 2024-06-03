@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/wrangler/pkg/data"
+	"github.com/rancher/wrangler/v2/pkg/data"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sWatch "k8s.io/apimachinery/pkg/watch"
@@ -57,7 +57,6 @@ func (w *tableConvertWatch) feed() {
 			select {
 			case e, ok := <-tableEvents:
 				if !ok {
-					fmt.Println("tableEvents closed!")
 					close(w.events)
 					return
 				}
@@ -66,7 +65,6 @@ func (w *tableConvertWatch) feed() {
 					w.events <- e
 				}
 			case <-w.done:
-				fmt.Println("TABLE CONVERT CLIENT HAS BEEN CLOSED")
 				close(w.events)
 				return
 			}

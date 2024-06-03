@@ -1,4 +1,5 @@
-// Package proxy implements the proxy store, which is responsible for interfacing directly with Kubernetes.
+// Package proxyalpha implements the proxy store, which is responsible for either interfacing directly with the Kubernetes API,
+// or in the case of List, interfacing with an on-disk cache of items in the Kubernetes API.
 package proxyalpha
 
 import (

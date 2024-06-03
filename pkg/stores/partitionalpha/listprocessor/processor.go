@@ -12,8 +12,8 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
-	"github.com/rancher/wrangler/pkg/data"
-	"github.com/rancher/wrangler/pkg/data/convert"
+	"github.com/rancher/wrangler/v2/pkg/data"
+	"github.com/rancher/wrangler/v2/pkg/data/convert"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )

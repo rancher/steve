@@ -1029,8 +1029,6 @@ github.com/rancher/norman v0.0.0-20240503193601-9f5f6586bb5b h1:9k8VOhRi6ZIZ8rBl
 github.com/rancher/norman v0.0.0-20240503193601-9f5f6586bb5b/go.mod h1:xJ0CLJUG9SvtyuPzPA8ATh2SjwiqXGfE+pPh7uVhJzQ=
 github.com/rancher/remotedialer v0.3.2 h1:kstZbRwPS5gPWpGg8VjEHT2poHtArs+Fc317YM8JCzU=
 github.com/rancher/remotedialer v0.3.2/go.mod h1:Ys004RpJuTLSm+k4aYUCoFiOOad37ubYev3TkOFg/5w=
-github.com/rancher/wrangler v1.1.2 h1:oXbXo9k7y/H4drUpb4RM1c++vT9O3rpoNEfyusGykiU=
-github.com/rancher/wrangler v1.1.2/go.mod h1:2k9MyhlBdjcutcBGoOJSUAz0HgDAXnMjv81d3n/AaQc=
 github.com/rancher/wrangler/v2 v2.2.0-rc6 h1:jMsuOVl7nBuQ5QJqdNkR2yHEf1+rYiyd1gN+mQzIcag=
 github.com/rancher/wrangler/v2 v2.2.0-rc6/go.mod h1:rFxhBR+PpC1MuJli+JeMpxoGxfV7XdFWtpdLC8s+oWQ=
 github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=

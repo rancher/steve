@@ -1,5 +1,6 @@
-// Package partitionalpha implements a store with parallel partitioning of data
-// so that segmented data can be concurrently collected and returned as a single data set.
+// Package partitionalpha implements a store which converts a request to partitions based on the user's rbac for
+// the resource. For example, a user may request all items of resource A, but only have permissions for resource A in
+// namespaces x,y,z. The partitions will then store that information and be passed to the next store.
 package partitionalpha
 
 import (
