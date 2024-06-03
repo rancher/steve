@@ -231,7 +231,3 @@ func (c *Collection) AddTemplate(templates ...Template) {
 		}
 	}
 }
-
-func (c *Collection) Len() int {
-	return len(c.schemas)
-}
