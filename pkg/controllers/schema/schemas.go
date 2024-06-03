@@ -38,14 +38,14 @@ type SchemasHandler interface {
 type handler struct {
 	sync.Mutex
 
-	ctx              context.Context
-	toSync           int32
-	watchableSchemas *schema2.Collection
-	client           discovery.DiscoveryInterface
-	cols             *common.DynamicColumns
-	crd              apiextcontrollerv1.CustomResourceDefinitionClient
-	ssar             authorizationv1client.SelfSubjectAccessReviewInterface
-	handler          SchemasHandler
+	ctx     context.Context
+	toSync  int32
+	schemas *schema2.Collection
+	client  discovery.DiscoveryInterface
+	cols    *common.DynamicColumns
+	crd     apiextcontrollerv1.CustomResourceDefinitionClient
+	ssar    authorizationv1client.SelfSubjectAccessReviewInterface
+	handler SchemasHandler
 }
 
 func Register(ctx context.Context,
@@ -58,13 +58,13 @@ func Register(ctx context.Context,
 	schemas *schema2.Collection) {
 
 	h := &handler{
-		ctx:              ctx,
-		cols:             cols,
-		client:           discovery,
-		watchableSchemas: schemas,
-		handler:          schemasHandler,
-		crd:              crd,
-		ssar:             ssar,
+		ctx:     ctx,
+		cols:    cols,
+		client:  discovery,
+		schemas: schemas,
+		handler: schemasHandler,
+		crd:     crd,
+		ssar:    ssar,
 	}
 
 	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
@@ -185,9 +185,9 @@ func (h *handler) refreshAll(ctx context.Context) error {
 		return err
 	}
 
-	h.watchableSchemas.Reset(filteredSchemas)
+	h.schemas.Reset(filteredSchemas)
 	if h.handler != nil {
-		return h.handler.OnSchemas(h.watchableSchemas)
+		return h.handler.OnSchemas(h.schemas)
 	}
 
 	return nil
