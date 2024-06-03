@@ -209,6 +209,7 @@ func setup(ctx context.Context, server *Server) error {
 	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
+
 	return nil
 }
 
@@ -239,10 +240,11 @@ func setupAlpha(ctx context.Context, server *Server) error {
 	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
 		return err
 	}
+	definitions.Register(ctx, server.BaseSchemas, server.controllers.K8s.Discovery(),
+		server.controllers.CRD.CustomResourceDefinition(), server.controllers.API.APIService())
 
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
-
 	cols, err := common.NewDynamicColumns(server.RESTConfig)
 	if err != nil {
 		return err
