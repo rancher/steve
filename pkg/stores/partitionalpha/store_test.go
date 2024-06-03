@@ -28,7 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package partitionalpha -destination partition_mocks.go "github.com/rancher/steve/pkg/stores/partitionalpha" Partitioner,UnstructuredStore
+//go:generate mockgen --build_flags=--mod=mod -package partitionalpha -destination partition_mocks_test.go "github.com/rancher/steve/pkg/stores/partitionalpha" Partitioner,UnstructuredStore
 
 func TestList(t *testing.T) {
 	type testCase struct {
