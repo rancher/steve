@@ -22,7 +22,8 @@ import (
 
 func DefaultTemplate(clientGetter proxy.ClientGetter,
 	summaryCache *summarycache.SummaryCache,
-	asl accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) schema.Template {
+	asl accesscontrol.AccessSetLookup,
+	namespaceCache corecontrollers.NamespaceCache) schema.Template {
 	return schema.Template{
 		Store:     metricsStore.NewMetricsStore(proxy.NewProxyStore(clientGetter, summaryCache, asl, namespaceCache)),
 		Formatter: formatter(summaryCache),
