@@ -205,6 +205,8 @@ func keyFromGVK(gvk schema.GroupVersionKind) string {
 	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
 }
 
+// getFieldsFromSchema converts object field names from types.APISchema's format into lasso's
+// cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 func getFieldsFromSchema(schema *types.APISchema) [][]string {
 	var fields [][]string
 	columns := attributes.Columns(schema)
