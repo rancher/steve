@@ -73,13 +73,13 @@ func DefaultSchemaTemplates(cf *client.Factory,
 }
 
 // DefaultSchemaTemplatesForStore returns the same default templates as DefaultSchemaTemplates, only using DefaultSchemaTemplateFoStore internally to construct the templates.
-func DefaultSchemaTemplateForStore(store types.Store,
+func DefaultSchemaTemplatesForStore(store types.Store,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
 	discovery discovery.DiscoveryInterface) []schema.Template {
 
 	return []schema.Template{
-		common.DefaultTemplateAlpha(store, summaryCache),
+		common.DefaultTemplateForStore(store, summaryCache),
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
