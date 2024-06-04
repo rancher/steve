@@ -110,7 +110,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return ToAPI(schema, obj, warnings), nil
 }
 
 // ByID looks up a single object by its ID.
@@ -124,7 +124,7 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return ToAPI(schema, obj, warnings), nil
 }
 
 func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
@@ -226,7 +226,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	for _, item := range list {
 		item := item.DeepCopy()
-		result.Objects = append(result.Objects, toAPI(schema, item, nil))
+		result.Objects = append(result.Objects, ToAPI(schema, item, nil))
 	}
 
 	result.Pages = pages
@@ -266,7 +266,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return ToAPI(schema, obj, warnings), nil
 }
 
 // Update updates a single object in the store.
@@ -280,7 +280,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data ty
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return toAPI(schema, obj, warnings), nil
+	return ToAPI(schema, obj, warnings), nil
 }
 
 // Watch returns a channel of events for a list or resource.
@@ -310,7 +310,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 				return err
 			}
 			for i := range c {
-				response <- toAPIEvent(apiOp, schema, i)
+				response <- ToAPIEvent(apiOp, schema, i)
 			}
 			return nil
 		})
@@ -326,7 +326,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	return response, nil
 }
 
-func toAPI(schema *types.APISchema, obj runtime.Object, warnings []types.Warning) types.APIObject {
+func ToAPI(schema *types.APISchema, obj runtime.Object, warnings []types.Warning) types.APIObject {
 	if obj == nil || reflect.ValueOf(obj).IsNil() {
 		return types.APIObject{}
 	}
@@ -372,7 +372,7 @@ func moveToUnderscore(obj *unstructured.Unstructured) *unstructured.Unstructured
 	return obj
 }
 
-func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Event) types.APIEvent {
+func ToAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Event) types.APIEvent {
 	name := types.ChangeAPIEvent
 	switch event.Type {
 	case watch.Deleted:
@@ -393,7 +393,7 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 		return apiEvent
 	}
 
-	apiEvent.Object = toAPI(schema, event.Object, nil)
+	apiEvent.Object = ToAPI(schema, event.Object, nil)
 
 	m, err := meta.Accessor(event.Object)
 	if err != nil {
