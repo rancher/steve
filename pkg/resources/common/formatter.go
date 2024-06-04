@@ -30,7 +30,8 @@ func DefaultTemplate(clientGetter proxy.ClientGetter,
 	}
 }
 
-func DefaultTemplateAlpha(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
+// DefaultTemplateForStore provides a default schema template which uses a provided, pre-initialized store. Primarily used when creating a Template that uses a Lasso SQL store internally.
+func DefaultTemplateForStore(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
 	return schema.Template{
 		Store:     store,
 		Formatter: formatter(summaryCache),
