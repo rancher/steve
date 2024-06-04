@@ -72,7 +72,7 @@ func TestNewProxyStore(t *testing.T) {
 			}
 
 			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
+			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(c, nil)
 
@@ -95,7 +95,7 @@ func TestNewProxyStore(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 
 			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(fmt.Errorf("error"))
+			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(fmt.Errorf("error"))
 
 			s, err := NewProxyStore(scc, cg, rn, cf)
 			assert.Nil(t, err)
@@ -116,7 +116,7 @@ func TestNewProxyStore(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 
 			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
+			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
 			s, err := NewProxyStore(scc, cg, rn, cf)
@@ -139,7 +139,7 @@ func TestNewProxyStore(t *testing.T) {
 			ri := NewMockResourceInterface(gomock.NewController(t))
 
 			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.TODO(), &nsSchema).Return(nil)
+			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
 
