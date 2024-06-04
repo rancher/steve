@@ -55,7 +55,7 @@ var (
 		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
 		"_v1_ConfigMap": {{`metadata`, `labels[harvesterhci.io/cloud-init-template]`}},
 
-		"management.cattle.io_v1_Node": {{`status`, `nodeName`}},
+		"management.cattle.io_v3_Node": {{`status`, `nodeName`}},
 	}
 	baseNSSchema = types.APISchema{
 		Schema: &schemas.Schema{
