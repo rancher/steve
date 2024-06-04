@@ -179,7 +179,7 @@ func defaultInitializeCacheFactory() (CacheFactory, error) {
 func (s *Store) initializeNamespaceCache() error {
 	buffer := WarningBuffer{}
 	nsSchema := baseNSSchema
-	if err := s.columnSetter.SetColumns(context.TODO(), &nsSchema); err != nil {
+	if err := s.columnSetter.SetColumns(context.Background(), &nsSchema); err != nil {
 		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
 	}
 	client, err := s.clientGetter.TableAdminClient(nil, &nsSchema, "", &buffer)
