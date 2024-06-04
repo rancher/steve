@@ -12,8 +12,6 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
-	"github.com/rancher/wrangler/v2/pkg/data"
-	"github.com/rancher/wrangler/v2/pkg/data/convert"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -157,59 +155,6 @@ func getLimit(apiOp *types.APIRequest) int {
 		limit = defaultLimit
 	}
 	return limit
-}
-
-func matchesOne(obj map[string]interface{}, filter informer.Filter) bool {
-	var objValue interface{}
-	var ok bool
-	subField := []string{}
-	for !ok && len(filter.Field) > 0 {
-		objValue, ok = data.GetValue(obj, filter.Field...)
-		if !ok {
-			subField = append(subField, filter.Field[len(filter.Field)-1])
-			filter.Field = filter.Field[:len(filter.Field)-1]
-		}
-	}
-	if !ok {
-		return false
-	}
-	switch typedVal := objValue.(type) {
-	case string, int, bool:
-		if len(subField) > 0 {
-			return false
-		}
-		stringVal := convert.ToString(typedVal)
-		if strings.Contains(stringVal, filter.Match) {
-			return true
-		}
-	case []interface{}:
-		filter = informer.Filter{Field: subField, Match: filter.Match, Op: filter.Op}
-		if matchesOneInList(typedVal, filter) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesOneInList(obj []interface{}, filter informer.Filter) bool {
-	for _, v := range obj {
-		switch typedItem := v.(type) {
-		case string, int, bool:
-			stringVal := convert.ToString(typedItem)
-			if strings.Contains(stringVal, filter.Match) {
-				return true
-			}
-		case map[string]interface{}:
-			if matchesOne(typedItem, filter) {
-				return true
-			}
-		case []interface{}:
-			if matchesOneInList(typedItem, filter) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Cache) ([]informer.Filter, error) {
