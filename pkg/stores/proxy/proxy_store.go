@@ -87,7 +87,7 @@ type Store struct {
 
 // NewProxyStore returns a wrapped types.Store.
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) types.Store {
-	return &errorStore{
+	return &ErrorStore{
 		Store: &unformatterStore{
 			Store: &WatchRefresh{
 				Store: partition.NewStore(

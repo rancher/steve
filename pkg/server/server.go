@@ -23,6 +23,7 @@ import (
 	"github.com/rancher/steve/pkg/server/router"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/partitionalpha"
+	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/stores/proxyalpha"
 	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/client-go/rest"
@@ -255,7 +256,7 @@ func setupAlpha(ctx context.Context, server *Server) error {
 		panic(err)
 	}
 
-	errStore := proxyalpha.NewErrorStore(
+	errStore := proxy.NewErrorStore(
 		proxyalpha.NewUnformatterStore(
 			proxyalpha.NewWatchRefresh(
 				partitionalpha.NewStore(
