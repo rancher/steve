@@ -72,9 +72,10 @@ func (c *Config) ToServerAlpha(ctx context.Context) (*server.Server, error) {
 		}
 	}
 
-	return server.NewAlpha(ctx, restConfig, &server.Options{
+	return server.New(ctx, restConfig, &server.Options{
 		AuthMiddleware: auth,
 		Next:           ui.New(c.UIPath),
+		Alpha:          true,
 	})
 }
 
