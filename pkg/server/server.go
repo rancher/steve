@@ -258,7 +258,7 @@ func setupAlpha(ctx context.Context, server *Server) error {
 
 	errStore := proxy.NewErrorStore(
 		proxyalpha.NewUnformatterStore(
-			proxyalpha.NewWatchRefresh(
+			proxy.NewWatchRefresh(
 				partitionalpha.NewStore(
 					s,
 					asl,
