@@ -176,19 +176,30 @@ func defaultInitializeCacheFactory() (CacheFactory, error) {
 	return informerFactory, nil
 }
 
+// initializeNamespaceCache warms up the namespace cache as it is needed to process queries using options related to
+// namespaces and projects.
 func (s *Store) initializeNamespaceCache() error {
 	buffer := WarningBuffer{}
 	nsSchema := baseNSSchema
+
+	// make sure any relevant columns are set to the ns schema
 	if err := s.columnSetter.SetColumns(context.Background(), &nsSchema); err != nil {
 		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
 	}
+
+	// build table client
 	client, err := s.clientGetter.TableAdminClient(nil, &nsSchema, "", &buffer)
 	if err != nil {
 		return err
 	}
 
+	// get fields from schema's columns
 	fields := getFieldsFromSchema(&nsSchema)
+
+	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(attributes.GVK(&nsSchema))...)
+
+	// get the ns informer
 	nsInformer, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
 	if err != nil {
 		return err
