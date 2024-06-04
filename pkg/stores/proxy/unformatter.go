@@ -11,6 +11,11 @@ type unformatterStore struct {
 	types.Store
 }
 
+// NewUnformatterStore returns a store which removes fields added by the formatter that kubernetes cannot recognize.
+func NewUnformatterStore(s types.Store) types.Store {
+	return &unformatterStore{Store: s}
+}
+
 // ByID looks up a single object by its ID.
 func (u *unformatterStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
 	return u.Store.ByID(apiOp, schema, id)
