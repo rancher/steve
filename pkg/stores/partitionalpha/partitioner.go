@@ -32,7 +32,7 @@ type UnstructuredStore interface {
 	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error)
 }
 
-// rbacPartitioner is an implementation of the partition.Partitioner interface.
+// rbacPartitioner is an implementation of the partitionalpha.Partitioner interface.
 type rbacPartitioner struct {
 	proxyStore UnstructuredStore
 }
