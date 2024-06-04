@@ -37,23 +37,6 @@ type rbacPartitioner struct {
 	proxyStore UnstructuredStore
 }
 
-// Lookup returns the default passthrough partition which is used only for retrieving single resources.
-// Listing or watching resources require custom partitions.
-func (p *rbacPartitioner) Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error) {
-	switch verb {
-	case "create":
-		fallthrough
-	case "get":
-		fallthrough
-	case "update":
-		fallthrough
-	case "delete":
-		return passthroughPartitions[0], nil
-	default:
-		return partition.Partition{}, fmt.Errorf("partition list: invalid verb %s", verb)
-	}
-}
-
 // All returns a slice of partitions applicable to the API schema and the user's access level.
 // For watching individual resources or for blanket access permissions, it returns the passthrough partition.
 // For more granular permissions, it returns a slice of partitions matching an allowed namespace or resource names.

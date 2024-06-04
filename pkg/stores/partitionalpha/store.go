@@ -20,7 +20,6 @@ import (
 
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
-	Lookup(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) (partition.Partition, error)
 	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error)
 	Store() UnstructuredStore
 }

@@ -52,21 +52,6 @@ func (mr *MockPartitionerMockRecorder) All(arg0, arg1, arg2, arg3 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "All", reflect.TypeOf((*MockPartitioner)(nil).All), arg0, arg1, arg2, arg3)
 }
 
-// Lookup mocks base method.
-func (m *MockPartitioner) Lookup(arg0 *types.APIRequest, arg1 *types.APISchema, arg2, arg3 string) (partition.Partition, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Lookup", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(partition.Partition)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Lookup indicates an expected call of Lookup.
-func (mr *MockPartitionerMockRecorder) Lookup(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lookup", reflect.TypeOf((*MockPartitioner)(nil).Lookup), arg0, arg1, arg2, arg3)
-}
-
 // Store mocks base method.
 func (m *MockPartitioner) Store() UnstructuredStore {
 	m.ctrl.T.Helper()
