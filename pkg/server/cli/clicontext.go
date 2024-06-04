@@ -23,14 +23,14 @@ type Config struct {
 }
 
 func (c *Config) MustServer(ctx context.Context) *server.Server {
-	cc, err := c.ToServer(ctx)
+	cc, err := c.ToServer(ctx, false)
 	if err != nil {
 		panic(err)
 	}
 	return cc
 }
 
-func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
+func (c *Config) ToServer(ctx context.Context, alpha bool) (*server.Server, error) {
 	var (
 		auth steveauth.Middleware
 	)
@@ -51,31 +51,7 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 	return server.New(ctx, restConfig, &server.Options{
 		AuthMiddleware: auth,
 		Next:           ui.New(c.UIPath),
-	})
-}
-
-func (c *Config) ToServerAlpha(ctx context.Context) (*server.Server, error) {
-	var (
-		auth steveauth.Middleware
-	)
-
-	restConfig, err := kubeconfig.GetNonInteractiveClientConfigWithContext(c.KubeConfig, c.Context).ClientConfig()
-	if err != nil {
-		return nil, err
-	}
-	restConfig.RateLimiter = ratelimit.None
-
-	if c.WebhookConfig.WebhookAuthentication {
-		auth, err = c.WebhookConfig.WebhookMiddleware()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return server.New(ctx, restConfig, &server.Options{
-		AuthMiddleware: auth,
-		Next:           ui.New(c.UIPath),
-		Alpha:          true,
+		Alpha:          alpha,
 	})
 }
 
