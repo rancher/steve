@@ -8,9 +8,9 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/debounce"
-	apiextcontrollerv1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/apiextensions.k8s.io/v1"
-	v1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/apiregistration.k8s.io/v1"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
+	apiextcontrollerv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/apiextensions.k8s.io/v1"
+	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/apiregistration.k8s.io/v1"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/discovery"
 )

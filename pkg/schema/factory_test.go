@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	k8sSchema "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 )

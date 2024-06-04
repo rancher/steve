@@ -10,7 +10,7 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/clustercache"
-	"github.com/rancher/wrangler/v2/pkg/summary"
+	"github.com/rancher/wrangler/v3/pkg/summary"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"

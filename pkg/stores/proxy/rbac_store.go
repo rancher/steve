@@ -8,7 +8,7 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/stores/partition"
-	"github.com/rancher/wrangler/v2/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"

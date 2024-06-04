@@ -11,14 +11,14 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
-	"github.com/rancher/wrangler/v2/pkg/generic"
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

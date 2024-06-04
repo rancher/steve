@@ -10,7 +10,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/wrangler/v2/pkg/name"
+	"github.com/rancher/wrangler/v3/pkg/name"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/cache"

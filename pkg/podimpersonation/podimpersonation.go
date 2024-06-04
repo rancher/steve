@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/rancher/steve/pkg/stores/proxy"
-	"github.com/rancher/wrangler/v2/pkg/condition"
-	"github.com/rancher/wrangler/v2/pkg/randomtoken"
-	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
+	"github.com/rancher/wrangler/v3/pkg/condition"
+	"github.com/rancher/wrangler/v3/pkg/randomtoken"
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

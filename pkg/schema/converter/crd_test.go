@@ -7,8 +7,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/schema/table"
-	"github.com/rancher/wrangler/v2/pkg/generic/fake"
-	wranglerSchema "github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/rancher/wrangler/v3/pkg/generic/fake"
+	wranglerSchema "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )

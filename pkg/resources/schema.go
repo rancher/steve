@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
-	corecontrollers "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
+	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/discovery"
 )
