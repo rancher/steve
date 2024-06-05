@@ -21,6 +21,10 @@ import (
 	"github.com/rancher/steve/pkg/schema/definitions"
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/proxy"
+	"github.com/rancher/steve/pkg/stores/sqlpartition"
+	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/client-go/rest"
 )
@@ -48,6 +52,7 @@ type Server struct {
 
 	aggregationSecretNamespace string
 	aggregationSecretName      string
+	SQLCache                   bool
 }
 
 type Options struct {
@@ -62,6 +67,8 @@ type Options struct {
 	AggregationSecretName      string
 	ClusterRegistry            string
 	ServerVersion              string
+	// SQLCache enables the SQLite-based lasso caching mechanism
+	SQLCache bool
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -81,6 +88,8 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		aggregationSecretName:      opts.AggregationSecretName,
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
+		// SQLCache enables the SQLite-based lasso caching mechanism
+		SQLCache: opts.SQLCache,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -147,14 +156,50 @@ func setup(ctx context.Context, server *Server) error {
 
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
-
-	for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache()) {
-		sf.AddTemplate(template)
-	}
-
 	cols, err := common.NewDynamicColumns(server.RESTConfig)
 	if err != nil {
 		return err
+	}
+
+	var onSchemasHandler schemacontroller.SchemasHandlerFunc
+	if server.SQLCache {
+		s, err := sqlproxy.NewProxyStore(cols, cf, summaryCache, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		errStore := proxy.NewErrorStore(
+			proxy.NewUnformatterStore(
+				proxy.NewWatchRefresh(
+					sqlpartition.NewStore(
+						s,
+						asl,
+					),
+					asl,
+				),
+			),
+		)
+		store := metricsStore.NewMetricsStore(errStore)
+		// end store setup code
+
+		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, server.controllers.K8s.Discovery()) {
+			sf.AddTemplate(template)
+		}
+
+		onSchemasHandler = func(schemas *schema.Collection) error {
+			if err := ccache.OnSchemas(schemas); err != nil {
+				return err
+			}
+			if err := s.Reset(); err != nil {
+				return err
+			}
+			return nil
+		}
+	} else {
+		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache()) {
+			sf.AddTemplate(template)
+		}
+		onSchemasHandler = ccache.OnSchemas
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
@@ -165,7 +210,7 @@ func setup(ctx context.Context, server *Server) error {
 		server.controllers.CRD.CustomResourceDefinition(),
 		server.controllers.API.APIService(),
 		server.controllers.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
-		ccache,
+		onSchemasHandler,
 		sf)
 
 	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
@@ -176,6 +221,7 @@ func setup(ctx context.Context, server *Server) error {
 	server.APIServer = apiServer
 	server.Handler = handler
 	server.SchemaFactory = sf
+
 	return nil
 }
 

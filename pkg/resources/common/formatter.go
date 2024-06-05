@@ -30,6 +30,14 @@ func DefaultTemplate(clientGetter proxy.ClientGetter,
 	}
 }
 
+// DefaultTemplateForStore provides a default schema template which uses a provided, pre-initialized store. Primarily used when creating a Template that uses a Lasso SQL store internally.
+func DefaultTemplateForStore(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
+	return schema.Template{
+		Store:     store,
+		Formatter: formatter(summaryCache),
+	}
+}
+
 func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix string) {
 	buf := &strings.Builder{}
 	if gvr.Group == "management.cattle.io" && gvr.Version == "v3" {

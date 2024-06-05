@@ -1,5 +1,6 @@
-// Package proxy implements the proxy store, which is responsible for interfacing directly with Kubernetes.
-package proxy
+// Package sqlproxy implements the proxy store, which is responsible for either interfacing directly with the Kubernetes API,
+// or in the case of List, interfacing with an on-disk cache of items in the Kubernetes API.
+package sqlproxy
 
 import (
 	"context"
@@ -9,17 +10,23 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/lasso/pkg/cache/sql/informer"
+	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
+	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/common"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"github.com/rancher/wrangler/v2/pkg/data"
-	corecontrollers "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 	"github.com/rancher/wrangler/v2/pkg/summary"
 	"github.com/sirupsen/logrus"
@@ -28,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
@@ -39,9 +47,26 @@ import (
 const watchTimeoutEnv = "CATTLE_WATCH_TIMEOUT_SECONDS"
 
 var (
-	lowerChars  = regexp.MustCompile("[a-z]+")
-	paramScheme = runtime.NewScheme()
-	paramCodec  = runtime.NewParameterCodec(paramScheme)
+	paramScheme               = runtime.NewScheme()
+	paramCodec                = runtime.NewParameterCodec(paramScheme)
+	typeSpecificIndexedFields = map[string][][]string{
+		"_v1_Namespace": {{`metadata`, `labels[field.cattle.io/projectId]`}},
+		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
+		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
+		"_v1_ConfigMap": {{`metadata`, `labels[harvesterhci.io/cloud-init-template]`}},
+
+		"management.cattle.io_v3_Node": {{`status`, `nodeName`}},
+	}
+	baseNSSchema = types.APISchema{
+		Schema: &schemas.Schema{
+			Attributes: map[string]interface{}{
+				"group":    "",
+				"version":  "v1",
+				"kind":     "Namespace",
+				"resource": "namespaces",
+			},
+		},
+	}
 )
 
 func init() {
@@ -62,6 +87,16 @@ type ClientGetter interface {
 	TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
 }
 
+type SchemaColumnSetter interface {
+	SetColumns(ctx context.Context, schema *types.APISchema) error
+}
+
+type Cache interface {
+	// ListByOptions returns objects according to the specified list options and partitions
+	// see ListOptionIndexer.ListByOptions
+	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+}
+
 // WarningBuffer holds warnings that may be returned from the kubernetes api
 type WarningBuffer []types.Warning
 
@@ -79,31 +114,126 @@ type RelationshipNotifier interface {
 	OnInboundRelationshipChange(ctx context.Context, schema *types.APISchema, namespace string) <-chan *summary.Relationship
 }
 
-// Store implements partition.UnstructuredStore directly on top of kubernetes.
 type Store struct {
-	clientGetter ClientGetter
-	notifier     RelationshipNotifier
+	clientGetter   ClientGetter
+	notifier       RelationshipNotifier
+	cacheFactory   CacheFactory
+	cfInitializer  CacheFactoryInitializer
+	namespaceCache Cache
+	lock           sync.Mutex
+	columnSetter   SchemaColumnSetter
 }
 
-// NewProxyStore returns a wrapped types.Store.
-func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) types.Store {
-	return &ErrorStore{
-		Store: &unformatterStore{
-			Store: &WatchRefresh{
-				Store: partition.NewStore(
-					&rbacPartitioner{
-						proxyStore: &Store{
-							clientGetter: clientGetter,
-							notifier:     notifier,
-						},
-					},
-					lookup,
-					namespaceCache,
-				),
-				asl: lookup,
-			},
-		},
+type CacheFactoryInitializer func() (CacheFactory, error)
+
+type CacheFactory interface {
+	CacheFor(fields [][]string, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (factory.Cache, error)
+	Reset() error
+}
+
+// NewProxyStore returns a Store implemented directly on top of kubernetes.
+func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory CacheFactory) (*Store, error) {
+	store := &Store{
+		clientGetter: clientGetter,
+		notifier:     notifier,
+		columnSetter: c,
 	}
+
+	if factory == nil {
+		var err error
+		factory, err = defaultInitializeCacheFactory()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	store.cacheFactory = factory
+	if err := store.initializeNamespaceCache(); err != nil {
+		logrus.Infof("failed to warm up namespace informer for proxy store in steve, will try again on next ns request")
+	}
+	return store, nil
+}
+
+// Reset locks the store, resets the underlying cache factory, and warm the namespace cache.
+func (s *Store) Reset() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if err := s.cacheFactory.Reset(); err != nil {
+		return err
+	}
+
+	if err := s.initializeNamespaceCache(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func defaultInitializeCacheFactory() (CacheFactory, error) {
+	informerFactory, err := factory.NewCacheFactory()
+	if err != nil {
+		return nil, err
+	}
+	return informerFactory, nil
+}
+
+// initializeNamespaceCache warms up the namespace cache as it is needed to process queries using options related to
+// namespaces and projects.
+func (s *Store) initializeNamespaceCache() error {
+	buffer := WarningBuffer{}
+	nsSchema := baseNSSchema
+
+	// make sure any relevant columns are set to the ns schema
+	if err := s.columnSetter.SetColumns(context.Background(), &nsSchema); err != nil {
+		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
+	}
+
+	// build table client
+	client, err := s.clientGetter.TableAdminClient(nil, &nsSchema, "", &buffer)
+	if err != nil {
+		return err
+	}
+
+	// get fields from schema's columns
+	fields := getFieldsFromSchema(&nsSchema)
+
+	// get any type-specific fields that steve is interested in
+	fields = append(fields, getFieldForGVK(attributes.GVK(&nsSchema))...)
+
+	// get the ns informer
+	nsInformer, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
+	if err != nil {
+		return err
+	}
+
+	s.namespaceCache = nsInformer
+	return nil
+}
+
+func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
+	return typeSpecificIndexedFields[keyFromGVK(gvk)]
+}
+
+func keyFromGVK(gvk schema.GroupVersionKind) string {
+	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
+}
+
+// getFieldsFromSchema converts object field names from types.APISchema's format into lasso's
+// cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
+func getFieldsFromSchema(schema *types.APISchema) [][]string {
+	var fields [][]string
+	columns := attributes.Columns(schema)
+	if columns == nil {
+		return nil
+	}
+	colDefs, ok := columns.([]common.ColumnDefinition)
+	if !ok {
+		return nil
+	}
+	for _, colDef := range colDefs {
+		field := strings.TrimPrefix(colDef.Field, "$.")
+		fields = append(fields, strings.Split(field, "."))
+	}
+	return fields
 }
 
 // ByID looks up a single object by its ID.
@@ -197,69 +327,6 @@ func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
 	return result
 }
 
-// ByNames filters a list of objects by an allowed set of names.
-// In plain kubernetes, if a user has permission to 'list' or 'watch' a defined set of resource names,
-// performing the list or watch will result in a Forbidden error, because the user does not have permission
-// to list *all* resources.
-// With this filter, the request can be performed successfully, and only the allowed resources will
-// be returned in the list.
-func (s *Store) ByNames(apiOp *types.APIRequest, schema *types.APISchema, names sets.String) (*unstructured.UnstructuredList, []types.Warning, error) {
-	if apiOp.Namespace == "*" {
-		// This happens when you grant namespaced objects with "get" or "list "by name in a clusterrolebinding.
-		// We will treat this as an invalid situation instead of listing all objects in the cluster
-		// and filtering by name.
-		return &unstructured.UnstructuredList{}, nil, nil
-	}
-	buffer := WarningBuffer{}
-	adminClient, err := s.clientGetter.TableAdminClient(apiOp, schema, apiOp.Namespace, &buffer)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	objs, err := s.list(apiOp, schema, adminClient)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var filtered []unstructured.Unstructured
-	for _, obj := range objs.Items {
-		if names.Has(obj.GetName()) {
-			filtered = append(filtered, obj)
-		}
-	}
-
-	objs.Items = filtered
-	return objs, buffer, nil
-}
-
-// List returns an unstructured list of resources.
-func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {
-	buffer := WarningBuffer{}
-	client, err := s.clientGetter.TableClient(apiOp, schema, apiOp.Namespace, &buffer)
-	if err != nil {
-		return nil, nil, err
-	}
-	result, err := s.list(apiOp, schema, client)
-	return result, buffer, err
-}
-
-func (s *Store) list(apiOp *types.APIRequest, schema *types.APISchema, client dynamic.ResourceInterface) (*unstructured.UnstructuredList, error) {
-	opts := metav1.ListOptions{}
-	if err := decodeParams(apiOp, &opts); err != nil {
-		return nil, nil
-	}
-
-	k8sClient, _ := metricsStore.Wrap(client, nil)
-	resultList, err := k8sClient.List(apiOp, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	tableToList(resultList)
-
-	return resultList, nil
-}
-
 func returnErr(err error, c chan watch.Event) {
 	c <- watch.Event{
 		Type: watch.Error,
@@ -349,7 +416,7 @@ func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInt
 // to list *all* resources.
 // With this filter, the request can be performed successfully, and only the allowed resources will
 // be returned in watch.
-func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.String) (chan watch.Event, error) {
+func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.Set[string]) (chan watch.Event, error) {
 	buffer := &WarningBuffer{}
 	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
 	if err != nil {
@@ -544,4 +611,83 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 		}
 	}
 	return obj, buffer, nil
+}
+
+// ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
+	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
+	if err != nil {
+		return nil, "", err
+	}
+	// warnings from inside the informer are discarded
+	buffer := WarningBuffer{}
+	client, err := s.clientGetter.TableAdminClient(apiOp, schema, "", &buffer)
+	if err != nil {
+		return nil, "", err
+	}
+	fields := getFieldsFromSchema(schema)
+	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
+
+	inf, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
+	if err != nil {
+		return nil, "", err
+	}
+
+	list, continueToken, err := inf.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
+	if err != nil {
+		if errors.Is(err, informer.InvalidColumnErr) {
+			return nil, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+		}
+		return nil, "", err
+	}
+
+	return list.Items, continueToken, nil
+}
+
+// WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
+func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error) {
+	ctx, cancel := context.WithCancel(apiOp.Context())
+	apiOp = apiOp.Clone().WithContext(ctx)
+
+	eg := errgroup.Group{}
+
+	result := make(chan watch.Event)
+
+	for _, partition := range partitions {
+		p := partition
+		eg.Go(func() error {
+			defer cancel()
+			c, err := s.watchByPartition(p, apiOp, schema, wr)
+
+			if err != nil {
+				return err
+			}
+			for i := range c {
+				result <- i
+			}
+			return nil
+		})
+	}
+
+	go func() {
+		defer close(result)
+		<-ctx.Done()
+		eg.Wait()
+		cancel()
+	}()
+
+	return result, nil
+}
+
+// watchByPartition returns a channel of events for a list or resource belonging to a specified partition
+func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
+	if partition.Passthrough {
+		return s.Watch(apiOp, schema, wr)
+	}
+
+	apiOp.Namespace = partition.Namespace
+	if partition.All {
+		return s.Watch(apiOp, schema, wr)
+	}
+	return s.WatchNames(apiOp, schema, wr, partition.Names)
 }

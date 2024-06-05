@@ -15,6 +15,14 @@ type WatchRefresh struct {
 	asl accesscontrol.AccessSetLookup
 }
 
+// NewWatchRefresh returns a new store with awareness of changes to the requester's access.
+func NewWatchRefresh(s types.Store, asl accesscontrol.AccessSetLookup) *WatchRefresh {
+	return &WatchRefresh{
+		Store: s,
+		asl:   asl,
+	}
+}
+
 // Watch performs a watch request which halts if the user's access level changes.
 func (w *WatchRefresh) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan types.APIEvent, error) {
 	user, ok := request.UserFrom(apiOp.Context())

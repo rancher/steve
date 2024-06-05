@@ -23,14 +23,14 @@ type Config struct {
 }
 
 func (c *Config) MustServer(ctx context.Context) *server.Server {
-	cc, err := c.ToServer(ctx)
+	cc, err := c.ToServer(ctx, false)
 	if err != nil {
 		panic(err)
 	}
 	return cc
 }
 
-func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
+func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, error) {
 	var (
 		auth steveauth.Middleware
 	)
@@ -51,6 +51,7 @@ func (c *Config) ToServer(ctx context.Context) (*server.Server, error) {
 	return server.New(ctx, restConfig, &server.Options{
 		AuthMiddleware: auth,
 		Next:           ui.New(c.UIPath),
+		SQLCache:       sqlCache,
 	})
 }
 

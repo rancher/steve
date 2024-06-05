@@ -71,3 +71,33 @@ func DefaultSchemaTemplates(cf *client.Factory,
 		},
 	}
 }
+
+// DefaultSchemaTemplatesForStore returns the same default templates as DefaultSchemaTemplates, only using DefaultSchemaTemplateFoStore internally to construct the templates.
+func DefaultSchemaTemplatesForStore(store types.Store,
+	baseSchemas *types.APISchemas,
+	summaryCache *summarycache.SummaryCache,
+	discovery discovery.DiscoveryInterface) []schema.Template {
+
+	return []schema.Template{
+		common.DefaultTemplateForStore(store, summaryCache),
+		apigroups.Template(discovery),
+		{
+			ID:        "configmap",
+			Formatter: formatters.DropHelmData,
+		},
+		{
+			ID:        "secret",
+			Formatter: formatters.DropHelmData,
+		},
+		{
+			ID:        "pod",
+			Formatter: formatters.Pod,
+		},
+		{
+			ID: "management.cattle.io.cluster",
+			Customize: func(apiSchema *types.APISchema) {
+				cluster.AddApply(baseSchemas, apiSchema)
+			},
+		},
+	}
+}
