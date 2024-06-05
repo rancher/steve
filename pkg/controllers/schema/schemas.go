@@ -31,8 +31,10 @@ var (
 	}
 )
 
-type SchemasHandler interface {
-	OnSchemas(schemas *schema2.Collection) error
+type SchemasHandlerFunc func(schemas *schema2.Collection) error
+
+func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection) error {
+	return s(schemas)
 }
 
 type handler struct {
@@ -45,7 +47,7 @@ type handler struct {
 	cols    *common.DynamicColumns
 	crd     apiextcontrollerv1.CustomResourceDefinitionClient
 	ssar    authorizationv1client.SelfSubjectAccessReviewInterface
-	handler SchemasHandler
+	handler SchemasHandlerFunc
 }
 
 func Register(ctx context.Context,
@@ -54,7 +56,7 @@ func Register(ctx context.Context,
 	crd apiextcontrollerv1.CustomResourceDefinitionController,
 	apiService v1.APIServiceController,
 	ssar authorizationv1client.SelfSubjectAccessReviewInterface,
-	schemasHandler SchemasHandler,
+	schemasHandler SchemasHandlerFunc,
 	schemas *schema2.Collection) {
 
 	h := &handler{

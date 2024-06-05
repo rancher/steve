@@ -55,10 +55,6 @@ type Server struct {
 	SQLCache                   bool
 }
 
-type serverSchemaHandler struct {
-	SchemasFunc func(schemas *schema.Collection) error
-}
-
 type Options struct {
 	// Controllers If the controllers are passed in the caller must also start the controllers
 	Controllers                *Controllers
@@ -165,7 +161,7 @@ func setup(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	var onSchemasHandler schemacontroller.SchemasHandler
+	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
 		s, err := sqlproxy.NewProxyStore(cols, cf, summaryCache, nil)
 		if err != nil {
@@ -190,22 +186,20 @@ func setup(ctx context.Context, server *Server) error {
 			sf.AddTemplate(template)
 		}
 
-		onSchemasHandler = &serverSchemaHandler{
-			SchemasFunc: func(schemas *schema.Collection) error {
-				if err := ccache.OnSchemas(schemas); err != nil {
-					return err
-				}
-				if err := s.Reset(); err != nil {
-					return err
-				}
-				return nil
-			},
+		onSchemasHandler = func(schemas *schema.Collection) error {
+			if err := ccache.OnSchemas(schemas); err != nil {
+				return err
+			}
+			if err := s.Reset(); err != nil {
+				return err
+			}
+			return nil
 		}
 	} else {
 		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache()) {
 			sf.AddTemplate(template)
 		}
-		onSchemasHandler = ccache
+		onSchemasHandler = ccache.OnSchemas
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
@@ -264,8 +258,4 @@ func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, op
 
 	<-ctx.Done()
 	return ctx.Err()
-}
-
-func (s *serverSchemaHandler) OnSchemas(schemas *schema.Collection) error {
-	return s.SchemasFunc(schemas)
 }
