@@ -22,9 +22,9 @@ import (
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partitionalpha"
 	"github.com/rancher/steve/pkg/stores/proxy"
-	"github.com/rancher/steve/pkg/stores/proxyalpha"
+	"github.com/rancher/steve/pkg/stores/sqlpartition"
+	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/client-go/rest"
 )
@@ -52,7 +52,7 @@ type Server struct {
 
 	aggregationSecretNamespace string
 	aggregationSecretName      string
-	Alpha                      bool
+	SQLCache                   bool
 }
 
 type serverSchemaHandler struct {
@@ -71,7 +71,7 @@ type Options struct {
 	AggregationSecretName      string
 	ClusterRegistry            string
 	ServerVersion              string
-	Alpha                      bool
+	SQLCache                   bool
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -91,7 +91,7 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		aggregationSecretName:      opts.AggregationSecretName,
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
-		Alpha:                      opts.Alpha,
+		SQLCache:                   opts.SQLCache,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -164,8 +164,8 @@ func setup(ctx context.Context, server *Server) error {
 	}
 
 	var onSchemasHandler schemacontroller.SchemasHandler
-	if server.Alpha {
-		s, err := proxyalpha.NewProxyStore(cols, cf, summaryCache, nil)
+	if server.SQLCache {
+		s, err := sqlproxy.NewProxyStore(cols, cf, summaryCache, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -173,7 +173,7 @@ func setup(ctx context.Context, server *Server) error {
 		errStore := proxy.NewErrorStore(
 			proxy.NewUnformatterStore(
 				proxy.NewWatchRefresh(
-					partitionalpha.NewStore(
+					sqlpartition.NewStore(
 						s,
 						asl,
 					),

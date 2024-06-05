@@ -1,6 +1,6 @@
-// Package proxyalpha implements the proxy store, which is responsible for either interfacing directly with the Kubernetes API,
+// Package sqlproxy implements the proxy store, which is responsible for either interfacing directly with the Kubernetes API,
 // or in the case of List, interfacing with an on-disk cache of items in the Kubernetes API.
-package proxyalpha
+package sqlproxy
 
 import (
 	"context"
@@ -23,8 +23,8 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partitionalpha/listprocessor"
-	"github.com/rancher/steve/pkg/stores/proxyalpha/tablelistconvert"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"github.com/rancher/wrangler/v2/pkg/data"
 	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/rancher/wrangler/v2/pkg/schemas/validation"

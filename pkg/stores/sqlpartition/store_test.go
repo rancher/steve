@@ -1,4 +1,4 @@
-package partitionalpha
+package sqlpartition
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/stores/proxyalpha"
+	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/wrangler/v2/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package partitionalpha -destination partition_mocks_test.go "github.com/rancher/steve/pkg/stores/partitionalpha" Partitioner,UnstructuredStore
+//go:generate mockgen --build_flags=--mod=mod -package sqlpartition -destination partition_mocks_test.go "github.com/rancher/steve/pkg/stores/sqlpartition" Partitioner,UnstructuredStore
 
 func TestList(t *testing.T) {
 	type testCase struct {
@@ -137,7 +137,7 @@ func TestList(t *testing.T) {
 }
 
 type mockPartitioner struct {
-	store      proxyalpha.Store
+	store      sqlproxy.Store
 	partitions map[string][]partition.Partition
 }
 
@@ -150,7 +150,7 @@ func (m mockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, v
 	return m.partitions[user.GetName()], nil
 }
 
-func (m mockPartitioner) Store() proxyalpha.Store {
+func (m mockPartitioner) Store() sqlproxy.Store {
 	return m.store
 }
 

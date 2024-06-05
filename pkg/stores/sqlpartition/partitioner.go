@@ -1,4 +1,4 @@
-package partitionalpha
+package sqlpartition
 
 import (
 	"fmt"
@@ -32,7 +32,7 @@ type UnstructuredStore interface {
 	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error)
 }
 
-// rbacPartitioner is an implementation of the partitionalpha.Partitioner interface.
+// rbacPartitioner is an implementation of the sqlpartition.Partitioner interface.
 type rbacPartitioner struct {
 	proxyStore UnstructuredStore
 }

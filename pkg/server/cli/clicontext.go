@@ -30,7 +30,7 @@ func (c *Config) MustServer(ctx context.Context) *server.Server {
 	return cc
 }
 
-func (c *Config) ToServer(ctx context.Context, alpha bool) (*server.Server, error) {
+func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, error) {
 	var (
 		auth steveauth.Middleware
 	)
@@ -51,7 +51,7 @@ func (c *Config) ToServer(ctx context.Context, alpha bool) (*server.Server, erro
 	return server.New(ctx, restConfig, &server.Options{
 		AuthMiddleware: auth,
 		Next:           ui.New(c.UIPath),
-		Alpha:          alpha,
+		SQLCache:       sqlCache,
 	})
 }
 

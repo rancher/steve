@@ -1,4 +1,4 @@
-package partitionalpha
+package sqlpartition
 
 import (
 	"testing"

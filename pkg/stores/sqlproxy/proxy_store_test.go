@@ -1,4 +1,4 @@
-package proxyalpha
+package sqlproxy
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/stores/partitionalpha/listprocessor"
-	"github.com/rancher/steve/pkg/stores/proxyalpha/tablelistconvert"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/pkg/errors"
@@ -37,9 +37,9 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package proxyalpha -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/proxyalpha Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier
-//go:generate mockgen --build_flags=--mod=mod -package proxyalpha -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
-//go:generate mockgen --build_flags=--mod=mod -package proxyalpha -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
+//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier
+//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
+//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
 var c *watch.FakeWatcher
 
