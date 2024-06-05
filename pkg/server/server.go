@@ -71,7 +71,8 @@ type Options struct {
 	AggregationSecretName      string
 	ClusterRegistry            string
 	ServerVersion              string
-	SQLCache                   bool
+	// SQLCache enables the SQLite-based lasso caching mechanism
+	SQLCache bool
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -91,7 +92,8 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		aggregationSecretName:      opts.AggregationSecretName,
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
-		SQLCache:                   opts.SQLCache,
+		// SQLCache enables the SQLite-based lasso caching mechanism
+		SQLCache: opts.SQLCache,
 	}
 
 	if err := setup(ctx, server); err != nil {
