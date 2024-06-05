@@ -8,7 +8,6 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
-	k8s.io/client-go => github.com/rancher/client-go v1.29.3-rancher1
 )
 
 require (
@@ -20,8 +19,8 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/rancher/apiserver v0.0.0-20240503193545-2e1b0ddd9791
-	github.com/rancher/dynamiclistener v0.5.0-rc6
+	github.com/rancher/apiserver v0.0.0-20240604183424-8c448886365e
+	github.com/rancher/dynamiclistener v0.6.0-rc1
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/lasso v0.0.0-20240603075835-701e919d08b7
 	github.com/rancher/norman v0.0.0-20240604183301-20cd23aadce1
