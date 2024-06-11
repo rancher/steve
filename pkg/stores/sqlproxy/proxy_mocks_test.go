@@ -13,7 +13,7 @@ import (
 	informer "github.com/rancher/lasso/pkg/cache/sql/informer"
 	factory "github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	partition "github.com/rancher/lasso/pkg/cache/sql/partition"
-	summary "github.com/rancher/wrangler/v2/pkg/summary"
+	summary "github.com/rancher/wrangler/v3/pkg/summary"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	dynamic "k8s.io/client-go/dynamic"

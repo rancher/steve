@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/wrangler/v2/pkg/data"
+	"github.com/rancher/wrangler/v3/pkg/data"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sWatch "k8s.io/apimachinery/pkg/watch"

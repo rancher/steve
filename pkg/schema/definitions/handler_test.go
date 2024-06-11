@@ -7,7 +7,7 @@ import (
 	openapi_v2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
-	wschemas "github.com/rancher/wrangler/v2/pkg/schemas"
+	wschemas "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"

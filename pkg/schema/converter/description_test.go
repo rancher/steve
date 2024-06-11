@@ -6,7 +6,7 @@ import (
 
 	openapiv2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
