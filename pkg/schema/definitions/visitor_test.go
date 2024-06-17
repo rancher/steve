@@ -1,7 +1,6 @@
 package definitions
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,13 +54,13 @@ var (
 			"missing",
 		},
 	}
-	protoRefNoSubSchema = testRef{
+	protoRefNoSubSchema = openAPIV2Reference{
 		BaseSchema: proto.BaseSchema{
 			Description: "testRef - no subSchema",
 		},
 		reference: "some-other-type",
 	}
-	protoRef = testRef{
+	protoRef = openAPIV2Reference{
 		BaseSchema: proto.BaseSchema{
 			Description: "testRef",
 		},
@@ -74,29 +73,6 @@ var (
 		},
 	}
 )
-
-// testRef implements proto.Reference to test VisitReference
-type testRef struct {
-	proto.BaseSchema
-	reference string
-	subSchema proto.Schema
-}
-
-func (t *testRef) Reference() string {
-	return t.reference
-}
-
-func (t *testRef) SubSchema() proto.Schema {
-	return t.subSchema
-}
-
-func (t *testRef) Accept(v proto.SchemaVisitor) {
-	v.VisitReference(t)
-}
-
-func (t *testRef) GetName() string {
-	return fmt.Sprintf("Reference to %q", t.reference)
-}
 
 func TestSchemaFieldVisitor(t *testing.T) {
 	protoKind.Fields["protoRef"] = &protoRef
