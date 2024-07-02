@@ -24,7 +24,7 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/lasso v0.0.0-20240603075835-701e919d08b7
 	github.com/rancher/norman v0.0.0-20240604183301-20cd23aadce1
-	github.com/rancher/remotedialer v0.3.2
+	github.com/rancher/remotedialer v0.4.0
 	github.com/rancher/wrangler/v3 v3.0.0-rc2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
