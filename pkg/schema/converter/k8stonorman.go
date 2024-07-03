@@ -8,6 +8,8 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/norman/types/convert"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/apigroups"
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/apiextensions.k8s.io/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -82,6 +84,8 @@ func GetGVKForKind(kind *proto.Kind) *schema.GroupVersionKind {
 func ToSchemas(crd v1.CustomResourceDefinitionClient, client discovery.DiscoveryInterface) (map[string]*types.APISchema, error) {
 	result := map[string]*types.APISchema{}
 
+	addTemplateBased(result)
+
 	if err := addDiscovery(client, result); err != nil {
 		return nil, err
 	}
@@ -95,4 +99,11 @@ func ToSchemas(crd v1.CustomResourceDefinitionClient, client discovery.Discovery
 	}
 
 	return result, nil
+}
+
+// some schemas are not based on real resources but are filled-in by a template later on. This function adds the base
+// schema so that these endpoints are still recognizable in the api
+func addTemplateBased(schemas map[string]*types.APISchema) {
+	apiGroupGVK := attributes.GVK(&apigroups.BaseSchema)
+	schemas[GVKToVersionedSchemaID(apiGroupGVK)] = &apigroups.BaseSchema
 }

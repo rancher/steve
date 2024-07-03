@@ -7,6 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	openapiv2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/resources/apigroups"
 	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	wranglerSchema "github.com/rancher/wrangler/v3/pkg/schemas"
@@ -20,34 +21,51 @@ import (
 )
 
 func TestToSchemas(t *testing.T) {
-	gvkExtensionMap := map[any]any{
-		gvkExtensionGroup:   "TestGroup",
-		gvkExtensionVersion: "v1",
-		gvkExtensionKind:    "TestResource",
-	}
-	gvkExtensionSlice := []any{gvkExtensionMap}
-	extensionSliceYaml, err := yaml.Marshal(gvkExtensionSlice)
-	require.NoError(t, err)
-	gvkSchema := openapiv2.NamedSchema{
-		Name: "TestResources",
-		Value: &openapiv2.Schema{
-			Description: "TestResources are test resource created for unit tests",
-			Type: &openapiv2.TypeItem{
-				Value: []string{"object"},
-			},
-			Properties: &openapiv2.Properties{
-				AdditionalProperties: []*openapiv2.NamedSchema{},
-			},
-			VendorExtension: []*openapiv2.NamedAny{
-				{
-					Name: gvkExtensionName,
-					Value: &openapiv2.Any{
-						Yaml: string(extensionSliceYaml),
+	createNamedSchema := func(name string, description string, gvk schema.GroupVersionKind) (*openapiv2.NamedSchema, error) {
+		gvkExtensionMap := map[any]any{
+			gvkExtensionGroup:   gvk.Group,
+			gvkExtensionVersion: gvk.Version,
+			gvkExtensionKind:    gvk.Kind,
+		}
+		gvkExtensionSlice := []any{gvkExtensionMap}
+		extensionSliceYaml, err := yaml.Marshal(gvkExtensionSlice)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create named schema for %s: %w", name, err)
+		}
+		return &openapiv2.NamedSchema{
+			Name: name,
+			Value: &openapiv2.Schema{
+				Description: description,
+				Type: &openapiv2.TypeItem{
+					Value: []string{"object"},
+				},
+				Properties: &openapiv2.Properties{
+					AdditionalProperties: []*openapiv2.NamedSchema{},
+				},
+				VendorExtension: []*openapiv2.NamedAny{
+					{
+						Name: gvkExtensionName,
+						Value: &openapiv2.Any{
+							Yaml: string(extensionSliceYaml),
+						},
 					},
 				},
 			},
-		},
+		}, nil
 	}
+	apiGroupDescription := "APIGroup contains the name, the supported versions, and the preferred version of a group"
+	gvkSchema, err := createNamedSchema("TestResources", "TestResources are test resource created for unit tests", schema.GroupVersionKind{
+		Group:   "TestGroup",
+		Version: "v1",
+		Kind:    "TestResource",
+	})
+	require.NoError(t, err)
+	apiGroupSchema, err := createNamedSchema("ApiGroups", apiGroupDescription, schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "APIGroup",
+	})
+	require.NoError(t, err)
 	tests := []struct {
 		name          string
 		groups        []schema.GroupVersion
@@ -160,6 +178,7 @@ func TestToSchemas(t *testing.T) {
 						Description: "Test Resource for unit tests",
 					},
 				},
+				"core.v1.apigroup": &apigroups.BaseSchema,
 			},
 		},
 		{
@@ -194,6 +213,7 @@ func TestToSchemas(t *testing.T) {
 						},
 					},
 				},
+				"core.v1.apigroup": &apigroups.BaseSchema,
 			},
 		},
 		{
@@ -260,8 +280,10 @@ func TestToSchemas(t *testing.T) {
 					},
 				},
 			},
-			wantError:     false,
-			desiredSchema: map[string]*types.APISchema{},
+			wantError: false,
+			desiredSchema: map[string]*types.APISchema{
+				"core.v1.apigroup": &apigroups.BaseSchema,
+			},
 		},
 		{
 			name:          "discovery error",
@@ -305,6 +327,7 @@ func TestToSchemas(t *testing.T) {
 						},
 					},
 				},
+				"core.v1.apigroup": &apigroups.BaseSchema,
 			},
 		},
 		{
@@ -326,7 +349,7 @@ func TestToSchemas(t *testing.T) {
 			crds:   []v1.CustomResourceDefinition{},
 			document: &openapiv2.Document{
 				Definitions: &openapiv2.Definitions{
-					AdditionalProperties: []*openapiv2.NamedSchema{&gvkSchema},
+					AdditionalProperties: []*openapiv2.NamedSchema{gvkSchema, apiGroupSchema},
 				},
 			},
 			wantError: false,
@@ -344,6 +367,17 @@ func TestToSchemas(t *testing.T) {
 							"verbs":      []string{"get"},
 							"namespaced": true,
 						},
+					},
+				},
+				"core.v1.apigroup": {
+					Schema: &wranglerSchema.Schema{
+						ID: "apigroup",
+						Attributes: map[string]interface{}{
+							"group":   "",
+							"kind":    "APIGroup",
+							"version": "v1",
+						},
+						Description: apiGroupDescription,
 					},
 				},
 			},
