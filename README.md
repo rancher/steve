@@ -124,6 +124,17 @@ item is included in the list.
 /v1/{type}?filter=spec.containers.image=alpine
 ```
 
+**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
+filtering is only supported for a subset of attributes:
+- `id`, `metadata.name`, `metadata.namespace`, `metadata.state.name`, and `metadata.timestamp` for any resource kind
+- a short list of hardcoded attributes for a selection of specific types listed
+in [typeSpecificIndexFields](https://github.com/rancher/steve/blob/main/pkg/stores/sqlproxy/proxy_store.go#L52-L58)
+- the special string `metadata.fields[N]`, with N starting at 0, for all columns
+displayed by `kubectl get $TYPE`. For example `secrets` have `"metadata.fields[0]"`,
+`"metadata.fields[1]"` , `"metadata.fields[2]"`, and `"metadata.fields[3]"` respectively
+corresponding to `"name"`, `"type"`, `"data"`, and `"age"`. For CRDs, these come from
+[Additional printer columns](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns)
+
 #### `projectsornamespaces`
 
 Resources can also be filtered by the Rancher projects their namespaces belong

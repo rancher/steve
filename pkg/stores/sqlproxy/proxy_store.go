@@ -15,6 +15,15 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/virtual"
+	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
+
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -39,11 +48,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 
-	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/resources/common"
-	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
-	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
+	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -62,6 +67,10 @@ var (
 		"_v1_ConfigMap": {{`metadata`, `labels[harvesterhci.io/cloud-init-template]`}},
 
 		"management.cattle.io_v3_Node": {{`status`, `nodeName`}},
+	}
+	commonIndexFields = [][]string{
+		{`id`},
+		{`metadata`, `state`, `name`},
 	}
 	baseNSSchema = types.APISchema{
 		Schema: &schemas.Schema{
@@ -124,29 +133,35 @@ type RelationshipNotifier interface {
 	OnInboundRelationshipChange(ctx context.Context, schema *types.APISchema, namespace string) <-chan *summary.Relationship
 }
 
+type TransformBuilder interface {
+	GetTransformFunc(gvk schema.GroupVersionKind) cache.TransformFunc
+}
+
 type Store struct {
-	clientGetter   ClientGetter
-	notifier       RelationshipNotifier
-	cacheFactory   CacheFactory
-	cfInitializer  CacheFactoryInitializer
-	namespaceCache Cache
-	lock           sync.Mutex
-	columnSetter   SchemaColumnSetter
+	clientGetter     ClientGetter
+	notifier         RelationshipNotifier
+	cacheFactory     CacheFactory
+	cfInitializer    CacheFactoryInitializer
+	namespaceCache   Cache
+	lock             sync.Mutex
+	columnSetter     SchemaColumnSetter
+	transformBuilder TransformBuilder
 }
 
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(fields [][]string, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (factory.Cache, error)
+	CacheFor(fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (factory.Cache, error)
 	Reset() error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory CacheFactory) (*Store, error) {
+func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, factory CacheFactory) (*Store, error) {
 	store := &Store{
-		clientGetter: clientGetter,
-		notifier:     notifier,
-		columnSetter: c,
+		clientGetter:     clientGetter,
+		notifier:         notifier,
+		columnSetter:     c,
+		transformBuilder: virtual.NewTransformBuilder(scache),
 	}
 
 	if factory == nil {
@@ -203,14 +218,18 @@ func (s *Store) initializeNamespaceCache() error {
 		return err
 	}
 
+	gvk := attributes.GVK(&nsSchema)
 	// get fields from schema's columns
 	fields := getFieldsFromSchema(&nsSchema)
 
 	// get any type-specific fields that steve is interested in
-	fields = append(fields, getFieldForGVK(attributes.GVK(&nsSchema))...)
+	fields = append(fields, getFieldForGVK(gvk)...)
+
+	// get the type-specifc transform func
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
 
 	// get the ns informer
-	nsInformer, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
+	nsInformer, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
 	if err != nil {
 		return err
 	}
@@ -220,7 +239,13 @@ func (s *Store) initializeNamespaceCache() error {
 }
 
 func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
-	return typeSpecificIndexedFields[keyFromGVK(gvk)]
+	fields := [][]string{}
+	fields = append(fields, commonIndexFields...)
+	typeFields := typeSpecificIndexedFields[keyFromGVK(gvk)]
+	if typeFields != nil {
+		fields = append(fields, typeFields...)
+	}
+	return fields
 }
 
 func keyFromGVK(gvk schema.GroupVersionKind) string {
@@ -639,10 +664,12 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	if err != nil {
 		return nil, 0, "", err
 	}
+	gvk := attributes.GVK(schema)
 	fields := getFieldsFromSchema(schema)
-	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
+	fields = append(fields, getFieldForGVK(gvk)...)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
 
-	inf, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
+	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
 	if err != nil {
 		return nil, 0, "", err
 	}
