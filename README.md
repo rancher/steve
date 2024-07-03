@@ -138,7 +138,7 @@ item is included in the list.
 
 **If SQLite caching is enabled** (`server.Options.SQLCache=true`),
 filtering is only supported for a subset of attributes:
-- `metadata.name`, `metadata.namespace` and `metadata.timestamp` for any resource kind
+- `id`, `metadata.name`, `metadata.namespace`, `metadata.state.name`, and `metadata.timestamp` for any resource kind
 - a short list of hardcoded attributes for a selection of specific types listed
 in [typeSpecificIndexFields](https://github.com/rancher/steve/blob/main/pkg/stores/sqlproxy/proxy_store.go#L52-L58)
 - the special string `metadata.fields[N]`, with N starting at 0, for all columns
