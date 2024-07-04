@@ -6,7 +6,6 @@ package tablelistconvert
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rancher/wrangler/v3/pkg/data"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,7 +76,6 @@ func (w *tableConvertWatch) ResultChan() <-chan k8sWatch.Event {
 }
 
 func (w *tableConvertWatch) Stop() {
-	fmt.Println("stop")
 	close(w.done)
 	w.Interface.Stop()
 }
