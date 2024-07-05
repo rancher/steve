@@ -4,6 +4,9 @@ go 1.22.0
 
 toolchain go1.22.2
 
+// TEMP: remove this when bumping lasso to include https://github.com/rancher/lasso/pull/84
+replace github.com/rancher/lasso => github.com/moio/lasso v0.0.0-20240705114348-e3bb021170d3
+
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
