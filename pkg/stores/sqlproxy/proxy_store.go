@@ -293,16 +293,6 @@ func rowToObject(obj *unstructured.Unstructured) {
 	}
 }
 
-func tableToList(obj *unstructured.UnstructuredList) {
-	if obj.Object["kind"] != "Table" ||
-		(obj.Object["apiVersion"] != "meta.k8s.io/v1" &&
-			obj.Object["apiVersion"] != "meta.k8s.io/v1beta1") {
-		return
-	}
-
-	obj.Items = tableToObjects(obj.Object)
-}
-
 func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
 	var result []unstructured.Unstructured
 
