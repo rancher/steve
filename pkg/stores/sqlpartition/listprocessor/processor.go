@@ -44,8 +44,13 @@ type ListOptions struct {
 }
 
 type Cache interface {
-	// ListByOptions returns objects according to the specified list options and partitions
-	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	// ListByOptions returns objects according to the specified list options and partitions.
+	// Specifically:
+	//   - an unstructured list of resources belonging to any of the specified partitions
+	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
+	//   - a continue token, if there are more pages after the returned one
+	//   - an error instead of all of the above if anything went wrong
+	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
@@ -160,7 +165,7 @@ func getLimit(apiOp *types.APIRequest) int {
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Cache) ([]informer.Filter, error) {
 	var filters []informer.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, err := namespaceInformer.ListByOptions(ctx, informer.ListOptions{
+		uList, _, _, err := namespaceInformer.ListByOptions(ctx, informer.ListOptions{
 			Filters: []informer.OrFilter{
 				{
 					Filters: []informer.Filter{

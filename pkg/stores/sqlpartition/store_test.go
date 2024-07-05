@@ -88,7 +88,7 @@ func TestList(t *testing.T) {
 			}
 			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
 			p.EXPECT().Store().Return(us)
-			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, "", nil)
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, len(uListToReturn), "", nil)
 			l, err := s.List(req, schema)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedAPIObjList, l)
@@ -125,7 +125,7 @@ func TestList(t *testing.T) {
 			partitions := make([]partition.Partition, 0)
 			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
 			p.EXPECT().Store().Return(us)
-			us.EXPECT().ListByPartitions(req, schema, partitions).Return(nil, "", fmt.Errorf("error"))
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(nil, 0, "", fmt.Errorf("error"))
 			_, err := s.List(req, schema)
 			assert.NotNil(t, err)
 		},

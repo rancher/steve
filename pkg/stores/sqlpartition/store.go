@@ -76,12 +76,12 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 
 	store := s.Partitioner.Store()
 
-	list, continueToken, err := store.ListByPartitions(apiOp, schema, partitions)
+	list, total, continueToken, err := store.ListByPartitions(apiOp, schema, partitions)
 	if err != nil {
 		return result, err
 	}
 
-	result.Count = len(list)
+	result.Count = total
 
 	for _, item := range list {
 		item := item.DeepCopy()

@@ -45,13 +45,14 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockCache) ListByOptions(arg0 context.Context, arg1 informer.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, string, error) {
+func (m *MockCache) ListByOptions(arg0 context.Context, arg1 informer.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByOptions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
-	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(string)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // ListByOptions indicates an expected call of ListByOptions.

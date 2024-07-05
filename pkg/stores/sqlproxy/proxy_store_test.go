@@ -231,10 +231,11 @@ func TestListByPartitions(t *testing.T) {
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
-			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, "", nil)
-			list, contToken, err := s.ListByPartitions(req, schema, partitions)
+			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, len(expectedItems), total)
 			assert.Equal(t, "", contToken)
 		},
 	})
@@ -293,11 +294,11 @@ func TestListByPartitions(t *testing.T) {
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
 
-			nsi.EXPECT().ListByOptions(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, "", fmt.Errorf("error")).Times(2)
+			nsi.EXPECT().ListByOptions(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, 0, "", fmt.Errorf("error")).Times(2)
 			_, err := listprocessor.ParseQuery(req, nsi)
 			assert.NotNil(t, err)
 
-			_, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -360,7 +361,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
-			_, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -425,7 +426,7 @@ func TestListByPartitions(t *testing.T) {
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(factory.Cache{}, fmt.Errorf("error"))
 
-			_, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -496,9 +497,9 @@ func TestListByPartitions(t *testing.T) {
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
-			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(nil, "", fmt.Errorf("error"))
+			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
 
-			_, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})

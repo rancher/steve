@@ -138,13 +138,14 @@ func (mr *MockUnstructuredStoreMockRecorder) Delete(arg0, arg1, arg2 interface{}
 }
 
 // ListByPartitions mocks base method.
-func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) ([]unstructured.Unstructured, string, error) {
+func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByPartitions", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]unstructured.Unstructured)
-	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(string)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // ListByPartitions indicates an expected call of ListByPartitions.

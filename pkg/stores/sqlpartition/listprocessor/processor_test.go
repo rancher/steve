@@ -101,7 +101,7 @@ func TestParseQuery(t *testing.T) {
 						},
 					},
 				},
-			}, []partition.Partition{{Passthrough: true}}, "").Return(list, "", nil)
+			}, []partition.Partition{{Passthrough: true}}, "").Return(list, len(list.Items), "", nil)
 			return nsc
 		},
 	})
@@ -151,7 +151,7 @@ func TestParseQuery(t *testing.T) {
 						},
 					},
 				},
-			}, []partition.Partition{{Passthrough: true}}, "").Return(nil, "", fmt.Errorf("error"))
+			}, []partition.Partition{{Passthrough: true}}, "").Return(nil, 0, "", fmt.Errorf("error"))
 			return nsi
 		},
 	})
@@ -204,7 +204,7 @@ func TestParseQuery(t *testing.T) {
 						},
 					},
 				},
-			}, []partition.Partition{{Passthrough: true}}, "").Return(list, "", nil)
+			}, []partition.Partition{{Passthrough: true}}, "").Return(list, len(list.Items), "", nil)
 			return nsi
 		},
 	})

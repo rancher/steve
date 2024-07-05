@@ -92,9 +92,13 @@ type SchemaColumnSetter interface {
 }
 
 type Cache interface {
-	// ListByOptions returns objects according to the specified list options and partitions
-	// see ListOptionIndexer.ListByOptions
-	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, string, error)
+	// ListByOptions returns objects according to the specified list options and partitions.
+	// Specifically:
+	//   - an unstructured list of resources belonging to any of the specified partitions
+	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
+	//   - a continue token, if there are more pages after the returned one
+	//   - an error instead of all of the above if anything went wrong
+	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -603,35 +607,39 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-// ListByPartitions returns an unstructured list of resources belonging to any of the specified partitions
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, error) {
+// ListByPartitions returns:
+//   - an unstructured list of resources belonging to any of the specified partitions
+//   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
+//   - a continue token, if there are more pages after the returned one
+//   - an error instead of all of the above if anything went wrong
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
 	client, err := s.clientGetter.TableAdminClient(apiOp, schema, "", &buffer)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(attributes.GVK(schema))...)
 
 	inf, err := s.cacheFactory.CacheFor(fields, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 
-	list, continueToken, err := inf.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
+	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
 	if err != nil {
 		if errors.Is(err, informer.InvalidColumnErr) {
-			return nil, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
-		return nil, "", err
+		return nil, 0, "", err
 	}
 
-	return list.Items, continueToken, nil
+	return list.Items, total, continueToken, nil
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
