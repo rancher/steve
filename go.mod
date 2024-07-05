@@ -4,9 +4,6 @@ go 1.22.0
 
 toolchain go1.22.2
 
-// TEMP: remove this when bumping lasso to include https://github.com/rancher/lasso/pull/84
-replace github.com/rancher/lasso => github.com/moio/lasso v0.0.0-20240705114348-e3bb021170d3
-
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
@@ -25,10 +22,10 @@ require (
 	github.com/rancher/apiserver v0.0.0-20240604183424-8c448886365e
 	github.com/rancher/dynamiclistener v0.6.0-rc1
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/lasso v0.0.0-20240603075835-701e919d08b7
+	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
 	github.com/rancher/norman v0.0.0-20240604183301-20cd23aadce1
 	github.com/rancher/remotedialer v0.3.2
-	github.com/rancher/wrangler/v3 v3.0.0-rc2
+	github.com/rancher/wrangler/v3 v3.0.0-rc3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
