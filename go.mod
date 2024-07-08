@@ -19,13 +19,13 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/rancher/apiserver v0.0.0-20240604183424-8c448886365e
-	github.com/rancher/dynamiclistener v0.6.0-rc1
+	github.com/rancher/apiserver v0.0.0-20240708202538-39a6f2535146
+	github.com/rancher/dynamiclistener v0.6.0-rc2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
-	github.com/rancher/norman v0.0.0-20240604183301-20cd23aadce1
+	github.com/rancher/norman v0.0.0-20240708202514-a0127673d1b9
 	github.com/rancher/remotedialer v0.3.2
-	github.com/rancher/wrangler/v3 v3.0.0-rc3
+	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
