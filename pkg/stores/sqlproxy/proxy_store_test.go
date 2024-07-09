@@ -503,6 +503,43 @@ func TestListByPartitions(t *testing.T) {
 			assert.NotNil(t, err)
 		},
 	})
+	tests = append(tests, testCase{
+		description: "client ListByPartitions() with schema that doesn't allow listing should get an empty response",
+		test: func(t *testing.T) {
+			nsi := NewMockCache(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+
+			s := &Store{
+				namespaceCache: nsi,
+				clientGetter:   cg,
+				cacheFactory:   cf,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+					"verbs": []string{"create"},
+				}},
+			}
+
+			items, count, token, err := s.ListByPartitions(req, schema, partitions)
+			assert.Nil(t, items)
+			assert.Equal(t, count, 0)
+			assert.Empty(t, token)
+			assert.Nil(t, err)
+		},
+	})
+
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })

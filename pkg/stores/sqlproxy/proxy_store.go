@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -607,12 +608,35 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
+func schemaAllowsVerb(verb string, schema *types.APISchema) bool {
+	attr, ok := schema.Schema.Attributes["verbs"]
+	if !ok {
+		// If we can't determine whether nor not the verb is allowed, we might
+		// as well allow K8s to decide.
+		return true
+	}
+
+	verbs, ok := attr.([]string)
+	if !ok {
+		// Again, if we can't determine whether nor not the verb is allowed, we might
+		// as well allow K8s to decide.
+		return true
+	}
+
+	return slices.Contains(verbs, verb)
+}
+
 // ListByPartitions returns:
 //   - an unstructured list of resources belonging to any of the specified partitions
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
+	if !schemaAllowsVerb("list", schema) {
+		logrus.Debugf("list method is not allowed for %s", apiOp.Type)
+		return nil, 0, "", nil
+	}
+
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		return nil, 0, "", err
