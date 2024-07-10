@@ -2,6 +2,7 @@ package clustercache
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -124,6 +125,17 @@ func (h *clusterCache) addResourceEventHandler(gvk schema2.GroupVersionKind, inf
 	})
 }
 
+func getTweakListOptions() informer.TweakListOptionsFunc {
+	globalLabelSelector := os.Getenv("CATTLE_GLOBAL_LABEL_SELECTOR")
+	if globalLabelSelector == "" {
+		return func(*metav1.ListOptions) {}
+	}
+	logrus.Infof("Applying global label selector: %s", globalLabelSelector)
+	return func(opts *metav1.ListOptions) {
+		opts.LabelSelector = globalLabelSelector
+	}
+}
+
 func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 	h.Lock()
 	defer h.Unlock()
@@ -148,7 +160,7 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 		}
 
 		summaryInformer := informer.NewFilteredSummaryInformer(h.summaryClient, gvr, metav1.NamespaceAll, 2*time.Hour,
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, nil)
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, getTweakListOptions())
 		ctx, cancel := context.WithCancel(h.ctx)
 		w := &watcher{
 			ctx:      ctx,
