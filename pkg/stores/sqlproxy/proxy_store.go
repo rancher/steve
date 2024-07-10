@@ -608,24 +608,6 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-func schemaAllowsVerb(verb string, schema *types.APISchema) bool {
-	attr, ok := schema.Schema.Attributes["verbs"]
-	if !ok {
-		// If we can't determine whether nor not the verb is allowed, we might
-		// as well allow K8s to decide.
-		return true
-	}
-
-	verbs, ok := attr.([]string)
-	if !ok {
-		// Again, if we can't determine whether nor not the verb is allowed, we might
-		// as well allow K8s to decide.
-		return true
-	}
-
-	return slices.Contains(verbs, verb)
-}
-
 // ListByPartitions returns:
 //   - an unstructured list of resources belonging to any of the specified partitions
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
@@ -712,4 +694,15 @@ func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.API
 		return s.Watch(apiOp, schema, wr)
 	}
 	return s.WatchNames(apiOp, schema, wr, partition.Names)
+}
+
+func schemaAllowsVerb(verb string, schema *types.APISchema) bool {
+	verbs := attributes.Verbs(schema)
+	if len(verbs) == 0 {
+		// Again, if we can't determine whether nor not the verb is allowed, we might
+		// as well allow K8s to decide.
+		return true
+	}
+
+	return slices.Contains(verbs, verb)
 }
