@@ -58,7 +58,8 @@ func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user
 		if cOk && currentID != access.ID {
 			// we only want to keep around one record per user. If our current access record is invalid, purge the
 			//record of it from the cache, so we don't keep duplicates
-			c.purgeUserRecords(currentID)
+			c.cache.Remove(currentID)
+			c.as.PurgeUserData(currentID)
 			c.userCache.Remove(user.GetName())
 		}
 	}
@@ -67,12 +68,6 @@ func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user
 func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
 	c.cache.Add(access.ID, schemas, schemasCacheTTL)
 	c.userCache.Add(user.GetName(), access.ID, schemasCacheTTL)
-}
-
-// PurgeUserRecords removes a record from the backing LRU cache before expiry
-func (c *Collection) purgeUserRecords(id string) {
-	c.cache.Remove(id)
-	c.as.PurgeUserData(id)
 }
 
 func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.APISchemas, error) {
