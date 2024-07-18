@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/rancher/steve/pkg/internal/cache"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
@@ -193,7 +194,7 @@ func TestAccessStore_AccessFor(t *testing.T) {
 		Name:   "test-user",
 		Groups: []string{"users", "mygroup"},
 	}
-	asCache := cache.NewLRUExpireCache(10)
+	asCache := cache.NewCache[AccessSetID, *AccessSet](10, 1*time.Hour)
 	store := &AccessStore{
 		usersPolicyRules: &policyRulesMock{
 			getRBFunc: func(s string) []*rbacv1.RoleBinding {
@@ -258,18 +259,18 @@ func TestAccessStore_AccessFor(t *testing.T) {
 
 	as := store.AccessFor(testUser)
 	validateAccessSet(as)
-	if got, want := len(asCache.Keys()), 1; got != want {
+	if got, want := asCache.Len(), 1; got != want {
 		t.Errorf("Unexpected number of cache keys: got %d, want %d", got, want)
 	}
 
 	as = store.AccessFor(testUser)
 	validateAccessSet(as)
-	if got, want := len(asCache.Keys()), 1; got != want {
+	if got, want := asCache.Len(), 1; got != want {
 		t.Errorf("Unexpected increase in cache size, got %d, want %d", got, want)
 	}
 
 	store.PurgeUserData(as.ID)
-	if got, want := len(asCache.Keys()), 0; got != want {
+	if got, want := asCache.Len(), 0; got != want {
 		t.Errorf("Cache was not purged, got len %d, want %d", got, want)
 	}
 }

@@ -8,9 +8,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/rancher/steve/pkg/internal/cache"
+
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
@@ -39,7 +40,7 @@ type AccessStore struct {
 	usersPolicyRules  policyRules
 	groupsPolicyRules policyRules
 	roles             roleRevisions
-	cache             *cache.LRUExpireCache
+	cache             cache.Cache[AccessSetID, *AccessSet]
 }
 
 type roleKey struct {
@@ -54,7 +55,7 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 		roles:             newRoleRevision(ctx, rbac),
 	}
 	if cacheResults {
-		as.cache = cache.NewLRUExpireCache(50)
+		as.cache = cache.NewCache[AccessSetID, *AccessSet](50, accessSetsCacheTTL)
 	}
 	return as
 }
@@ -63,9 +64,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	var cacheKey AccessSetID
 	if l.cache != nil {
 		cacheKey = AccessSetID(l.CacheKey(user))
-		val, ok := l.cache.Get(cacheKey)
-		if ok {
-			as, _ := val.(*AccessSet)
+		if as, ok := l.cache.Get(cacheKey); ok {
 			return as
 		}
 	}
@@ -77,14 +76,14 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 
 	if l.cache != nil {
 		result.ID = string(cacheKey)
-		l.cache.Add(cacheKey, result, accessSetsCacheTTL)
+		l.cache.Set(cacheKey, result)
 	}
 
 	return result
 }
 
 func (l *AccessStore) PurgeUserData(id string) {
-	l.cache.Remove(id)
+	l.cache.Delete(AccessSetID(id))
 }
 
 func (l *AccessStore) CacheKey(user user.Info) string {
