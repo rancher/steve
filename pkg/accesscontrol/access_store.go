@@ -16,6 +16,8 @@ import (
 
 //go:generate mockgen --build_flags=--mod=mod -package fake -destination fake/AccessSetLookup.go "github.com/rancher/steve/pkg/accesscontrol" AccessSetLookup
 
+const accessSetsCacheTTL = 24 * time.Hour
+
 type AccessSetLookup interface {
 	AccessFor(user user.Info) *AccessSet
 	PurgeUserData(id string)
@@ -75,7 +77,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 
 	if l.cache != nil {
 		result.ID = string(cacheKey)
-		l.cache.Add(cacheKey, result, 24*time.Hour)
+		l.cache.Add(cacheKey, result, accessSetsCacheTTL)
 	}
 
 	return result

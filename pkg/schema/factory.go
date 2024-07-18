@@ -15,6 +15,8 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
+const schemasCacheTTL = 24 * time.Hour
+
 type Factory interface {
 	Schemas(user user.Info) (*types.APISchemas, error)
 	ByGVR(gvr schema.GroupVersionResource) string
@@ -63,8 +65,8 @@ func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user
 }
 
 func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
-	c.cache.Add(access.ID, schemas, 24*time.Hour)
-	c.userCache.Add(user.GetName(), access.ID, 24*time.Hour)
+	c.cache.Add(access.ID, schemas, schemasCacheTTL)
+	c.userCache.Add(user.GetName(), access.ID, schemasCacheTTL)
 }
 
 // PurgeUserRecords removes a record from the backing LRU cache before expiry
