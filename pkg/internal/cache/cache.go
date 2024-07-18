@@ -1,6 +1,11 @@
 package cache
 
-import "time"
+import (
+	"os"
+	"time"
+)
+
+const cacheBackendEnvVar = "CATTLE_STEVE_CACHE_BACKEND"
 
 type Cache[K, V any] interface {
 	Get(K) (V, bool)
@@ -11,5 +16,10 @@ type Cache[K, V any] interface {
 }
 
 func NewCache[K, V any](maxSize int, ttl time.Duration) Cache[K, V] {
-	return newLRUExpire[K, V](maxSize, ttl)
+	switch os.Getenv(cacheBackendEnvVar) {
+	case "LRU", "lru":
+		return newLRUExpire[K, V](maxSize, ttl)
+	default:
+		return newExpiring[K, V](maxSize, ttl)
+	}
 }
