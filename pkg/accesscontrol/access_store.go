@@ -32,10 +32,10 @@ type roleRevisions interface {
 }
 
 type AccessStore struct {
-	users  policyRules
-	groups policyRules
-	roles  roleRevisions
-	cache  *cache.LRUExpireCache
+	usersPolicyRules  policyRules
+	groupsPolicyRules policyRules
+	roles             roleRevisions
+	cache             *cache.LRUExpireCache
 }
 
 type roleKey struct {
@@ -45,9 +45,9 @@ type roleKey struct {
 
 func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
 	as := &AccessStore{
-		users:  newPolicyRuleIndex(true, rbac),
-		groups: newPolicyRuleIndex(false, rbac),
-		roles:  newRoleRevision(ctx, rbac),
+		usersPolicyRules:  newPolicyRuleIndex(true, rbac),
+		groupsPolicyRules: newPolicyRuleIndex(false, rbac),
+		roles:             newRoleRevision(ctx, rbac),
 	}
 	if cacheResults {
 		as.cache = cache.NewLRUExpireCache(50)
@@ -66,9 +66,9 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 		}
 	}
 
-	result := l.users.get(user.GetName())
+	result := l.usersPolicyRules.get(user.GetName())
 	for _, group := range user.GetGroups() {
-		result.Merge(l.groups.get(group))
+		result.Merge(l.groupsPolicyRules.get(group))
 	}
 
 	if l.cache != nil {
@@ -91,9 +91,9 @@ func (l *AccessStore) CacheKey(user user.Info) string {
 	copy(groups, groupBase)
 	sort.Strings(groups)
 
-	l.addRolesToHash(d, user.GetName(), l.users)
+	l.addRolesToHash(d, user.GetName(), l.usersPolicyRules)
 	for _, group := range groups {
-		l.addRolesToHash(d, group, l.groups)
+		l.addRolesToHash(d, group, l.groupsPolicyRules)
 	}
 
 	return hex.EncodeToString(d.Sum(nil))
