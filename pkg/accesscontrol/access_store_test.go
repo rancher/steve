@@ -27,7 +27,7 @@ func TestAccessStore_CacheKey(t *testing.T) {
 		{
 			name: "consistently produces the same value",
 			store: &AccessStore{
-				users: &policyRulesMock{
+				usersPolicyRules: &policyRulesMock{
 					getRBFunc: func(s string) []*rbacv1.RoleBinding {
 						return []*rbacv1.RoleBinding{
 							makeRB("testns", "testrb", testUser.Name, "testrole"),
@@ -39,7 +39,7 @@ func TestAccessStore_CacheKey(t *testing.T) {
 						}
 					},
 				},
-				groups: &policyRulesMock{},
+				groupsPolicyRules: &policyRulesMock{},
 				roles: roleRevisionsMock(func(ns, name string) string {
 					return fmt.Sprintf("%s%srev", ns, name)
 				}),
@@ -55,8 +55,8 @@ func TestAccessStore_CacheKey(t *testing.T) {
 		{
 			name: "group permissions are taken into account",
 			store: &AccessStore{
-				users: &policyRulesMock{},
-				groups: &policyRulesMock{
+				usersPolicyRules: &policyRulesMock{},
+				groupsPolicyRules: &policyRulesMock{
 					getRBFunc: func(s string) []*rbacv1.RoleBinding {
 						return []*rbacv1.RoleBinding{
 							makeRB("testns", "testrb", testUser.Name, "testrole"),
@@ -85,8 +85,8 @@ func TestAccessStore_CacheKey(t *testing.T) {
 		{
 			name: "different groups order produces the same value",
 			store: &AccessStore{
-				users: &policyRulesMock{},
-				groups: &policyRulesMock{
+				usersPolicyRules: &policyRulesMock{},
+				groupsPolicyRules: &policyRulesMock{
 					getRBFunc: func(s string) []*rbacv1.RoleBinding {
 						if s == testUser.Groups[0] {
 							return []*rbacv1.RoleBinding{
@@ -121,14 +121,14 @@ func TestAccessStore_CacheKey(t *testing.T) {
 		{
 			name: "role changes produce a different value",
 			store: &AccessStore{
-				users: &policyRulesMock{
+				usersPolicyRules: &policyRulesMock{
 					getRBFunc: func(s string) []*rbacv1.RoleBinding {
 						return []*rbacv1.RoleBinding{
 							makeRB("testns", "testrb", testUser.Name, "testrole"),
 						}
 					},
 				},
-				groups: &policyRulesMock{},
+				groupsPolicyRules: &policyRulesMock{},
 				roles: roleRevisionsMock(func(ns, name string) string {
 					return "rev1"
 				}),
@@ -146,8 +146,8 @@ func TestAccessStore_CacheKey(t *testing.T) {
 		{
 			name: "new groups produce a different value",
 			store: &AccessStore{
-				users: &policyRulesMock{},
-				groups: &policyRulesMock{
+				usersPolicyRules: &policyRulesMock{},
+				groupsPolicyRules: &policyRulesMock{
 					getRBFunc: func(s string) []*rbacv1.RoleBinding {
 						return []*rbacv1.RoleBinding{
 							makeRB("testns", "testrb", testUser.Name, "testrole"),
