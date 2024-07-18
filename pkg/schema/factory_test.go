@@ -113,10 +113,10 @@ func TestSchemaCache(t *testing.T) {
 			collection := NewCollection(context.TODO(), types.EmptyAPISchemas(), mockLookup)
 			collection.schemas = map[string]*types.APISchema{"testCRD": makeSchema("testCRD")}
 			runSchemaTest(t, test.before, mockLookup, collection, &testUser)
-			assert.Len(t, collection.cache.Keys(), 1, "expected cache to be size 1")
+			assert.Equal(t, collection.cache.Len(), 1, "expected cache to be size 1")
 			mockLookup.Clear()
 			runSchemaTest(t, test.after, mockLookup, collection, &testUser)
-			assert.Len(t, collection.cache.Keys(), 1, "expected cache to be size 1")
+			assert.Equal(t, collection.cache.Len(), 1, "expected cache to be size 1")
 		})
 	}
 }
