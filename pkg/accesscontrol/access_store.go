@@ -31,6 +31,8 @@ type roleRevisions interface {
 	roleRevision(string, string) string
 }
 
+type AccessSetID string
+
 type AccessStore struct {
 	usersPolicyRules  policyRules
 	groupsPolicyRules policyRules
@@ -56,9 +58,9 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 }
 
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
-	var cacheKey string
+	var cacheKey AccessSetID
 	if l.cache != nil {
-		cacheKey = l.CacheKey(user)
+		cacheKey = AccessSetID(l.CacheKey(user))
 		val, ok := l.cache.Get(cacheKey)
 		if ok {
 			as, _ := val.(*AccessSet)
@@ -72,7 +74,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	}
 
 	if l.cache != nil {
-		result.ID = cacheKey
+		result.ID = string(cacheKey)
 		l.cache.Add(cacheKey, result, 24*time.Hour)
 	}
 
