@@ -34,7 +34,7 @@ func Test_WatchChangeDetection(t *testing.T) {
 		Groups: nil,
 		Extra:  nil,
 	}
-	accessSet := &accesscontrol.AccessSet{}
+	accessSet := accesscontrol.NewAccessSet()
 	// always return the same empty accessSet for the test user
 	asl.EXPECT().AccessFor(userInfo).Return(accessSet).AnyTimes()
 
@@ -350,8 +350,9 @@ func Test_AccessSetAndChangeSignal(t *testing.T) {
 		Groups: nil,
 		Extra:  nil,
 	}
-	accessSet := &accesscontrol.AccessSet{}
-	changedSet := &accesscontrol.AccessSet{ID: "1"}
+	accessSet := accesscontrol.NewAccessSet()
+	changedSet := accesscontrol.NewAccessSet()
+	changedSet.SetID("1")
 
 	// return access set with ID "" the first time then "1" for subsequent request
 	gomock.InOrder(

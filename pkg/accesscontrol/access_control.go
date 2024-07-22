@@ -25,7 +25,7 @@ func (a *AccessControl) CanDo(apiOp *types.APIRequest, resource, verb, namespace
 		}
 	}
 	group, resource := kv.Split(resource, "/")
-	accessSet := apiOp.Schemas.Attributes["accessSet"].(*AccessSet)
+	accessSet := apiOp.Schemas.Attributes["accessSet"].(AccessSet)
 	if accessSet.Grants(verb, schema.GroupResource{
 		Group:    group,
 		Resource: resource,

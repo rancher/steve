@@ -34,7 +34,7 @@ func newSchemas() (*types.APISchemas, error) {
 func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	access := c.as.AccessFor(user)
 	c.removeOldRecords(access, user)
-	if schemas, ok := c.cache.Get(accesscontrol.AccessSetID(access.ID)); ok {
+	if schemas, ok := c.cache.Get(access.ID()); ok {
 		return schemas, nil
 	}
 
@@ -46,9 +46,9 @@ func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	return schemas, nil
 }
 
-func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user.Info) {
+func (c *Collection) removeOldRecords(access accesscontrol.AccessSet, user user.Info) {
 	current, ok := c.userCache.Get(user.GetName())
-	if ok && current != accesscontrol.AccessSetID(access.ID) {
+	if ok && current != access.ID() {
 		// we only want to keep around one record per user. If our current access record is invalid, purge the
 		//record of it from the cache, so we don't keep duplicates
 		c.cache.Delete(current)
@@ -57,12 +57,12 @@ func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user
 	}
 }
 
-func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
-	c.cache.Set(accesscontrol.AccessSetID(access.ID), schemas)
-	c.userCache.Set(user.GetName(), accesscontrol.AccessSetID(access.ID))
+func (c *Collection) addToCache(access accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
+	c.cache.Set(access.ID(), schemas)
+	c.userCache.Set(user.GetName(), access.ID())
 }
 
-func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.APISchemas, error) {
+func (c *Collection) schemasForSubject(access accesscontrol.AccessSet) (*types.APISchemas, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 

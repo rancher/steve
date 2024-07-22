@@ -20,12 +20,12 @@ import (
 const accessSetsCacheTTL = 24 * time.Hour
 
 type AccessSetLookup interface {
-	AccessFor(user user.Info) *AccessSet
+	AccessFor(user user.Info) AccessSet
 	PurgeUserData(id string)
 }
 
 type policyRules interface {
-	get(string) *AccessSet
+	get(string) *accessSet
 	getRoleBindings(string) []*rbacv1.RoleBinding
 	getClusterRoleBindings(string) []*rbacv1.ClusterRoleBinding
 }
@@ -40,7 +40,7 @@ type AccessStore struct {
 	usersPolicyRules  policyRules
 	groupsPolicyRules policyRules
 	roles             roleRevisions
-	cache             cache.Cache[AccessSetID, *AccessSet]
+	cache             cache.Cache[AccessSetID, AccessSet]
 }
 
 type roleKey struct {
@@ -55,12 +55,12 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 		roles:             newRoleRevision(ctx, rbac),
 	}
 	if cacheResults {
-		as.cache = cache.NewCache[AccessSetID, *AccessSet](50, accessSetsCacheTTL)
+		as.cache = cache.NewCache[AccessSetID, AccessSet](50, accessSetsCacheTTL)
 	}
 	return as
 }
 
-func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
+func (l *AccessStore) AccessFor(user user.Info) AccessSet {
 	var cacheKey AccessSetID
 	if l.cache != nil {
 		cacheKey = AccessSetID(l.CacheKey(user))
@@ -75,7 +75,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	}
 
 	if l.cache != nil {
-		result.ID = string(cacheKey)
+		result.id = string(cacheKey)
 		l.cache.Set(cacheKey, result)
 	}
 

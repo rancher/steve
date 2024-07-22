@@ -176,7 +176,7 @@ func (s *Store) userChangeNotify(ctx context.Context, user user.Info) chan inter
 			}
 
 			newAS := s.asl.AccessFor(user)
-			if newAS.ID != as.ID {
+			if newAS.ID() != as.ID() {
 				result <- struct{}{}
 				as = newAS
 			}

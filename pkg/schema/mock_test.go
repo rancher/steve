@@ -16,18 +16,18 @@ const (
 )
 
 type mockAccessSetLookup struct {
-	accessSets  map[string]*accesscontrol.AccessSet
-	currentHash map[string]hash.Hash
+	accessSets  map[string]accesscontrol.AccessSet
+	currentHash map[accesscontrol.AccessSetID]hash.Hash
 }
 
 func newMockAccessSetLookup() *mockAccessSetLookup {
 	return &mockAccessSetLookup{
-		accessSets:  map[string]*accesscontrol.AccessSet{},
-		currentHash: map[string]hash.Hash{},
+		accessSets:  map[string]accesscontrol.AccessSet{},
+		currentHash: map[accesscontrol.AccessSetID]hash.Hash{},
 	}
 }
 
-func (m *mockAccessSetLookup) AccessFor(user user.Info) *accesscontrol.AccessSet {
+func (m *mockAccessSetLookup) AccessFor(user user.Info) accesscontrol.AccessSet {
 	if set, ok := m.accessSets[user.GetName()]; ok {
 		return set
 	}
@@ -37,7 +37,7 @@ func (m *mockAccessSetLookup) AccessFor(user user.Info) *accesscontrol.AccessSet
 func (m *mockAccessSetLookup) PurgeUserData(id string) {
 	var foundKey string
 	for key, value := range m.accessSets {
-		if value.ID == id {
+		if string(value.ID()) == id {
 			foundKey = key
 		}
 	}
@@ -50,21 +50,21 @@ func (m *mockAccessSetLookup) AddAccessForUser(user user.Info, verb string, gr s
 	currentAccessSet, ok := m.accessSets[user.GetName()]
 	var currentHash hash.Hash
 	if !ok {
-		currentAccessSet = &accesscontrol.AccessSet{}
+		currentAccessSet = accesscontrol.NewAccessSet()
 		currentHash = sha256.New()
 	} else {
-		currentHash = m.currentHash[currentAccessSet.ID]
+		currentHash = m.currentHash[currentAccessSet.ID()]
 	}
 	currentAccessSet.Add(verb, gr, accesscontrol.Access{Namespace: namespace, ResourceName: name})
 	calculateAccessSetID(currentHash, verb, gr, namespace, name)
-	currentAccessSet.ID = hex.EncodeToString(currentHash.Sum(nil))
+	currentAccessSet.SetID(hex.EncodeToString(currentHash.Sum(nil)))
 	m.accessSets[user.GetName()] = currentAccessSet
-	m.currentHash[currentAccessSet.ID] = currentHash
+	m.currentHash[currentAccessSet.ID()] = currentHash
 }
 
 func (m *mockAccessSetLookup) Clear() {
-	m.accessSets = map[string]*accesscontrol.AccessSet{}
-	m.currentHash = map[string]hash.Hash{}
+	m.accessSets = map[string]accesscontrol.AccessSet{}
+	m.currentHash = map[accesscontrol.AccessSetID]hash.Hash{}
 }
 
 func calculateAccessSetID(digest hash.Hash, verb string, gr schema.GroupResource, namespace string, name string) {

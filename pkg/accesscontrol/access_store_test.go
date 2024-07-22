@@ -194,7 +194,7 @@ func TestAccessStore_AccessFor(t *testing.T) {
 		Name:   "test-user",
 		Groups: []string{"users", "mygroup"},
 	}
-	asCache := cache.NewCache[AccessSetID, *AccessSet](10, 1*time.Hour)
+	asCache := cache.NewCache[AccessSetID, AccessSet](10, 1*time.Hour)
 	store := &AccessStore{
 		usersPolicyRules: &policyRulesMock{
 			getRBFunc: func(s string) []*rbacv1.RoleBinding {
@@ -202,8 +202,8 @@ func TestAccessStore_AccessFor(t *testing.T) {
 					makeRB("testns", "testrb", testUser.Name, "testrole"),
 				}
 			},
-			getFunc: func(_ string) *AccessSet {
-				return &AccessSet{
+			getFunc: func(_ string) *accessSet {
+				return &accessSet{
 					set: map[key]resourceAccessSet{
 						{"get", corev1.Resource("ConfigMap")}: map[Access]bool{
 							{Namespace: All, ResourceName: All}: true,
@@ -221,8 +221,8 @@ func TestAccessStore_AccessFor(t *testing.T) {
 				}
 				return nil
 			},
-			getFunc: func(_ string) *AccessSet {
-				return &AccessSet{
+			getFunc: func(_ string) *accessSet {
+				return &accessSet{
 					set: map[key]resourceAccessSet{
 						{"list", appsv1.Resource("Deployment")}: map[Access]bool{
 							{Namespace: "testns", ResourceName: All}: true,
@@ -237,11 +237,11 @@ func TestAccessStore_AccessFor(t *testing.T) {
 		cache: asCache,
 	}
 
-	validateAccessSet := func(as *AccessSet) {
+	validateAccessSet := func(as AccessSet) {
 		if as == nil {
 			t.Fatal("AccessFor() returned nil")
 		}
-		if as.ID == "" {
+		if as.ID() == "" {
 			t.Fatal("AccessSet has empty ID")
 		}
 		if !as.Grants("get", corev1.Resource("ConfigMap"), "default", "cm") ||
@@ -269,7 +269,7 @@ func TestAccessStore_AccessFor(t *testing.T) {
 		t.Errorf("Unexpected increase in cache size, got %d, want %d", got, want)
 	}
 
-	store.PurgeUserData(as.ID)
+	store.PurgeUserData(string(as.ID()))
 	if got, want := asCache.Len(), 0; got != want {
 		t.Errorf("Cache was not purged, got len %d, want %d", got, want)
 	}
@@ -296,12 +296,12 @@ func makeCRB(name, user, role string) *rbacv1.ClusterRoleBinding {
 }
 
 type policyRulesMock struct {
-	getFunc    func(string) *AccessSet
+	getFunc    func(string) *accessSet
 	getRBFunc  func(string) []*rbacv1.RoleBinding
 	getCRBFunc func(string) []*rbacv1.ClusterRoleBinding
 }
 
-func (p policyRulesMock) get(s string) *AccessSet {
+func (p policyRulesMock) get(s string) *accessSet {
 	if p.getFunc == nil {
 		return nil
 	}

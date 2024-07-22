@@ -36,10 +36,10 @@ func (m *MockAccessSetLookup) EXPECT() *MockAccessSetLookupMockRecorder {
 }
 
 // AccessFor mocks base method.
-func (m *MockAccessSetLookup) AccessFor(arg0 user.Info) *accesscontrol.AccessSet {
+func (m *MockAccessSetLookup) AccessFor(arg0 user.Info) accesscontrol.AccessSet {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AccessFor", arg0)
-	ret0, _ := ret[0].(*accesscontrol.AccessSet)
+	ret0, _ := ret[0].(accesscontrol.AccessSet)
 	return ret0
 }
 

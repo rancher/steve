@@ -249,7 +249,7 @@ func (s *Store) getCacheKey(apiOp *types.APIRequest, opts *listprocessor.ListOpt
 		filters:      filters,
 		sort:         opts.Sort.String(),
 		pageSize:     opts.Pagination.PageSize(),
-		accessID:     s.asl.AccessFor(user).ID,
+		accessID:     string(s.asl.AccessFor(user).ID()),
 		resourcePath: apiOp.Request.URL.Path,
 		revision:     opts.Revision,
 	}, nil

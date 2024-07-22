@@ -316,13 +316,13 @@ type mockAccessSetLookup struct {
 	userRoles []map[string]string
 }
 
-func (m *mockAccessSetLookup) AccessFor(user user.Info) *accesscontrol.AccessSet {
+func (m *mockAccessSetLookup) AccessFor(user user.Info) accesscontrol.AccessSet {
 	userName := user.GetName()
 	access := getAccessID(userName, m.userRoles[0][userName])
 	m.userRoles = m.userRoles[1:]
-	return &accesscontrol.AccessSet{
-		ID: access,
-	}
+	as := accesscontrol.NewAccessSet()
+	as.SetID(access)
+	return as
 }
 
 func (m *mockAccessSetLookup) PurgeUserData(_ string) {

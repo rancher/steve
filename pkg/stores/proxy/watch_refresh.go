@@ -43,7 +43,7 @@ func (w *WatchRefresh) Watch(apiOp *types.APIRequest, schema *types.APISchema, w
 			}
 
 			newAs := w.asl.AccessFor(user)
-			if as.ID != newAs.ID {
+			if as.ID() != newAs.ID() {
 				// RBAC changed
 				cancel()
 				return

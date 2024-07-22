@@ -9,9 +9,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type AccessSet struct {
-	ID  string
-	set map[key]resourceAccessSet
+type AccessSet interface {
+	SetID(id string)
+	ID() AccessSetID
+	Namespaces() []string
+	Merge(right *accessSet)
+	Grants(verb string, gr schema.GroupResource, namespace, name string) bool
+	AccessListFor(verb string, gr schema.GroupResource) AccessList
+	Add(verb string, gr schema.GroupResource, access Access)
 }
 
 type resourceAccessSet map[Access]bool
@@ -21,7 +26,24 @@ type key struct {
 	gr   schema.GroupResource
 }
 
-func (a *AccessSet) Namespaces() (result []string) {
+type accessSet struct {
+	id  string
+	set map[key]resourceAccessSet
+}
+
+func NewAccessSet() AccessSet {
+	return &accessSet{}
+}
+
+func (a *accessSet) SetID(id string) {
+	a.id = id
+}
+
+func (a *accessSet) ID() AccessSetID {
+	return AccessSetID(a.id)
+}
+
+func (a *accessSet) Namespaces() (result []string) {
 	set := map[string]bool{}
 	for k, as := range a.set {
 		if k.verb != "get" && k.verb != "list" {
@@ -41,7 +63,7 @@ func (a *AccessSet) Namespaces() (result []string) {
 	return
 }
 
-func (a *AccessSet) Merge(right *AccessSet) {
+func (a *accessSet) Merge(right *accessSet) {
 	for k, accessMap := range right.set {
 		m, ok := a.set[k]
 		if !ok {
@@ -58,7 +80,7 @@ func (a *AccessSet) Merge(right *AccessSet) {
 	}
 }
 
-func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name string) bool {
+func (a *accessSet) Grants(verb string, gr schema.GroupResource, namespace, name string) bool {
 	for _, v := range []string{All, verb} {
 		for _, g := range []string{All, gr.Group} {
 			for _, r := range []string{All, gr.Resource} {
@@ -80,7 +102,7 @@ func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name 
 	return false
 }
 
-func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result AccessList) {
+func (a *accessSet) AccessListFor(verb string, gr schema.GroupResource) (result AccessList) {
 	dedup := map[Access]bool{}
 	for _, v := range []string{All, verb} {
 		for _, g := range []string{All, gr.Group} {
@@ -105,7 +127,7 @@ func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result A
 	return
 }
 
-func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
+func (a *accessSet) Add(verb string, gr schema.GroupResource, access Access) {
 	if a.set == nil {
 		a.set = map[key]resourceAccessSet{}
 	}
