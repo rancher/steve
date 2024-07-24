@@ -5,8 +5,11 @@ import (
 	"slices"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
@@ -45,6 +48,7 @@ func TestAccessStore_CacheKey(t *testing.T) {
 				}),
 			},
 			verify: func(t *testing.T, store *AccessStore, res string) {
+				// iterate enough times to make possibly random iterators repeating order by coincidence
 				for range 5 {
 					if res != store.CacheKey(testUser) {
 						t.Fatal("CacheKey is not the same on consecutive runs")
@@ -184,6 +188,92 @@ func TestAccessStore_CacheKey(t *testing.T) {
 	}
 }
 
+func TestAccessStore_AccessFor(t *testing.T) {
+	testUser := &user.DefaultInfo{
+		Name:   "test-user",
+		Groups: []string{"users", "mygroup"},
+	}
+	asCache := cache.NewLRUExpireCache(10)
+	store := &AccessStore{
+		usersPolicyRules: &policyRulesMock{
+			getRBFunc: func(s string) []*rbacv1.RoleBinding {
+				return []*rbacv1.RoleBinding{
+					makeRB("testns", "testrb", testUser.Name, "testrole"),
+				}
+			},
+			getFunc: func(_ string) *AccessSet {
+				return &AccessSet{
+					set: map[key]resourceAccessSet{
+						{"get", corev1.Resource("ConfigMap")}: map[Access]bool{
+							{Namespace: All, ResourceName: All}: true,
+						},
+					},
+				}
+			},
+		},
+		groupsPolicyRules: &policyRulesMock{
+			getCRBFunc: func(s string) []*rbacv1.ClusterRoleBinding {
+				if s == "mygroup" {
+					return []*rbacv1.ClusterRoleBinding{
+						makeCRB("testcrb", testUser.Name, "testclusterrole"),
+					}
+				}
+				return nil
+			},
+			getFunc: func(_ string) *AccessSet {
+				return &AccessSet{
+					set: map[key]resourceAccessSet{
+						{"list", appsv1.Resource("Deployment")}: map[Access]bool{
+							{Namespace: "testns", ResourceName: All}: true,
+						},
+					},
+				}
+			},
+		},
+		roles: roleRevisionsMock(func(ns, name string) string {
+			return fmt.Sprintf("%s%srev", ns, name)
+		}),
+		cache: asCache,
+	}
+
+	validateAccessSet := func(as *AccessSet) {
+		if as == nil {
+			t.Fatal("AccessFor() returned nil")
+		}
+		if as.ID == "" {
+			t.Fatal("AccessSet has empty ID")
+		}
+		if !as.Grants("get", corev1.Resource("ConfigMap"), "default", "cm") ||
+			!as.Grants("list", appsv1.Resource("Deployment"), "testns", "deploy") {
+			t.Error("AccessSet does not grant desired permissions")
+		}
+		// wrong verbs
+		if as.Grants("delete", corev1.Resource("ConfigMap"), "default", "cm") ||
+			as.Grants("get", appsv1.Resource("Deployment"), "testns", "deploy") ||
+			// wrong resource
+			as.Grants("get", corev1.Resource("Secret"), "testns", "s") {
+			t.Error("AccessSet grants undesired permissions")
+		}
+	}
+
+	as := store.AccessFor(testUser)
+	validateAccessSet(as)
+	if got, want := len(asCache.Keys()), 1; got != want {
+		t.Errorf("Unexpected number of cache keys: got %d, want %d", got, want)
+	}
+
+	as = store.AccessFor(testUser)
+	validateAccessSet(as)
+	if got, want := len(asCache.Keys()), 1; got != want {
+		t.Errorf("Unexpected increase in cache size, got %d, want %d", got, want)
+	}
+
+	store.PurgeUserData(as.ID)
+	if got, want := len(asCache.Keys()), 0; got != want {
+		t.Errorf("Cache was not purged, got len %d, want %d", got, want)
+	}
+}
+
 func makeRB(ns, name, user, role string) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
@@ -205,12 +295,16 @@ func makeCRB(name, user, role string) *rbacv1.ClusterRoleBinding {
 }
 
 type policyRulesMock struct {
+	getFunc    func(string) *AccessSet
 	getRBFunc  func(string) []*rbacv1.RoleBinding
 	getCRBFunc func(string) []*rbacv1.ClusterRoleBinding
 }
 
-func (p policyRulesMock) get(string) *AccessSet {
-	panic("implement me")
+func (p policyRulesMock) get(s string) *AccessSet {
+	if p.getFunc == nil {
+		return nil
+	}
+	return p.getFunc(s)
 }
 
 func (p policyRulesMock) getRoleBindings(s string) []*rbacv1.RoleBinding {
