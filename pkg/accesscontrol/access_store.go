@@ -99,13 +99,10 @@ func (l *AccessStore) CacheKey(user user.Info) string {
 	return hex.EncodeToString(d.Sum(nil))
 }
 
-var null = []byte{'\x00'}
-
 func (l *AccessStore) addRolesToHash(digest hash.Hash, subjectName string, rules policyRules) {
 	for _, crb := range rules.getClusterRoleBindings(subjectName) {
 		digest.Write([]byte(crb.RoleRef.Name))
 		digest.Write([]byte(l.roles.roleRevision("", crb.RoleRef.Name)))
-		digest.Write(null)
 	}
 
 	for _, rb := range rules.getRoleBindings(subjectName) {
@@ -114,6 +111,5 @@ func (l *AccessStore) addRolesToHash(digest hash.Hash, subjectName string, rules
 			digest.Write([]byte(rb.Namespace))
 		}
 		digest.Write([]byte(l.roles.roleRevision(rb.Namespace, rb.RoleRef.Name)))
-		digest.Write(null)
 	}
 }
