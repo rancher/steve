@@ -5,17 +5,21 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/internal/cache"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/wrangler/v3/pkg/name"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
+
+const schemasCacheTTL = 24 * time.Hour
 
 type Collection struct {
 	toSync     int32
@@ -26,8 +30,8 @@ type Collection struct {
 	notifierID int
 	byGVR      map[schema.GroupVersionResource]string
 	byGVK      map[schema.GroupVersionKind]string
-	cache      *cache.LRUExpireCache
-	userCache  *cache.LRUExpireCache
+	cache      cache.Cache[accesscontrol.AccessSetID, *types.APISchemas]
+	userCache  cache.Cache[string, accesscontrol.AccessSetID]
 	lock       sync.RWMutex
 
 	ctx     context.Context
@@ -75,8 +79,8 @@ func NewCollection(ctx context.Context, baseSchema *types.APISchemas, access acc
 		templates:  map[string][]*Template{},
 		byGVR:      map[schema.GroupVersionResource]string{},
 		byGVK:      map[schema.GroupVersionKind]string{},
-		cache:      cache.NewLRUExpireCache(1000),
-		userCache:  cache.NewLRUExpireCache(1000),
+		cache:      cache.NewCache[accesscontrol.AccessSetID, *types.APISchemas](1000, schemasCacheTTL),
+		userCache:  cache.NewCache[string, accesscontrol.AccessSetID](1000, schemasCacheTTL),
 		notifiers:  map[int]func(){},
 		ctx:        ctx,
 		as:         access,
@@ -121,9 +125,8 @@ func (c *Collection) Reset(schemas map[string]*types.APISchema) {
 	c.schemas = schemas
 	c.byGVR = byGVR
 	c.byGVK = byGVK
-	for _, k := range c.cache.Keys() {
-		c.cache.Remove(k)
-	}
+	c.cache.Reset()
+	c.userCache.Reset()
 	c.lock.Unlock()
 	c.lock.RLock()
 	for _, f := range c.notifiers {
