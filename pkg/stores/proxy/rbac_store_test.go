@@ -26,7 +26,7 @@ func TestAll(t *testing.T) {
 				Schema: &schemas.Schema{
 					ID: "foo",
 					Attributes: map[string]interface{}{
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "*",
@@ -46,7 +46,7 @@ func TestAll(t *testing.T) {
 				Schema: &schemas.Schema{
 					ID: "foo",
 					Attributes: map[string]interface{}{
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "*",
@@ -75,7 +75,7 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
@@ -111,7 +111,7 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
@@ -135,7 +135,7 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
@@ -160,7 +160,7 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
@@ -200,7 +200,7 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",

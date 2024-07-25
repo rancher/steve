@@ -13,10 +13,10 @@ type AccessSet interface {
 	SetID(id string)
 	ID() AccessSetID
 	Namespaces() []string
+	Add(verb string, gr schema.GroupResource, access Access)
 	Merge(right *accessSet)
 	Grants(verb string, gr schema.GroupResource, namespace, name string) bool
 	AccessListFor(verb string, gr schema.GroupResource) AccessList
-	Add(verb string, gr schema.GroupResource, access Access)
 }
 
 type resourceAccessSet map[Access]bool
@@ -102,7 +102,7 @@ func (a *accessSet) Grants(verb string, gr schema.GroupResource, namespace, name
 	return false
 }
 
-func (a *accessSet) AccessListFor(verb string, gr schema.GroupResource) (result AccessList) {
+func (a *accessSet) AccessListFor(verb string, gr schema.GroupResource) AccessList {
 	dedup := map[Access]bool{}
 	for _, v := range []string{All, verb} {
 		for _, g := range []string{All, gr.Group} {
@@ -120,11 +120,12 @@ func (a *accessSet) AccessListFor(verb string, gr schema.GroupResource) (result 
 		}
 	}
 
+	var result []Access
 	for k := range dedup {
 		result = append(result, k)
 	}
 
-	return
+	return result
 }
 
 func (a *accessSet) Add(verb string, gr schema.GroupResource, access Access) {
@@ -150,11 +151,11 @@ type ByVerb interface {
 	AnyVerb(verb ...string) bool
 }
 
-func AccessListByVerb(m map[string]AccessList) ByVerb {
+func AccessListByVerb(m map[string][]Access) ByVerb {
 	return accessListByVerb(m)
 }
 
-type accessListByVerb map[string]AccessList
+type accessListByVerb map[string][]Access
 
 func (a accessListByVerb) Set(k string, v []Access) { // needed for testing
 	a[k] = v
@@ -166,7 +167,8 @@ func (a accessListByVerb) Verb(verb string) (AccessList, bool) {
 }
 
 func (a accessListByVerb) Grants(verb, namespace, name string) bool {
-	return a[verb].Grants(namespace, name)
+	al := AccessList(a[verb])
+	return al.Grants(namespace, name)
 }
 
 func (a accessListByVerb) All(verb string) bool {

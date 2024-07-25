@@ -224,7 +224,7 @@ func makeSchema(resourceType string) *types.APISchema {
 				"kind":     resourceType,
 				"resource": resourceType,
 				"verbs":    []string{"get", "list", "watch", "delete", "update", "create"},
-				"access":   accesscontrol.AccessListByVerb(make(map[string]accesscontrol.AccessList)),
+				"access":   accesscontrol.AccessListByVerb(make(map[string][]accesscontrol.Access)),
 			},
 		},
 		Store: &empty.Store{},

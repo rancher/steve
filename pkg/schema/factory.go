@@ -86,13 +86,13 @@ func (c *Collection) schemasForSubject(access accesscontrol.AccessSet) (*types.A
 		}
 
 		verbs := attributes.Verbs(s)
-		verbAccess := make(map[string]accesscontrol.AccessList)
+		verbAccess := make(map[string][]accesscontrol.Access)
 
 		for _, verb := range verbs {
 			a := access.AccessListFor(verb, gr)
 			if !attributes.Namespaced(s) {
 				// trim out bad data where we are granted namespaced access to cluster scoped object
-				result := accesscontrol.AccessList{}
+				var result []accesscontrol.Access
 				for _, access := range a {
 					if access.Namespace == accesscontrol.All {
 						result = append(result, access)
@@ -107,7 +107,7 @@ func (c *Collection) schemasForSubject(access accesscontrol.AccessSet) (*types.A
 
 		if len(verbAccess) == 0 {
 			if gr.Group == "" && gr.Resource == "namespaces" {
-				var accessList accesscontrol.AccessList
+				var accessList []accesscontrol.Access
 				for _, ns := range access.Namespaces() {
 					accessList = append(accessList, accesscontrol.Access{
 						Namespace:    accesscontrol.All,

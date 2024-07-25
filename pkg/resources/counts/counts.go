@@ -29,7 +29,7 @@ func Register(schemas *types.APISchemas, ccache clustercache.ClusterCache) {
 	schemas.MustImportAndCustomize(Count{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
-		schema.Attributes["access"] = accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+		schema.Attributes["access"] = accesscontrol.AccessListByVerb(map[string][]accesscontrol.Access{
 			"watch": {
 				{
 					Namespace:    "*",
