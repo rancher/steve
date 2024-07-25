@@ -197,13 +197,15 @@ func addGenericPermissionsToSchema(schema *types.APISchema, verb string) {
 	} else {
 		panic(fmt.Sprintf("Can't add generic permissions for verb %s", verb))
 	}
-	currentAccess := schema.Attributes["access"].(accesscontrol.AccessListByVerb)
-	currentAccess[verb] = []accesscontrol.Access{
+	currentAccess := schema.Attributes["access"].(interface {
+		Set(string, []accesscontrol.Access)
+	})
+	currentAccess.Set(verb, []accesscontrol.Access{
 		{
 			Namespace:    "*",
 			ResourceName: "*",
 		},
-	}
+	})
 }
 
 func makeSchema(resourceType string) *types.APISchema {
@@ -222,7 +224,7 @@ func makeSchema(resourceType string) *types.APISchema {
 				"kind":     resourceType,
 				"resource": resourceType,
 				"verbs":    []string{"get", "list", "watch", "delete", "update", "create"},
-				"access":   accesscontrol.AccessListByVerb{},
+				"access":   accesscontrol.AccessListByVerb(make(map[string]accesscontrol.AccessList)),
 			},
 		},
 		Store: &empty.Store{},

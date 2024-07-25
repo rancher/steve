@@ -29,14 +29,14 @@ func Register(schemas *types.APISchemas, ccache clustercache.ClusterCache) {
 	schemas.MustImportAndCustomize(Count{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
-		schema.Attributes["access"] = accesscontrol.AccessListByVerb{
-			"watch": accesscontrol.AccessList{
+		schema.Attributes["access"] = accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+			"watch": {
 				{
 					Namespace:    "*",
 					ResourceName: "*",
 				},
 			},
-		}
+		})
 		schema.Store = &Store{
 			ccache: ccache,
 		}
@@ -314,7 +314,7 @@ func (s *Store) getCount(apiOp *types.APIRequest) Count {
 
 	for _, schema := range s.schemasToWatch(apiOp) {
 		gvk := attributes.GVK(schema)
-		access, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
+		access := accesscontrol.GetAccessListMap(schema)
 
 		rev := 0
 		itemCount := ItemCount{

@@ -86,7 +86,7 @@ func (c *Collection) schemasForSubject(access accesscontrol.AccessSet) (*types.A
 		}
 
 		verbs := attributes.Verbs(s)
-		verbAccess := accesscontrol.AccessListByVerb{}
+		verbAccess := make(map[string]accesscontrol.AccessList)
 
 		for _, verb := range verbs {
 			a := access.AccessListFor(verb, gr)
@@ -130,20 +130,21 @@ func (c *Collection) schemasForSubject(access accesscontrol.AccessSet) (*types.A
 			return method
 		}
 
+		byVerb := accesscontrol.AccessListByVerb(verbAccess)
 		s = s.DeepCopy()
-		attributes.SetAccess(s, verbAccess)
-		if verbAccess.AnyVerb("list", "get") {
+		attributes.SetAccess(s, byVerb)
+		if byVerb.AnyVerb("list", "get") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodGet))
 			s.CollectionMethods = append(s.CollectionMethods, allowed(http.MethodGet))
 		}
-		if verbAccess.AnyVerb("delete") {
+		if byVerb.AnyVerb("delete") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodDelete))
 		}
-		if verbAccess.AnyVerb("update") {
+		if byVerb.AnyVerb("update") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPut))
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPatch))
 		}
-		if verbAccess.AnyVerb("create") {
+		if byVerb.AnyVerb("create") {
 			s.CollectionMethods = append(s.CollectionMethods, allowed(http.MethodPost))
 		}
 

@@ -26,14 +26,14 @@ func TestAll(t *testing.T) {
 				Schema: &schemas.Schema{
 					ID: "foo",
 					Attributes: map[string]interface{}{
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "*",
 									ResourceName: "*",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -46,8 +46,8 @@ func TestAll(t *testing.T) {
 				Schema: &schemas.Schema{
 					ID: "foo",
 					Attributes: map[string]interface{}{
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "*",
 									ResourceName: "r1",
@@ -57,7 +57,7 @@ func TestAll(t *testing.T) {
 									ResourceName: "r2",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -75,8 +75,8 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
 									ResourceName: "*",
@@ -86,7 +86,7 @@ func TestAll(t *testing.T) {
 									ResourceName: "*",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -111,14 +111,14 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
 									ResourceName: "*",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -135,14 +135,14 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
 									ResourceName: "*",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -160,8 +160,8 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
 									ResourceName: "r1",
@@ -175,7 +175,7 @@ func TestAll(t *testing.T) {
 									ResourceName: "r1",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -200,8 +200,8 @@ func TestAll(t *testing.T) {
 					ID: "foo",
 					Attributes: map[string]interface{}{
 						"namespaced": true,
-						"access": accesscontrol.AccessListByVerb{
-							"list": accesscontrol.AccessList{
+						"access": accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+							"list": {
 								accesscontrol.Access{
 									Namespace:    "n1",
 									ResourceName: "r1",
@@ -211,7 +211,7 @@ func TestAll(t *testing.T) {
 									ResourceName: "r1",
 								},
 							},
-						},
+						}),
 					},
 				},
 			},

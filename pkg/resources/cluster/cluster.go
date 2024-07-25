@@ -27,14 +27,14 @@ func Register(ctx context.Context, apiSchemas *types.APISchemas, cg proxy.Client
 	apiSchemas.MustImportAndCustomize(Cluster{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
-		schema.Attributes["access"] = accesscontrol.AccessListByVerb{
-			"watch": accesscontrol.AccessList{
+		schema.Attributes["access"] = accesscontrol.AccessListByVerb(map[string]accesscontrol.AccessList{
+			"watch": {
 				{
 					Namespace:    "*",
 					ResourceName: "*",
 				},
 			},
-		}
+		})
 		schema.Store = &Store{
 			provider:  provider(ctx, cg),
 			discovery: discoveryClient(cg),

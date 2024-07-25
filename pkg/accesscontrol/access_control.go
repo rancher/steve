@@ -19,8 +19,8 @@ func NewAccessControl() *AccessControl {
 func (a *AccessControl) CanDo(apiOp *types.APIRequest, resource, verb, namespace, name string) error {
 	apiSchema := apiOp.Schemas.LookupSchema(resource)
 	if apiSchema != nil && attributes.GVK(apiSchema).Kind != "" {
-		access := GetAccessListMap(apiSchema)
-		if access[verb].Grants(namespace, name) {
+		access, _ := GetAccessListMap(apiSchema).Verb(verb)
+		if access.Grants(namespace, name) {
 			return nil
 		}
 	}
@@ -37,8 +37,7 @@ func (a *AccessControl) CanDo(apiOp *types.APIRequest, resource, verb, namespace
 
 func (a *AccessControl) CanWatch(apiOp *types.APIRequest, schema *types.APISchema) error {
 	if attributes.GVK(schema).Kind != "" {
-		access := GetAccessListMap(schema)
-		if _, ok := access["watch"]; ok {
+		if _, ok := GetAccessListMap(schema).Verb("watch"); ok {
 			return nil
 		}
 	}
