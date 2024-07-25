@@ -9,9 +9,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type AccessSet struct {
-	ID  string
-	set map[key]resourceAccessSet
+type AccessSet interface {
+	SetID(id string)
+	ID() AccessSetID
+	Namespaces() []string
+	Add(verb string, gr schema.GroupResource, access Access)
+	Merge(right *accessSet)
+	Grants(verb string, gr schema.GroupResource, namespace, name string) bool
+	AccessListFor(verb string, gr schema.GroupResource) AccessList
 }
 
 type resourceAccessSet map[Access]bool
@@ -21,7 +26,24 @@ type key struct {
 	gr   schema.GroupResource
 }
 
-func (a *AccessSet) Namespaces() (result []string) {
+type accessSet struct {
+	id  string
+	set map[key]resourceAccessSet
+}
+
+func NewAccessSet() AccessSet {
+	return &accessSet{}
+}
+
+func (a *accessSet) SetID(id string) {
+	a.id = id
+}
+
+func (a *accessSet) ID() AccessSetID {
+	return AccessSetID(a.id)
+}
+
+func (a *accessSet) Namespaces() (result []string) {
 	set := map[string]bool{}
 	for k, as := range a.set {
 		if k.verb != "get" && k.verb != "list" {
@@ -41,7 +63,7 @@ func (a *AccessSet) Namespaces() (result []string) {
 	return
 }
 
-func (a *AccessSet) Merge(right *AccessSet) {
+func (a *accessSet) Merge(right *accessSet) {
 	for k, accessMap := range right.set {
 		m, ok := a.set[k]
 		if !ok {
@@ -58,7 +80,7 @@ func (a *AccessSet) Merge(right *AccessSet) {
 	}
 }
 
-func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name string) bool {
+func (a *accessSet) Grants(verb string, gr schema.GroupResource, namespace, name string) bool {
 	for _, v := range []string{All, verb} {
 		for _, g := range []string{All, gr.Group} {
 			for _, r := range []string{All, gr.Resource} {
@@ -80,7 +102,7 @@ func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name 
 	return false
 }
 
-func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result AccessList) {
+func (a *accessSet) AccessListFor(verb string, gr schema.GroupResource) AccessList {
 	dedup := map[Access]bool{}
 	for _, v := range []string{All, verb} {
 		for _, g := range []string{All, gr.Group} {
@@ -98,14 +120,15 @@ func (a AccessSet) AccessListFor(verb string, gr schema.GroupResource) (result A
 		}
 	}
 
+	var result []Access
 	for k := range dedup {
 		result = append(result, k)
 	}
 
-	return
+	return result
 }
 
-func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
+func (a *accessSet) Add(verb string, gr schema.GroupResource, access Access) {
 	if a.set == nil {
 		a.set = map[key]resourceAccessSet{}
 	}
@@ -120,13 +143,35 @@ func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 	}
 }
 
-type AccessListByVerb map[string]AccessList
-
-func (a AccessListByVerb) Grants(verb, namespace, name string) bool {
-	return a[verb].Grants(namespace, name)
+type ByVerb interface {
+	Verb(verb string) (AccessList, bool)
+	Grants(verb, namespace, name string) bool
+	All(verb string) bool
+	Granted(verb string) map[string]Resources
+	AnyVerb(verb ...string) bool
 }
 
-func (a AccessListByVerb) All(verb string) bool {
+func AccessListByVerb(m map[string][]Access) ByVerb {
+	return accessListByVerb(m)
+}
+
+type accessListByVerb map[string][]Access
+
+func (a accessListByVerb) Set(k string, v []Access) { // needed for testing
+	a[k] = v
+}
+
+func (a accessListByVerb) Verb(verb string) (AccessList, bool) {
+	l, ok := a[verb]
+	return l, ok
+}
+
+func (a accessListByVerb) Grants(verb, namespace, name string) bool {
+	al := AccessList(a[verb])
+	return al.Grants(namespace, name)
+}
+
+func (a accessListByVerb) All(verb string) bool {
 	return a.Grants(verb, All, All)
 }
 
@@ -135,7 +180,7 @@ type Resources struct {
 	Names sets.String
 }
 
-func (a AccessListByVerb) Granted(verb string) (result map[string]Resources) {
+func (a accessListByVerb) Granted(verb string) (result map[string]Resources) {
 	result = map[string]Resources{}
 
 	for _, access := range a[verb] {
@@ -170,7 +215,7 @@ func (a AccessListByVerb) Granted(verb string) (result map[string]Resources) {
 	return result
 }
 
-func (a AccessListByVerb) AnyVerb(verb ...string) bool {
+func (a accessListByVerb) AnyVerb(verb ...string) bool {
 	for _, v := range verb {
 		if len(a[v]) > 0 {
 			return true
@@ -208,10 +253,10 @@ func (a Access) nameOK(name string) bool {
 	return a.ResourceName == All || a.ResourceName == name
 }
 
-func GetAccessListMap(s *types.APISchema) AccessListByVerb {
+func GetAccessListMap(s *types.APISchema) ByVerb {
 	if s == nil {
 		return nil
 	}
-	v, _ := attributes.Access(s).(AccessListByVerb)
+	v, _ := attributes.Access(s).(ByVerb)
 	return v
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/rancher/apiserver/pkg/builtin"
 	"github.com/rancher/apiserver/pkg/types"
@@ -35,9 +34,7 @@ func newSchemas() (*types.APISchemas, error) {
 func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	access := c.as.AccessFor(user)
 	c.removeOldRecords(access, user)
-	val, ok := c.cache.Get(access.ID)
-	if ok {
-		schemas, _ := val.(*types.APISchemas)
+	if schemas, ok := c.cache.Get(access.ID()); ok {
 		return schemas, nil
 	}
 
@@ -49,31 +46,23 @@ func (c *Collection) Schemas(user user.Info) (*types.APISchemas, error) {
 	return schemas, nil
 }
 
-func (c *Collection) removeOldRecords(access *accesscontrol.AccessSet, user user.Info) {
+func (c *Collection) removeOldRecords(access accesscontrol.AccessSet, user user.Info) {
 	current, ok := c.userCache.Get(user.GetName())
-	if ok {
-		currentID, cOk := current.(string)
-		if cOk && currentID != access.ID {
-			// we only want to keep around one record per user. If our current access record is invalid, purge the
-			//record of it from the cache, so we don't keep duplicates
-			c.purgeUserRecords(currentID)
-			c.userCache.Remove(user.GetName())
-		}
+	if ok && current != access.ID() {
+		// we only want to keep around one record per user. If our current access record is invalid, purge the
+		//record of it from the cache, so we don't keep duplicates
+		c.cache.Delete(current)
+		c.as.PurgeUserData(string(current))
+		c.userCache.Delete(user.GetName())
 	}
 }
 
-func (c *Collection) addToCache(access *accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
-	c.cache.Add(access.ID, schemas, 24*time.Hour)
-	c.userCache.Add(user.GetName(), access.ID, 24*time.Hour)
+func (c *Collection) addToCache(access accesscontrol.AccessSet, user user.Info, schemas *types.APISchemas) {
+	c.cache.Set(access.ID(), schemas)
+	c.userCache.Set(user.GetName(), access.ID())
 }
 
-// PurgeUserRecords removes a record from the backing LRU cache before expiry
-func (c *Collection) purgeUserRecords(id string) {
-	c.cache.Remove(id)
-	c.as.PurgeUserData(id)
-}
-
-func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.APISchemas, error) {
+func (c *Collection) schemasForSubject(access accesscontrol.AccessSet) (*types.APISchemas, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -97,13 +86,13 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 		}
 
 		verbs := attributes.Verbs(s)
-		verbAccess := accesscontrol.AccessListByVerb{}
+		verbAccess := make(map[string][]accesscontrol.Access)
 
 		for _, verb := range verbs {
 			a := access.AccessListFor(verb, gr)
 			if !attributes.Namespaced(s) {
 				// trim out bad data where we are granted namespaced access to cluster scoped object
-				result := accesscontrol.AccessList{}
+				var result []accesscontrol.Access
 				for _, access := range a {
 					if access.Namespace == accesscontrol.All {
 						result = append(result, access)
@@ -118,7 +107,7 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 
 		if len(verbAccess) == 0 {
 			if gr.Group == "" && gr.Resource == "namespaces" {
-				var accessList accesscontrol.AccessList
+				var accessList []accesscontrol.Access
 				for _, ns := range access.Namespaces() {
 					accessList = append(accessList, accesscontrol.Access{
 						Namespace:    accesscontrol.All,
@@ -141,20 +130,21 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 			return method
 		}
 
+		byVerb := accesscontrol.AccessListByVerb(verbAccess)
 		s = s.DeepCopy()
-		attributes.SetAccess(s, verbAccess)
-		if verbAccess.AnyVerb("list", "get") {
+		attributes.SetAccess(s, byVerb)
+		if byVerb.AnyVerb("list", "get") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodGet))
 			s.CollectionMethods = append(s.CollectionMethods, allowed(http.MethodGet))
 		}
-		if verbAccess.AnyVerb("delete") {
+		if byVerb.AnyVerb("delete") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodDelete))
 		}
-		if verbAccess.AnyVerb("update") {
+		if byVerb.AnyVerb("update") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPut))
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPatch))
 		}
-		if verbAccess.AnyVerb("create") {
+		if byVerb.AnyVerb("create") {
 			s.CollectionMethods = append(s.CollectionMethods, allowed(http.MethodPost))
 		}
 

@@ -77,7 +77,7 @@ func (p *rbacPartitioner) Store() UnstructuredStore {
 // isPassthrough determines whether a request can be passed through directly to the underlying store
 // or if the results need to be partitioned by namespace and name based on the requester's access.
 func isPassthrough(apiOp *types.APIRequest, schema *types.APISchema, verb string) ([]partition.Partition, bool) {
-	accessListByVerb, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
+	accessListByVerb := accesscontrol.GetAccessListMap(schema)
 	if accessListByVerb.All(verb) {
 		return nil, true
 	}
