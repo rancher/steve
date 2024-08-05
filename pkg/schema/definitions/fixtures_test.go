@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	openapi_v2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/wrangler/v3/pkg/yaml"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/kube-openapi/pkg/util/proto"
 )
 
 var (
@@ -63,6 +61,26 @@ spec:
                   additionalManifest:
                     type: string
                     nullable: true
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: schemaless.management.cattle.io
+spec:
+  conversion:
+    strategy: None
+  group: management.cattle.io
+  names:
+    kind: Schemaless
+    listKind: SchemalessList
+    plural: schemalese
+    singular: schemaless
+  scope: Cluster
+  preserveUnkownFields: true
+  versions:
+  - name: v2
     served: true
     storage: true
 `
@@ -348,6 +366,35 @@ definitions:
     - group: "management.cattle.io"
       version: "v2"
       kind: "Nullable"
+  io.cattle.management.v2.Schemaless:
+    description: "this kind has no schema"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the resource"
+        type: "object"
+        required:
+        - "name"
+        properties:
+          name:
+            description: "The name of the resource"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+    x-kubernetes-group-version-kind:
+    - group: "management.cattle.io"
+      version: "v2"
+      kind: "Schemaless"
   io.cattle.management.NotAKind:
     type: "string"
     description: "Some string which isn't a kind"
@@ -400,114 +447,3 @@ definitions:
       kind: "ConfigMap"
       version: "v1"
 `
-
-var (
-	rawSchemalessCRDs = `
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: schemaless.management.cattle.io
-spec:
-  conversion:
-    strategy: None
-  group: management.cattle.io
-  names:
-    kind: Schemaless
-    listKind: SchemalessList
-    plural: schemalese
-    singular: schemaless
-  scope: Cluster
-  versions:
-  - name: v2
-    schema:
-      openAPIV3Schema:
-        type: object
-        properties:
-          spec:
-            type: object
-            properties:
-              rkeConfig:
-                type: object
-                nullable: true
-        x-kubernetes-preserve-unknown-fields: true
-    served: true
-    storage: true
-`
-
-	rawSchemalessModels = `
-swagger: "2.0"
-info:
-  title: "Test openapi spec"
-  version: "v1.0.0"
-paths:
-  /apis/management.cattle.io/v3/globalroles:
-    get:
-      description: "get a global role"
-      responses:
-        200:
-          description: "OK"
-definitions:
-  io.cattle.management.v2.schemaless:
-    description: "this kind has no schema"
-    type: "object"
-    properties:
-      apiVersion:
-        description: "The APIVersion of this resource"
-        type: "string"
-      kind:
-        description: "The kind"
-        type: "string"
-      metadata:
-        description: "The metadata"
-        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
-      spec:
-        description: "The spec for the resource"
-        type: "object"
-        required:
-        - "name"
-        properties:
-          name:
-            description: "The name of the resource"
-            type: "string"
-          notRequired:
-            description: "Some field that isn't required"
-            type: "boolean"
-    x-kubernetes-group-version-kind:
-    - group: "management.cattle.io"
-      version: "v2"
-      kind: "Schemaless"
-  io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta:
-    description: "Object Metadata"
-    properties:
-      annotations:
-        description: "annotations of the resource"
-        type: "object"
-        additionalProperties:
-          type: "string"
-      name:
-        description: "name of the resource"
-        type: "string"
-`
-)
-
-func getSchemalessCRDs() ([]*apiextv1.CustomResourceDefinition, error) {
-	crds, err := yaml.UnmarshalWithJSONDecoder[*apiextv1.CustomResourceDefinition](bytes.NewBuffer([]byte(rawSchemalessCRDs)))
-	if err != nil {
-		return nil, fmt.Errorf("unmarshaling raw CRDs: %w", err)
-	}
-	for _, crd := range crds {
-		for _, crdVersion := range crd.Spec.Versions {
-			crdVersion.Schema = nil
-		}
-	}
-	return crds, err
-}
-
-func getSchemalessModels() (proto.Models, error) {
-	doc, err := openapi_v2.ParseDocument([]byte(rawSchemalessModels))
-	if err != nil {
-		return nil, fmt.Errorf("unmarshaling raw models: %w", err)
-	}
-	models, err := proto.NewOpenAPIData(doc)
-	return models, err
-}

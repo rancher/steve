@@ -225,8 +225,6 @@ func listGVKModels(models proto.Models, groups *metav1.APIGroupList, crdCache wa
 			}
 			if version.Schema != nil {
 				gvkToCRD[gvk] = version.Schema.OpenAPIV3Schema
-			} else {
-				gvkToCRD[gvk] = nil
 			}
 		}
 	}
