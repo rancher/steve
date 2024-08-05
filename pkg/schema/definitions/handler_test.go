@@ -34,7 +34,7 @@ func TestRefresh(t *testing.T) {
 	require.NotNil(t, userAttributesV2)
 
 	nullableV2 := getJSONSchema(crds, "nullable.management.cattle.io", "v2")
-	require.NotNil(t, userAttributesV2)
+	require.NotNil(t, nullableV2)
 
 	tests := []struct {
 		name             string
@@ -84,6 +84,11 @@ func TestRefresh(t *testing.T) {
 					ModelName: "io.cattle.management.v2.Nullable",
 					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Nullable"),
 					CRD:       nullableV2,
+				},
+				"management.cattle.io.schemaless": {
+					ModelName: "io.cattle.management.v2.Schemaless",
+					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Schemaless"),
+					CRD:       nil,
 				},
 			},
 		},
@@ -146,6 +151,11 @@ func TestRefresh(t *testing.T) {
 					ModelName: "io.cattle.management.v2.Nullable",
 					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Nullable"),
 					CRD:       nullableV2,
+				},
+				"management.cattle.io.schemaless": {
+					ModelName: "io.cattle.management.v2.Schemaless",
+					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Schemaless"),
+					CRD:       nil,
 				},
 			},
 		},
