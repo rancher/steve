@@ -34,7 +34,7 @@ func TestRefresh(t *testing.T) {
 	require.NotNil(t, userAttributesV2)
 
 	nullableV2 := getJSONSchema(crds, "nullable.management.cattle.io", "v2")
-	require.NotNil(t, userAttributesV2)
+	require.NotNil(t, nullableV2)
 
 	tests := []struct {
 		name             string
@@ -84,6 +84,11 @@ func TestRefresh(t *testing.T) {
 					ModelName: "io.cattle.management.v2.Nullable",
 					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Nullable"),
 					CRD:       nullableV2,
+				},
+				"management.cattle.io.schemaless": {
+					ModelName: "io.cattle.management.v2.Schemaless",
+					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Schemaless"),
+					CRD:       nil,
 				},
 			},
 		},
@@ -147,6 +152,11 @@ func TestRefresh(t *testing.T) {
 					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Nullable"),
 					CRD:       nullableV2,
 				},
+				"management.cattle.io.schemaless": {
+					ModelName: "io.cattle.management.v2.Schemaless",
+					Schema:    defaultModels.LookupModel("io.cattle.management.v2.Schemaless"),
+					CRD:       nil,
+				},
 			},
 		},
 	}
@@ -194,59 +204,6 @@ func TestRefresh(t *testing.T) {
 		})
 
 	}
-}
-
-func TestRefreshSchemalessCRDs(t *testing.T) {
-	schemalessModels, err := getSchemalessModels()
-	require.NoError(t, err)
-
-	crds, err := getSchemalessCRDs()
-	require.NoError(t, err)
-
-	for _, crd := range crds {
-		for _, crdVersion := range crd.Spec.Versions {
-			crdVersion.Schema = nil
-		}
-	}
-
-	test := struct {
-		name          string
-		nilGroups     bool
-		wantModels    proto.Models
-		wantGVKModels map[string]gvkModel
-	}{
-		name:       "problem - missing schema",
-		wantModels: schemalessModels,
-		wantGVKModels: map[string]gvkModel{
-			"management.cattle.io.schemaless": {
-				ModelName: "io.cattle.management.v2.schemaless",
-			},
-		},
-	}
-	t.Run(test.name, func(t *testing.T) {
-		client, err := buildDefaultServerlessDiscovery()
-		require.Nil(t, err)
-		baseSchemas := types.EmptyAPISchemas()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		crdCache := fake.NewMockNonNamespacedCacheInterface[*apiextv1.CustomResourceDefinition](ctrl)
-		crdCache.EXPECT().List(labels.Everything()).Return(crds, nil).AnyTimes()
-
-		handler := NewSchemaDefinitionHandler(baseSchemas, crdCache, client)
-		err = handler.Refresh()
-		require.NoError(t, err)
-
-		handler.lock.RLock()
-		defer handler.lock.RUnlock()
-		require.Equal(t, test.wantModels, handler.models)
-		// Just test the model names, because the schema and crd will be null in the input
-		require.Equal(t, len(test.wantGVKModels), len(handler.gvkModels))
-		for k, v := range test.wantGVKModels {
-			require.Equal(t, v.ModelName, handler.gvkModels[k].ModelName)
-		}
-	})
 }
 
 func Test_byID(t *testing.T) {
@@ -733,65 +690,6 @@ func buildDefaultDiscovery() (*fakeDiscovery, error) {
 	document, err := openapi_v2.ParseDocument([]byte(openapi_raw))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse openapi document %w", err)
-	}
-	groups := []metav1.APIGroup{
-		// The core groups (eg: Pods, ConfigMaps, etc)
-		{
-			Name: "",
-			PreferredVersion: metav1.GroupVersionForDiscovery{
-				GroupVersion: "v1",
-				Version:      "v1",
-			},
-			Versions: []metav1.GroupVersionForDiscovery{
-				{
-					GroupVersion: "v1",
-					Version:      "v1",
-				},
-			},
-		},
-		{
-			Name: "management.cattle.io",
-			PreferredVersion: metav1.GroupVersionForDiscovery{
-				GroupVersion: "management.cattle.io/v2",
-				Version:      "v2",
-			},
-			Versions: []metav1.GroupVersionForDiscovery{
-				{
-					GroupVersion: "management.cattle.io/v1",
-					Version:      "v1",
-				},
-				{
-					GroupVersion: "management.cattle.io/v2",
-					Version:      "v2",
-				},
-			},
-		},
-		{
-			Name: "noversion.cattle.io",
-			Versions: []metav1.GroupVersionForDiscovery{
-				{
-					GroupVersion: "noversion.cattle.io/v1",
-					Version:      "v1",
-				},
-				{
-					GroupVersion: "noversion.cattle.io/v2",
-					Version:      "v2",
-				},
-			},
-		},
-	}
-	return &fakeDiscovery{
-		Groups: &metav1.APIGroupList{
-			Groups: groups,
-		},
-		Document: document,
-	}, nil
-}
-
-func buildDefaultServerlessDiscovery() (*fakeDiscovery, error) {
-	document, err := openapi_v2.ParseDocument([]byte(rawSchemalessModels))
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse rawSchemalessModels: %w", err)
 	}
 	groups := []metav1.APIGroup{
 		// The core groups (eg: Pods, ConfigMaps, etc)
