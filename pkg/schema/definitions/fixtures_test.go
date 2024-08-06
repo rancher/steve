@@ -63,6 +63,26 @@ spec:
                     nullable: true
     served: true
     storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: schemaless.management.cattle.io
+spec:
+  conversion:
+    strategy: None
+  group: management.cattle.io
+  names:
+    kind: Schemaless
+    listKind: SchemalessList
+    plural: schemalese
+    singular: schemaless
+  scope: Cluster
+  preserveUnkownFields: true
+  versions:
+  - name: v2
+    served: true
+    storage: true
 `
 )
 
@@ -346,6 +366,35 @@ definitions:
     - group: "management.cattle.io"
       version: "v2"
       kind: "Nullable"
+  io.cattle.management.v2.Schemaless:
+    description: "this kind has no schema"
+    type: "object"
+    properties:
+      apiVersion:
+        description: "The APIVersion of this resource"
+        type: "string"
+      kind:
+        description: "The kind"
+        type: "string"
+      metadata:
+        description: "The metadata"
+        $ref: "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+      spec:
+        description: "The spec for the resource"
+        type: "object"
+        required:
+        - "name"
+        properties:
+          name:
+            description: "The name of the resource"
+            type: "string"
+          notRequired:
+            description: "Some field that isn't required"
+            type: "boolean"
+    x-kubernetes-group-version-kind:
+    - group: "management.cattle.io"
+      version: "v2"
+      kind: "Schemaless"
   io.cattle.management.NotAKind:
     type: "string"
     description: "Some string which isn't a kind"
