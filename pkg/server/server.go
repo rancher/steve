@@ -239,12 +239,15 @@ func (c *Server) StartAggregation(ctx context.Context) {
 		c.aggregationSecretName, c)
 }
 
-func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, opts *server.ListenOpts) error {
+func (c *Server) ListenAndServe(ctx context.Context, httpsPort, httpPort int, debugMode bool, opts *server.ListenOpts) error {
 	if opts == nil {
 		opts = &server.ListenOpts{}
 	}
 	if opts.Storage == nil && opts.Secrets == nil {
 		opts.Secrets = c.controllers.Core.Secret()
+	}
+	if debugMode {
+		opts.Debug = true
 	}
 
 	c.StartAggregation(ctx)

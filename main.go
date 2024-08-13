@@ -38,5 +38,5 @@ func run(_ *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, nil)
+	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, debugconfig.Debug, nil)
 }
