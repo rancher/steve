@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 )
 
@@ -182,7 +183,7 @@ func setup(ctx context.Context, server *Server) error {
 		store := metricsStore.NewMetricsStore(errStore)
 		// end store setup code
 
-		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, server.controllers.K8s.Discovery()) {
+		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
 			sf.AddTemplate(template)
 		}
 

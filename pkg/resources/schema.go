@@ -76,10 +76,11 @@ func DefaultSchemaTemplates(cf *client.Factory,
 func DefaultSchemaTemplatesForStore(store types.Store,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
+	asl accesscontrol.AccessSetLookup,
 	discovery discovery.DiscoveryInterface) []schema.Template {
 
 	return []schema.Template{
-		common.DefaultTemplateForStore(store, summaryCache),
+		common.DefaultTemplateForStore(store, summaryCache, asl),
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
