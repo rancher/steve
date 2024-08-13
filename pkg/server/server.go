@@ -26,7 +26,6 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
-	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 )
 
