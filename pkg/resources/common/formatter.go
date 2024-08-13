@@ -120,9 +120,10 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 		} else {
 			delete(resource.Links, "remove")
 		}
-
-		if _, ok := resource.Links["remove"]; !ok && slice.ContainsString(resource.Schema.ResourceMethods, "blocked-DELETE") {
-			resource.Links["remove"] = "blocked"
+		if _, ok := resource.Links["update"]; ok {
+			resource.Links["patch"] = resource.Links["update"]
+		} else {
+			delete(resource.Links, "patch")
 		}
 
 		if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
