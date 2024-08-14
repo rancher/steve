@@ -76,7 +76,7 @@ func TestNewProxyStore(t *testing.T) {
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(c, nil)
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, cf, nil)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -97,7 +97,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, cf, nil)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -119,7 +119,7 @@ func TestNewProxyStore(t *testing.T) {
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, cf, nil)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -143,7 +143,7 @@ func TestNewProxyStore(t *testing.T) {
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, cf, nil)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)

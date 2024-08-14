@@ -39,6 +39,7 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -126,6 +127,7 @@ type Store struct {
 	namespaceCache Cache
 	lock           sync.Mutex
 	columnSetter   SchemaColumnSetter
+	discovery      discovery.DiscoveryInterface
 }
 
 type CacheFactoryInitializer func() (CacheFactory, error)
@@ -136,7 +138,7 @@ type CacheFactory interface {
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory CacheFactory) (*Store, error) {
+func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, factory CacheFactory, discovery discovery.DiscoveryInterface) (*Store, error) {
 	store := &Store{
 		clientGetter: clientGetter,
 		notifier:     notifier,
@@ -145,7 +147,7 @@ func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier Rel
 
 	if factory == nil {
 		var err error
-		factory, err = defaultInitializeCacheFactory()
+		factory, err = defaultInitializeCacheFactory(discovery)
 		if err != nil {
 			return nil, err
 		}
@@ -172,8 +174,8 @@ func (s *Store) Reset() error {
 	return nil
 }
 
-func defaultInitializeCacheFactory() (CacheFactory, error) {
-	informerFactory, err := factory.NewCacheFactory()
+func defaultInitializeCacheFactory(d discovery.DiscoveryInterface) (CacheFactory, error) {
+	informerFactory, err := factory.NewCacheFactory(d)
 	if err != nil {
 		return nil, err
 	}

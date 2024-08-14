@@ -163,7 +163,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		s, err := sqlproxy.NewProxyStore(cols, cf, summaryCache, nil)
+		s, err := sqlproxy.NewProxyStore(cols, cf, summaryCache, nil, server.controllers.K8s.Discovery())
 		if err != nil {
 			panic(err)
 		}
