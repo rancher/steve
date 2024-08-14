@@ -51,9 +51,13 @@ generating a kubeconfig for a cluster, or installing an app from a catalog:
 POST /v1/catalog.cattle.io.clusterrepos/rancher-partner-charts?action=install
 ```
 
-#### `limit`
+### List-specific query parameters
 
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
+List requests (`/v1/{type}` and `/v1/{type}/{namespace}`) have additional
+parameters for filtering, sorting and pagination.
+
+
+#### `limit`
 
 Set the maximum number of results to retrieve from Kubernetes. The limit is
 passed on as a parameter to the Kubernetes request. The purpose of setting this
@@ -76,8 +80,6 @@ The default limit is 100000. To override the default, set `limit=-1`.
 
 #### `continue`
 
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
-
 Continue retrieving the next chunk of a partial list. The continue token is
 included in the response of a limited list and indicates that the result is
 partial. This token can then be used as a query parameter to retrieve the next
@@ -85,8 +87,6 @@ chunk. All chunks have been retrieved when the continue field in the response
 is empty.
 
 #### `filter`
-
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
 
 Filter results by a designated field. Filter keys use dot notation to denote
 the subfield of an object to filter on. The filter value is matched as a
@@ -156,8 +156,6 @@ The list can be negated to exclude results:
 
 #### `sort`
 
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
-
 Results can be sorted lexicographically by primary and secondary columns.
 
 Sorting by only a primary column, for example name:
@@ -193,8 +191,6 @@ Normal sort by name, reverse sort by creation time:
 ```
 
 #### `page`, `pagesize`, and `revision`
-
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
 
 Results can be batched by pages for easier display.
 
