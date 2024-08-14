@@ -212,6 +212,11 @@ Normal sort by name, reverse sort by creation time:
 /v1/{type}?sort=metadata.name,-metadata.creationTimestamp
 ```
 
+**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
+sorting is only supported for the set of attributes supported by
+filtering (see above).
+
+
 #### `page`, `pagesize`, and `revision`
 
 Results can be batched by pages for easier display.
