@@ -144,7 +144,8 @@ in [typeSpecificIndexFields](https://github.com/rancher/steve/blob/main/pkg/stor
 - the special string `metadata.fields[N]`, with N starting at 0, for all columns
 displayed by `kubectl get $TYPE`. For example `secrets` have `"metadata.fields[0]"`,
 `"metadata.fields[1]"` , `"metadata.fields[2]"`, and `"metadata.fields[3]"` respectively
-corresponding to `"name"`, `"type"`, `"data"`, and `"age"`
+corresponding to `"name"`, `"type"`, `"data"`, and `"age"`. For CRDs, these come from
+[Additional printer columns](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns)
 
 #### `projectsornamespaces`
 
