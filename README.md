@@ -51,11 +51,20 @@ generating a kubeconfig for a cluster, or installing an app from a catalog:
 POST /v1/catalog.cattle.io.clusterrepos/rancher-partner-charts?action=install
 ```
 
+### List-specific query parameters
+
+List requests (`/v1/{type}` and `/v1/{type}/{namespace}`) have additional
+parameters for filtering, sorting and pagination.
+
+Note that the exact meaning and behavior of those parameters may vary if
+Steve is used with SQLite caching of resources, which is configured when
+calling `server.New` via the `server.Options.SQLCache` boolean option.
+Meaning and behavior are the same unless otherwise specified.
+
 #### `limit`
 
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
-
-Set the maximum number of results to retrieve from Kubernetes. The limit is
+**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
+set the maximum number of results to retrieve from Kubernetes. The limit is
 passed on as a parameter to the Kubernetes request. The purpose of setting this
 limit is to prevent a huge response from overwhelming Steve and Rancher. For
 more information about setting limits, review the Kubernetes documentation on
@@ -68,15 +77,19 @@ the result set is partial, there is no guarantee that the result returned to
 the client is fully sorted across the entire list, only across the returned
 chunk.
 
-The returned response will include a `continue` token, which indicates that the
+**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
+set the maximum number of results to return from the SQLite cache.
+
+If both this parameter and `pagesize` are set, the smallest is taken.
+
+**In both cases**,
+the returned response will include a `continue` token, which indicates that the
 result is partial and must be used in the subsequent request to retrieve the
 next chunk.
 
 The default limit is 100000. To override the default, set `limit=-1`.
 
 #### `continue`
-
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
 
 Continue retrieving the next chunk of a partial list. The continue token is
 included in the response of a limited list and indicates that the result is
@@ -85,8 +98,6 @@ chunk. All chunks have been retrieved when the continue field in the response
 is empty.
 
 #### `filter`
-
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
 
 Filter results by a designated field. Filter keys use dot notation to denote
 the subfield of an object to filter on. The filter value is matched as a
@@ -117,12 +128,24 @@ Filters can be negated to exclude results:
 /v1/{type}?filter=metadata.name!=foo
 ```
 
-Arrays are searched for matching items. If any item in the array matches, the
+**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
+arrays are searched for matching items. If any item in the array matches, the
 item is included in the list.
 
 ```
 /v1/{type}?filter=spec.containers.image=alpine
 ```
+
+**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
+filtering is only supported for a subset of attributes:
+- `metadata.name`, `metadata.namespace` and `metadata.timestamp` for any resource kind
+- a short list of hardcoded attributes for a selection of specific types listed
+in [typeSpecificIndexFields](https://github.com/rancher/steve/blob/main/pkg/stores/sqlproxy/proxy_store.go#L52-L58)
+- the special string `metadata.fields[N]`, with N starting at 0, for all columns
+displayed by `kubectl get $TYPE`. For example `secrets` have `"metadata.fields[0]"`,
+`"metadata.fields[1]"` , `"metadata.fields[2]"`, and `"metadata.fields[3]"` respectively
+corresponding to `"name"`, `"type"`, `"data"`, and `"age"`. For CRDs, these come from
+[Additional printer columns](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns)
 
 #### `projectsornamespaces`
 
@@ -155,8 +178,6 @@ The list can be negated to exclude results:
 ```
 
 #### `sort`
-
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
 
 Results can be sorted lexicographically by primary and secondary columns.
 
@@ -192,9 +213,12 @@ Normal sort by name, reverse sort by creation time:
 /v1/{type}?sort=metadata.name,-metadata.creationTimestamp
 ```
 
-#### `page`, `pagesize`, and `revision`
+**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
+sorting is only supported for the set of attributes supported by
+filtering (see above).
 
-Only applicable to list requests (`/v1/{type}` and `/v1/{type}/{namespace}`).
+
+#### `page`, `pagesize`, and `revision`
 
 Results can be batched by pages for easier display.
 
@@ -209,24 +233,40 @@ Pages are one-indexed, so this is equivalent to
 ```
 /v1/{type}?pagesize=10&page=1
 ```
-To retrieve subsequent pages, the page number and the list revision number must
+
+**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
+to retrieve subsequent pages, the page number and the list revision number must
 be included in the request. This ensures the page will be retrieved from the
 cache, rather than making a new request to Kubernetes. If the revision number
 is omitted, a new fetch is performed in order to get the latest revision. The
 revision is included in the list response.
 
 ```
-/v1/{type}?pagezie=10&page=2&revision=107440
+/v1/{type}?pagesize=10&page=2&revision=107440
 ```
-
-The total number of pages and individual items are included in the list
-response as `pages` and `count` respectively.
-
-If a page number is out of bounds, an empty list is returned.
 
 `page` and `pagesize` can be used alongside the `limit` and `continue`
 parameters supported by Kubernetes. `limit` and `continue` are typically used
 for server-side chunking and do not guarantee results in any order.
+
+**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
+to retrieve subsequent pages, only the page number is necessary, and it
+will always return the latest version.
+```
+/v1/{type}?pagesize=10&page=2
+```
+
+If both `pagesize` and `limit` are set, the smallest is taken.
+
+If both `page` and `continue` are set, the result is the `page`-th page
+after the last result specified by `continue`.
+
+**In both cases**,
+the total number of pages and individual items are included in the list
+response as `pages` and `count` respectively.
+
+If a page number is out of bounds, an empty list is returned.
+
 
 Running the Steve server
 ------------------------
