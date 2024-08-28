@@ -1,13 +1,28 @@
 package common
 
 import (
+	"bytes"
+	"context"
+	"net/http"
 	"net/url"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/apiserver/pkg/urlbuilder"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/accesscontrol/fake"
+	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
 func Test_includeFields(t *testing.T) {
@@ -609,6 +624,376 @@ func Test_selfLink(t *testing.T) {
 			obj.SetName(test.resourceName)
 			obj.SetNamespace(test.resourceNamespace)
 			assert.Equal(t, test.want, selfLink(gvr, &obj), "did not get expected prefix for object")
+		})
+	}
+}
+
+func Test_formatterLinks(t *testing.T) {
+	t.Parallel()
+	type permissions struct {
+		hasGet    bool
+		hasUpdate bool
+		hasRemove bool
+	}
+	tests := []struct {
+		name         string
+		hasUser      bool
+		permissions  *permissions
+		schema       *types.APISchema
+		apiObject    types.APIObject
+		currentLinks map[string]string
+		wantLinks    map[string]string
+	}{
+		{
+			name: "no schema",
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+			},
+		},
+		{
+			name: "no gvr in schema",
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"some": "thing",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+			},
+		},
+		{
+			name: "api object has no accessor",
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID:     "example",
+				Object: struct{}{},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+			},
+		},
+		{
+			name: "no user info",
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+			},
+		},
+		{
+			name:    "no accessSet",
+			hasUser: true,
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+			},
+		},
+		{
+			name:        "no update/remove permissions",
+			hasUser:     true,
+			permissions: &permissions{},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
+			},
+		},
+		{
+			name:    "update but no remove permissions",
+			hasUser: true,
+			permissions: &permissions{
+				hasUpdate: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "/api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
+			},
+		},
+		{
+			name:    "remove but no update permissions",
+			hasUser: true,
+			permissions: &permissions{
+				hasRemove: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"remove":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
+			},
+		},
+		{
+			name:    "update and remove permissions",
+			hasUser: true,
+			permissions: &permissions{
+				hasUpdate: true,
+				hasRemove: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "/api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
+			},
+		},
+		{
+			name:    "update and remove permissions, but blocked",
+			hasUser: true,
+			permissions: &permissions{
+				hasUpdate: true,
+				hasRemove: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+						"disallowMethods": map[string]bool{
+							http.MethodPut:    true,
+							http.MethodDelete: true,
+						},
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "blocked",
+				"update":  "blocked",
+				"remove":  "blocked",
+				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			defaultUserInfo := user.DefaultInfo{
+				Name:   "test-user",
+				Groups: []string{"groups"},
+			}
+			ctrl := gomock.NewController(t)
+			asl := fake.NewMockAccessSetLookup(ctrl)
+			if test.permissions != nil {
+				gvr := attributes.GVR(test.schema)
+				meta, err := meta.Accessor(test.apiObject.Object)
+				accessSet := accesscontrol.AccessSet{}
+				require.NoError(t, err)
+				if test.permissions.hasUpdate {
+					accessSet.Add("update", gvr.GroupResource(), accesscontrol.Access{
+						Namespace:    meta.GetNamespace(),
+						ResourceName: meta.GetName(),
+					})
+				}
+				if test.permissions.hasRemove {
+					accessSet.Add("delete", gvr.GroupResource(), accesscontrol.Access{
+						Namespace:    meta.GetNamespace(),
+						ResourceName: meta.GetName(),
+					})
+				}
+				asl.EXPECT().AccessFor(&defaultUserInfo).Return(&accessSet)
+			} else {
+				asl.EXPECT().AccessFor(&defaultUserInfo).Return(nil).AnyTimes()
+			}
+			ctx := context.Background()
+			if test.hasUser {
+				ctx = request.WithUser(ctx, &defaultUserInfo)
+			}
+			httpRequest, err := http.NewRequestWithContext(ctx, "", "", bytes.NewBuffer([]byte{}))
+			require.NoError(t, err)
+			request := &types.APIRequest{
+				Request:    httpRequest,
+				URLBuilder: &urlbuilder.DefaultURLBuilder{},
+			}
+			resource := &types.RawResource{
+				Schema:    test.schema,
+				APIObject: test.apiObject,
+				Links:     test.currentLinks,
+			}
+			fmtter := formatter(nil, asl)
+			fmtter(request, resource)
+			require.Equal(t, test.wantLinks, resource.Links)
+
 		})
 	}
 }
