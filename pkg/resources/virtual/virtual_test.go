@@ -1,6 +1,9 @@
-package common_test
+package virtual_test
 
 import (
+	"github.com/rancher/steve/pkg/resources/virtual"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"strings"
 	"testing"
 
 	"github.com/rancher/steve/pkg/resources/virtual/common"
@@ -9,10 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/tools/cache"
 )
 
-func TestTransformCommonObjects(t *testing.T) {
+func TestTransformChain(t *testing.T) {
 	tests := []struct {
 		name             string
 		input            any
@@ -21,23 +23,6 @@ func TestTransformCommonObjects(t *testing.T) {
 		wantOutput       any
 		wantError        bool
 	}{
-		{
-			name: "signal error",
-			input: cache.DeletedFinalStateUnknown{
-				Key: "some-ns/some-name",
-			},
-			wantOutput: cache.DeletedFinalStateUnknown{
-				Key: "some-ns/some-name",
-			},
-			wantError: false,
-		},
-		{
-			name: "not unstructured",
-			input: map[string]any{
-				"somekey": "someval",
-			},
-			wantError: true,
-		},
 		{
 			name: "add summary + relationships + reserved fields",
 			hasSummary: &summary.SummarizedObject{
@@ -109,14 +94,14 @@ func TestTransformCommonObjects(t *testing.T) {
 			},
 		},
 		{
-			name: "add conditions + reserved fields",
+			name: "processable event",
 			input: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "test.cattle.io/v1",
-					"kind":       "TestResource",
+					"apiVersion": "/v1",
+					"kind":       "Event",
 					"metadata": map[string]interface{}{
-						"name":      "testobj",
-						"namespace": "test-ns",
+						"name":      "oswaldsFarm",
+						"namespace": "oswaldsNamespace",
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
@@ -128,15 +113,17 @@ func TestTransformCommonObjects(t *testing.T) {
 							},
 						},
 					},
+					"id":   "eventTest2id",
+					"type": "Gorniplatz",
 				},
 			},
 			wantOutput: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "test.cattle.io/v1",
-					"kind":       "TestResource",
+					"apiVersion": "/v1",
+					"kind":       "Event",
 					"metadata": map[string]interface{}{
-						"name":          "testobj",
-						"namespace":     "test-ns",
+						"name":          "oswaldsFarm",
+						"namespace":     "oswaldsNamespace",
 						"relationships": []any(nil),
 					},
 					"status": map[string]interface{}{
@@ -152,7 +139,40 @@ func TestTransformCommonObjects(t *testing.T) {
 							},
 						},
 					},
-					"id": "test-ns/testobj",
+					"id":    "oswaldsNamespace/oswaldsFarm",
+					"_id":   "eventTest2id",
+					"type":  "Gorniplatz",
+					"_type": "Gorniplatz",
+				},
+			},
+		},
+		{
+			name: "don't fix non-default-group event fields",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "palau.io/v1",
+					"kind":       "Event",
+					"metadata": map[string]interface{}{
+						"name":          "gregsFarm",
+						"namespace":     "gregsNamespace",
+						"relationships": []any(nil),
+					},
+					"id":   "eventTest1id",
+					"type": "Gorniplatz",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "palau.io/v1",
+					"kind":       "Event",
+					"metadata": map[string]interface{}{
+						"name":          "gregsFarm",
+						"namespace":     "gregsNamespace",
+						"relationships": []any(nil),
+					},
+					"id":   "gregsNamespace/gregsFarm",
+					"_id":  "eventTest1id",
+					"type": "Gorniplatz",
 				},
 			},
 		},
@@ -163,23 +183,18 @@ func TestTransformCommonObjects(t *testing.T) {
 				SummarizedObject: test.hasSummary,
 				Relationships:    test.hasRelationships,
 			}
-			df := common.DefaultFields{
-				Cache: &fakeCache,
-			}
+			tb := virtual.NewTransformBuilder(&fakeCache)
 			raw, isSignal, err := common.GetUnstructured(test.input)
-			if err != nil {
-				require.True(t, test.wantError)
-				return
-			}
-			if isSignal {
-				require.Equal(t, test.input, test.wantOutput)
-				return
-			}
-			output, err := df.GetTransform()(raw)
+			require.False(t, isSignal)
+			require.Nil(t, err)
+			apiVersion := raw.GetAPIVersion()
+			parts := strings.Split(apiVersion, "/")
+			gvk := schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: raw.GetKind()}
+			output, err := tb.GetTransformFunc(gvk)(test.input)
+			require.Equal(t, test.wantOutput, output)
 			if test.wantError {
 				require.Error(t, err)
 			} else {
-				require.Equal(t, test.wantOutput, output)
 				require.NoError(t, err)
 			}
 		})
