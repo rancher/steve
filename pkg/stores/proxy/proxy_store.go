@@ -505,6 +505,9 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 		return nil, nil, fmt.Errorf("metadata.resourceVersion is required for update")
 	}
 
+	gvk := attributes.GVK(schema)
+	input["apiVersion"], input["kind"] = gvk.ToAPIVersionAndKind()
+
 	opts := metav1.UpdateOptions{}
 	if err := decodeParams(apiOp, &opts); err != nil {
 		return nil, nil, err
