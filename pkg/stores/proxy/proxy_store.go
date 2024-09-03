@@ -444,7 +444,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 	input["apiVersion"], input["kind"] = gvk.ToAPIVersionAndKind()
 
 	buffer := WarningBuffer{}
-	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, ns, &buffer))
+	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, namespace, &buffer))
 	if err != nil {
 		return nil, nil, err
 	}
