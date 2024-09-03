@@ -422,13 +422,22 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 	}
 
 	name := types.Name(input)
-	ns := types.Namespace(input)
-	if name == "" && input.String("metadata", "generateName") == "" {
-		input.SetNested(schema.ID[0:1]+"-", "metadata", "generatedName")
+	namespace := types.Namespace(input)
+	generateName := input.String("metadata", "generateName")
+
+	if name == "" && generateName == "" {
+		input.SetNested(schema.ID[0:1]+"-", "metadata", "generateName")
 	}
-	if ns == "" && apiOp.Namespace != "" {
-		ns = apiOp.Namespace
-		input.SetNested(ns, "metadata", "namespace")
+
+	if namespace == "" {
+		if apiOp.Namespace == "" {
+			return nil, nil, validation.ErrorCode{
+				Status: http.StatusUnprocessableEntity,
+				Code:   "metadata.namespace or apiOp.namespace are required",
+			}
+		}
+
+		input.SetNested(apiOp.Namespace, "metadata", "namespace")
 	}
 
 	gvk := attributes.GVK(schema)
