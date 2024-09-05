@@ -13,15 +13,6 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/attributes"
-	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/partition"
-	"github.com/rancher/wrangler/v3/pkg/data"
-	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
-	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -34,9 +25,23 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/wrangler/v3/pkg/data"
+	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+	"github.com/rancher/wrangler/v3/pkg/summary"
+
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/attributes"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/partition"
 )
 
-const watchTimeoutEnv = "CATTLE_WATCH_TIMEOUT_SECONDS"
+const (
+	watchTimeoutEnv      = "CATTLE_WATCH_TIMEOUT_SECONDS"
+	errNamespaceRequired = "metadata.namespace or apiOp.namespace are required"
+)
 
 var (
 	lowerChars  = regexp.MustCompile("[a-z]+")
@@ -429,15 +434,19 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 		input.SetNested(schema.ID[0:1]+"-", "metadata", "generateName")
 	}
 
-	if namespace == "" {
-		if apiOp.Namespace == "" {
-			return nil, nil, validation.ErrorCode{
-				Status: http.StatusUnprocessableEntity,
-				Code:   "metadata.namespace or apiOp.namespace are required",
+	if attributes.Namespaced(schema) {
+		if namespace == "" {
+			if apiOp.Namespace == "" {
+				return nil, nil, validation.ErrorCode{
+					Status: http.StatusUnprocessableEntity,
+					Code:   errNamespaceRequired,
+				}
 			}
+
+			namespace = apiOp.Namespace
 		}
 
-		input.SetNested(apiOp.Namespace, "metadata", "namespace")
+		input.SetNested(namespace, "metadata", "namespace")
 	}
 
 	gvk := attributes.GVK(schema)
