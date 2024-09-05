@@ -1,20 +1,19 @@
 package proxy
 
 import (
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+
 	"github.com/pkg/errors"
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/client"
-	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
@@ -26,6 +25,11 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 	clientgotesting "k8s.io/client-go/testing"
+
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
+
+	"github.com/rancher/steve/pkg/client"
 )
 
 var c *watch.FakeWatcher
@@ -238,6 +242,53 @@ func TestCreate(t *testing.T) {
 					"kind":       "Secret",
 					"metadata": map[string]interface{}{
 						"name": "testing-secret",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing name",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version": "v1",
+							"kind":    "Secret",
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"namespace":    "testing-ns",
+							"generateName": "testing-gen-name",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"generateName": "testing-gen-name",
+						"namespace":    "testing-ns",
 					},
 				}},
 				warning: []types.Warning{},

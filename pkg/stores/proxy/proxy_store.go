@@ -40,7 +40,7 @@ import (
 
 const (
 	watchTimeoutEnv      = "CATTLE_WATCH_TIMEOUT_SECONDS"
-	errNamespaceRequired = "metadata.namespace or apiOp.namespace are required"
+	errNamespaceRequired = "metadata.namespace is required"
 )
 
 var (
