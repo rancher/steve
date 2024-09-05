@@ -9,21 +9,17 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -445,146 +441,6 @@ func returnErr(err error, c chan watch.Event) {
 	}
 }
 
-func (s *Store) listAndWatch(apiOp *types.APIRequest, client dynamic.ResourceInterface, schema *types.APISchema, w types.WatchRequest, result chan watch.Event) {
-	rev := w.Revision
-	if rev == "-1" || rev == "0" {
-		rev = ""
-	}
-
-	timeout := int64(60 * 30)
-	timeoutSetting := os.Getenv(watchTimeoutEnv)
-	if timeoutSetting != "" {
-		userSetTimeout, err := strconv.Atoi(timeoutSetting)
-		if err != nil {
-			logrus.Debugf("could not parse %s environment variable, error: %v", watchTimeoutEnv, err)
-		} else {
-			timeout = int64(userSetTimeout)
-		}
-	}
-	k8sClient, _ := metricsStore.Wrap(client, nil)
-	watcher, err := k8sClient.Watch(apiOp, metav1.ListOptions{
-		Watch:           true,
-		TimeoutSeconds:  &timeout,
-		ResourceVersion: rev,
-		LabelSelector:   w.Selector,
-	})
-	if err != nil {
-		returnErr(errors.Wrapf(err, "stopping watch for %s: %v", schema.ID, err), result)
-		return
-	}
-	defer watcher.Stop()
-	logrus.Debugf("opening watcher for %s", schema.ID)
-
-	eg, ctx := errgroup.WithContext(apiOp.Context())
-
-	go func() {
-		<-ctx.Done()
-		watcher.Stop()
-	}()
-
-	if s.notifier != nil {
-		eg.Go(func() error {
-			for rel := range s.notifier.OnInboundRelationshipChange(ctx, schema, apiOp.Namespace) {
-				obj, _, err := s.byID(apiOp, schema, rel.Namespace, rel.Name)
-				if err == nil {
-					rowToObject(obj)
-					result <- watch.Event{Type: watch.Modified, Object: obj}
-				} else {
-					returnErr(errors.Wrapf(err, "notifier watch error: %v", err), result)
-				}
-			}
-			return fmt.Errorf("closed")
-		})
-	}
-
-	eg.Go(func() error {
-		for event := range watcher.ResultChan() {
-			if event.Type == watch.Error {
-				if status, ok := event.Object.(*metav1.Status); ok {
-					returnErr(fmt.Errorf("event watch error: %s", status.Message), result)
-				} else {
-					logrus.Debugf("event watch error: could not decode event object %T", event.Object)
-				}
-				continue
-			}
-			if unstr, ok := event.Object.(*unstructured.Unstructured); ok {
-				rowToObject(unstr)
-			}
-			result <- event
-		}
-		return fmt.Errorf("closed")
-	})
-
-	_ = eg.Wait()
-	return
-}
-
-// WatchNames returns a channel of events filtered by an allowed set of names.
-// In plain kubernetes, if a user has permission to 'list' or 'watch' a defined set of resource names,
-// performing the list or watch will result in a Forbidden error, because the user does not have permission
-// to list *all* resources.
-// With this filter, the request can be performed successfully, and only the allowed resources will
-// be returned in watch.
-func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.Set[string]) (chan watch.Event, error) {
-	buffer := &WarningBuffer{}
-	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
-	if err != nil {
-		return nil, err
-	}
-	c, err := s.watch(apiOp, schema, w, adminClient)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(chan watch.Event)
-	go func() {
-		defer close(result)
-		for item := range c {
-			if item.Type == watch.Error {
-				if status, ok := item.Object.(*metav1.Status); ok {
-					logrus.Debugf("WatchNames received error: %s", status.Message)
-				} else {
-					logrus.Debugf("WatchNames received error: %v", item)
-				}
-				result <- item
-				continue
-			}
-
-			m, err := meta.Accessor(item.Object)
-			if err != nil {
-				logrus.Debugf("WatchNames cannot process unexpected object: %s", err)
-				continue
-			}
-
-			if names.Has(m.GetName()) {
-				result <- item
-			}
-		}
-	}()
-
-	return result, nil
-}
-
-// Watch returns a channel of events for a list or resource.
-func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
-	buffer := &WarningBuffer{}
-	client, err := s.clientGetter.TableClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
-	if err != nil {
-		return nil, err
-	}
-	return s.watch(apiOp, schema, w, client)
-}
-
-func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	result := make(chan watch.Event)
-	go func() {
-		s.listAndWatch(apiOp, client, schema, w, result)
-		logrus.Debugf("closing watcher for %s", schema.ID)
-		close(result)
-	}()
-	return result, nil
-}
-
 // Create creates a single object in the store.
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
 	var (
@@ -748,6 +604,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	if err != nil {
 		return nil, 0, "", err
 	}
+
 	gvk := attributes.GVK(schema)
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(gvk)...)
@@ -772,49 +629,34 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
-func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error) {
-	ctx, cancel := context.WithCancel(apiOp.Context())
+func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan struct{}, error) {
+	ctx := apiOp.Context()
+
+	// XXX: Why was this needed at all??
 	apiOp = apiOp.Clone().WithContext(ctx)
 
-	eg := errgroup.Group{}
-
-	result := make(chan watch.Event)
-
-	for _, partition := range partitions {
-		p := partition
-		eg.Go(func() error {
-			defer cancel()
-			c, err := s.watchByPartition(p, apiOp, schema, wr)
-
-			if err != nil {
-				return err
-			}
-			for i := range c {
-				result <- i
-			}
-			return nil
-		})
+	// warnings from inside the informer are discarded
+	buffer := WarningBuffer{}
+	client, err := s.clientGetter.TableAdminClient(apiOp, schema, "", &buffer)
+	if err != nil {
+		return nil, err
 	}
 
-	go func() {
-		defer close(result)
-		<-ctx.Done()
-		eg.Wait()
-		cancel()
-	}()
-
-	return result, nil
-}
-
-// watchByPartition returns a channel of events for a list or resource belonging to a specified partition
-func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest) (chan watch.Event, error) {
-	if partition.Passthrough {
-		return s.Watch(apiOp, schema, wr)
+	gvk := attributes.GVK(schema)
+	fields := getFieldsFromSchema(schema)
+	fields = append(fields, getFieldForGVK(gvk)...)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
+	client2 := &tablelistconvert.Client{ResourceInterface: client}
+	attrs2 := attributes.GVK(schema)
+	ns2 := attributes.Namespaced(schema)
+	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, client2, attrs2, ns2, controllerschema.IsListWatchable(schema))
+	if err != nil {
+		return nil, err
 	}
 
-	apiOp.Namespace = partition.Namespace
-	if partition.All {
-		return s.Watch(apiOp, schema, wr)
-	}
-	return s.WatchNames(apiOp, schema, wr, partition.Names)
+	debounceListener := newDebounceListener(5 * time.Second)
+	inf.Watch(ctx, debounceListener)
+	go debounceListener.Run(ctx)
+
+	return debounceListener.ch, nil
 }

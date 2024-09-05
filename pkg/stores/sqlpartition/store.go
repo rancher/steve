@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/attributes"
 	cachepartition "github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/stores/partition"
 )
@@ -143,8 +144,10 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	go func() {
 		defer close(response)
 
-		for i := range c {
-			response <- partition.ToAPIEvent(nil, schema, i)
+		for range c {
+			response <- types.APIEvent{
+				ResourceType: attributes.GVK(schema).String(),
+			}
 		}
 	}()
 
