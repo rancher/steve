@@ -518,18 +518,15 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 		input.SetNested(schema.ID[0:1]+"-", "metadata", "generateName")
 	}
 
-	if attributes.Namespaced(schema) {
-		if namespace == "" {
-			if apiOp.Namespace == "" {
-				return nil, nil, validation.ErrorCode{
-					Status: http.StatusUnprocessableEntity,
-					Code:   errNamespaceRequired,
-				}
+	if attributes.Namespaced(schema) && namespace == "" {
+		if apiOp.Namespace == "" {
+			return nil, nil, validation.ErrorCode{
+				Status: http.StatusUnprocessableEntity,
+				Code:   errNamespaceRequired,
 			}
-
-			namespace = apiOp.Namespace
 		}
 
+		namespace = apiOp.Namespace
 		input.SetNested(namespace, "metadata", "namespace")
 	}
 

@@ -864,6 +864,53 @@ func TestCreate(t *testing.T) {
 			},
 		},
 		{
+			name: "missing name",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version": "v1",
+							"kind":    "Secret",
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"namespace":    "testing-ns",
+							"generateName": "testing-gen-name",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"generateName": "testing-gen-name",
+						"namespace":    "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
 			name: "missing name / generateName",
 			input: input{
 				apiOp: &types.APIRequest{
