@@ -331,6 +331,13 @@ func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
 	return fields
 }
 
+<<<<<<< HEAD
+=======
+func keyFromGVK(gvk schema.GroupVersionKind) string {
+	return gvkKey(gvk.Group, gvk.Version, gvk.Kind)
+}
+
+>>>>>>> e8a76fe (Restore the gvkKey helper, add event fields.)
 func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
