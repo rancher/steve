@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/rest"
 	clientgotesting "k8s.io/client-go/testing"
 
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 
@@ -413,10 +414,10 @@ func TestCreate(t *testing.T) {
 			expected: expected{
 				value:   nil,
 				warning: nil,
-				err: validation.ErrorCode{
-					Code:   errNamespaceRequired,
-					Status: http.StatusUnprocessableEntity,
-				},
+				err: apierror.NewAPIError(
+					validation.InvalidBodyContent,
+					errNamespaceRequired,
+				),
 			},
 		},
 		{

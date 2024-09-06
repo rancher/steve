@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -436,10 +437,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 
 	if attributes.Namespaced(schema) && namespace == "" {
 		if apiOp.Namespace == "" {
-			return nil, nil, validation.ErrorCode{
-				Status: http.StatusUnprocessableEntity,
-				Code:   errNamespaceRequired,
-			}
+			return nil, nil, apierror.NewAPIError(validation.InvalidBodyContent, errNamespaceRequired)
 		}
 
 		namespace = apiOp.Namespace

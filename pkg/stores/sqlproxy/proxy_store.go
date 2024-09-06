@@ -520,10 +520,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 
 	if attributes.Namespaced(schema) && namespace == "" {
 		if apiOp.Namespace == "" {
-			return nil, nil, validation.ErrorCode{
-				Status: http.StatusUnprocessableEntity,
-				Code:   errNamespaceRequired,
-			}
+			return nil, nil, apierror.NewAPIError(validation.InvalidBodyContent, errNamespaceRequired)
 		}
 
 		namespace = apiOp.Namespace

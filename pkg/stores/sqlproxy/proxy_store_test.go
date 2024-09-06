@@ -3,13 +3,14 @@ package sqlproxy
 import (
 	"context"
 	"fmt"
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/pkg/errors"
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
@@ -1028,10 +1030,10 @@ func TestCreate(t *testing.T) {
 			expected: expected{
 				value:   nil,
 				warning: nil,
-				err: validation.ErrorCode{
-					Code:   errNamespaceRequired,
-					Status: http.StatusUnprocessableEntity,
-				},
+				err: apierror.NewAPIError(
+					validation.InvalidBodyContent,
+					errNamespaceRequired,
+				),
 			},
 		},
 		{
