@@ -2,7 +2,7 @@ module github.com/rancher/steve
 
 go 1.22.0
 
-toolchain go1.22.2
+toolchain go1.22.7
 
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
