@@ -62,11 +62,11 @@ calling `server.New` via the `server.Options.SQLCache` boolean option.
 Meaning and behavior are the same unless otherwise specified.
 
 Note that, if SQLite caching of resources is enabled, some of the data
-is encrypted at rest. In particular:
- - by default, Secrets are encrypted
+can be stored in disk, in either encrypted or plain text forms based on:
+ - by default, Secrets are always encrypted
  - if the environment variable `CATTLE_ENCRYPT_CACHE_ALL` is set to "true",
 all resources are encrypted
- - regardless of the setting, any filterable/sortable columns are stored
+ - regardless of the setting's value, any filterable/sortable columns are stored
 in plain text (see `filter` below for the exact list)
 
 #### `limit`
