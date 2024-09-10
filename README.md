@@ -61,6 +61,14 @@ Steve is used with SQLite caching of resources, which is configured when
 calling `server.New` via the `server.Options.SQLCache` boolean option.
 Meaning and behavior are the same unless otherwise specified.
 
+Note that, if SQLite caching of resources is enabled, some of the data
+can be stored in disk, in either encrypted or plain text forms based on:
+ - by default, Secrets are always encrypted
+ - if the environment variable `CATTLE_ENCRYPT_CACHE_ALL` is set to "true",
+all resources are encrypted
+ - regardless of the setting's value, any filterable/sortable columns are stored
+in plain text (see `filter` below for the exact list)
+
 #### `limit`
 
 **If SQLite caching is disabled** (`server.Options.SQLCache=false`),
