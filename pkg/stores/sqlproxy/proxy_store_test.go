@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
@@ -20,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/pkg/errors"
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
@@ -37,7 +41,7 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier
+//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./sql_informer_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer ByOptionsLister
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
@@ -47,6 +51,10 @@ type testFactory struct {
 	*client.Factory
 
 	fakeClient *fake.FakeDynamicClient
+}
+
+func (t *testFactory) TableClient(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	return t.fakeClient.Resource(schema2.GroupVersionResource{}).Namespace(namespace), nil
 }
 
 func TestNewProxyStore(t *testing.T) {
@@ -74,9 +82,9 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(c, nil)
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(c, nil)
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -97,7 +105,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -119,7 +127,7 @@ func TestNewProxyStore(t *testing.T) {
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -141,9 +149,9 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(scc, cg, rn, cf)
+			s, err := NewProxyStore(scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -173,6 +181,7 @@ func TestListByPartitions(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 			inf := &informer.Informer{
 				ByOptionsLister: bloi,
 			}
@@ -180,9 +189,10 @@ func TestListByPartitions(t *testing.T) {
 				ByOptionsLister: inf,
 			}
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -230,7 +240,8 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
@@ -245,11 +256,13 @@ func TestListByPartitions(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -309,11 +322,13 @@ func TestListByPartitions(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -372,11 +387,13 @@ func TestListByPartitions(t *testing.T) {
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -424,7 +441,8 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(factory.Cache{}, fmt.Errorf("error"))
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(factory.Cache{}, fmt.Errorf("error"))
 
 			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
@@ -439,6 +457,7 @@ func TestListByPartitions(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 			inf := &informer.Informer{
 				ByOptionsLister: bloi,
 			}
@@ -446,9 +465,10 @@ func TestListByPartitions(t *testing.T) {
 				ByOptionsLister: inf,
 			}
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
 			}
 			var partitions []partition.Partition
 			req := &types.APIRequest{
@@ -496,8 +516,9 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {"gvk", "specific", "fields"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
 			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
 			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
@@ -523,19 +544,22 @@ func TestReset(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 			nsc2 := factory.Cache{}
 			s := &Store{
-				namespaceCache: nsc,
-				clientGetter:   cg,
-				cacheFactory:   cf,
-				columnSetter:   cs,
-				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
+				namespaceCache:   nsc,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				columnSetter:     cs,
+				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
+				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
 			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nsc2, nil)
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nsc2, nil)
+			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset()
 			assert.Nil(t, err)
 			assert.Equal(t, nsc2, s.namespaceCache)
@@ -548,13 +572,15 @@ func TestReset(t *testing.T) {
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
-				columnSetter:   cs,
-				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				columnSetter:     cs,
+				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
+				transformBuilder: tb,
 			}
 
 			cf.EXPECT().Reset().Return(fmt.Errorf("error"))
@@ -569,13 +595,15 @@ func TestReset(t *testing.T) {
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
-				columnSetter:   cs,
-				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				columnSetter:     cs,
+				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
+				transformBuilder: tb,
 			}
 
 			cf.EXPECT().Reset().Return(nil)
@@ -591,13 +619,15 @@ func TestReset(t *testing.T) {
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsi,
-				clientGetter:   cg,
-				cacheFactory:   cf,
-				columnSetter:   cs,
-				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				columnSetter:     cs,
+				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
+				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
 
@@ -616,20 +646,23 @@ func TestReset(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
 
 			s := &Store{
-				namespaceCache: nsc,
-				clientGetter:   cg,
-				cacheFactory:   cf,
-				columnSetter:   cs,
-				cfInitializer:  func() (CacheFactory, error) { return cf, nil },
+				namespaceCache:   nsc,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				columnSetter:     cs,
+				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
+				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
 
 			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{"metadata", "labels[field.cattle.io/projectId]"}}, &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
+			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset()
 			assert.NotNil(t, err)
 		},
@@ -715,5 +748,359 @@ func receiveUntil(wc chan watch.Event, d time.Duration) error {
 		case <-timer.C:
 			return errors.New("timed out waiting to receiving objects from chan")
 		}
+	}
+}
+
+func TestCreate(t *testing.T) {
+	type input struct {
+		apiOp  *types.APIRequest
+		schema *types.APISchema
+		params types.APIObject
+	}
+
+	type expected struct {
+		value   *unstructured.Unstructured
+		warning []types.Warning
+		err     error
+	}
+
+	testCases := []struct {
+		name              string
+		namespace         string
+		input             input
+		expected          expected
+		createReactorFunc clientgotesting.ReactionFunc
+	}{
+		{
+			name: "creating resource - namespace scoped",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name":      "testing-secret",
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "testing-secret",
+						"namespace": "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "creating resource - cluster scoped",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": false,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name": "testing-secret",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name": "testing-secret",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing name",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version": "v1",
+							"kind":    "Secret",
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"namespace":    "testing-ns",
+							"generateName": "testing-gen-name",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"generateName": "testing-gen-name",
+						"namespace":    "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing name / generateName",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version": "v1",
+							"kind":    "Secret",
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"generateName": "t-",
+						"namespace":    "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing namespace in the params / should copy from apiOp",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Namespace: "testing-ns",
+					Request:   &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name": "testing-secret",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "testing-secret",
+						"namespace": "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing namespace - namespace scoped",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{},
+			},
+			expected: expected{
+				value:   nil,
+				warning: nil,
+				err: apierror.NewAPIError(
+					validation.InvalidBodyContent,
+					errNamespaceRequired,
+				),
+			},
+		},
+		{
+			name: "error response",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name":      "testing-secret",
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, apierrors.NewUnauthorized("sample reason")
+			},
+			expected: expected{
+				value:   nil,
+				warning: []types.Warning{},
+				err:     apierrors.NewUnauthorized("sample reason"),
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			testClientFactory, err := client.NewFactory(&rest.Config{}, false)
+			assert.Nil(t, err)
+
+			fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
+
+			if tt.createReactorFunc != nil {
+				fakeClient.PrependReactor("create", "*", tt.createReactorFunc)
+			}
+
+			testStore := Store{
+				clientGetter: &testFactory{Factory: testClientFactory,
+					fakeClient: fakeClient,
+				},
+			}
+
+			value, warning, err := testStore.Create(tt.input.apiOp, tt.input.schema, tt.input.params)
+
+			assert.Equal(t, tt.expected.value, value)
+			assert.Equal(t, tt.expected.warning, warning)
+			assert.Equal(t, tt.expected.err, err)
+		})
 	}
 }
