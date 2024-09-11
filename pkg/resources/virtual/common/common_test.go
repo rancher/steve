@@ -156,6 +156,79 @@ func TestTransformCommonObjects(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "fix event fields",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "testobj",
+						Namespace: "test-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "test.cattle.io/v1",
+						Kind:       "TestResource",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "success",
+					Transitioning: false,
+					Error:         false,
+					Message:       []string{"resource 1 rolled out", "resource 2 rolled out"},
+				},
+			},
+			hasRelationships: []summarycache.Relationship{
+				{
+					ToID:        "1345",
+					ToType:      "SomeType",
+					ToNamespace: "some-ns",
+					FromID:      "78901",
+					FromType:    "TestResource",
+					Rel:         "uses",
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Event",
+					"metadata": map[string]interface{}{
+						"name":      "gregsFarm",
+						"namespace": "gregsNamespace",
+					},
+					"id":   "eventTest1id",
+					"type": "Gorniplatz",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Event",
+					"metadata": map[string]interface{}{
+						"name":      "gregsFarm",
+						"namespace": "gregsNamespace",
+						"state": map[string]interface{}{
+							"name":          "success",
+							"error":         false,
+							"transitioning": false,
+							"message":       "resource 1 rolled out:resource 2 rolled out",
+						},
+						"relationships": []any{
+							map[string]any{
+								"toId":        "1345",
+								"toType":      "SomeType",
+								"toNamespace": "some-ns",
+								"fromId":      "78901",
+								"fromType":    "TestResource",
+								"rel":         "uses",
+							},
+						},
+					},
+					"id":    "gregsNamespace/gregsFarm",
+					"_id":   "eventTest1id",
+					"type":  "Gorniplatz",
+					"_type": "Gorniplatz",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

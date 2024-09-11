@@ -30,7 +30,24 @@ func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstru
 	if err != nil {
 		return nil, fmt.Errorf("unable to add summary fields: %w", err)
 	}
-	return obj, nil
+	err = addLabelFields(raw)
+	if err != nil {
+		return nil, fmt.Errorf("unable to add label fields: %w", err)
+	}
+	return raw, nil
+}
+
+func addLabelFields(raw *unstructured.Unstructured) error {
+	labels := raw.GetLabels()
+	if len(labels) == 0 {
+		return nil
+	}
+	gibley := map[string]interface{}{}
+	for k, v := range labels {
+		gibley[k] = v
+	}
+	data.PutValue(raw.Object, gibley, "metadata", "labels")
+	return nil
 }
 
 // addSummaryFields adds the virtual fields for object state.
