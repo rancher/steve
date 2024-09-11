@@ -3,7 +3,6 @@ package common
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/rancher/steve/pkg/summarycache"
@@ -76,25 +75,11 @@ func addIDField(raw *unstructured.Unstructured) *unstructured.Unstructured {
 }
 
 // updateTypeField replaces the _type field with the contents of the field named "type", if it exists
-func updateTypeField(raw *unstructured.Unstructured) *unstructured.Unstructured {
-	objectID := raw.GetName()
-	namespace := raw.GetNamespace()
-	if namespace != "" {
-		objectID = fmt.Sprintf("%s/%s", namespace, objectID)
-	}
-	v1, ok := raw.Object["type"]
-	if ok {
-		fmt.Fprintf(os.Stderr, "QQQ: type field: %s\n", v1)
-	}
-	v2, ok := raw.Object["_type"]
-	if ok {
-		fmt.Fprintf(os.Stderr, "QQQ: _type field: %s\n", v2)
-	}
+func fixTypeField(raw *unstructured.Unstructured) *unstructured.Unstructured {
 	currentTypeValue, ok := raw.Object["type"]
 	if ok {
 		raw.Object["_type"] = currentTypeValue
 	}
-	//raw.Object["id"] = objectID
 	return raw
 }
 
