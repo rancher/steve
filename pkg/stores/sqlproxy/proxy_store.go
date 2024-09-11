@@ -131,8 +131,7 @@ var (
 			{"status", "provider"},
 		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
-			{"status", "nodeName"},
-		},
+			{"status", "nodeName"}},
 		gvkKey("management.cattle.io", "v3", "NodePool"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
