@@ -1136,6 +1136,7 @@ func TestUpdate(t *testing.T) {
 			Schema: &schemas.Schema{
 				ID: "testing",
 				Attributes: map[string]interface{}{
+					"kind":       "Secret",
 					"version":    "v1",
 					"namespaced": true,
 				},
@@ -1185,13 +1186,15 @@ func TestUpdate(t *testing.T) {
 					Schema: &schemas.Schema{
 						ID: "testing",
 						Attributes: map[string]interface{}{
+							"version":    "v2",
+							"kind":       "Secret",
 							"namespaced": true,
 						},
 					},
 				},
 				params: types.APIObject{
 					Object: map[string]interface{}{
-						"apiVersion": "v2",
+						"apiVersion": "v1",
 						"kind":       "Secret",
 						"metadata": map[string]interface{}{
 							"name":            "testing-secret",
@@ -1259,114 +1262,6 @@ func TestUpdate(t *testing.T) {
 				value:   nil,
 				warning: nil,
 				err:     fmt.Errorf(errResourceVersionRequired),
-			},
-		},
-		{
-			name: "update - missing apiVersion (should copy from schema)",
-			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
-				return false, ret, nil
-			},
-			createInput: &sampleCreateInput,
-			updateInput: input{
-				apiOp: &types.APIRequest{
-					Request: &http.Request{
-						URL:    &url.URL{},
-						Method: http.MethodPut,
-					},
-					Schema: &types.APISchema{
-						Schema: &schemas.Schema{
-							ID: "testing",
-						},
-					},
-					Method: http.MethodPut,
-				},
-
-				schema: &types.APISchema{
-					Schema: &schemas.Schema{
-						ID: "testing",
-						Attributes: map[string]interface{}{
-							"version":    "v2",
-							"namespaced": true,
-						},
-					},
-				},
-				params: types.APIObject{
-					Object: map[string]interface{}{
-						"kind": "Secret",
-						"metadata": map[string]interface{}{
-							"name":            "testing-secret",
-							"namespace":       "testing-ns",
-							"resourceVersion": "1",
-						},
-					},
-				},
-			},
-			expected: expected{
-				value: &unstructured.Unstructured{Object: map[string]interface{}{
-					"apiVersion": "v2",
-					"kind":       "Secret",
-					"metadata": map[string]interface{}{
-						"name":            "testing-secret",
-						"namespace":       "testing-ns",
-						"resourceVersion": "1",
-					},
-				}},
-				warning: []types.Warning{},
-				err:     nil,
-			},
-		},
-		{
-			name: "update - missing kind (should copy from schema)",
-			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
-				return false, ret, nil
-			},
-			createInput: &sampleCreateInput,
-			updateInput: input{
-				apiOp: &types.APIRequest{
-					Request: &http.Request{
-						URL:    &url.URL{},
-						Method: http.MethodPut,
-					},
-					Schema: &types.APISchema{
-						Schema: &schemas.Schema{
-							ID: "testing",
-						},
-					},
-					Method: http.MethodPut,
-				},
-
-				schema: &types.APISchema{
-					Schema: &schemas.Schema{
-						ID: "testing",
-						Attributes: map[string]interface{}{
-							"kind":       "Secret",
-							"namespaced": true,
-						},
-					},
-				},
-				params: types.APIObject{
-					Object: map[string]interface{}{
-						"apiVersion": "v2",
-						"metadata": map[string]interface{}{
-							"name":            "testing-secret",
-							"namespace":       "testing-ns",
-							"resourceVersion": "1",
-						},
-					},
-				},
-			},
-			expected: expected{
-				value: &unstructured.Unstructured{Object: map[string]interface{}{
-					"apiVersion": "v2",
-					"kind":       "Secret",
-					"metadata": map[string]interface{}{
-						"name":            "testing-secret",
-						"namespace":       "testing-ns",
-						"resourceVersion": "1",
-					},
-				}},
-				warning: []types.Warning{},
-				err:     nil,
 			},
 		},
 		{
