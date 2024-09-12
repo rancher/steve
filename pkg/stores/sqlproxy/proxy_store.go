@@ -50,8 +50,9 @@ import (
 )
 
 const (
-	watchTimeoutEnv      = "CATTLE_WATCH_TIMEOUT_SECONDS"
-	errNamespaceRequired = "metadata.namespace or apiOp.namespace are required"
+	watchTimeoutEnv            = "CATTLE_WATCH_TIMEOUT_SECONDS"
+	errNamespaceRequired       = "metadata.namespace or apiOp.namespace are required"
+	errResourceVersionRequired = "metadata.resourceVersion is required for update"
 )
 
 var (
@@ -528,7 +529,15 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 	}
 
 	gvk := attributes.GVK(schema)
-	input["apiVersion"], input["kind"] = gvk.ToAPIVersionAndKind()
+	apiVersion, kind := gvk.ToAPIVersionAndKind()
+
+	if value, found := input["apiVersion"]; !found || value == "" {
+		input["apiVersion"] = apiVersion
+	}
+
+	if value, found := input["kind"]; !found || value == "" {
+		input["kind"] = kind
+	}
 
 	buffer := WarningBuffer{}
 	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, namespace, &buffer))
@@ -598,7 +607,18 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 
 	resourceVersion := input.String("metadata", "resourceVersion")
 	if resourceVersion == "" {
-		return nil, nil, fmt.Errorf("metadata.resourceVersion is required for update")
+		return nil, nil, fmt.Errorf(errResourceVersionRequired)
+	}
+
+	gvk := attributes.GVK(schema)
+	apiVersion, kind := gvk.ToAPIVersionAndKind()
+
+	if value, found := input["apiVersion"]; !found || value == "" {
+		input["apiVersion"] = apiVersion
+	}
+
+	if value, found := input["kind"]; !found || value == "" {
+		input["kind"] = kind
 	}
 
 	opts := metav1.UpdateOptions{}

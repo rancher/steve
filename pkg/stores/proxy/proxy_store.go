@@ -40,8 +40,9 @@ import (
 )
 
 const (
-	watchTimeoutEnv      = "CATTLE_WATCH_TIMEOUT_SECONDS"
-	errNamespaceRequired = "metadata.namespace is required"
+	watchTimeoutEnv            = "CATTLE_WATCH_TIMEOUT_SECONDS"
+	errNamespaceRequired       = "metadata.namespace is required"
+	errResourceVersionRequired = "metadata.resourceVersion is required for update"
 )
 
 var (
@@ -523,7 +524,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 
 	resourceVersion := input.String("metadata", "resourceVersion")
 	if resourceVersion == "" {
-		return nil, nil, fmt.Errorf("metadata.resourceVersion is required for update")
+		return nil, nil, fmt.Errorf(errResourceVersionRequired)
 	}
 
 	gvk := attributes.GVK(schema)
