@@ -516,7 +516,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 
 	resourceVersion := input.String("metadata", "resourceVersion")
 	if resourceVersion == "" {
-		return nil, nil, fmt.Errorf(errResourceVersionRequired)
+		return nil, nil, errors.New(errResourceVersionRequired)
 	}
 
 	gvk := attributes.GVK(schema)

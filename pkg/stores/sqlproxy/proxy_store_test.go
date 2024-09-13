@@ -1371,7 +1371,7 @@ func TestUpdate(t *testing.T) {
 			expected: expected{
 				value:   nil,
 				warning: nil,
-				err:     fmt.Errorf(errResourceVersionRequired),
+				err:     errors.New(errResourceVersionRequired),
 			},
 		},
 		{
@@ -1449,7 +1449,12 @@ func TestUpdate(t *testing.T) {
 
 			assert.Equal(t, tt.expected.value, value)
 			assert.Equal(t, tt.expected.warning, warning)
-			assert.Equal(t, tt.expected.err, err)
+
+			if tt.expected.err != nil {
+				assert.Equal(t, tt.expected.err.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
