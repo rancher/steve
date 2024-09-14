@@ -197,8 +197,8 @@ github.com/rancher/lasso v0.0.0-20240828170735-d79536cac289 h1:gbV7qLOcEgyTgep2o
 github.com/rancher/lasso v0.0.0-20240828170735-d79536cac289/go.mod h1:Efx/+BbH3ivmnTPLu5cA3Gc9wT5oyGS0LBcqEuYTx+A=
 github.com/rancher/norman v0.0.0-20240822182819-60ccfabc4ac5 h1:Z34NXcW0ymdpVBfd1R0vvqTXBh1gCOdPNFtB+RUahQw=
 github.com/rancher/norman v0.0.0-20240822182819-60ccfabc4ac5/go.mod h1:dyjfXBsNiroPWOdUZe7diUOUSLf6HQ/r2kEpwH/8zas=
-github.com/rancher/remotedialer v0.3.2 h1:kstZbRwPS5gPWpGg8VjEHT2poHtArs+Fc317YM8JCzU=
-github.com/rancher/remotedialer v0.3.2/go.mod h1:Ys004RpJuTLSm+k4aYUCoFiOOad37ubYev3TkOFg/5w=
+github.com/rancher/remotedialer v0.4.1 h1:jwOf2kPRjBBpSFofv1OuZHWaYHeC9Eb6/XgDvbkoTgc=
+github.com/rancher/remotedialer v0.4.1/go.mod h1:Ys004RpJuTLSm+k4aYUCoFiOOad37ubYev3TkOFg/5w=
 github.com/rancher/wrangler/v3 v3.0.0 h1:IHHCA+vrghJDPxjtLk4fmeSCFhNe9fFzLFj3m2B0YpA=
 github.com/rancher/wrangler/v3 v3.0.0/go.mod h1:Dfckuuq7MJk2JWVBDywRlZXMxEyPxHy4XqGrPEzu5Eg=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
