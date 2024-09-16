@@ -16,7 +16,6 @@ import (
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	watch "k8s.io/apimachinery/pkg/watch"
 )
 
 // MockPartitioner is a mock of Partitioner interface.
@@ -143,10 +142,10 @@ func (mr *MockUnstructuredStoreMockRecorder) Delete(arg0, arg1, arg2 any) *gomoc
 }
 
 // ListByPartitions mocks base method.
-func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
+func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByPartitions", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]unstructured.Unstructured)
+	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(string)
 	ret3, _ := ret[3].(error)
@@ -176,10 +175,10 @@ func (mr *MockUnstructuredStoreMockRecorder) Update(arg0, arg1, arg2, arg3 any) 
 }
 
 // WatchByPartitions mocks base method.
-func (m *MockUnstructuredStore) WatchByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 types.WatchRequest, arg3 []partition.Partition) (chan watch.Event, error) {
+func (m *MockUnstructuredStore) WatchByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 types.WatchRequest, arg3 []partition.Partition) (chan struct{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WatchByPartitions", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(chan watch.Event)
+	ret0, _ := ret[0].(chan struct{})
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -2,7 +2,7 @@ package sqlproxy
 
 import (
 	"context"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
@@ -11,8 +11,10 @@ import (
 var _ informer.Listener = (*debounceListener)(nil)
 
 type debounceListener struct {
+	lock     sync.Mutex
+	notified bool
+
 	debounceRate time.Duration
-	notified     atomic.Bool
 	ch           chan struct{}
 }
 
@@ -25,26 +27,32 @@ func newDebounceListener(debounceRate time.Duration) *debounceListener {
 }
 
 func (d *debounceListener) Run(ctx context.Context) {
-	d.ch <- struct{}{}
 	ticker := time.NewTicker(d.debounceRate)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			close(d.ch)
 			return
 		case <-ticker.C:
-			if !d.notified.Swap(false) {
-				continue
+			d.lock.Lock()
+			if d.notified {
+				d.ch <- struct{}{}
 			}
-			d.ch <- struct{}{}
+			d.notified = false
+			d.lock.Unlock()
 		}
 	}
 }
 
-func (d *debounceListener) Notify() {
-	d.notified.Store(true)
+func (d *debounceListener) NotifyNow() {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.ch <- struct{}{}
 }
 
-func (d *debounceListener) Close() {
-	close(d.ch)
+func (d *debounceListener) Notify() {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.notified = true
 }

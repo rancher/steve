@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -593,7 +594,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		return nil, 0, "", err
@@ -625,12 +626,21 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		return nil, 0, "", err
 	}
 
-	return list.Items, total, continueToken, nil
+	return list, total, continueToken, nil
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
 func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan struct{}, error) {
 	ctx := apiOp.Context()
+
+	revision := 0
+	if wr.Revision != "" {
+		parsedRevision, err := strconv.ParseInt(wr.Revision, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid revision %q: %w", wr.Revision, err)
+		}
+		revision = int(parsedRevision)
+	}
 
 	// XXX: Why was this needed at all??
 	apiOp = apiOp.Clone().WithContext(ctx)
@@ -655,7 +665,10 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 	}
 
 	debounceListener := newDebounceListener(5 * time.Second)
-	inf.Watch(ctx, debounceListener)
+	latestRevision := inf.Watch(ctx, debounceListener)
+	if latestRevision > revision {
+		debounceListener.NotifyNow()
+	}
 	go debounceListener.Run(ctx)
 
 	return debounceListener.ch, nil
