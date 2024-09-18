@@ -53,11 +53,11 @@ func DefaultSchemaTemplates(cf *client.Factory,
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
-			Formatter: formatters.DropHelmData,
+			Formatter: formatters.HandleHelmData,
 		},
 		{
 			ID:        "secret",
-			Formatter: formatters.DropHelmData,
+			Formatter: formatters.HandleHelmData,
 		},
 		{
 			ID:        "pod",
@@ -83,11 +83,11 @@ func DefaultSchemaTemplatesForStore(store types.Store,
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",
-			Formatter: formatters.DropHelmData,
+			Formatter: formatters.HandleHelmData,
 		},
 		{
 			ID:        "secret",
-			Formatter: formatters.DropHelmData,
+			Formatter: formatters.HandleHelmData,
 		},
 		{
 			ID:        "pod",
