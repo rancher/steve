@@ -384,6 +384,88 @@ func TestListByPartitions(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "client ListByPartitions() should detect listable-but-unwatchable schema, still work normally",
+		test: func(t *testing.T) {
+			nsi := NewMockCache(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			c := factory.Cache{
+				ByOptionsLister: inf,
+			}
+			s := &Store{
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+					// note: no watch here
+					"verbs": []string{"list"},
+				}},
+			}
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+			opts, err := listprocessor.ParseQuery(req, nil)
+			assert.Nil(t, err)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
+
+			// This tests that fields are being extracted from schema columns and the type specific fields map
+			// note also the watchable bool is expected to be false
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), false).Return(c, nil)
+
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
+			assert.Nil(t, err)
+			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, len(expectedItems), total)
+			assert.Equal(t, "", contToken)
+		},
+	})
+	tests = append(tests, testCase{
 		description: "client ListByPartitions() with CacheFor() error returned should returned an errors. Should pass fields",
 		test: func(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
