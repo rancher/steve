@@ -343,7 +343,7 @@ func TestCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "missing namespace in the params / should copy from apiOp",
+			name: "missing namespace in the params (should copy from apiOp)",
 			input: input{
 				apiOp: &types.APIRequest{
 					Schema: &types.APISchema{
@@ -466,7 +466,7 @@ func TestCreate(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			testClientFactory, err := client.NewFactory(&rest.Config{}, false)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 
@@ -485,6 +485,360 @@ func TestCreate(t *testing.T) {
 			assert.Equal(t, tt.expected.value, value)
 			assert.Equal(t, tt.expected.warning, warning)
 			assert.Equal(t, tt.expected.err, err)
+		})
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	type input struct {
+		apiOp  *types.APIRequest
+		schema *types.APISchema
+		params types.APIObject
+		id     string
+	}
+
+	type expected struct {
+		value   *unstructured.Unstructured
+		warning []types.Warning
+		err     error
+	}
+
+	sampleCreateInput := input{
+		apiOp: &types.APIRequest{
+			Request: &http.Request{
+				URL:    &url.URL{},
+				Method: http.MethodPost,
+			},
+			Schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "testing",
+				},
+			},
+			Method: http.MethodPost,
+		},
+		schema: &types.APISchema{
+			Schema: &schemas.Schema{
+				ID: "testing",
+				Attributes: map[string]interface{}{
+					"kind":       "Secret",
+					"version":    "v1",
+					"namespaced": true,
+				},
+			},
+		},
+		params: types.APIObject{
+			Object: map[string]interface{}{
+				"kind":       "Secret",
+				"apiVersion": "v1",
+				"metadata": map[string]interface{}{
+					"name":            "testing-secret",
+					"namespace":       "testing-ns",
+					"resourceVersion": "1",
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name               string
+		updateCallbackFunc clientgotesting.ReactionFunc
+		createInput        *input
+		updateInput        input
+		expected           expected
+	}{
+		{
+			name: "update - usual request",
+			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			createInput: &sampleCreateInput,
+			updateInput: input{
+				apiOp: &types.APIRequest{
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPut,
+					},
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Method: http.MethodPut,
+				},
+
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v2",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v2",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name":            "testing-secret",
+							"namespace":       "testing-ns",
+							"resourceVersion": "1",
+						},
+					},
+				},
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v2",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":            "testing-secret",
+						"namespace":       "testing-ns",
+						"resourceVersion": "1",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "update - different apiVersion and kind (params and schema) - should copy from schema",
+			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			createInput: &sampleCreateInput,
+			updateInput: input{
+				apiOp: &types.APIRequest{
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPut,
+					},
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Method: http.MethodPut,
+				},
+
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v2",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "ConfigMap",
+						"metadata": map[string]interface{}{
+							"name":            "testing-secret",
+							"namespace":       "testing-ns",
+							"resourceVersion": "1",
+						},
+					},
+				},
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v2",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":            "testing-secret",
+						"namespace":       "testing-ns",
+						"resourceVersion": "1",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "update - missing apiVersion and kind in params - should copy from schema",
+			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			createInput: &sampleCreateInput,
+			updateInput: input{
+				apiOp: &types.APIRequest{
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPost,
+					},
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Method: http.MethodPost,
+				},
+
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v2",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"name":            "testing-secret",
+							"namespace":       "testing-ns",
+							"resourceVersion": "1",
+						},
+					},
+				},
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v2",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":            "testing-secret",
+						"namespace":       "testing-ns",
+						"resourceVersion": "1",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "update - missing resource version",
+			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			updateInput: input{
+				apiOp: &types.APIRequest{
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPut,
+					},
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Method: http.MethodPut,
+				},
+
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name":      "testing-secret",
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			expected: expected{
+				value:   nil,
+				warning: nil,
+				err:     errors.New(errResourceVersionRequired),
+			},
+		},
+		{
+			name: "update - error request",
+			updateCallbackFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, apierrors.NewUnauthorized("sample reason")
+			},
+			createInput: &sampleCreateInput,
+			updateInput: input{
+				apiOp: &types.APIRequest{
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPut,
+					},
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Method: http.MethodPut,
+				},
+
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v2",
+						"metadata": map[string]interface{}{
+							"name":            "testing-secret",
+							"namespace":       "testing-ns",
+							"resourceVersion": "1",
+						},
+					},
+				},
+			},
+			expected: expected{
+				value:   nil,
+				warning: nil,
+				err:     apierrors.NewUnauthorized("sample reason"),
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			testClientFactory, err := client.NewFactory(&rest.Config{}, false)
+			assert.NoError(t, err)
+
+			fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
+
+			if tt.updateCallbackFunc != nil {
+				fakeClient.PrependReactor("update", "*", tt.updateCallbackFunc)
+			}
+
+			testStore := Store{
+				clientGetter: &testFactory{Factory: testClientFactory,
+					fakeClient: fakeClient,
+				},
+			}
+
+			// Creating the object first, so we can update it later (this function is not the SUT)
+			if tt.createInput != nil {
+				_, _, err = testStore.Create(tt.createInput.apiOp, tt.createInput.schema, tt.createInput.params)
+				assert.NoError(t, err)
+			}
+
+			value, warning, err := testStore.Update(tt.updateInput.apiOp, tt.updateInput.schema, tt.updateInput.params, tt.updateInput.id)
+
+			assert.Equal(t, tt.expected.value, value)
+			assert.Equal(t, tt.expected.warning, warning)
+
+			if tt.expected.err != nil {
+				assert.Equal(t, tt.expected.err.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
