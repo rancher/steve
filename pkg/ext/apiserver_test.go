@@ -103,6 +103,26 @@ func (t *testStore) Delete(ctx context.Context, userInfo user.Info, name string,
 	return nil
 }
 
+func allowAll(req *http.Request) (*authenticator.Response, bool, error) {
+	return &authenticator.Response{
+		User: &user.DefaultInfo{
+			Name:   "system:masters",
+			Groups: []string{"system:masters"},
+		},
+	}, true, nil
+}
+
+func TestExtensionAPIServerAuthenticationError(t *testing.T) {
+	store := &testStore{}
+	_, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+		// XXX: Find a way to get rid of this
+		opts.BindPort = 32002
+	})
+	defer cleanup()
+
+	require.Error(t, err)
+}
+
 func TestExtensionAPIServerAuthentication(t *testing.T) {
 	store := &testStore{}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
@@ -160,6 +180,7 @@ func TestExtensionAPIServer(t *testing.T) {
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32001
+		opts.Authentication.CustomAuthenticator = allowAll
 	})
 	defer cleanup()
 
@@ -217,7 +238,7 @@ func setupExtensionAPIServer(t *testing.T, store *testStore, optionSetter func(*
 	}
 	extensionAPIServer, err := NewExtensionAPIServer(scheme, codecs, opts)
 	if err != nil {
-		return nil, nil, err
+		return nil, func() {}, err
 	}
 
 	addToScheme(scheme)

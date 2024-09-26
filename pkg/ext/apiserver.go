@@ -114,6 +114,10 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
 
+	if !opts.Authentication.EnableBuiltIn && opts.Authentication.CustomAuthenticator == nil {
+		return nil, fmt.Errorf("at least one authenticator must be configured")
+	}
+
 	if opts.Authentication.EnableBuiltIn {
 		if err := recommendedOpts.Authentication.ApplyTo(&config.Authentication, config.SecureServing, config.OpenAPIConfig); err != nil {
 			return nil, fmt.Errorf("applyto authentication: %w", err)
