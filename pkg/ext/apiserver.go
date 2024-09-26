@@ -1,6 +1,7 @@
 package ext
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	authenticatorunion "k8s.io/apiserver/pkg/authentication/request/union"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -51,6 +53,14 @@ type ExtensionAPIServerOptions struct {
 	GetOpenAPIDefinitions             openapicommon.GetOpenAPIDefinitions
 	OpenAPIDefinitionNameReplacements map[string]string
 
+	Authentication AuthenticationOptions
+
+	BindPort int
+}
+
+type AuthenticationOptions struct {
+	// When turned off, reject requests, unless custom authentication passes
+	EnableBuiltIn       bool
 	CustomAuthenticator authenticator.RequestFunc
 }
 
@@ -78,12 +88,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	resolver := &request.RequestInfoFactory{APIPrefixes: sets.NewString("apis", "api"), GrouplessAPIPrefixes: sets.NewString("api")}
 	config := genericapiserver.NewRecommendedConfig(codecs)
 	config.RequestInfoResolver = resolver
-	if opts.CustomAuthenticator != nil {
-		config.Authentication = genericapiserver.AuthenticationInfo{
-			Authenticator: opts.CustomAuthenticator,
-		}
-	}
-	config.ExternalAddress = ":4444"
 
 	// XXX: kubectl doesn't show this, why is it here, do we need it?
 	// XXX: Understand what this is for
@@ -105,10 +109,27 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	// which will break kubectl explain
 	config.OpenAPIV3Config.Definitions = nil
 
-	recommendedOpts.SecureServing.BindPort = 4445
-	recommendedOpts.SecureServing.PermitPortSharing = true
+	recommendedOpts.SecureServing.BindPort = opts.BindPort
 	if err := recommendedOpts.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
-		return nil, fmt.Errorf("applyto secureservice: %w", err)
+		return nil, fmt.Errorf("applyto secureserving: %w", err)
+	}
+
+	if opts.Authentication.EnableBuiltIn {
+		if err := recommendedOpts.Authentication.ApplyTo(&config.Authentication, config.SecureServing, config.OpenAPIConfig); err != nil {
+			return nil, fmt.Errorf("applyto authentication: %w", err)
+		}
+	}
+	if opts.Authentication.CustomAuthenticator != nil {
+		if opts.Authentication.EnableBuiltIn {
+			config.Authentication.Authenticator = authenticatorunion.New(
+				opts.Authentication.CustomAuthenticator,
+				config.Authentication.Authenticator,
+			)
+		} else {
+			config.Authentication = genericapiserver.AuthenticationInfo{
+				Authenticator: opts.Authentication.CustomAuthenticator,
+			}
+		}
 	}
 
 	completedConfig := config.Complete()
@@ -142,7 +163,7 @@ func (s *ExtensionAPIServer) InstallResourceStore(store ResourceStore) {
 	s.apiGroups[store.gvk.Group] = apiGroup
 }
 
-func (s *ExtensionAPIServer) Prepare() error {
+func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) error {
 	for _, apiGroup := range s.apiGroups {
 		err := s.genericAPIServer.InstallAPIGroup(&apiGroup)
 		if err != nil {
@@ -151,6 +172,13 @@ func (s *ExtensionAPIServer) Prepare() error {
 	}
 	prepared := s.genericAPIServer.PrepareRun()
 	s.handler = prepared.Handler
+
+	readyCh <- struct{}{}
+
+	if err := prepared.Run(ctx.Done()); err != nil {
+		return err
+	}
+
 	return nil
 }
 

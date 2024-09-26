@@ -105,11 +105,17 @@ func (t *testStore) Delete(ctx context.Context, userInfo user.Info, name string,
 
 func TestExtensionAPIServerAuthentication(t *testing.T) {
 	store := &testStore{}
-	extensionAPIServer, err := setupExtensionAPIServer(store, func(opts *ExtensionAPIServerOptions) {
-		opts.CustomAuthenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
-			return nil, false, nil
-		})
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+		// XXX: Find a way to get rid of this
+		opts.BindPort = 32000
+		opts.Authentication = AuthenticationOptions{
+			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+				return nil, false, nil
+			}),
+		}
 	})
+	defer cleanup()
+
 	require.NoError(t, err)
 
 	paths := []string{
@@ -151,13 +157,19 @@ func TestExtensionAPIServerAuthentication(t *testing.T) {
 
 func TestExtensionAPIServer(t *testing.T) {
 	store := &testStore{}
-	extensionAPIServer, err := setupExtensionAPIServer(store, nil)
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+		// XXX: Find a way to get rid of this
+		opts.BindPort = 32001
+	})
+	defer cleanup()
+
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/apis", nil)
 	w := httptest.NewRecorder()
 
 	extensionAPIServer.ServeHTTP(w, req)
+
 	resp := w.Result()
 	body, _ := io.ReadAll(resp.Body)
 
@@ -192,7 +204,7 @@ func TestExtensionAPIServer(t *testing.T) {
 	require.Equal(t, expected, apiGroupList)
 }
 
-func setupExtensionAPIServer(store *testStore, optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, error) {
+func setupExtensionAPIServer(t *testing.T, store *testStore, optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
 	codecs := serializer.NewCodecFactory(scheme)
 	opts := ExtensionAPIServerOptions{
 		GetOpenAPIDefinitions: getOpenAPIDefinitions,
@@ -205,7 +217,7 @@ func setupExtensionAPIServer(store *testStore, optionSetter func(*ExtensionAPISe
 	}
 	extensionAPIServer, err := NewExtensionAPIServer(scheme, codecs, opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	addToScheme(scheme)
@@ -213,10 +225,23 @@ func setupExtensionAPIServer(store *testStore, optionSetter func(*ExtensionAPISe
 	testResourceStore := MakeResourceStore("testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
 	extensionAPIServer.InstallResourceStore(testResourceStore)
 
-	err = extensionAPIServer.Prepare()
-	if err != nil {
-		return nil, err
+	ctx, cancel := context.WithCancel(context.Background())
+
+	stoppedCh := make(chan error, 1)
+	readyCh := make(chan struct{}, 1)
+	defer close(readyCh)
+	go func() {
+		err := extensionAPIServer.Run(ctx, readyCh)
+		stoppedCh <- err
+		close(stoppedCh)
+	}()
+	<-readyCh
+
+	cleanup := func() {
+		cancel()
+		err := <-stoppedCh
+		require.NoError(t, err)
 	}
 
-	return extensionAPIServer, nil
+	return extensionAPIServer, cleanup, nil
 }
