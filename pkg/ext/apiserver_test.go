@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -17,6 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 )
 
 var (
@@ -112,23 +117,21 @@ func allowAll(req *http.Request) (*authenticator.Response, bool, error) {
 	}, true, nil
 }
 
-func TestExtensionAPIServerAuthenticationError(t *testing.T) {
-	store := &testStore{}
-	_, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32002
-	})
-	defer cleanup()
-
-	require.Error(t, err)
-}
-
 func TestExtensionAPIServerAuthentication(t *testing.T) {
+	clientGetter := kubeconfig.GetNonInteractiveClientConfig(os.Getenv("KUBECONFIG"))
+	restConfig, err := clientGetter.ClientConfig()
+	require.NoError(t, err)
+
+	client, err := kubernetes.NewForConfig(restConfig)
+	require.NoError(t, err)
+
 	store := &testStore{}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
+		opts.Client = client
 		opts.Authentication = AuthenticationOptions{
+			EnableBuiltIn: true,
 			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
 				return nil, false, nil
 			}),
@@ -173,6 +176,8 @@ func TestExtensionAPIServerAuthentication(t *testing.T) {
 			require.Equal(t, expectedStatus.ErrStatus, responseStatus)
 		})
 	}
+
+	time.Sleep(10 * time.Minute)
 }
 
 func TestExtensionAPIServer(t *testing.T) {
@@ -225,7 +230,12 @@ func TestExtensionAPIServer(t *testing.T) {
 	require.Equal(t, expected, apiGroupList)
 }
 
-func setupExtensionAPIServer(t *testing.T, store *testStore, optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
+func setupExtensionAPIServer[
+	T Ptr[DerefT],
+	DerefT any,
+	TList Ptr[DerefTList],
+	DerefTList any,
+](t *testing.T, store Store[T, TList], optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
 	codecs := serializer.NewCodecFactory(scheme)
 	opts := ExtensionAPIServerOptions{
 		GetOpenAPIDefinitions: getOpenAPIDefinitions,

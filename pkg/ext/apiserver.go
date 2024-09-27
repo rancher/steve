@@ -20,6 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/kubernetes"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
@@ -54,6 +55,8 @@ type ExtensionAPIServerOptions struct {
 	OpenAPIDefinitionNameReplacements map[string]string
 
 	Authentication AuthenticationOptions
+
+	Client kubernetes.Interface
 
 	BindPort int
 }
@@ -119,12 +122,23 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	}
 
 	if opts.Authentication.EnableBuiltIn {
-		if err := recommendedOpts.Authentication.ApplyTo(&config.Authentication, config.SecureServing, config.OpenAPIConfig); err != nil {
+		if opts.Client == nil {
+			return nil, fmt.Errorf("client required for builtin auth")
+		}
+
+		if err := ApplyTo(
+			opts.Client,
+			recommendedOpts.Authentication,
+			&config.Authentication,
+			config.SecureServing,
+			config.OpenAPIConfig,
+		); err != nil {
 			return nil, fmt.Errorf("applyto authentication: %w", err)
 		}
 	}
 	if opts.Authentication.CustomAuthenticator != nil {
 		if opts.Authentication.EnableBuiltIn {
+			fmt.Println("custom and builtin")
 			config.Authentication.Authenticator = authenticatorunion.New(
 				opts.Authentication.CustomAuthenticator,
 				config.Authentication.Authenticator,
@@ -175,6 +189,7 @@ func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) err
 		}
 	}
 	prepared := s.genericAPIServer.PrepareRun()
+	// XXX: Mutex / atomic probably
 	s.handler = prepared.Handler
 
 	readyCh <- struct{}{}
