@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 )
@@ -61,6 +62,7 @@ type delegate[
 	gvr          schema.GroupVersionResource
 	singularName string
 	store        Store[T, TList]
+	authorizer   authorizer.Authorizer
 }
 
 // New implements [rest.Storage]
@@ -90,15 +92,13 @@ func (s *delegate[T, DerefT, TList, DerefTList]) NewList() runtime.Object {
 }
 
 // List implements [rest.Lister]
-func (s *delegate[T, DerefT, TList, DerefTList]) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
-	userInfo, ok := request.UserFrom(ctx)
-	if !ok {
-		return nil, fmt.Errorf("missing user info")
+func (s *delegate[T, DerefT, TList, DerefTList]) List(parentCtx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, err
 	}
-
 	// XXX: metainternalversion to metav1
-
-	return s.store.List(ctx, userInfo, &metav1.ListOptions{})
+	return s.store.List(ctx, &metav1.ListOptions{})
 }
 
 // ConvertToTable implements [rest.Lister]
@@ -113,31 +113,31 @@ func (s *delegate[T, DerefT, TList, DerefTList]) ConvertToTable(ctx context.Cont
 }
 
 // Get implements [rest.Getter]
-func (s *delegate[T, DerefT, TList, DerefTList]) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	userInfo, ok := request.UserFrom(ctx)
-	if !ok {
-		return nil, fmt.Errorf("missing user info")
+func (s *delegate[T, DerefT, TList, DerefTList]) Get(parentCtx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, err
 	}
 
-	return s.store.Get(ctx, userInfo, name, options)
+	return s.store.Get(ctx, name, options)
 }
 
 // Delete implements [rest.GracefulDeleter]
-func (s *delegate[T, DerefT, TList, DerefTList]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
-	userInfo, ok := request.UserFrom(ctx)
-	if !ok {
-		return nil, true, fmt.Errorf("missing user info")
+func (s *delegate[T, DerefT, TList, DerefTList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, false, err
 	}
 
-	err := s.store.Delete(ctx, userInfo, name, options)
+	err = s.store.Delete(ctx, name, options)
 	return nil, true, err
 }
 
 // Create implements [rest.Creater]
-func (s *delegate[T, DerefT, TList, DerefTList]) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
-	userInfo, ok := request.UserFrom(ctx)
-	if !ok {
-		return nil, fmt.Errorf("missing user info")
+func (s *delegate[T, DerefT, TList, DerefTList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	if createValidation != nil {
@@ -147,12 +147,12 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Create(ctx context.Context, obj
 		}
 	}
 
-	return s.store.Create(ctx, userInfo, obj.(T), options)
+	return s.store.Create(ctx, obj.(T), options)
 }
 
 // Update implements [rest.Updater]
 func (s *delegate[T, DerefT, TList, DerefTList]) Update(
-	ctx context.Context,
+	parentCtx context.Context,
 	name string,
 	objInfo rest.UpdatedObjectInfo,
 	createValidation rest.ValidateObjectFunc,
@@ -160,12 +160,12 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Update(
 	forceAllowCreate bool,
 	options *metav1.UpdateOptions,
 ) (runtime.Object, bool, error) {
-	userInfo, ok := request.UserFrom(ctx)
-	if !ok {
-		return nil, true, fmt.Errorf("missing user info")
+	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, false, err
 	}
 
-	oldObj, err := s.store.Get(ctx, userInfo, name, &metav1.GetOptions{})
+	oldObj, err := s.store.Get(ctx, name, &metav1.GetOptions{})
 	if err != nil {
 		// XXX: Do we want to support creation??
 		return nil, false, err
@@ -188,7 +188,7 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Update(
 		}
 	}
 
-	newT, err = s.store.Update(ctx, userInfo, newT, options)
+	newT, err = s.store.Update(ctx, newT, options)
 	if err != nil {
 		return nil, false, err
 	}
@@ -208,17 +208,17 @@ func (w *watcher) ResultChan() <-chan watch.Event {
 	return w.ch
 }
 
-func (s *delegate[T, DerefT, TList, DerefTList]) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
-	userInfo, ok := request.UserFrom(ctx)
-	if !ok {
-		return nil, fmt.Errorf("missing user info")
+func (s *delegate[T, DerefT, TList, DerefTList]) Watch(parentCtx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	w := &watcher{
 		ch: make(chan watch.Event),
 	}
 	go func() {
-		eventCh, err := s.store.Watch(ctx, userInfo, &metav1.ListOptions{})
+		eventCh, err := s.store.Watch(ctx, &metav1.ListOptions{})
 		if err != nil {
 			return
 		}
@@ -262,4 +262,18 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Kind() string {
 // resource name. (eg: token => tokens)
 func (s *delegate[T, DerefT, TList, DerefTList]) GetSingularName() string {
 	return s.singularName
+}
+
+func (s *delegate[T, DerefT, TList, DerefTList]) makeContext(parentCtx context.Context) (Context, error) {
+	userInfo, ok := request.UserFrom(parentCtx)
+	if !ok {
+		return Context{}, fmt.Errorf("missing user info")
+	}
+
+	ctx := Context{
+		Context:    parentCtx,
+		User:       userInfo,
+		Authorizer: s.authorizer,
+	}
+	return ctx, nil
 }

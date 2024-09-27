@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
@@ -84,37 +84,41 @@ func (t *TestType) DeepCopyObject() runtime.Object {
 type testStore struct {
 }
 
-func (t *testStore) Create(ctx context.Context, userInfo user.Info, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
+func (t *testStore) Create(ctx Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
 	return &testTypeFixture, nil
 }
 
-func (t *testStore) Update(ctx context.Context, userInfo user.Info, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
+func (t *testStore) Update(ctx Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
 	return &testTypeFixture, nil
 }
 
-func (t *testStore) Get(ctx context.Context, userInfo user.Info, name string, opts *metav1.GetOptions) (*TestType, error) {
+func (t *testStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
 	return &testTypeFixture, nil
 }
 
-func (t *testStore) List(ctx context.Context, userInfo user.Info, opts *metav1.ListOptions) (*TestTypeList, error) {
+func (t *testStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
 	return &testTypeListFixture, nil
 }
 
-func (t *testStore) Watch(ctx context.Context, userInfo user.Info, opts *metav1.ListOptions) (<-chan WatchEvent[*TestType], error) {
+func (t *testStore) Watch(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[*TestType], error) {
 	return nil, nil
 }
 
-func (t *testStore) Delete(ctx context.Context, userInfo user.Info, name string, opts *metav1.DeleteOptions) error {
+func (t *testStore) Delete(ctx Context, name string, opts *metav1.DeleteOptions) error {
 	return nil
 }
 
-func allowAll(req *http.Request) (*authenticator.Response, bool, error) {
+func authAsAdmin(req *http.Request) (*authenticator.Response, bool, error) {
 	return &authenticator.Response{
 		User: &user.DefaultInfo{
 			Name:   "system:masters",
 			Groups: []string{"system:masters"},
 		},
 	}, true, nil
+}
+
+func authzAllowAll(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
+	return authorizer.DecisionAllow, "", nil
 }
 
 func TestExtensionAPIServerAuthentication(t *testing.T) {
@@ -130,6 +134,7 @@ func TestExtensionAPIServerAuthentication(t *testing.T) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
 		opts.Client = client
+		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authentication = AuthenticationOptions{
 			EnableBuiltIn: true,
 			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -176,8 +181,6 @@ func TestExtensionAPIServerAuthentication(t *testing.T) {
 			require.Equal(t, expectedStatus.ErrStatus, responseStatus)
 		})
 	}
-
-	time.Sleep(10 * time.Minute)
 }
 
 func TestExtensionAPIServer(t *testing.T) {
@@ -185,7 +188,8 @@ func TestExtensionAPIServer(t *testing.T) {
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32001
-		opts.Authentication.CustomAuthenticator = allowAll
+		opts.Authentication.CustomAuthenticator = authAsAdmin
+		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	defer cleanup()
 
@@ -237,6 +241,7 @@ func setupExtensionAPIServer[
 	DerefTList any,
 ](t *testing.T, store Store[T, TList], optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
 	codecs := serializer.NewCodecFactory(scheme)
+
 	opts := ExtensionAPIServerOptions{
 		GetOpenAPIDefinitions: getOpenAPIDefinitions,
 		OpenAPIDefinitionNameReplacements: map[string]string{
@@ -253,7 +258,7 @@ func setupExtensionAPIServer[
 
 	addToScheme(scheme)
 
-	testResourceStore := MakeResourceStore("testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+	testResourceStore := MakeResourceStore("testtypes", "testtype", testTypeGV.WithKind("TestType"), opts.Authorization, store)
 	extensionAPIServer.InstallResourceStore(testResourceStore)
 
 	ctx, cancel := context.WithCancel(context.Background())

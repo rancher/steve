@@ -87,14 +87,12 @@ func (e emptyAddresses) ServerAddressByClientCIDRs(clientIP net.IP) []metav1.Ser
 	return nil
 }
 
-type theKey struct{}
-
-var (
-	myKey = theKey{}
-)
-
 func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactory, opts ExtensionAPIServerOptions) (*ExtensionAPIServer, error) {
 	recommendedOpts := genericoptions.NewRecommendedOptions("", codecs.LegacyCodec())
+
+	if opts.Authorization == nil {
+		return nil, fmt.Errorf("no authorization provided")
+	}
 
 	// XXX: Need to call config.Complete() -> This sets the resolver for example
 
@@ -233,7 +231,7 @@ func MakeResourceStore[
 	DerefT any,
 	TList Ptr[DerefTList],
 	DerefTList any,
-](resourceName string, singularName string, gvk schema.GroupVersionKind, store Store[T, TList]) ResourceStore {
+](resourceName string, singularName string, gvk schema.GroupVersionKind, authorizer authorizer.Authorizer, store Store[T, TList]) ResourceStore {
 	s := &delegate[T, DerefT, TList, DerefTList]{
 		singularName: singularName,
 		gvk:          gvk,
@@ -242,7 +240,8 @@ func MakeResourceStore[
 			Version:  gvk.Version,
 			Resource: resourceName,
 		},
-		store: store,
+		authorizer: authorizer,
+		store:      store,
 	}
 
 	resourceStore := ResourceStore{

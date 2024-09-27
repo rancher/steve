@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/client-go/kubernetes"
 	certutil "k8s.io/client-go/util/cert"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -166,8 +167,8 @@ type authTestStore struct {
 	userCh chan user.Info
 }
 
-func (t *authTestStore) List(ctx context.Context, userInfo user.Info, opts *metav1.ListOptions) (*TestTypeList, error) {
-	t.userCh <- userInfo
+func (t *authTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
+	t.userCh <- ctx.User
 	return &testTypeListFixture, nil
 }
 
@@ -252,6 +253,7 @@ func TestAuthentication(t *testing.T) {
 
 	ok := wrbacv1.New(controllerFactory)
 	accessStore := accesscontrol.NewAccessStore(context.Background(), true, ok)
+	_ = accessStore
 
 	err = controllerFactory.Start(ctx, 4)
 	require.NoError(t, err)
@@ -267,7 +269,7 @@ func TestAuthentication(t *testing.T) {
 		opts.Authentication = AuthenticationOptions{
 			EnableBuiltIn: true,
 		}
-		opts.Authorization = NewAccessSetAuthorizer(accessStore)
+		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	defer cleanup()
 
@@ -372,10 +374,10 @@ func TestAuthentication(t *testing.T) {
 				// Eventually because the cache for auth might not be synced yet
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
 					resp, err := httpClient.Do(req)
-					require.NoError(c, err)
+					require.NoError(t, err)
 					defer resp.Body.Close()
 
-					require.Equal(c, test.expectedStatusCode, resp.StatusCode)
+					require.Equal(t, test.expectedStatusCode, resp.StatusCode)
 				}, 5*time.Second, 110*time.Millisecond)
 
 				if test.expectedUser != nil {
