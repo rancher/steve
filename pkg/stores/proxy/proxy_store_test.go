@@ -2,18 +2,18 @@ package proxy
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/client"
-	"github.com/rancher/wrangler/v2/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -22,6 +22,12 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 	clientgotesting "k8s.io/client-go/testing"
+
+	"github.com/rancher/apiserver/pkg/apierror"
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/client"
+	"github.com/rancher/wrangler/v2/pkg/schemas"
+	"github.com/rancher/wrangler/v2/pkg/schemas/validation"
 )
 
 var c *watch.FakeWatcher
@@ -30,6 +36,14 @@ type testFactory struct {
 	*client.Factory
 
 	fakeClient *fake.FakeDynamicClient
+}
+
+func (t *testFactory) TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	return t.fakeClient.Resource(schema2.GroupVersionResource{}), nil
+}
+
+func (t *testFactory) TableClient(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	return t.fakeClient.Resource(schema2.GroupVersionResource{}).Namespace(namespace), nil
 }
 
 func TestWatchNamesErrReceive(t *testing.T) {
@@ -80,10 +94,6 @@ func TestByNames(t *testing.T) {
 	assert.Nil(t, warn)
 }
 
-func (t *testFactory) TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
-	return t.fakeClient.Resource(schema2.GroupVersionResource{}), nil
-}
-
 func receiveUntil(wc chan watch.Event, d time.Duration) error {
 	timer := time.NewTicker(d)
 	defer timer.Stop()
@@ -119,5 +129,359 @@ func receiveUntil(wc chan watch.Event, d time.Duration) error {
 		case <-timer.C:
 			return errors.New("timed out waiting to receiving objects from chan")
 		}
+	}
+}
+
+func TestCreate(t *testing.T) {
+	type input struct {
+		apiOp  *types.APIRequest
+		schema *types.APISchema
+		params types.APIObject
+	}
+
+	type expected struct {
+		value   *unstructured.Unstructured
+		warning []types.Warning
+		err     error
+	}
+
+	testCases := []struct {
+		name              string
+		namespace         string
+		input             input
+		expected          expected
+		createReactorFunc clientgotesting.ReactionFunc
+	}{
+		{
+			name: "creating resource - namespace scoped",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name":      "testing-secret",
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "testing-secret",
+						"namespace": "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "creating resource - cluster scoped",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": false,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name": "testing-secret",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name": "testing-secret",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing name",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version": "v1",
+							"kind":    "Secret",
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"namespace":    "testing-ns",
+							"generateName": "testing-gen-name",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"generateName": "testing-gen-name",
+						"namespace":    "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing name / generateName",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version": "v1",
+							"kind":    "Secret",
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"generateName": "t-",
+						"namespace":    "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing namespace in the params / should copy from apiOp",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Namespace: "testing-ns",
+					Request:   &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name": "testing-secret",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return false, ret, nil
+			},
+			expected: expected{
+				value: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "testing-secret",
+						"namespace": "testing-ns",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "missing namespace - namespace scoped",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{},
+			},
+			expected: expected{
+				value:   nil,
+				warning: nil,
+				err: apierror.NewAPIError(
+					validation.InvalidBodyContent,
+					errNamespaceRequired,
+				),
+			},
+		},
+		{
+			name: "error response",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{
+							ID: "testing",
+						},
+					},
+					Request: &http.Request{URL: &url.URL{}},
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "Secret",
+						"metadata": map[string]interface{}{
+							"name":      "testing-secret",
+							"namespace": "testing-ns",
+						},
+					},
+				},
+			},
+			createReactorFunc: func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, apierrors.NewUnauthorized("sample reason")
+			},
+			expected: expected{
+				value:   nil,
+				warning: []types.Warning{},
+				err:     apierrors.NewUnauthorized("sample reason"),
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			testClientFactory, err := client.NewFactory(&rest.Config{}, false)
+			assert.Nil(t, err)
+
+			fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
+
+			if tt.createReactorFunc != nil {
+				fakeClient.PrependReactor("create", "*", tt.createReactorFunc)
+			}
+
+			testStore := Store{
+				clientGetter: &testFactory{Factory: testClientFactory,
+					fakeClient: fakeClient,
+				},
+			}
+
+			value, warning, err := testStore.Create(tt.input.apiOp, tt.input.schema, tt.input.params)
+
+			assert.Equal(t, tt.expected.value, value)
+			assert.Equal(t, tt.expected.warning, warning)
+			assert.Equal(t, tt.expected.err, err)
+		})
 	}
 }
