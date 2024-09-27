@@ -31,11 +31,18 @@ type roleRevisions interface {
 	roleRevision(string, string) string
 }
 
+// accessStoreCache is a subset of the methods implemented by LRUExpireCache
+type accessStoreCache interface {
+	Add(key interface{}, value interface{}, ttl time.Duration)
+	Get(key interface{}) (interface{}, bool)
+	Remove(key interface{})
+}
+
 type AccessStore struct {
 	usersPolicyRules  policyRules
 	groupsPolicyRules policyRules
 	roles             roleRevisions
-	cache             *cache.LRUExpireCache
+	cache             accessStoreCache
 }
 
 type roleKey struct {
