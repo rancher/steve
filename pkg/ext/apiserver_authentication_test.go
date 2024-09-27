@@ -18,6 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/lasso/pkg/controller"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	wrbacv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -240,6 +243,19 @@ func TestAuthentication(t *testing.T) {
 	client, err := kubernetes.NewForConfig(restConfig)
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	opts := &controller.SharedControllerFactoryOptions{}
+	controllerFactory, err := controller.NewSharedControllerFactoryFromConfigWithOptions(restConfig, scheme, opts)
+	require.NoError(t, err)
+
+	ok := wrbacv1.New(controllerFactory)
+	accessStore := accesscontrol.NewAccessStore(context.Background(), true, ok)
+
+	err = controllerFactory.Start(ctx, 4)
+	require.NoError(t, err)
+
 	store := &authTestStore{
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
@@ -251,6 +267,7 @@ func TestAuthentication(t *testing.T) {
 		opts.Authentication = AuthenticationOptions{
 			EnableBuiltIn: true,
 		}
+		opts.Authorization = NewAccessSetAuthorizer(accessStore)
 	})
 	defer cleanup()
 

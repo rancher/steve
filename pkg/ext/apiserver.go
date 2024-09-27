@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	authenticatorunion "k8s.io/apiserver/pkg/authentication/request/union"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -29,6 +30,7 @@ var (
 	// Reference:
 	// Scheme scheme for unversioned types - such as APIResourceList, and Status
 	scheme = runtime.NewScheme()
+	Scheme = scheme
 	// Codecs for unversioned types - such as APIResourceList, and Status
 	Codecs = serializer.NewCodecFactory(scheme)
 )
@@ -55,6 +57,8 @@ type ExtensionAPIServerOptions struct {
 	OpenAPIDefinitionNameReplacements map[string]string
 
 	Authentication AuthenticationOptions
+
+	Authorization authorizer.Authorizer
 
 	Client kubernetes.Interface
 
@@ -83,6 +87,12 @@ func (e emptyAddresses) ServerAddressByClientCIDRs(clientIP net.IP) []metav1.Ser
 	return nil
 }
 
+type theKey struct{}
+
+var (
+	myKey = theKey{}
+)
+
 func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactory, opts ExtensionAPIServerOptions) (*ExtensionAPIServer, error) {
 	recommendedOpts := genericoptions.NewRecommendedOptions("", codecs.LegacyCodec())
 
@@ -91,6 +101,9 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	resolver := &request.RequestInfoFactory{APIPrefixes: sets.NewString("apis", "api"), GrouplessAPIPrefixes: sets.NewString("api")}
 	config := genericapiserver.NewRecommendedConfig(codecs)
 	config.RequestInfoResolver = resolver
+	config.Authorization = genericapiserver.AuthorizationInfo{
+		Authorizer: opts.Authorization,
+	}
 
 	// XXX: kubectl doesn't show this, why is it here, do we need it?
 	// XXX: Understand what this is for

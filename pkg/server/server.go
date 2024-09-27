@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
 	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
+	"github.com/rancher/steve/pkg/ext"
 	"github.com/rancher/steve/pkg/resources"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/schemas"
@@ -44,6 +45,8 @@ type Server struct {
 	ClusterRegistry string
 	Version         string
 
+	extensionAPIServer *ext.ExtensionAPIServer
+
 	authMiddleware      auth.Middleware
 	controllers         *Controllers
 	needControllerStart bool
@@ -69,6 +72,8 @@ type Options struct {
 	ServerVersion              string
 	// SQLCache enables the SQLite-based lasso caching mechanism
 	SQLCache bool
+
+	ExtensionAPIServer *ext.ExtensionAPIServer
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -89,7 +94,8 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
 		// SQLCache enables the SQLite-based lasso caching mechanism
-		SQLCache: opts.SQLCache,
+		SQLCache:           opts.SQLCache,
+		extensionAPIServer: opts.ExtensionAPIServer,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -213,7 +219,7 @@ func setup(ctx context.Context, server *Server) error {
 		onSchemasHandler,
 		sf)
 
-	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
+	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router, server.extensionAPIServer)
 	if err != nil {
 		return err
 	}
