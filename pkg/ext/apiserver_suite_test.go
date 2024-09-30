@@ -215,10 +215,10 @@ func (s *ExtensionAPIServerSuite) SetupSuite() {
 }
 
 func (s *ExtensionAPIServerSuite) TearDownSuite() {
-	os.RemoveAll(s.certTempPath)
+	s.cancel()
 	err := s.testEnv.Stop()
 	s.Require().NoError(err)
-	s.cancel()
+	os.RemoveAll(s.certTempPath)
 }
 
 func TestExtensionAPIServerSuite(t *testing.T) {

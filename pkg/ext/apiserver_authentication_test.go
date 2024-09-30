@@ -20,17 +20,17 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
-type authTestStore struct {
+type authnTestStore struct {
 	*testStore
 	userCh chan user.Info
 }
 
-func (t *authTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
+func (t *authnTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
 	t.userCh <- ctx.User
 	return &testTypeListFixture, nil
 }
 
-func (t *authTestStore) getUser() (user.Info, bool) {
+func (t *authnTestStore) getUser() (user.Info, bool) {
 	timer := time.NewTimer(time.Second * 5)
 	defer timer.Stop()
 	select {
@@ -68,7 +68,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
 	notAllowedCertificate, err := tls.X509KeyPair(notAllowedCert, notAllowedKey)
 	require.NoError(t, err)
 
-	store := &authTestStore{
+	store := &authnTestStore{
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
@@ -213,7 +213,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
 func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 	t := s.T()
 
-	store := &authTestStore{
+	store := &authnTestStore{
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
