@@ -22,7 +22,6 @@ type Context struct {
 	User user.Info
 	// Authorizer helps you determines if a user is authorized to perform
 	// actions to specific resources
-	// XXX: Could be our own interface ?
 	Authorizer authorizer.Authorizer
 }
 

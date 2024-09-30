@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,6 +21,8 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 )
@@ -232,6 +235,13 @@ func TestExtensionAPIServer(t *testing.T) {
 		},
 	}
 	require.Equal(t, expected, apiGroupList)
+}
+
+type IntegrationSuite struct {
+	suite.Suite
+	testEnv   envtest.Environment
+	clientset kubernetes.Clientset
+	restCfg   rest.Config
 }
 
 func setupExtensionAPIServer[

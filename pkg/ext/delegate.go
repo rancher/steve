@@ -51,7 +51,6 @@ type Ptr[U any] interface {
 // our own Store interface we want developers to use
 //
 // It is used for non-namespaced objects only.
-// XXX: I guess we'll have Store and NamespacedStore, so we'll probably need 2 delegate types?
 type delegate[
 	T Ptr[DerefT],
 	DerefT any,
@@ -92,13 +91,18 @@ func (s *delegate[T, DerefT, TList, DerefTList]) NewList() runtime.Object {
 }
 
 // List implements [rest.Lister]
-func (s *delegate[T, DerefT, TList, DerefTList]) List(parentCtx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+func (s *delegate[T, DerefT, TList, DerefTList]) List(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (runtime.Object, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
 	}
-	// XXX: metainternalversion to metav1
-	return s.store.List(ctx, &metav1.ListOptions{})
+
+	options, err := convertListOptions(internaloptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.store.List(ctx, options)
 }
 
 // ConvertToTable implements [rest.Lister]
@@ -276,4 +280,14 @@ func (s *delegate[T, DerefT, TList, DerefTList]) makeContext(parentCtx context.C
 		Authorizer: s.authorizer,
 	}
 	return ctx, nil
+}
+
+func convertListOptions(options *metainternalversion.ListOptions) (*metav1.ListOptions, error) {
+	var out metav1.ListOptions
+	err := scheme.Convert(options, &out, nil)
+	if err != nil {
+		return nil, fmt.Errorf("convert list options: %w", err)
+	}
+
+	return &out, nil
 }

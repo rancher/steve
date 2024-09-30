@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rancher/wrangler/v3/pkg/schemes"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,8 +39,7 @@ var (
 func init() {
 	schemes.AddToScheme(scheme)
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-	// // Needed for CreateOptions, UpdateOptions, etc for ParameterCodec
-	// internalversion.AddToScheme(scheme)
+	metainternalversion.RegisterConversions(scheme)
 
 	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
 	scheme.AddUnversionedTypes(unversioned,
@@ -94,8 +94,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		return nil, fmt.Errorf("no authorization provided")
 	}
 
-	// XXX: Need to call config.Complete() -> This sets the resolver for example
-
 	resolver := &request.RequestInfoFactory{APIPrefixes: sets.NewString("apis", "api"), GrouplessAPIPrefixes: sets.NewString("api")}
 	config := genericapiserver.NewRecommendedConfig(codecs)
 	config.RequestInfoResolver = resolver
@@ -103,8 +101,9 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		Authorizer: opts.Authorization,
 	}
 
-	// XXX: kubectl doesn't show this, why is it here, do we need it?
-	// XXX: Understand what this is for
+	// XXX: kubectl doesn't show this, and it's listed as optional so it
+	//      should be safe to remove. I haven't found a lot of resource on
+	//      what this does.
 	config.DiscoveryAddresses = emptyAddresses{}
 
 	config.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(opts.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(scheme))
