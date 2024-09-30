@@ -1,166 +1,24 @@
 package ext
 
 import (
-	"context"
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	crand "crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
+	"encoding/json"
 	"fmt"
-	"math/big"
+	"io"
 	"net/http"
-	"os"
-	"path/filepath"
+	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/steve/pkg/accesscontrol"
-	wrbacv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/client-go/kubernetes"
-	certutil "k8s.io/client-go/util/cert"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"k8s.io/apiserver/pkg/endpoints/request"
 )
-
-// Copied and modified from envtest internal
-var (
-	ellipticCurve = elliptic.P256()
-	bigOne        = big.NewInt(1)
-)
-
-// CertPair is a private key and certificate for use for client auth, as a CA, or serving.
-type CertPair struct {
-	Key  crypto.Signer
-	Cert *x509.Certificate
-}
-
-// CertBytes returns the PEM-encoded version of the certificate for this pair.
-func (k CertPair) CertBytes() []byte {
-	return pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: k.Cert.Raw,
-	})
-}
-
-// AsBytes encodes keypair in the appropriate formats for on-disk storage (PEM and
-// PKCS8, respectively).
-func (k CertPair) AsBytes() (cert []byte, key []byte, err error) {
-	cert = k.CertBytes()
-
-	rawKeyData, err := x509.MarshalPKCS8PrivateKey(k.Key)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to encode private key: %w", err)
-	}
-
-	key = pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: rawKeyData,
-	})
-
-	return cert, key, nil
-}
-
-// TinyCA supports signing serving certs and client-certs,
-// and can be used as an auth mechanism with envtest.
-type TinyCA struct {
-	CA      CertPair
-	orgName string
-
-	nextSerial *big.Int
-}
-
-// newPrivateKey generates a new private key of a relatively sane size (see
-// rsaKeySize).
-func newPrivateKey() (crypto.Signer, error) {
-	return ecdsa.GenerateKey(ellipticCurve, crand.Reader)
-}
-
-// NewTinyCA creates a new a tiny CA utility for provisioning serving certs and client certs FOR TESTING ONLY.
-// Don't use this for anything else!
-func NewTinyCA() (*TinyCA, error) {
-	caPrivateKey, err := newPrivateKey()
-	if err != nil {
-		return nil, fmt.Errorf("unable to generate private key for CA: %w", err)
-	}
-	caCfg := certutil.Config{CommonName: "envtest-environment", Organization: []string{"envtest"}}
-	caCert, err := certutil.NewSelfSignedCACert(caCfg, caPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to generate certificate for CA: %w", err)
-	}
-
-	return &TinyCA{
-		CA:         CertPair{Key: caPrivateKey, Cert: caCert},
-		orgName:    "envtest",
-		nextSerial: big.NewInt(1),
-	}, nil
-}
-
-func (c *TinyCA) CertBytes() []byte {
-	return pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: c.CA.Cert.Raw,
-	})
-}
-
-func (c *TinyCA) NewClientCert(name string) (CertPair, error) {
-	return c.makeCert(certutil.Config{
-		CommonName: name,
-		Usages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-	})
-}
-
-func (c *TinyCA) makeCert(cfg certutil.Config) (CertPair, error) {
-	now := time.Now()
-
-	key, err := newPrivateKey()
-	if err != nil {
-		return CertPair{}, fmt.Errorf("unable to create private key: %w", err)
-	}
-
-	serial := new(big.Int).Set(c.nextSerial)
-	c.nextSerial.Add(c.nextSerial, bigOne)
-
-	template := x509.Certificate{
-		Subject:      pkix.Name{CommonName: cfg.CommonName, Organization: cfg.Organization},
-		DNSNames:     cfg.AltNames.DNSNames,
-		IPAddresses:  cfg.AltNames.IPs,
-		SerialNumber: serial,
-
-		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: cfg.Usages,
-
-		// technically not necessary for testing, but let's set anyway just in case.
-		NotBefore: now.UTC(),
-		// 1 week -- the default for cfssl, and just long enough for a
-		// long-term test, but not too long that anyone would try to use this
-		// seriously.
-		NotAfter: now.Add(168 * time.Hour).UTC(),
-	}
-
-	certRaw, err := x509.CreateCertificate(crand.Reader, &template, c.CA.Cert, key.Public(), c.CA.Key)
-	if err != nil {
-		return CertPair{}, fmt.Errorf("unable to create certificate: %w", err)
-	}
-
-	cert, err := x509.ParseCertificate(certRaw)
-	if err != nil {
-		return CertPair{}, fmt.Errorf("generated invalid certificate, could not parse: %w", err)
-	}
-
-	return CertPair{
-		Key:  key,
-		Cert: cert,
-	}, nil
-}
 
 type authTestStore struct {
 	*testStore
@@ -183,15 +41,11 @@ func (t *authTestStore) getUser() (user.Info, bool) {
 	}
 }
 
-func TestAuthentication(t *testing.T) {
-	tinyCA, err := NewTinyCA()
-	require.NoError(t, err)
-	certPair, err := tinyCA.NewClientCert("system:auth-proxy")
-	require.NoError(t, err)
-	cert, key, err := certPair.AsBytes()
-	require.NoError(t, err)
+func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
+	t := s.T()
 
-	notAllowedCertPair, err := tinyCA.NewClientCert("system:not-allowed")
+	// Same CA but CN not in the list allowed
+	notAllowedCertPair, err := s.ca.NewClientCert("system:not-allowed")
 	require.NoError(t, err)
 	notAllowedCert, notAllowedKey, err := notAllowedCertPair.AsBytes()
 	require.NoError(t, err)
@@ -203,6 +57,8 @@ func TestAuthentication(t *testing.T) {
 	badCert, badKey, err := badCertPair.AsBytes()
 	require.NoError(t, err)
 
+	cert, key, err := s.cert.AsBytes()
+	require.NoError(t, err)
 	certificate, err := tls.X509KeyPair(cert, key)
 	require.NoError(t, err)
 
@@ -212,52 +68,6 @@ func TestAuthentication(t *testing.T) {
 	notAllowedCertificate, err := tls.X509KeyPair(notAllowedCert, notAllowedKey)
 	require.NoError(t, err)
 
-	tempDir, err := os.MkdirTemp("", "steve_test")
-	require.NoError(t, err)
-	defer os.Remove(tempDir)
-
-	caFilepath := filepath.Join(tempDir, "request-header-ca.crt")
-	certFilepath := filepath.Join(tempDir, "client-auth-proxy.crt")
-	keyFilepath := filepath.Join(tempDir, "client-auth-proxy.key")
-
-	os.WriteFile(caFilepath, tinyCA.CertBytes(), 0644)
-	os.WriteFile(certFilepath, cert, 0644)
-	os.WriteFile(keyFilepath, key, 0644)
-
-	apiServer := &envtest.APIServer{}
-	apiServer.Configure().Append("requestheader-allowed-names", "system:auth-proxy")
-	apiServer.Configure().Append("requestheader-extra-headers-prefix", "X-Remote-Extra-")
-	apiServer.Configure().Append("requestheader-group-headers", "X-Remote-Group")
-	apiServer.Configure().Append("requestheader-username-headers", "X-Remote-User")
-	apiServer.Configure().Append("requestheader-client-ca-file", caFilepath)
-	apiServer.Configure().Append("proxy-client-cert-file", certFilepath)
-	apiServer.Configure().Append("proxy-client-key-file", keyFilepath)
-
-	testEnv := envtest.Environment{
-		ControlPlane: envtest.ControlPlane{
-			APIServer: apiServer,
-		},
-	}
-	restConfig, err := testEnv.Start()
-	require.NoError(t, err)
-
-	client, err := kubernetes.NewForConfig(restConfig)
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	opts := &controller.SharedControllerFactoryOptions{}
-	controllerFactory, err := controller.NewSharedControllerFactoryFromConfigWithOptions(restConfig, scheme, opts)
-	require.NoError(t, err)
-
-	ok := wrbacv1.New(controllerFactory)
-	accessStore := accesscontrol.NewAccessStore(context.Background(), true, ok)
-	_ = accessStore
-
-	err = controllerFactory.Start(ctx, 4)
-	require.NoError(t, err)
-
 	store := &authTestStore{
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
@@ -265,7 +75,7 @@ func TestAuthentication(t *testing.T) {
 	_, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32003
-		opts.Client = client
+		opts.Client = s.client
 		opts.Authentication = AuthenticationOptions{
 			EnableBuiltIn: true,
 		}
@@ -276,6 +86,7 @@ func TestAuthentication(t *testing.T) {
 	require.NoError(t, err)
 
 	allPaths := []string{
+		"/",
 		"/openapi/v2",
 		"/openapi/v3",
 		"/openapi/v3/apis/ext.cattle.io/v1",
@@ -305,7 +116,7 @@ func TestAuthentication(t *testing.T) {
 			groups: []string{"my-group"},
 
 			expectedStatusCode: http.StatusOK,
-			expectedUser:       &user.DefaultInfo{Name: "my-user", Groups: []string{"my-group", "system:authenticated"}},
+			expectedUser:       &user.DefaultInfo{Name: "my-user", Groups: []string{"my-group", "system:authenticated"}, Extra: map[string][]string{}},
 		},
 		{
 			name:   "authenticated request all paths",
@@ -317,8 +128,17 @@ func TestAuthentication(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 		},
 		{
+			name:   "authenticated request to unknown endpoint",
+			certs:  []tls.Certificate{certificate},
+			paths:  []string{"/unknown"},
+			user:   "my-user",
+			groups: []string{"my-group"},
+
+			expectedStatusCode: http.StatusNotFound,
+		},
+		{
 			name:   "no client certs",
-			paths:  allPaths,
+			paths:  append(allPaths, "/unknown"),
 			user:   "my-user",
 			groups: []string{"my-group"},
 
@@ -327,7 +147,7 @@ func TestAuthentication(t *testing.T) {
 		{
 			name:   "client certs from bad CA",
 			certs:  []tls.Certificate{badCACertificate},
-			paths:  allPaths,
+			paths:  append(allPaths, "/unknown"),
 			user:   "my-user",
 			groups: []string{"my-group"},
 
@@ -336,7 +156,7 @@ func TestAuthentication(t *testing.T) {
 		{
 			name:   "client certs with CN not allowed",
 			certs:  []tls.Certificate{notAllowedCertificate},
-			paths:  allPaths,
+			paths:  append(allPaths, "/unknown"),
 			user:   "my-user",
 			groups: []string{"my-group"},
 
@@ -344,7 +164,7 @@ func TestAuthentication(t *testing.T) {
 		},
 		{
 			name:   "no user",
-			paths:  allPaths,
+			paths:  append(allPaths, "/unknown"),
 			groups: []string{"my-group"},
 
 			expectedStatusCode: http.StatusUnauthorized,
@@ -383,11 +203,135 @@ func TestAuthentication(t *testing.T) {
 				if test.expectedUser != nil {
 					authUser, found := store.getUser()
 					require.True(t, found)
-					require.Equal(t, &user.DefaultInfo{
-						Name:   "my-user",
-						Groups: []string{"my-group", "system:authenticated"},
-						Extra:  map[string][]string{},
-					}, authUser)
+					require.Equal(t, test.expectedUser, authUser)
+				}
+			}
+		})
+	}
+}
+
+func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
+	t := s.T()
+
+	store := &authTestStore{
+		testStore: &testStore{},
+		userCh:    make(chan user.Info, 100),
+	}
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+		// XXX: Find a way to get rid of this
+		opts.BindPort = 32000
+		opts.Client = s.client
+		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authentication = AuthenticationOptions{
+			EnableBuiltIn: false,
+			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+				user, ok := request.UserFrom(req.Context())
+				if !ok {
+					return nil, false, nil
+				}
+				if user.GetName() == "error" {
+					return nil, false, fmt.Errorf("fake error")
+				}
+				return &authenticator.Response{
+					User: user,
+				}, true, nil
+			}),
+		}
+	})
+	defer cleanup()
+	require.NoError(t, err)
+
+	unauthorized := apierrors.NewUnauthorized("Unauthorized")
+	unauthorized.ErrStatus.Kind = "Status"
+	unauthorized.ErrStatus.APIVersion = "v1"
+
+	allPaths := []string{
+		"/",
+		"/apis",
+		"/apis/ext.cattle.io",
+		"/apis/ext.cattle.io/v1",
+		"/apis/ext.cattle.io/v1/testtypes",
+		"/apis/ext.cattle.io/v1/testtypes/foo",
+		"/openapi/v2",
+		"/openapi/v3",
+		"/openapi/v3/apis/ext.cattle.io/v1",
+	}
+
+	tests := []struct {
+		name  string
+		user  *user.DefaultInfo
+		paths []string
+
+		expectedStatusCode int
+		expectedStatus     apierrors.APIStatus
+		expectedUser       *user.DefaultInfo
+	}{
+		{
+			name:  "authenticated request check user",
+			paths: []string{"/apis/ext.cattle.io/v1/testtypes"},
+			user:  &user.DefaultInfo{Name: "my-user", Groups: []string{"my-group", "system:authenticated"}, Extra: map[string][]string{}},
+
+			expectedStatusCode: http.StatusOK,
+			expectedUser:       &user.DefaultInfo{Name: "my-user", Groups: []string{"my-group", "system:authenticated"}, Extra: map[string][]string{}},
+		},
+		{
+			name:  "authenticated request all paths",
+			user:  &user.DefaultInfo{Name: "my-user", Groups: []string{"my-group", "system:authenticated"}, Extra: map[string][]string{}},
+			paths: allPaths,
+
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:  "authenticated request to unknown endpoint",
+			user:  &user.DefaultInfo{Name: "my-user", Groups: []string{"my-group", "system:authenticated"}, Extra: map[string][]string{}},
+			paths: []string{"/unknown"},
+
+			expectedStatusCode: http.StatusNotFound,
+		},
+		{
+			name:  "unauthenticated request",
+			paths: append(allPaths, "/unknown"),
+
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedStatus:     unauthorized,
+		},
+		{
+			name:  "authentication error",
+			user:  &user.DefaultInfo{Name: "error"},
+			paths: append(allPaths, "/unknown"),
+
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedStatus:     unauthorized,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, path := range test.paths {
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				w := httptest.NewRecorder()
+
+				if test.user != nil {
+					ctx := request.WithUser(req.Context(), test.user)
+					req = req.WithContext(ctx)
+				}
+
+				extensionAPIServer.ServeHTTP(w, req)
+				resp := w.Result()
+
+				body, _ := io.ReadAll(resp.Body)
+
+				responseStatus := metav1.Status{}
+				json.Unmarshal(body, &responseStatus)
+
+				require.Equal(t, test.expectedStatusCode, resp.StatusCode, "for path "+path)
+				if test.expectedStatus != nil {
+					require.Equal(t, test.expectedStatus.Status(), responseStatus, "for path "+path)
+				}
+				if test.expectedUser != nil {
+					authUser, found := store.getUser()
+					require.True(t, found)
+					require.Equal(t, test.expectedUser, authUser)
 				}
 			}
 		})

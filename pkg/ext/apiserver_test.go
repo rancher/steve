@@ -6,13 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,11 +16,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
-
-	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 )
 
 var (
@@ -124,68 +115,6 @@ func authzAllowAll(ctx context.Context, a authorizer.Attributes) (authorizer.Dec
 	return authorizer.DecisionAllow, "", nil
 }
 
-func TestExtensionAPIServerAuthentication(t *testing.T) {
-	clientGetter := kubeconfig.GetNonInteractiveClientConfig(os.Getenv("KUBECONFIG"))
-	restConfig, err := clientGetter.ClientConfig()
-	require.NoError(t, err)
-
-	client, err := kubernetes.NewForConfig(restConfig)
-	require.NoError(t, err)
-
-	store := &testStore{}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32000
-		opts.Client = client
-		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
-		opts.Authentication = AuthenticationOptions{
-			EnableBuiltIn: true,
-			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
-				return nil, false, nil
-			}),
-		}
-	})
-	defer cleanup()
-
-	require.NoError(t, err)
-
-	paths := []string{
-		"/",
-		"/apis",
-		"/apis/ext.cattle.io",
-		"/apis/ext.cattle.io/v1",
-		"/apis/ext.cattle.io/v1/testtypes",
-		"/apis/ext.cattle.io/v1/testtypes/foo",
-		"/openapi/v2",
-		"/openapi/v3",
-		"/openapi/v3/apis/ext.cattle.io/v1",
-		"/unknown",
-	}
-	for _, path := range paths {
-		name := strings.Replace(path, "/", "", 1)
-		name = strings.ReplaceAll(name, "/", "-")
-		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/apis", nil)
-			w := httptest.NewRecorder()
-
-			extensionAPIServer.ServeHTTP(w, req)
-			resp := w.Result()
-
-			body, _ := io.ReadAll(resp.Body)
-
-			responseStatus := metav1.Status{}
-			json.Unmarshal(body, &responseStatus)
-
-			expectedStatus := apierrors.NewUnauthorized("Unauthorized")
-			expectedStatus.ErrStatus.Kind = "Status"
-			expectedStatus.ErrStatus.APIVersion = "v1"
-
-			require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-			require.Equal(t, expectedStatus.ErrStatus, responseStatus)
-		})
-	}
-}
-
 func TestExtensionAPIServer(t *testing.T) {
 	store := &testStore{}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
@@ -235,13 +164,6 @@ func TestExtensionAPIServer(t *testing.T) {
 		},
 	}
 	require.Equal(t, expected, apiGroupList)
-}
-
-type IntegrationSuite struct {
-	suite.Suite
-	testEnv   envtest.Environment
-	clientset kubernetes.Clientset
-	restCfg   rest.Config
 }
 
 func setupExtensionAPIServer[
