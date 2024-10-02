@@ -81,9 +81,8 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
 		}
 		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 	})
-	defer cleanup()
-
 	require.NoError(t, err)
+	defer cleanup()
 
 	allPaths := []string{
 		"/",
@@ -238,8 +237,8 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 			}),
 		}
 	})
-	defer cleanup()
 	require.NoError(t, err)
+	defer cleanup()
 
 	unauthorized := apierrors.NewUnauthorized("Unauthorized")
 	unauthorized.ErrStatus.Kind = "Status"

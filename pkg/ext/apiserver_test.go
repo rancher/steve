@@ -123,9 +123,8 @@ func TestExtensionAPIServer(t *testing.T) {
 		opts.Authentication.CustomAuthenticator = authAsAdmin
 		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 	})
-	defer cleanup()
-
 	require.NoError(t, err)
+	defer cleanup()
 
 	req := httptest.NewRequest(http.MethodGet, "/apis", nil)
 	w := httptest.NewRecorder()
