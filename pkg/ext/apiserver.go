@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/rancher/wrangler/v3/pkg/schemes"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -79,7 +80,8 @@ type ExtensionAPIServer struct {
 	genericAPIServer *genericapiserver.GenericAPIServer
 	apiGroups        map[string]genericapiserver.APIGroupInfo
 
-	handler http.Handler
+	handlerMu sync.RWMutex
+	handler   http.Handler
 }
 
 type emptyAddresses struct{}
@@ -201,12 +203,13 @@ func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) err
 		}
 	}
 	prepared := s.genericAPIServer.PrepareRun()
-	// XXX: Mutex / atomic probably
+	s.handlerMu.Lock()
 	s.handler = prepared.Handler
+	s.handlerMu.Unlock()
 
 	readyCh <- struct{}{}
 
-	if err := prepared.Run(ctx.Done()); err != nil {
+	if err := prepared.RunWithContext(ctx); err != nil {
 		return err
 	}
 
@@ -214,6 +217,8 @@ func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) err
 }
 
 func (s *ExtensionAPIServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	s.handlerMu.RLock()
+	defer s.handlerMu.RUnlock()
 	s.handler.ServeHTTP(w, req)
 }
 
