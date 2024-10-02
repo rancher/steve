@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -127,10 +128,24 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Get(parentCtx context.Context, 
 }
 
 // Delete implements [rest.GracefulDeleter]
+//
+// deleteValidation is used to do some validation on the object before deleting
+// it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
 func (s *delegate[T, DerefT, TList, DerefTList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, false, err
+	}
+
+	oldObj, err := s.store.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, false, err
+	}
+
+	if deleteValidation != nil {
+		if err = deleteValidation(ctx, oldObj); err != nil {
+			return nil, false, err
+		}
 	}
 
 	err = s.store.Delete(ctx, name, options)
@@ -138,6 +153,9 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Delete(parentCtx context.Contex
 }
 
 // Create implements [rest.Creater]
+//
+// createValidation is used to do some validation on the object before creating
+// it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
 func (s *delegate[T, DerefT, TList, DerefTList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
@@ -155,6 +173,15 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Create(parentCtx context.Contex
 }
 
 // Update implements [rest.Updater]
+//
+// createValidation is used to do some validation on the object before creating
+// it in the store. For example, it will do an authorization check for "create"
+// verb if the object needs to be created.
+// See here for details: https://github.com/kubernetes/apiserver/blob/70ed6fdbea9eb37bd1d7558e90c20cfe888955e8/pkg/endpoints/handlers/update.go#L190-L201
+// Another example is running mutating/validating webhooks, though we're not using these yet.
+//
+// updateValidation is used to do some validation on the object before updating it in the store.
+// One example is running mutating/validating webhooks, though we're not using these yet.
 func (s *delegate[T, DerefT, TList, DerefTList]) Update(
 	parentCtx context.Context,
 	name string,
@@ -171,8 +198,24 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Update(
 
 	oldObj, err := s.store.Get(ctx, name, &metav1.GetOptions{})
 	if err != nil {
-		// XXX: Do we want to support creation??
-		return nil, false, err
+		if !apierrors.IsNotFound(err) {
+			return nil, false, err
+		}
+
+		obj, err := objInfo.UpdatedObject(ctx, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if err = createValidation(ctx, obj); err != nil {
+			return nil, false, err
+		}
+
+		newObj, err := s.store.Create(ctx, obj.(T), &metav1.CreateOptions{})
+		if err != nil {
+			return nil, false, err
+		}
+		return newObj, false, err
 	}
 
 	newObj, err := objInfo.UpdatedObject(ctx, oldObj)
