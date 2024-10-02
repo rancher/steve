@@ -5,6 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -23,6 +24,10 @@ type Context struct {
 	// Authorizer helps you determines if a user is authorized to perform
 	// actions to specific resources
 	Authorizer authorizer.Authorizer
+	// GroupVersionResource is the GVR of the request.
+	// It makes it easy to create errors such as in:
+	//     apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
+	GroupVersionResource schema.GroupVersionResource
 }
 
 type Store[T runtime.Object, TList runtime.Object] interface {

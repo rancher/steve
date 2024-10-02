@@ -275,9 +275,10 @@ func (s *delegate[T, DerefT, TList, DerefTList]) makeContext(parentCtx context.C
 	}
 
 	ctx := Context{
-		Context:    parentCtx,
-		User:       userInfo,
-		Authorizer: s.authorizer,
+		Context:              parentCtx,
+		User:                 userInfo,
+		Authorizer:           s.authorizer,
+		GroupVersionResource: s.gvr,
 	}
 	return ctx, nil
 }
