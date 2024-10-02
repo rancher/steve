@@ -25,39 +25,26 @@ type typeCheckerList struct {
 
 // XXX: Implement DeleteCollection to simplify everything here
 // var _ rest.StandardStorage = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Storage = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Scoper = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.KindProvider = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.GroupVersionKindProvider = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.SingularNameProvider = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
+var _ rest.Storage = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.Scoper = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.KindProvider = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.GroupVersionKindProvider = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.SingularNameProvider = (*delegate[*typeChecker, *typeCheckerList])(nil)
 
-var _ rest.Getter = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Lister = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.GracefulDeleter = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Creater = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Updater = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Watcher = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-
-// Ptr[U] acts as a type constraint such that
-//
-//	T Ptr[U]
-//
-// means that T is a pointer to U and a runtime.Object.
-type Ptr[U any] interface {
-	*U
-	runtime.Object
-}
+var _ rest.Getter = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.Lister = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.GracefulDeleter = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.Creater = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.Updater = (*delegate[*typeChecker, *typeCheckerList])(nil)
+var _ rest.Watcher = (*delegate[*typeChecker, *typeCheckerList])(nil)
 
 // delegate is the bridge between k8s.io/apiserver's [rest.Storage] interface and
 // our own Store interface we want developers to use
 //
 // It is used for non-namespaced objects only.
-type delegate[
-	T Ptr[DerefT],
-	DerefT any,
-	TList Ptr[DerefTList],
-	DerefTList any,
-] struct {
+type delegate[T runtime.Object, TList runtime.Object] struct {
+	t            T
+	tList        TList
 	gvk          schema.GroupVersionKind
 	gvr          schema.GroupVersionResource
 	singularName string
@@ -68,31 +55,29 @@ type delegate[
 // New implements [rest.Storage]
 //
 // It uses generics to create the resource and set its GVK.
-func (s *delegate[T, DerefT, TList, DerefTList]) New() runtime.Object {
-	var t DerefT
-	ptrT := T(&t)
-	ptrT.GetObjectKind().SetGroupVersionKind(s.gvk)
-	return ptrT
+func (s *delegate[T, TList]) New() runtime.Object {
+	t := s.t.DeepCopyObject()
+	t.GetObjectKind().SetGroupVersionKind(s.gvk)
+	return t
 }
 
 // Destroy cleans up its resources on shutdown.
 // Destroy has to be implemented in thread-safe way and be prepared
 // for being called more than once.
-func (s *delegate[T, DerefT, TList, DerefTList]) Destroy() {
+func (s *delegate[T, TList]) Destroy() {
 }
 
 // NewList implements [rest.Lister]
 //
 // It uses generics to create the resource and set its GVK.
-func (s *delegate[T, DerefT, TList, DerefTList]) NewList() runtime.Object {
-	var t DerefTList
-	ptrT := TList(&t)
-	ptrT.GetObjectKind().SetGroupVersionKind(s.gvk)
-	return ptrT
+func (s *delegate[T, TList]) NewList() runtime.Object {
+	tList := s.tList.DeepCopyObject()
+	tList.GetObjectKind().SetGroupVersionKind(s.gvk)
+	return tList
 }
 
 // List implements [rest.Lister]
-func (s *delegate[T, DerefT, TList, DerefTList]) List(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (runtime.Object, error) {
+func (s *delegate[T, TList]) List(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (runtime.Object, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
@@ -112,13 +97,13 @@ func (s *delegate[T, DerefT, TList, DerefTList]) List(parentCtx context.Context,
 // (and Rancher UI) to display a table of the items.
 //
 // Currently, we use the default table convertor which will show two columns: Name and Created At.
-func (s *delegate[T, DerefT, TList, DerefTList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+func (s *delegate[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	defaultTableConverter := rest.NewDefaultTableConvertor(s.gvr.GroupResource())
 	return defaultTableConverter.ConvertToTable(ctx, object, tableOptions)
 }
 
 // Get implements [rest.Getter]
-func (s *delegate[T, DerefT, TList, DerefTList]) Get(parentCtx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+func (s *delegate[T, TList]) Get(parentCtx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
@@ -131,7 +116,7 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Get(parentCtx context.Context, 
 //
 // deleteValidation is used to do some validation on the object before deleting
 // it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
-func (s *delegate[T, DerefT, TList, DerefTList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+func (s *delegate[T, TList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, false, err
@@ -156,7 +141,7 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Delete(parentCtx context.Contex
 //
 // createValidation is used to do some validation on the object before creating
 // it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
-func (s *delegate[T, DerefT, TList, DerefTList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+func (s *delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
@@ -182,7 +167,7 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Create(parentCtx context.Contex
 //
 // updateValidation is used to do some validation on the object before updating it in the store.
 // One example is running mutating/validating webhooks, though we're not using these yet.
-func (s *delegate[T, DerefT, TList, DerefTList]) Update(
+func (s *delegate[T, TList]) Update(
 	parentCtx context.Context,
 	name string,
 	objInfo rest.UpdatedObjectInfo,
@@ -255,7 +240,7 @@ func (w *watcher) ResultChan() <-chan watch.Event {
 	return w.ch
 }
 
-func (s *delegate[T, DerefT, TList, DerefTList]) Watch(parentCtx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+func (s *delegate[T, TList]) Watch(parentCtx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
@@ -285,21 +270,21 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Watch(parentCtx context.Context
 // GroupVersionKind implements rest.GroupVersionKind
 //
 // This is used to generate the data for the Discovery API
-func (s *delegate[T, DerefT, TList, DerefTList]) GroupVersionKind(_ schema.GroupVersion) schema.GroupVersionKind {
+func (s *delegate[T, TList]) GroupVersionKind(_ schema.GroupVersion) schema.GroupVersionKind {
 	return s.gvk
 }
 
 // NamespaceScoped implements rest.Scoper
 //
 // The delegate is used for non-namespaced resources so it always returns false
-func (s *delegate[T, DerefT, TList, DerefTList]) NamespaceScoped() bool {
+func (s *delegate[T, TList]) NamespaceScoped() bool {
 	return false
 }
 
 // Kind implements rest.KindProvider
 //
 // XXX: Example where / how this is used
-func (s *delegate[T, DerefT, TList, DerefTList]) Kind() string {
+func (s *delegate[T, TList]) Kind() string {
 	return s.gvk.Kind
 }
 
@@ -307,11 +292,11 @@ func (s *delegate[T, DerefT, TList, DerefTList]) Kind() string {
 //
 // This is used by a variety of things such as kubectl to map singular name to
 // resource name. (eg: token => tokens)
-func (s *delegate[T, DerefT, TList, DerefTList]) GetSingularName() string {
+func (s *delegate[T, TList]) GetSingularName() string {
 	return s.singularName
 }
 
-func (s *delegate[T, DerefT, TList, DerefTList]) makeContext(parentCtx context.Context) (Context, error) {
+func (s *delegate[T, TList]) makeContext(parentCtx context.Context) (Context, error) {
 	userInfo, ok := request.UserFrom(parentCtx)
 	if !ok {
 		return Context{}, fmt.Errorf("missing user info")

@@ -117,7 +117,7 @@ func authzAllowAll(ctx context.Context, a authorizer.Attributes) (authorizer.Dec
 
 func TestExtensionAPIServer(t *testing.T) {
 	store := &testStore{}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32001
 		opts.Authentication.CustomAuthenticator = authAsAdmin
@@ -166,11 +166,9 @@ func TestExtensionAPIServer(t *testing.T) {
 }
 
 func setupExtensionAPIServer[
-	T Ptr[DerefT],
-	DerefT any,
-	TList Ptr[DerefTList],
-	DerefTList any,
-](t *testing.T, store Store[T, TList], optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
+	T runtime.Object,
+	TList runtime.Object,
+](t *testing.T, objT T, objTList TList, store Store[T, TList], optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
 	opts := ExtensionAPIServerOptions{
@@ -189,8 +187,7 @@ func setupExtensionAPIServer[
 
 	addToScheme(scheme)
 
-	testResourceStore := MakeResourceStore("testtypes", "testtype", testTypeGV.WithKind("TestType"), opts.Authorization, store)
-	extensionAPIServer.InstallResourceStore(testResourceStore)
+	InstallStore(extensionAPIServer, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

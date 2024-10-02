@@ -72,7 +72,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
-	_, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+	_, cleanup, err := setupExtensionAPIServer(t, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32003
 		opts.Client = s.client
@@ -216,7 +216,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
 		opts.Client = s.client

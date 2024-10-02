@@ -73,12 +73,20 @@ type AuthenticationOptions struct {
 	CustomAuthenticator authenticator.RequestFunc
 }
 
+// ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
+// a Kubernetes extension API server.
+//
+// Use [InstallStore] to add a new resource store onto an existing ExtensionAPIServer.
+// Each resources will then be reachable via /apis/<group>/<version>/<resource> as
+// defined by the Kubernetes API.
 type ExtensionAPIServer struct {
 	codecs serializer.CodecFactory
 	scheme *runtime.Scheme
 
 	genericAPIServer *genericapiserver.GenericAPIServer
 	apiGroups        map[string]genericapiserver.APIGroupInfo
+
+	authorizer authorizer.Authorizer
 
 	handlerMu sync.RWMutex
 	handler   http.Handler
@@ -152,7 +160,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	}
 	if opts.Authentication.CustomAuthenticator != nil {
 		if opts.Authentication.EnableBuiltIn {
-			fmt.Println("custom and builtin")
 			config.Authentication.Authenticator = authenticatorunion.New(
 				opts.Authentication.CustomAuthenticator,
 				config.Authentication.Authenticator,
@@ -175,26 +182,14 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		scheme:           scheme,
 		genericAPIServer: genericServer,
 		apiGroups:        make(map[string]genericapiserver.APIGroupInfo),
+		authorizer:       opts.Authorization,
 	}
 
 	return extensionAPIServer, nil
 }
 
-func (s *ExtensionAPIServer) InstallResourceStore(store ResourceStore) {
-	apiGroup, ok := s.apiGroups[store.gvk.Group]
-	if !ok {
-		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(store.gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
-	}
-
-	_, ok = apiGroup.VersionedResourcesStorageMap[store.gvk.Version]
-	if !ok {
-		apiGroup.VersionedResourcesStorageMap[store.gvk.Version] = make(map[string]rest.Storage)
-	}
-
-	apiGroup.VersionedResourcesStorageMap[store.gvk.Version][store.name] = store.storage
-	s.apiGroups[store.gvk.Group] = apiGroup
-}
-
+// Run prepares and runs the separate HTTPS server. It also configures the handler
+// so that ServeHTTP can be used.
 func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) error {
 	for _, apiGroup := range s.apiGroups {
 		err := s.genericAPIServer.InstallAPIGroup(&apiGroup)
@@ -222,23 +217,42 @@ func (s *ExtensionAPIServer) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	s.handler.ServeHTTP(w, req)
 }
 
-type ResourceStore struct {
-	// Name plural name of the resource (eg: tokens)
-	name string
-	// SingularName singular name of the resource (eg: token)
-	singularName string
-	// GVK is the group, version, kind of the resource
-	gvk     schema.GroupVersionKind
-	storage rest.Storage
-}
+// InstallStore installs a store on the given ExtensionAPIServer object.
+//
+// t and TList must be non-nil.
+//
+// Here's an example store for a Token and TokenList resource in the ext.cattle.io/v1 apiVersion:
+//
+//	gvk := schema.GroupVersionKind{
+//		Group: "ext.cattle.io",
+//		Version: "v1",
+//		Kind: "Token",
+//	}
+//	InstallStore(s, &Token{}, &TokenList{}, "tokens", "token", gvk, store)
+//
+// Note: Not using a method on ExtensionAPIServer object due to Go generic limitations.
+func InstallStore[T runtime.Object, TList runtime.Object](
+	s *ExtensionAPIServer,
+	t T,
+	tList TList,
+	resourceName string,
+	singularName string,
+	gvk schema.GroupVersionKind,
+	store Store[T, TList],
+) {
+	apiGroup, ok := s.apiGroups[gvk.Group]
+	if !ok {
+		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
+	}
 
-func MakeResourceStore[
-	T Ptr[DerefT],
-	DerefT any,
-	TList Ptr[DerefTList],
-	DerefTList any,
-](resourceName string, singularName string, gvk schema.GroupVersionKind, authorizer authorizer.Authorizer, store Store[T, TList]) ResourceStore {
-	s := &delegate[T, DerefT, TList, DerefTList]{
+	_, ok = apiGroup.VersionedResourcesStorageMap[gvk.Version]
+	if !ok {
+		apiGroup.VersionedResourcesStorageMap[gvk.Version] = make(map[string]rest.Storage)
+	}
+
+	delegate := &delegate[T, TList]{
+		t:            t,
+		tList:        tList,
 		singularName: singularName,
 		gvk:          gvk,
 		gvr: schema.GroupVersionResource{
@@ -246,17 +260,12 @@ func MakeResourceStore[
 			Version:  gvk.Version,
 			Resource: resourceName,
 		},
-		authorizer: authorizer,
+		authorizer: s.authorizer,
 		store:      store,
 	}
 
-	resourceStore := ResourceStore{
-		name:         resourceName,
-		singularName: singularName,
-		gvk:          gvk,
-		storage:      s,
-	}
-	return resourceStore
+	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = delegate
+	s.apiGroups[gvk.Group] = apiGroup
 }
 
 func getDefinitionName(replacements map[string]string) func(string) (string, spec.Extensions) {

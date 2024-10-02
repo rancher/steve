@@ -82,7 +82,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	store := &authzTestStore{
 		testStore: &testStore{},
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
 		opts.Client = s.client
