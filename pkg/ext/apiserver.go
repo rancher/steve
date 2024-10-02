@@ -22,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/kubernetes"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -105,6 +106,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	//      should be safe to remove. I haven't found a lot of resource on
 	//      what this does.
 	config.DiscoveryAddresses = emptyAddresses{}
+	config.EffectiveVersion = utilversion.NewEffectiveVersion("")
 
 	config.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(opts.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(scheme))
 	config.OpenAPIConfig.Info.Title = "Ext"

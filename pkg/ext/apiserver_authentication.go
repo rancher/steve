@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticatorfactory"
 	"k8s.io/apiserver/pkg/authentication/request/headerrequest"
 	"k8s.io/apiserver/pkg/server"
@@ -28,7 +29,9 @@ func ApplyTo(
 	openAPIConfig *openapicommon.Config,
 ) error {
 	cfg := authenticatorfactory.DelegatingAuthenticatorConfig{
-		Anonymous:                false,
+		Anonymous: &apiserver.AnonymousAuthConfig{
+			Enabled: false,
+		},
 		CacheTTL:                 delegatingOptions.CacheTTL,
 		WebhookRetryBackoff:      delegatingOptions.WebhookRetryBackoff,
 		TokenAccessReviewTimeout: delegatingOptions.TokenRequestTimeout,
