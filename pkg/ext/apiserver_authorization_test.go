@@ -3,6 +3,7 @@ package ext
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +21,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -33,6 +33,13 @@ type authzTestStore struct {
 	*testStore
 }
 
+func (t *authzTestStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
+	if name == "not-found" {
+		return nil, apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
+	}
+	return t.testStore.Get(ctx, name, opts)
+}
+
 func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
 	if ctx.User.GetName() == "read-only-error" {
 		decision, _, err := ctx.Authorizer.Authorize(ctx, authorizer.AttributesRecord{
@@ -42,11 +49,11 @@ func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeL
 			ResourceRequest: true,
 			APIGroup:        "ext.cattle.io",
 		})
-		if decision != authorizer.DecisionAllow {
-			forbidden := apierrors.NewForbidden(schema.GroupResource{
-				Group:    "ext.cattle.io",
-				Resource: "testtypes",
-			}, "Forbidden", err)
+		if err != nil || decision != authorizer.DecisionAllow {
+			if err == nil {
+				err = fmt.Errorf("not allowed")
+			}
+			forbidden := apierrors.NewForbidden(ctx.GroupVersionResource.GroupResource(), "Forbidden", err)
 			forbidden.ErrStatus.Kind = "Status"
 			forbidden.ErrStatus.APIVersion = "v1"
 			return nil, forbidden
@@ -92,8 +99,8 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			}),
 		}
 	})
-	defer cleanup()
 	require.NoError(t, err)
+	defer cleanup()
 
 	rbacBytes, err := os.ReadFile(filepath.Join("testdata", "rbac.yaml"))
 	require.NoError(t, err)
@@ -124,65 +131,209 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	}
 
 	tests := []struct {
-		name  string
-		user  *user.DefaultInfo
-		paths []string
+		name          string
+		user          *user.DefaultInfo
+		createRequest func() *http.Request
 
 		expectedStatusCode int
 		expectedStatus     apierrors.APIStatus
 	}{
 		{
-			name: "authorized read-only",
+			name: "authorized get read-only not found",
 			user: &user.DefaultInfo{
 				Name: "read-only",
 			},
-			paths:              []string{"/apis/ext.cattle.io/v1/testtypes"},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/not-found", nil)
+			},
+			expectedStatusCode: http.StatusNotFound,
+		},
+		{
+			name: "authorized get read-only",
+			user: &user.DefaultInfo{
+				Name: "read-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/foo", nil)
+			},
 			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized list read-only",
+			user: &user.DefaultInfo{
+				Name: "read-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "unauthorized create from read-only",
+			user: &user.DefaultInfo{
+				Name: "read-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodPost, "/apis/ext.cattle.io/v1/testtypes", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "unauthorized update from read-only",
+			user: &user.DefaultInfo{
+				Name: "read-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "unauthorized delete from read-only",
+			user: &user.DefaultInfo{
+				Name: "read-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodDelete, "/apis/ext.cattle.io/v1/testtypes/foo", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "unauthorized create-on-update",
+			user: &user.DefaultInfo{
+				Name: "update-not-create",
+			},
+			createRequest: func() *http.Request {
+				var buf bytes.Buffer
+				json.NewEncoder(&buf).Encode(&TestType{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "TestType",
+						APIVersion: testTypeGV.String(),
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "not-found",
+					},
+				})
+				return httptest.NewRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/not-found", &buf)
+			},
+			expectedStatusCode: http.StatusForbidden,
 		},
 		{
 			name: "authorized read-only-error with custom store authorization",
 			user: &user.DefaultInfo{
 				Name: "read-only-error",
 			},
-			paths:              []string{"/apis/ext.cattle.io/v1/testtypes"},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil)
+			},
 			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "authorized get read-write not found",
+			user: &user.DefaultInfo{
+				Name: "read-write",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/not-found", nil)
+			},
+			expectedStatusCode: http.StatusNotFound,
+		},
+		{
+			name: "authorized get read-write",
+			user: &user.DefaultInfo{
+				Name: "read-write",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/foo", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized list read-write",
+			user: &user.DefaultInfo{
+				Name: "read-write",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized create from read-write",
+			user: &user.DefaultInfo{
+				Name: "read-write",
+			},
+			createRequest: func() *http.Request {
+				var buf bytes.Buffer
+				json.NewEncoder(&buf).Encode(&TestType{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "TestType",
+						APIVersion: testTypeGV.String(),
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "foo",
+					},
+				})
+				return httptest.NewRequest(http.MethodPost, "/apis/ext.cattle.io/v1/testtypes", &buf)
+			},
+			expectedStatusCode: http.StatusCreated,
+		},
+		{
+			name: "authorized update from read-write",
+			user: &user.DefaultInfo{
+				Name: "read-write",
+			},
+			createRequest: func() *http.Request {
+				var buf bytes.Buffer
+				json.NewEncoder(&buf).Encode(&TestType{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "TestType",
+						APIVersion: testTypeGV.String(),
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "foo",
+					},
+				})
+				return httptest.NewRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", &buf)
+			},
+			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name: "unauthorized user",
 			user: &user.DefaultInfo{
 				Name: "unknown-user",
 			},
-			paths:              []string{"/apis/ext.cattle.io/v1/testtypes"},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil)
+			},
 			expectedStatusCode: http.StatusForbidden,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			for _, path := range test.paths {
-				req := httptest.NewRequest(http.MethodGet, path, nil)
-				w := httptest.NewRecorder()
+			req := test.createRequest()
+			w := httptest.NewRecorder()
 
-				if test.user != nil {
-					assert.EventuallyWithT(t, func(c *assert.CollectT) {
-						assert.True(c, authz.hasUser(test.user.GetName()))
-					}, time.Second*5, 100*time.Millisecond)
+			if test.user != nil {
+				assert.EventuallyWithT(t, func(c *assert.CollectT) {
+					assert.True(c, authz.hasUser(test.user.GetName()))
+				}, time.Second*5, 100*time.Millisecond)
 
-					ctx := request.WithUser(req.Context(), test.user)
-					req = req.WithContext(ctx)
-				}
+				ctx := request.WithUser(req.Context(), test.user)
+				req = req.WithContext(ctx)
+			}
 
-				extensionAPIServer.ServeHTTP(w, req)
-				resp := w.Result()
+			extensionAPIServer.ServeHTTP(w, req)
+			resp := w.Result()
 
-				body, _ := io.ReadAll(resp.Body)
-				responseStatus := metav1.Status{}
-				json.Unmarshal(body, &responseStatus)
+			body, _ := io.ReadAll(resp.Body)
+			responseStatus := metav1.Status{}
+			json.Unmarshal(body, &responseStatus)
 
-				require.Equal(t, test.expectedStatusCode, resp.StatusCode)
-				if test.expectedStatus != nil {
-					require.Equal(t, test.expectedStatus.Status(), responseStatus, "for path "+path)
-				}
+			require.Equal(t, test.expectedStatusCode, resp.StatusCode)
+			if test.expectedStatus != nil {
+				require.Equal(t, test.expectedStatus.Status(), responseStatus, "for request "+req.URL.String())
 			}
 		})
 	}

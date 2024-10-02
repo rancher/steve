@@ -2,7 +2,6 @@ package ext
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -41,7 +40,7 @@ func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.At
 		return authorizer.DecisionAllow, "", nil
 	}
 
-	return authorizer.DecisionDeny, "can't", fmt.Errorf("not allowed")
+	return authorizer.DecisionDeny, "", nil
 }
 
 func (a *AccessSetAuthorizer) hasUser(name string) bool {

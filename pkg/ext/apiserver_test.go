@@ -203,7 +203,11 @@ func setupExtensionAPIServer[
 		stoppedCh <- err
 		close(stoppedCh)
 	}()
-	<-readyCh
+	select {
+	case err := <-stoppedCh:
+		require.NoError(t, err)
+	case <-readyCh:
+	}
 
 	cleanup := func() {
 		cancel()
