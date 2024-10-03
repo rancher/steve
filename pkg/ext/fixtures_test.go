@@ -4,6 +4,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/registry/rest"
 	common "k8s.io/kube-openapi/pkg/common"
 	spec "k8s.io/kube-openapi/pkg/validation/spec"
 )
@@ -64,6 +65,8 @@ type TestType struct {
 func (t *TestType) DeepCopyObject() runtime.Object {
 	return t
 }
+
+var _ Store[*TestType, *TestTypeList] = (*testStore)(nil)
 
 type testStore struct {
 }
@@ -2758,3 +2761,18 @@ func schema_k8sio_apimachinery_pkg_version_Info(ref common.ReferenceCallback) co
 		},
 	}
 }
+
+// XXX: Implement DeleteCollection to simplify everything here
+// var _ rest.StandardStorage = (*delegate[*TestType, typeChecker, *typeCheckerList, typeCheckerList])(nil)
+var _ rest.Storage = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Scoper = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.KindProvider = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.GroupVersionKindProvider = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.SingularNameProvider = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Getter = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Lister = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.GracefulDeleter = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Creater = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Updater = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Watcher = (*delegate[*TestType, *TestTypeList])(nil)
+var _ rest.Patcher = (*delegate[*TestType, *TestTypeList])(nil)

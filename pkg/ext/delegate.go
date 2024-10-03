@@ -15,36 +15,16 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 )
 
-type typeChecker struct {
-	runtime.Object
-}
-
-type typeCheckerList struct {
-	runtime.Object
-}
-
-// XXX: Implement DeleteCollection to simplify everything here
-// var _ rest.StandardStorage = (*delegate[*typeChecker, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Storage = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.Scoper = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.KindProvider = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.GroupVersionKindProvider = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.SingularNameProvider = (*delegate[*typeChecker, *typeCheckerList])(nil)
-
-var _ rest.Getter = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.Lister = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.GracefulDeleter = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.Creater = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.Updater = (*delegate[*typeChecker, *typeCheckerList])(nil)
-var _ rest.Watcher = (*delegate[*typeChecker, *typeCheckerList])(nil)
-
 // delegate is the bridge between k8s.io/apiserver's [rest.Storage] interface and
 // our own Store interface we want developers to use
 //
-// It is used for non-namespaced objects only.
+// It currently supports non-namespaced stores only because Store[T, TList] doesn't
+// expose namespaces anywhere. When needed we'll add support to namespaced resources.
 type delegate[T runtime.Object, TList runtime.Object] struct {
-	scheme       *runtime.Scheme
-	t            T
+	scheme *runtime.Scheme
+	// t is the resource of the delegate (eg: *Token) and must be non-nil.
+	t T
+	// tList is the resource list of the delegate (eg: *TokenList) and must be non-nil.
 	tList        TList
 	gvk          schema.GroupVersionKind
 	gvr          schema.GroupVersionResource
