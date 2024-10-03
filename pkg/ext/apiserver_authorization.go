@@ -23,7 +23,7 @@ func NewAccessSetAuthorizer(asl accesscontrol.AccessSetLookup) *AccessSetAuthori
 func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
 	if !attrs.IsResourceRequest() {
 		// XXX: Implement
-		return authorizer.DecisionDeny, "", nil
+		return authorizer.DecisionDeny, "AccessSetAuthorizer does not support nonResourceURLs requests", nil
 	}
 
 	verb := attrs.GetVerb()
