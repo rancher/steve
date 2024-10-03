@@ -11,96 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
-
-var (
-	schemeBuilderTest = runtime.NewSchemeBuilder(addKnownTypesTest)
-	addToSchemeTest   = schemeBuilderTest.AddToScheme
-)
-
-func addKnownTypesTest(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(testTypeGV,
-		&TestType{},
-		&TestTypeList{},
-	)
-	metav1.AddToGroupVersion(scheme, testTypeGV)
-	return nil
-}
-
-var (
-	testTypeGV = schema.GroupVersion{
-		Group:   "ext.cattle.io",
-		Version: "v1",
-	}
-
-	testTypeListFixture = TestTypeList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TestList",
-			APIVersion: testTypeGV.String(),
-		},
-	}
-
-	testTypeFixture = TestType{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Test",
-			APIVersion: testTypeGV.String(),
-		},
-	}
-)
-
-var _ runtime.Object = (*TestTypeList)(nil)
-
-type TestTypeList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-}
-
-func (t *TestTypeList) DeepCopyObject() runtime.Object {
-	return t
-}
-
-var _ runtime.Object = (*TestType)(nil)
-
-type TestType struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-}
-
-func (t *TestType) DeepCopyObject() runtime.Object {
-	return t
-}
-
-type testStore struct {
-}
-
-func (t *testStore) Create(ctx Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
-	return &testTypeFixture, nil
-}
-
-func (t *testStore) Update(ctx Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
-	return &testTypeFixture, nil
-}
-
-func (t *testStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
-	return &testTypeFixture, nil
-}
-
-func (t *testStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
-	return &testTypeListFixture, nil
-}
-
-func (t *testStore) Watch(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[*TestType], error) {
-	return nil, nil
-}
-
-func (t *testStore) Delete(ctx Context, name string, opts *metav1.DeleteOptions) error {
-	return nil
-}
 
 func authAsAdmin(req *http.Request) (*authenticator.Response, bool, error) {
 	return &authenticator.Response{

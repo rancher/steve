@@ -191,6 +191,8 @@ func (s *ExtensionAPIServerSuite) SetupSuite() {
 	os.WriteFile(certFilepath, cert, 0644)
 	os.WriteFile(keyFilepath, key, 0644)
 
+	// Configures the aggregation layer according to
+	// https://kubernetes.io/docs/tasks/extend-kubernetes/configure-aggregation-layer/#enable-kubernetes-apiserver-flags
 	apiServer := &envtest.APIServer{}
 	apiServer.Configure().Append("requestheader-allowed-names", "system:auth-proxy")
 	apiServer.Configure().Append("requestheader-extra-headers-prefix", "X-Remote-Extra-")
