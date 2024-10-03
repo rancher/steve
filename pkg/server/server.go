@@ -73,6 +73,9 @@ type Options struct {
 	// SQLCache enables the SQLite-based lasso caching mechanism
 	SQLCache bool
 
+	// ExtensionAPIServer enables an extension API server that will be served
+	// under /ext
+	// If nil, Steve's default http handler for unknown routes will be served.
 	ExtensionAPIServer *ext.ExtensionAPIServer
 }
 

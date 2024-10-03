@@ -42,11 +42,13 @@ func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, ne
 
 	w := authMiddleware
 	handlers := router.Handlers{
-		Next:               next,
-		K8sResource:        w(a.apiHandler(k8sAPI)),
-		K8sProxy:           w(proxy),
-		APIRoot:            w(a.apiHandler(apiRoot)),
-		ExtensionAPIServer: w(extensionAPIServer),
+		Next:        next,
+		K8sResource: w(a.apiHandler(k8sAPI)),
+		K8sProxy:    w(proxy),
+		APIRoot:     w(a.apiHandler(apiRoot)),
+	}
+	if extensionAPIServer != nil {
+		handlers.ExtensionAPIServer = w(extensionAPIServer)
 	}
 	if routerFunc == nil {
 		return a.server, router.Routes(handlers), nil

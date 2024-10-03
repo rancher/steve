@@ -10,10 +10,12 @@ import (
 type RouterFunc func(h Handlers) http.Handler
 
 type Handlers struct {
-	K8sResource        http.Handler
-	APIRoot            http.Handler
-	K8sProxy           http.Handler
-	Next               http.Handler
+	K8sResource http.Handler
+	APIRoot     http.Handler
+	K8sProxy    http.Handler
+	Next        http.Handler
+	// ExtensionAPIServer serves under /ext. If nil, the default unknown path
+	// handler is served.
 	ExtensionAPIServer http.Handler
 }
 
@@ -26,8 +28,10 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/").Handler(h.APIRoot).HeadersRegexp("Accept", ".*json.*")
 	m.Path("/{name:v1}").Handler(h.APIRoot)
 
-	m.Path("/ext").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
-	m.PathPrefix("/ext/").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
+	if h.ExtensionAPIServer != nil {
+		m.Path("/ext").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
+		m.PathPrefix("/ext/").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
+	}
 
 	m.Path("/v1/{type}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{nameorns}").Queries("link", "{link}").Handler(h.K8sResource)
