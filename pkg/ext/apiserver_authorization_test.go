@@ -319,7 +319,8 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 
 			if test.user != nil {
 				assert.EventuallyWithT(t, func(c *assert.CollectT) {
-					assert.True(c, authz.hasUser(test.user.GetName()))
+					accessSet := accessStore.AccessFor(test.user)
+					assert.NotNil(c, accessSet)
 				}, time.Second*5, 100*time.Millisecond)
 
 				ctx := request.WithUser(req.Context(), test.user)
