@@ -235,7 +235,6 @@ func (s *delegate[T, TList]) Watch(parentCtx context.Context, options *metainter
 		if err != nil {
 			return
 		}
-		// defer close(eventCh)
 
 		for event := range eventCh {
 			w.ch <- watch.Event{
