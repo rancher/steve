@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rancher/wrangler/v3/pkg/schemes"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,27 +29,13 @@ import (
 )
 
 var (
-	// Reference:
-	// Scheme scheme for unversioned types - such as APIResourceList, and Status
-	scheme = runtime.NewScheme()
-	Scheme = scheme
-	// Codecs for unversioned types - such as APIResourceList, and Status
-	Codecs = serializer.NewCodecFactory(scheme)
+	schemeBuilder = runtime.NewSchemeBuilder(addKnownTypes, metainternalversion.AddToScheme)
+	AddToScheme   = schemeBuilder.AddToScheme
 )
 
-func init() {
-	schemes.AddToScheme(scheme)
+func addKnownTypes(scheme *runtime.Scheme) error {
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-	metainternalversion.RegisterConversions(scheme)
-
-	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
-	scheme.AddUnversionedTypes(unversioned,
-		&metav1.Status{},
-		&metav1.APIVersions{},
-		&metav1.APIGroupList{},
-		&metav1.APIGroup{},
-		&metav1.APIResourceList{},
-	)
+	return nil
 }
 
 type ExtensionAPIServerOptions struct {
@@ -121,7 +106,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	config.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(opts.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(scheme))
 	config.OpenAPIConfig.Info.Title = "Ext"
 	config.OpenAPIConfig.Info.Version = "0.1"
-	config.OpenAPIConfig.GetDefinitionName = getDefinitionName(opts.OpenAPIDefinitionNameReplacements)
+	config.OpenAPIConfig.GetDefinitionName = getDefinitionName(scheme, opts.OpenAPIDefinitionNameReplacements)
 	// Must set to nil otherwise getDefinitionName won't be used for refs
 	// which will break kubectl explain
 	config.OpenAPIConfig.Definitions = nil
@@ -129,7 +114,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	config.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(opts.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(scheme))
 	config.OpenAPIV3Config.Info.Title = "Ext"
 	config.OpenAPIV3Config.Info.Version = "0.1"
-	config.OpenAPIV3Config.GetDefinitionName = getDefinitionName(opts.OpenAPIDefinitionNameReplacements)
+	config.OpenAPIV3Config.GetDefinitionName = getDefinitionName(scheme, opts.OpenAPIDefinitionNameReplacements)
 	// Must set to nil otherwise getDefinitionName won't be used for refs
 	// which will break kubectl explain
 	config.OpenAPIV3Config.Definitions = nil
@@ -251,6 +236,8 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 	}
 
 	delegate := &delegate[T, TList]{
+		scheme: s.scheme,
+
 		t:            t,
 		tList:        tList,
 		singularName: singularName,
@@ -268,7 +255,7 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 	s.apiGroups[gvk.Group] = apiGroup
 }
 
-func getDefinitionName(replacements map[string]string) func(string) (string, spec.Extensions) {
+func getDefinitionName(scheme *runtime.Scheme, replacements map[string]string) func(string) (string, spec.Extensions) {
 	return func(name string) (string, spec.Extensions) {
 		namer := openapi.NewDefinitionNamer(scheme)
 		definitionName, defGVK := namer.GetDefinitionName(name)

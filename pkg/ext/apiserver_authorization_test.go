@@ -65,6 +65,8 @@ func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeL
 func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	t := s.T()
 
+	scheme := runtime.NewScheme()
+	AddToScheme(scheme)
 	rbacv1.AddToScheme(scheme)
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -82,7 +84,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	store := &authzTestStore{
 		testStore: &testStore{},
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
 		opts.Client = s.client

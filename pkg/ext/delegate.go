@@ -43,6 +43,7 @@ var _ rest.Watcher = (*delegate[*typeChecker, *typeCheckerList])(nil)
 //
 // It is used for non-namespaced objects only.
 type delegate[T runtime.Object, TList runtime.Object] struct {
+	scheme       *runtime.Scheme
 	t            T
 	tList        TList
 	gvk          schema.GroupVersionKind
@@ -83,7 +84,7 @@ func (s *delegate[T, TList]) List(parentCtx context.Context, internaloptions *me
 		return nil, err
 	}
 
-	options, err := convertListOptions(internaloptions)
+	options, err := s.convertListOptions(internaloptions)
 	if err != nil {
 		return nil, err
 	}
@@ -311,9 +312,9 @@ func (s *delegate[T, TList]) makeContext(parentCtx context.Context) (Context, er
 	return ctx, nil
 }
 
-func convertListOptions(options *metainternalversion.ListOptions) (*metav1.ListOptions, error) {
+func (s *delegate[T, TList]) convertListOptions(options *metainternalversion.ListOptions) (*metav1.ListOptions, error) {
 	var out metav1.ListOptions
-	err := scheme.Convert(options, &out, nil)
+	err := s.scheme.Convert(options, &out, nil)
 	if err != nil {
 		return nil, fmt.Errorf("convert list options: %w", err)
 	}

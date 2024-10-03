@@ -19,11 +19,11 @@ import (
 )
 
 var (
-	schemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
-	addToScheme   = schemeBuilder.AddToScheme
+	schemeBuilderTest = runtime.NewSchemeBuilder(addKnownTypesTest)
+	addToSchemeTest   = schemeBuilderTest.AddToScheme
 )
 
-func addKnownTypes(scheme *runtime.Scheme) error {
+func addKnownTypesTest(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(testTypeGV,
 		&TestType{},
 		&TestTypeList{},
@@ -116,8 +116,11 @@ func authzAllowAll(ctx context.Context, a authorizer.Attributes) (authorizer.Dec
 }
 
 func TestExtensionAPIServer(t *testing.T) {
+	scheme := runtime.NewScheme()
+	AddToScheme(scheme)
+
 	store := &testStore{}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32001
 		opts.Authentication.CustomAuthenticator = authAsAdmin
@@ -168,7 +171,9 @@ func TestExtensionAPIServer(t *testing.T) {
 func setupExtensionAPIServer[
 	T runtime.Object,
 	TList runtime.Object,
-](t *testing.T, objT T, objTList TList, store Store[T, TList], optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
+](t *testing.T, scheme *runtime.Scheme, objT T, objTList TList, store Store[T, TList], optionSetter func(*ExtensionAPIServerOptions)) (*ExtensionAPIServer, func(), error) {
+
+	addToSchemeTest(scheme)
 	codecs := serializer.NewCodecFactory(scheme)
 
 	opts := ExtensionAPIServerOptions{
@@ -184,8 +189,6 @@ func setupExtensionAPIServer[
 	if err != nil {
 		return nil, func() {}, err
 	}
-
-	addToScheme(scheme)
 
 	InstallStore(extensionAPIServer, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
 
