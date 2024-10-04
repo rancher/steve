@@ -15,12 +15,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	authenticatorunion "k8s.io/apiserver/pkg/authentication/request/union"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/kubernetes"
@@ -43,19 +43,24 @@ type ExtensionAPIServerOptions struct {
 	GetOpenAPIDefinitions             openapicommon.GetOpenAPIDefinitions
 	OpenAPIDefinitionNameReplacements map[string]string
 
-	Authentication AuthenticationOptions
+	// Authenticator will be used to authenticate requests coming to the
+	// extension API server.
+	//
+	// If the authenticator implements [dynamiccertificates.CAContentProvider], the
+	// ClientCA will be set on the underlying SecureServing struct. If the authenticator
+	// implements [dynamiccertificates.ControllerRunner] too, then Run() will be called so
+	// that the authenticators can run in the background. (See BuiltinAuthenticator for
+	// example).
+	//
+	// Use a UnionAuthenticator to have multiple ways of authenticating requests. See
+	// [NewUnionAuthenticator] for an example.
+	Authenticator authenticator.Request
 
 	Authorization authorizer.Authorizer
 
 	Client kubernetes.Interface
 
 	BindPort int
-}
-
-type AuthenticationOptions struct {
-	// When turned off, reject requests, unless custom authentication passes
-	EnableBuiltIn       bool
-	CustomAuthenticator authenticator.RequestFunc
 }
 
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
@@ -124,36 +129,13 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
 
-	if !opts.Authentication.EnableBuiltIn && opts.Authentication.CustomAuthenticator == nil {
-		return nil, fmt.Errorf("at least one authenticator must be configured")
+	if opts.Authenticator == nil {
+		return nil, fmt.Errorf("authenticator must be provided")
 	}
 
-	if opts.Authentication.EnableBuiltIn {
-		if opts.Client == nil {
-			return nil, fmt.Errorf("client required for builtin auth")
-		}
-
-		if err := ApplyTo(
-			opts.Client,
-			recommendedOpts.Authentication,
-			&config.Authentication,
-			config.SecureServing,
-			config.OpenAPIConfig,
-		); err != nil {
-			return nil, fmt.Errorf("applyto authentication: %w", err)
-		}
-	}
-	if opts.Authentication.CustomAuthenticator != nil {
-		if opts.Authentication.EnableBuiltIn {
-			config.Authentication.Authenticator = authenticatorunion.New(
-				opts.Authentication.CustomAuthenticator,
-				config.Authentication.Authenticator,
-			)
-		} else {
-			config.Authentication = genericapiserver.AuthenticationInfo{
-				Authenticator: opts.Authentication.CustomAuthenticator,
-			}
-		}
+	config.Authentication.Authenticator = opts.Authenticator
+	if caContentProvider, ok := opts.Authenticator.(dynamiccertificates.CAContentProvider); ok {
+		config.SecureServing.ClientCA = caContentProvider
 	}
 
 	completedConfig := config.Complete()

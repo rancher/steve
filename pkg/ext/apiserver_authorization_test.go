@@ -89,17 +89,15 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		opts.BindPort = 32000
 		opts.Client = s.client
 		opts.Authorization = authz
-		opts.Authentication = AuthenticationOptions{
-			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
-				user, ok := request.UserFrom(req.Context())
-				if !ok {
-					return nil, false, nil
-				}
-				return &authenticator.Response{
-					User: user,
-				}, true, nil
-			}),
-		}
+		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+			user, ok := request.UserFrom(req.Context())
+			if !ok {
+				return nil, false, nil
+			}
+			return &authenticator.Response{
+				User: user,
+			}, true, nil
+		})
 	})
 	require.NoError(t, err)
 	defer cleanup()

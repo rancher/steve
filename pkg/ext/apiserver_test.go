@@ -38,7 +38,7 @@ func TestExtensionAPIServer(t *testing.T) {
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32001
-		opts.Authentication.CustomAuthenticator = authAsAdmin
+		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	require.NoError(t, err)

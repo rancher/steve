@@ -1,6 +1,7 @@
 package ext
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -42,7 +43,7 @@ func (t *authnTestStore) getUser() (user.Info, bool) {
 	}
 }
 
-func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
+func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltin() {
 	t := s.T()
 
 	// Same CA but CN not in the list allowed
@@ -76,13 +77,21 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltIn() {
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
+	builtinAuth, err := NewBuiltinAuthenticator(s.client)
+	require.NoError(t, err)
+
+	func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err = builtinAuth.RunOnce(ctx)
+		require.NoError(t, err)
+	}()
+
 	_, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32003
 		opts.Client = s.client
-		opts.Authentication = AuthenticationOptions{
-			EnableBuiltIn: true,
-		}
+		opts.Authenticator = builtinAuth
 		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	require.NoError(t, err)
@@ -228,21 +237,18 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 		opts.BindPort = 32000
 		opts.Client = s.client
 		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
-		opts.Authentication = AuthenticationOptions{
-			EnableBuiltIn: false,
-			CustomAuthenticator: authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
-				user, ok := request.UserFrom(req.Context())
-				if !ok {
-					return nil, false, nil
-				}
-				if user.GetName() == "error" {
-					return nil, false, fmt.Errorf("fake error")
-				}
-				return &authenticator.Response{
-					User: user,
-				}, true, nil
-			}),
-		}
+		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+			user, ok := request.UserFrom(req.Context())
+			if !ok {
+				return nil, false, nil
+			}
+			if user.GetName() == "error" {
+				return nil, false, fmt.Errorf("fake error")
+			}
+			return &authenticator.Response{
+				User: user,
+			}, true, nil
+		})
 	})
 	require.NoError(t, err)
 	defer cleanup()
@@ -342,4 +348,89 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 			}
 		})
 	}
+}
+
+func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
+	t := s.T()
+
+	scheme := runtime.NewScheme()
+	AddToScheme(scheme)
+
+	cert, key, err := s.cert.AsBytes()
+	require.NoError(t, err)
+	certificate, err := tls.X509KeyPair(cert, key)
+	require.NoError(t, err)
+
+	builtinAuth, err := NewBuiltinAuthenticator(s.client)
+	require.NoError(t, err)
+
+	customAuth := authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
+		user, ok := request.UserFrom(req.Context())
+		if !ok {
+			return nil, false, nil
+		}
+		if user.GetName() == "error" {
+			return nil, false, fmt.Errorf("fake error")
+		}
+		return &authenticator.Response{
+			User: user,
+		}, true, nil
+	})
+	auth := NewUnionAuthenticator(customAuth, builtinAuth)
+	func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err = auth.RunOnce(ctx)
+		require.NoError(t, err)
+	}()
+
+	store := &authnTestStore{
+		testStore: &testStore{},
+		userCh:    make(chan user.Info, 100),
+	}
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+		// XXX: Find a way to get rid of this
+		opts.BindPort = 32004
+		opts.Client = s.client
+		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authenticator = auth
+	})
+	require.NoError(t, err)
+	defer cleanup()
+
+	httpClient := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				Certificates:       []tls.Certificate{certificate},
+			},
+		},
+	}
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", 32004, "/openapi/v2"), nil)
+	require.NoError(t, err)
+
+	userInfo := &user.DefaultInfo{
+		Name:   "my-user",
+		Groups: []string{"my-group"},
+	}
+
+	req.Header.Set("X-Remote-User", userInfo.GetName())
+	req.Header.Add("X-Remote-Group", userInfo.GetGroups()[0])
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		resp, err := httpClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+	}, 5*time.Second, 110*time.Millisecond)
+
+	req = httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
+	w := httptest.NewRecorder()
+
+	ctx := request.WithUser(req.Context(), userInfo)
+	req = req.WithContext(ctx)
+
+	extensionAPIServer.ServeHTTP(w, req)
+	resp := w.Result()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
