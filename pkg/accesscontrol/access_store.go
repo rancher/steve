@@ -2,9 +2,7 @@ package accesscontrol
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"hash"
+	"slices"
 	"sort"
 	"time"
 
@@ -26,6 +24,7 @@ type policyRules interface {
 	get(string) *AccessSet
 	getRoleBindings(string) []*rbacv1.RoleBinding
 	getClusterRoleBindings(string) []*rbacv1.ClusterRoleBinding
+	getRoleRefs(subjectName string) subjectGrants
 }
 
 type roleRevisions interface {
@@ -66,11 +65,12 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 }
 
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
+	info := l.toUserInfo(user)
 	if l.cache == nil {
-		return l.newAccessSet(user)
+		return l.newAccessSet(info)
 	}
 
-	cacheKey := l.CacheKey(user)
+	cacheKey := info.hash()
 
 	res, _, _ := l.concurrentAccessFor.Do(cacheKey, func() (interface{}, error) {
 		if val, ok := l.cache.Get(cacheKey); ok {
@@ -78,7 +78,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 			return as, nil
 		}
 
-		result := l.newAccessSet(user)
+		result := l.newAccessSet(info)
 		result.ID = cacheKey
 		l.cache.Add(cacheKey, result, 24*time.Hour)
 
@@ -87,10 +87,10 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	return res.(*AccessSet)
 }
 
-func (l *AccessStore) newAccessSet(user user.Info) *AccessSet {
-	result := l.usersPolicyRules.get(user.GetName())
-	for _, group := range user.GetGroups() {
-		result.Merge(l.groupsPolicyRules.get(group))
+func (l *AccessStore) newAccessSet(info userGrants) *AccessSet {
+	result := info.user.toAccessSet()
+	for _, group := range info.groups {
+		result.Merge(group.toAccessSet())
 	}
 	return result
 }
@@ -99,33 +99,17 @@ func (l *AccessStore) PurgeUserData(id string) {
 	l.cache.Remove(id)
 }
 
-func (l *AccessStore) CacheKey(user user.Info) string {
-	d := sha256.New()
+// toUserInfo retrieves all the access information for a user
+func (l *AccessStore) toUserInfo(user user.Info) userGrants {
+	var res userGrants
 
-	groupBase := user.GetGroups()
-	groups := make([]string, len(groupBase))
-	copy(groups, groupBase)
+	groups := slices.Clone(user.GetGroups())
 	sort.Strings(groups)
 
-	l.addRolesToHash(d, user.GetName(), l.usersPolicyRules)
+	res.user = l.usersPolicyRules.getRoleRefs(user.GetName())
 	for _, group := range groups {
-		l.addRolesToHash(d, group, l.groupsPolicyRules)
+		res.groups = append(res.groups, l.groupsPolicyRules.getRoleRefs(group))
 	}
 
-	return hex.EncodeToString(d.Sum(nil))
-}
-
-func (l *AccessStore) addRolesToHash(digest hash.Hash, subjectName string, rules policyRules) {
-	for _, crb := range rules.getClusterRoleBindings(subjectName) {
-		digest.Write([]byte(crb.RoleRef.Name))
-		digest.Write([]byte(l.roles.roleRevision("", crb.RoleRef.Name)))
-	}
-
-	for _, rb := range rules.getRoleBindings(subjectName) {
-		digest.Write([]byte(rb.RoleRef.Name))
-		if rb.Namespace != "" {
-			digest.Write([]byte(rb.Namespace))
-		}
-		digest.Write([]byte(l.roles.roleRevision(rb.Namespace, rb.RoleRef.Name)))
-	}
+	return res
 }
