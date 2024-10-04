@@ -152,3 +152,31 @@ func (p *policyRuleIndex) getRoleBindings(subjectName string) []*rbacv1.RoleBind
 	})
 	return result
 }
+
+func (p *policyRuleIndex) getRoleRefs(subjectName string) subjectGrants {
+	var clusterRoleBindings []roleRef
+	for _, crb := range p.getClusterRoleBindings(subjectName) {
+		rules, resourceVersion := p.getRules(All, crb.RoleRef)
+		clusterRoleBindings = append(clusterRoleBindings, roleRef{
+			roleName:        crb.RoleRef.Name,
+			resourceVersion: resourceVersion,
+			rules:           rules,
+		})
+	}
+
+	var roleBindings []roleRef
+	for _, rb := range p.getRoleBindings(subjectName) {
+		rules, resourceVersion := p.getRules(rb.Namespace, rb.RoleRef)
+		roleBindings = append(roleBindings, roleRef{
+			roleName:        rb.RoleRef.Name,
+			namespace:       rb.Namespace,
+			resourceVersion: resourceVersion,
+			rules:           rules,
+		})
+	}
+
+	return subjectGrants{
+		roleBindings:        roleBindings,
+		clusterRoleBindings: clusterRoleBindings,
+	}
+}
