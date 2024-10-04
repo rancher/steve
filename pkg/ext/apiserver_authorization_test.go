@@ -88,7 +88,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
 		opts.Client = s.client
-		opts.Authorization = authz
+		opts.Authorizer = authz
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
 			user, ok := request.UserFrom(req.Context())
 			if !ok {

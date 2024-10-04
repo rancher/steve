@@ -56,7 +56,7 @@ type ExtensionAPIServerOptions struct {
 	// [NewUnionAuthenticator] for an example.
 	Authenticator authenticator.Request
 
-	Authorization authorizer.Authorizer
+	Authorizer authorizer.Authorizer
 
 	Client kubernetes.Interface
 
@@ -91,15 +91,19 @@ func (e emptyAddresses) ServerAddressByClientCIDRs(clientIP net.IP) []metav1.Ser
 func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactory, opts ExtensionAPIServerOptions) (*ExtensionAPIServer, error) {
 	recommendedOpts := genericoptions.NewRecommendedOptions("", codecs.LegacyCodec())
 
-	if opts.Authorization == nil {
-		return nil, fmt.Errorf("no authorization provided")
+	if opts.Authenticator == nil {
+		return nil, fmt.Errorf("authenticator must be provided")
+	}
+
+	if opts.Authorizer == nil {
+		return nil, fmt.Errorf("authorizer must be provided")
 	}
 
 	resolver := &request.RequestInfoFactory{APIPrefixes: sets.NewString("apis", "api"), GrouplessAPIPrefixes: sets.NewString("api")}
 	config := genericapiserver.NewRecommendedConfig(codecs)
 	config.RequestInfoResolver = resolver
 	config.Authorization = genericapiserver.AuthorizationInfo{
-		Authorizer: opts.Authorization,
+		Authorizer: opts.Authorizer,
 	}
 
 	// XXX: kubectl doesn't show this, and it's listed as optional so it
@@ -129,10 +133,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
 
-	if opts.Authenticator == nil {
-		return nil, fmt.Errorf("authenticator must be provided")
-	}
-
 	config.Authentication.Authenticator = opts.Authenticator
 	if caContentProvider, ok := opts.Authenticator.(dynamiccertificates.CAContentProvider); ok {
 		config.SecureServing.ClientCA = caContentProvider
@@ -149,7 +149,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		scheme:           scheme,
 		genericAPIServer: genericServer,
 		apiGroups:        make(map[string]genericapiserver.APIGroupInfo),
-		authorizer:       opts.Authorization,
+		authorizer:       opts.Authorizer,
 	}
 
 	return extensionAPIServer, nil

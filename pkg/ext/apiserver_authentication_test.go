@@ -92,7 +92,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltin() {
 		opts.BindPort = 32003
 		opts.Client = s.client
 		opts.Authenticator = builtinAuth
-		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	require.NoError(t, err)
 	defer cleanup()
@@ -236,7 +236,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32000
 		opts.Client = s.client
-		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
 			user, ok := request.UserFrom(req.Context())
 			if !ok {
@@ -392,7 +392,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32004
 		opts.Client = s.client
-		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = auth
 	})
 	require.NoError(t, err)

@@ -39,7 +39,7 @@ func TestExtensionAPIServer(t *testing.T) {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32001
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
-		opts.Authorization = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	require.NoError(t, err)
 	defer cleanup()
