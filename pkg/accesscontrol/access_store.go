@@ -8,7 +8,6 @@ import (
 
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"golang.org/x/sync/singleflight"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
@@ -21,14 +20,7 @@ type AccessSetLookup interface {
 }
 
 type policyRules interface {
-	get(string) *AccessSet
-	getRoleBindings(string) []*rbacv1.RoleBinding
-	getClusterRoleBindings(string) []*rbacv1.ClusterRoleBinding
 	getRoleRefs(subjectName string) subjectGrants
-}
-
-type roleRevisions interface {
-	roleRevision(string, string) string
 }
 
 // accessStoreCache is a subset of the methods implemented by LRUExpireCache
@@ -41,21 +33,14 @@ type accessStoreCache interface {
 type AccessStore struct {
 	usersPolicyRules    policyRules
 	groupsPolicyRules   policyRules
-	roles               roleRevisions
 	cache               accessStoreCache
 	concurrentAccessFor *singleflight.Group
 }
 
-type roleKey struct {
-	namespace string
-	name      string
-}
-
-func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
+func NewAccessStore(_ context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
 	as := &AccessStore{
 		usersPolicyRules:    newPolicyRuleIndex(true, rbac),
 		groupsPolicyRules:   newPolicyRuleIndex(false, rbac),
-		roles:               newRoleRevision(ctx, rbac),
 		concurrentAccessFor: new(singleflight.Group),
 	}
 	if cacheResults {
