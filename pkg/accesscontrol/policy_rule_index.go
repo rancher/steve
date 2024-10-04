@@ -73,18 +73,22 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 	result := &AccessSet{}
 
 	for _, binding := range p.getRoleBindings(subjectName) {
-		p.addAccess(result, binding.Namespace, binding.RoleRef)
+		namespace := binding.Namespace
+		rules := p.getRules(namespace, binding.RoleRef)
+		addAccess(result, namespace, rules)
 	}
 
 	for _, binding := range p.getClusterRoleBindings(subjectName) {
-		p.addAccess(result, All, binding.RoleRef)
+		namespace := All
+		rules := p.getRules(namespace, binding.RoleRef)
+		addAccess(result, namespace, rules)
 	}
 
 	return result
 }
 
-func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
-	for _, rule := range p.getRules(namespace, roleRef) {
+func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule) {
+	for _, rule := range rules {
 		for _, group := range rule.APIGroups {
 			for _, resource := range rule.Resources {
 				names := rule.ResourceNames
