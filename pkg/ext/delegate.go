@@ -45,6 +45,10 @@ func (s *delegate[T, TList]) New() runtime.Object {
 // Destroy cleans up its resources on shutdown.
 // Destroy has to be implemented in thread-safe way and be prepared
 // for being called more than once.
+//
+// It is NOT meant to delete resources from the backing storage. It is meant to
+// stop clients, runners, etc that could be running for the store when the extension
+// API server gracefully shutdowns/exits.
 func (s *delegate[T, TList]) Destroy() {
 }
 
