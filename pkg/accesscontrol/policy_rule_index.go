@@ -74,13 +74,13 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 
 	for _, binding := range p.getRoleBindings(subjectName) {
 		namespace := binding.Namespace
-		rules := p.getRules(namespace, binding.RoleRef)
+		rules, _ := p.getRules(namespace, binding.RoleRef)
 		addAccess(result, namespace, rules)
 	}
 
 	for _, binding := range p.getClusterRoleBindings(subjectName) {
 		namespace := All
-		rules := p.getRules(namespace, binding.RoleRef)
+		rules, _ := p.getRules(namespace, binding.RoleRef)
 		addAccess(result, namespace, rules)
 	}
 
@@ -112,23 +112,23 @@ func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule
 	}
 }
 
-func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) []rbacv1.PolicyRule {
+func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) ([]rbacv1.PolicyRule, string) {
 	switch roleRef.Kind {
 	case "ClusterRole":
 		role, err := p.crCache.Get(roleRef.Name)
 		if err != nil {
-			return nil
+			return nil, ""
 		}
-		return role.Rules
+		return role.Rules, role.ResourceVersion
 	case "Role":
 		role, err := p.rCache.Get(namespace, roleRef.Name)
 		if err != nil {
-			return nil
+			return nil, ""
 		}
-		return role.Rules
+		return role.Rules, role.ResourceVersion
 	}
 
-	return nil
+	return nil, ""
 }
 
 func (p *policyRuleIndex) getClusterRoleBindings(subjectName string) []*rbacv1.ClusterRoleBinding {
