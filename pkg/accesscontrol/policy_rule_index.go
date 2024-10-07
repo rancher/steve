@@ -4,33 +4,35 @@ import (
 	"fmt"
 	"sort"
 
-	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
+	rbacv1controllers "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
-	rbacGroup = "rbac.authorization.k8s.io"
+	rbacGroup = rbacv1.GroupName
 	All       = "*"
+
+	groupKind      = rbacv1.GroupKind
+	userKind       = rbacv1.UserKind
+	svcAccountKind = rbacv1.ServiceAccountKind
 )
 
 type policyRuleIndex struct {
-	crCache             v1.ClusterRoleCache
-	rCache              v1.RoleCache
-	crbCache            v1.ClusterRoleBindingCache
-	rbCache             v1.RoleBindingCache
-	kind                string
+	crCache             rbacv1controllers.ClusterRoleCache
+	rCache              rbacv1controllers.RoleCache
+	crbCache            rbacv1controllers.ClusterRoleBindingCache
+	rbCache             rbacv1controllers.RoleBindingCache
 	roleIndexKey        string
 	clusterRoleIndexKey string
 }
 
-func newPolicyRuleIndex(user bool, rbac v1.Interface) *policyRuleIndex {
-	key := "Group"
+func newPolicyRuleIndex(user bool, rbac rbacv1controllers.Interface) *policyRuleIndex {
+	key := groupKind
 	if user {
-		key = "User"
+		key = userKind
 	}
 	pi := &policyRuleIndex{
-		kind:                key,
 		crCache:             rbac.ClusterRole().Cache(),
 		rCache:              rbac.Role().Cache(),
 		crbCache:            rbac.ClusterRoleBinding().Cache(),
@@ -39,34 +41,46 @@ func newPolicyRuleIndex(user bool, rbac v1.Interface) *policyRuleIndex {
 		roleIndexKey:        "rb" + key,
 	}
 
-	pi.crbCache.AddIndexer(pi.clusterRoleIndexKey, pi.clusterRoleBindingBySubjectIndexer)
-	pi.rbCache.AddIndexer(pi.roleIndexKey, pi.roleBindingBySubject)
+	pi.crbCache.AddIndexer(pi.clusterRoleIndexKey, clusterRoleBindingBySubjectIndexer(key))
+	pi.rbCache.AddIndexer(pi.roleIndexKey, roleBindingBySubjectIndexer(key))
 
 	return pi
 }
 
-func (p *policyRuleIndex) clusterRoleBindingBySubjectIndexer(crb *rbacv1.ClusterRoleBinding) (result []string, err error) {
-	for _, subject := range crb.Subjects {
-		if subject.APIGroup == rbacGroup && subject.Kind == p.kind && crb.RoleRef.Kind == "ClusterRole" {
-			result = append(result, subject.Name)
-		} else if subject.APIGroup == "" && p.kind == "User" && subject.Kind == "ServiceAccount" && subject.Namespace != "" && crb.RoleRef.Kind == "ClusterRole" {
-			// Index is for Users and this references a service account
-			result = append(result, fmt.Sprintf("serviceaccount:%s:%s", subject.Namespace, subject.Name))
+func clusterRoleBindingBySubjectIndexer(kind string) func(crb *rbacv1.ClusterRoleBinding) ([]string, error) {
+	return func(crb *rbacv1.ClusterRoleBinding) ([]string, error) {
+		if crb.RoleRef.Kind != "ClusterRole" {
+			return nil, nil
 		}
+		return indexSubjects(kind, crb.Subjects), nil
 	}
-	return
 }
 
-func (p *policyRuleIndex) roleBindingBySubject(rb *rbacv1.RoleBinding) (result []string, err error) {
-	for _, subject := range rb.Subjects {
-		if subject.APIGroup == rbacGroup && subject.Kind == p.kind {
+func roleBindingBySubjectIndexer(key string) func(rb *rbacv1.RoleBinding) ([]string, error) {
+	return func(rb *rbacv1.RoleBinding) ([]string, error) {
+		return indexSubjects(key, rb.Subjects), nil
+	}
+}
+
+func indexSubjects(kind string, subjects []rbacv1.Subject) []string {
+	var result []string
+	for _, subject := range subjects {
+		if subjectIs(kind, subject) {
 			result = append(result, subject.Name)
-		} else if subject.APIGroup == "" && p.kind == "User" && subject.Kind == "ServiceAccount" && subject.Namespace != "" {
+		} else if kind == userKind && subjectIsServiceAccount(subject) {
 			// Index is for Users and this references a service account
 			result = append(result, fmt.Sprintf("serviceaccount:%s:%s", subject.Namespace, subject.Name))
 		}
 	}
-	return
+	return result
+}
+
+func subjectIs(kind string, subject rbacv1.Subject) bool {
+	return subject.APIGroup == rbacGroup && subject.Kind == kind
+}
+
+func subjectIsServiceAccount(subject rbacv1.Subject) bool {
+	return subject.APIGroup == "" && subject.Kind == svcAccountKind && subject.Namespace != ""
 }
 
 // addAccess appends a set of PolicyRules to a given AccessSet
