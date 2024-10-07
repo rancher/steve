@@ -69,24 +69,7 @@ func (p *policyRuleIndex) roleBindingBySubject(rb *rbacv1.RoleBinding) (result [
 	return
 }
 
-func (p *policyRuleIndex) get(subjectName string) *AccessSet {
-	result := &AccessSet{}
-
-	for _, binding := range p.getRoleBindings(subjectName) {
-		namespace := binding.Namespace
-		rules, _ := p.getRules(namespace, binding.RoleRef)
-		addAccess(result, namespace, rules)
-	}
-
-	for _, binding := range p.getClusterRoleBindings(subjectName) {
-		namespace := All
-		rules, _ := p.getRules(namespace, binding.RoleRef)
-		addAccess(result, namespace, rules)
-	}
-
-	return result
-}
-
+// addAccess appends a set of PolicyRules to a given AccessSet
 func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule) {
 	for _, rule := range rules {
 		for _, group := range rule.APIGroups {
@@ -112,6 +95,7 @@ func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule
 	}
 }
 
+// getRules obtain the actual Role or ClusterRole pointed at by a RoleRef, and returns PolicyRyles and the resource version
 func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) ([]rbacv1.PolicyRule, string) {
 	switch roleRef.Kind {
 	case "ClusterRole":
@@ -153,6 +137,7 @@ func (p *policyRuleIndex) getRoleBindings(subjectName string) []*rbacv1.RoleBind
 	return result
 }
 
+// getRoleRefs gathers rules from roles granted to a given subject through RoleBindings and ClusterRoleBindings
 func (p *policyRuleIndex) getRoleRefs(subjectName string) subjectGrants {
 	var clusterRoleBindings []roleRef
 	for _, crb := range p.getClusterRoleBindings(subjectName) {
