@@ -49,7 +49,7 @@ type ExtensionAPIServerOptions struct {
 	// If the authenticator implements [dynamiccertificates.CAContentProvider], the
 	// ClientCA will be set on the underlying SecureServing struct. If the authenticator
 	// implements [dynamiccertificates.ControllerRunner] too, then Run() will be called so
-	// that the authenticators can run in the background. (See BuiltinAuthenticator for
+	// that the authenticators can run in the background. (See DefaultAuthenticator for
 	// example).
 	//
 	// Use a UnionAuthenticator to have multiple ways of authenticating requests. See

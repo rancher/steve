@@ -43,7 +43,7 @@ func (t *authnTestStore) getUser() (user.Info, bool) {
 	}
 }
 
-func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltin() {
+func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 	t := s.T()
 
 	// Same CA but CN not in the list allowed
@@ -77,13 +77,13 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltin() {
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
-	builtinAuth, err := NewBuiltinAuthenticator(s.client)
+	defaultAuth, err := NewDefaultAuthenticator(s.client)
 	require.NoError(t, err)
 
 	func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		err = builtinAuth.RunOnce(ctx)
+		err = defaultAuth.RunOnce(ctx)
 		require.NoError(t, err)
 	}()
 
@@ -91,7 +91,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationBuiltin() {
 		// XXX: Find a way to get rid of this
 		opts.BindPort = 32003
 		opts.Client = s.client
-		opts.Authenticator = builtinAuth
+		opts.Authenticator = defaultAuth
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 	})
 	require.NoError(t, err)
@@ -361,7 +361,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 	certificate, err := tls.X509KeyPair(cert, key)
 	require.NoError(t, err)
 
-	builtinAuth, err := NewBuiltinAuthenticator(s.client)
+	defaultAuth, err := NewDefaultAuthenticator(s.client)
 	require.NoError(t, err)
 
 	customAuth := authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -376,7 +376,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 			User: user,
 		}, true, nil
 	})
-	auth := NewUnionAuthenticator(customAuth, builtinAuth)
+	auth := NewUnionAuthenticator(customAuth, defaultAuth)
 	func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()

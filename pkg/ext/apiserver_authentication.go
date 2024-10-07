@@ -22,7 +22,7 @@ var _ dynamiccertificates.CAContentProvider = &UnionAuthenticator{}
 
 // UnionAuthenticator chains authenticators together to allow many ways of authenticating
 // requests for the extension API server. For example, we might want to use Rancher's
-// token authentication and fallback to the builtin authentication (mTLS) defined
+// token authentication and fallback to the default authentication (mTLS) defined
 // by Kubernetes.
 //
 // UnionAuthenticator is both a [dynamiccertificates.ControllerRunner] and a
@@ -42,11 +42,11 @@ type UnionAuthenticator struct {
 //	customAuth := authenticator.RequestFunc(func(req *http.Request) (*Response, bool, error) {
 //		// use request to determine what the user is, otherwise return false
 //	})
-//	builtin, err := NewBuiltinAuthenticator(client)
+//	default, err := NewDefaultAuthenticator(client)
 //	if err != nil {
 //		return err
 //	}
-//	auth := NewUnionAuthenticator(customAuth, builtin)
+//	auth := NewUnionAuthenticator(customAuth, default)
 //	err = auth.RunOnce(ctx)
 func NewUnionAuthenticator(authenticators ...authenticator.Request) *UnionAuthenticator {
 	caContentProviders := make([]dynamiccertificates.CAContentProvider, 0, len(authenticators))
@@ -113,10 +113,10 @@ const (
 	authenticationConfigMapName      = "extension-apiserver-authentication"
 )
 
-var _ dynamiccertificates.ControllerRunner = &BuiltinAuthenticator{}
-var _ dynamiccertificates.CAContentProvider = &BuiltinAuthenticator{}
+var _ dynamiccertificates.ControllerRunner = &DefaultAuthenticator{}
+var _ dynamiccertificates.CAContentProvider = &DefaultAuthenticator{}
 
-// BuiltinAuthenticator is an [authenticator.Request] that authenticates a user by:
+// DefaultAuthenticator is an [authenticator.Request] that authenticates a user by:
 //   - making sure the client uses a certificate signed by the CA defined in the
 //     `extension-apiserver-authentication` configmap in the `kube-system` namespace and
 //   - making sure the CN of the cert is part of the allow list, also defined in the same configmap
@@ -126,23 +126,23 @@ var _ dynamiccertificates.CAContentProvider = &BuiltinAuthenticator{}
 // This authenticator is a [dynamiccertificates.ControllerRunner] which means
 // it will run in the background to dynamically watch the content of the configmap.
 //
-// When using the BuiltinAuthenticator, it is suggested to call RunOnce() to initialize
+// When using the DefaultAuthenticator, it is suggested to call RunOnce() to initialize
 // the CA state. It is also possible to watch for changes to the CA bundle with the AddListener()
 // method.  Here's an example usage:
 //
-//	auth, err := NewBuiltinAuthenticator(client)
+//	auth, err := NewDefaultAuthenticator(client)
 //	if err != nil {
 //	   return err
 //	}
 //	auth.AddListener(myListener{auth: auth}) // myListener should react to CA bundle changes
 //	err = auth.RunOnce(ctx)
-type BuiltinAuthenticator struct {
+type DefaultAuthenticator struct {
 	requestHeaderConfig *authenticatorfactory.RequestHeaderConfig
 	authenticator       authenticator.Request
 }
 
-// NewBuiltinAuthenticator creates a BuiltinAuthenticator
-func NewBuiltinAuthenticator(client kubernetes.Interface) (*BuiltinAuthenticator, error) {
+// NewDefaultAuthenticator creates a DefaultAuthenticator
+func NewDefaultAuthenticator(client kubernetes.Interface) (*DefaultAuthenticator, error) {
 	requestHeaderConfig, err := createRequestHeaderConfig(client)
 	if err != nil {
 		return nil, fmt.Errorf("requestheaderconfig: %w", err)
@@ -160,40 +160,40 @@ func NewBuiltinAuthenticator(client kubernetes.Interface) (*BuiltinAuthenticator
 		return nil, err
 	}
 
-	return &BuiltinAuthenticator{
+	return &DefaultAuthenticator{
 		requestHeaderConfig: requestHeaderConfig,
 		authenticator:       authenticator,
 	}, nil
 }
 
 // AuthenticateRequest implements [authenticator.Request]
-func (b *BuiltinAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
+func (b *DefaultAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
 	return b.authenticator.AuthenticateRequest(req)
 }
 
 // AuthenticateRequest implements [dynamiccertificates.Notifier]
 // This is part of the [dynamiccertificates.CAContentProvider] interface.
-func (b *BuiltinAuthenticator) AddListener(listener dynamiccertificates.Listener) {
+func (b *DefaultAuthenticator) AddListener(listener dynamiccertificates.Listener) {
 	b.requestHeaderConfig.CAContentProvider.AddListener(listener)
 }
 
 // AuthenticateRequest implements [dynamiccertificates.CAContentProvider]
-func (b *BuiltinAuthenticator) Name() string {
+func (b *DefaultAuthenticator) Name() string {
 	return b.requestHeaderConfig.CAContentProvider.Name()
 }
 
 // AuthenticateRequest implements [dynamiccertificates.CAContentProvider]
-func (b *BuiltinAuthenticator) CurrentCABundleContent() []byte {
+func (b *DefaultAuthenticator) CurrentCABundleContent() []byte {
 	return b.requestHeaderConfig.CAContentProvider.CurrentCABundleContent()
 }
 
 // AuthenticateRequest implements [dynamiccertificates.CAContentProvider]
-func (b *BuiltinAuthenticator) VerifyOptions() (x509.VerifyOptions, bool) {
+func (b *DefaultAuthenticator) VerifyOptions() (x509.VerifyOptions, bool) {
 	return b.requestHeaderConfig.CAContentProvider.VerifyOptions()
 }
 
 // AuthenticateRequest implements [dynamiccertificates.ControllerRunner]
-func (b *BuiltinAuthenticator) RunOnce(ctx context.Context) error {
+func (b *DefaultAuthenticator) RunOnce(ctx context.Context) error {
 	runner, ok := b.requestHeaderConfig.CAContentProvider.(dynamiccertificates.ControllerRunner)
 	if !ok {
 		return nil
@@ -204,7 +204,7 @@ func (b *BuiltinAuthenticator) RunOnce(ctx context.Context) error {
 // AuthenticateRequest implements [dynamiccertificates.ControllerRunner].
 //
 // It will be called by the "SecureServing" when starting the extension API server
-func (b *BuiltinAuthenticator) Run(ctx context.Context, workers int) {
+func (b *DefaultAuthenticator) Run(ctx context.Context, workers int) {
 	runner, ok := b.requestHeaderConfig.CAContentProvider.(dynamiccertificates.ControllerRunner)
 	if !ok {
 		return
