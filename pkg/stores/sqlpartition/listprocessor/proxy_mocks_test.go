@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	informer "github.com/rancher/lasso/pkg/cache/sql/informer"
 	partition "github.com/rancher/lasso/pkg/cache/sql/partition"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

@@ -7,7 +7,7 @@ package fake
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	accesscontrol "github.com/rancher/steve/pkg/accesscontrol"
 	user "k8s.io/apiserver/pkg/authentication/user"
 )
