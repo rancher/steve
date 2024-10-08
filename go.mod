@@ -30,7 +30,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
 	github.com/urfave/cli/v2 v2.27.4
-	golang.org/x/sync v0.7.0
+	golang.org/x/sync v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.30.1
 	k8s.io/apiextensions-apiserver v0.30.1
