@@ -49,6 +49,8 @@ var _ runtime.Object = (*TestTypeList)(nil)
 type TestTypeList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
+
+	Items []TestType `json:"items"`
 }
 
 func (t *TestTypeList) DeepCopyObject() runtime.Object {

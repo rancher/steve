@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -206,7 +207,12 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 	singularName string,
 	gvk schema.GroupVersionKind,
 	store Store[T, TList],
-) {
+) error {
+
+	if !meta.IsListType(tList) {
+		return fmt.Errorf("tList (%T) is not a list type", tList)
+	}
+
 	apiGroup, ok := s.apiGroups[gvk.Group]
 	if !ok {
 		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
@@ -235,6 +241,7 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 
 	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = delegate
 	s.apiGroups[gvk.Group] = apiGroup
+	return nil
 }
 
 func getDefinitionName(scheme *runtime.Scheme, replacements map[string]string) func(string) (string, spec.Extensions) {

@@ -3,6 +3,7 @@ package ext
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -105,7 +106,10 @@ func setupExtensionAPIServer[
 		return nil, func() {}, err
 	}
 
-	InstallStore(extensionAPIServer, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+	err = InstallStore(extensionAPIServer, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("InstallStore: %w", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
