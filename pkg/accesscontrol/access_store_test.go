@@ -3,7 +3,9 @@ package accesscontrol
 import (
 	"fmt"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -271,6 +273,81 @@ func TestAccessStore_AccessFor(t *testing.T) {
 	store.PurgeUserData(as.ID)
 	if got, want := len(asCache.Keys()), 0; got != want {
 		t.Errorf("Cache was not purged, got len %d, want %d", got, want)
+	}
+}
+
+type spyCache struct {
+	accessStoreCache
+
+	mu       sync.Mutex
+	setCalls map[any]int
+}
+
+func (c *spyCache) Add(k interface{}, v interface{}, ttl time.Duration) {
+	defer c.observeAdd(k)
+
+	time.Sleep(1 * time.Millisecond) // allow other routines to wake up, simulating heavy load
+	c.accessStoreCache.Add(k, v, ttl)
+}
+
+func (c *spyCache) observeAdd(k interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.setCalls == nil {
+		c.setCalls = make(map[any]int)
+	}
+	c.setCalls[k]++
+}
+
+func TestAccessStore_AccessFor_concurrent(t *testing.T) {
+	t.Skipf("TODO - Add a fix for this test")
+	testUser := &user.DefaultInfo{Name: "test-user"}
+	asCache := &spyCache{accessStoreCache: cache.NewLRUExpireCache(100)}
+	store := &AccessStore{
+		roles: roleRevisionsMock(func(ns, name string) string {
+			return fmt.Sprintf("%s%srev", ns, name)
+		}),
+		usersPolicyRules: &policyRulesMock{
+			getRBFunc: func(s string) []*rbacv1.RoleBinding {
+				return []*rbacv1.RoleBinding{
+					makeRB("testns", "testrb", testUser.Name, "testrole"),
+				}
+			},
+			getFunc: func(_ string) *AccessSet {
+				return &AccessSet{
+					set: map[key]resourceAccessSet{
+						{"get", corev1.Resource("ConfigMap")}: map[Access]bool{
+							{Namespace: All, ResourceName: All}: true,
+						},
+					},
+				}
+			},
+		},
+		cache: asCache,
+	}
+
+	const n = 5 // observation showed cases with up to 5 (or more) concurrent queries for the same user
+
+	wait := make(chan struct{})
+	var wg sync.WaitGroup
+	var id string
+	for range n {
+		wg.Add(1)
+		go func() {
+			<-wait
+			id = store.AccessFor(testUser).ID
+			wg.Done()
+		}()
+	}
+	close(wait)
+	wg.Wait()
+
+	if got, want := len(asCache.setCalls), 1; got != want {
+		t.Errorf("Unexpected number of cache entries: got %d, want %d", got, want)
+	}
+	if got, want := asCache.setCalls[id], 1; got != want {
+		t.Errorf("Unexpected number of calls to cache.Set(): got %d, want %d", got, want)
 	}
 }
 

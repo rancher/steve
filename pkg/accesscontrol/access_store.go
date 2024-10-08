@@ -31,11 +31,18 @@ type roleRevisions interface {
 	roleRevision(string, string) string
 }
 
+// accessStoreCache is a subset of the methods implemented by LRUExpireCache
+type accessStoreCache interface {
+	Add(key interface{}, value interface{}, ttl time.Duration)
+	Get(key interface{}) (interface{}, bool)
+	Remove(key interface{})
+}
+
 type AccessStore struct {
 	usersPolicyRules  policyRules
 	groupsPolicyRules policyRules
 	roles             roleRevisions
-	cache             *cache.LRUExpireCache
+	cache             accessStoreCache
 }
 
 type roleKey struct {
@@ -56,26 +63,29 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 }
 
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
-	var cacheKey string
-	if l.cache != nil {
-		cacheKey = l.CacheKey(user)
-		val, ok := l.cache.Get(cacheKey)
-		if ok {
-			as, _ := val.(*AccessSet)
-			return as
-		}
+	if l.cache == nil {
+		return l.newAccessSet(user)
 	}
 
+	cacheKey := l.CacheKey(user)
+
+	if val, ok := l.cache.Get(cacheKey); ok {
+		as, _ := val.(*AccessSet)
+		return as
+	}
+
+	result := l.newAccessSet(user)
+	result.ID = cacheKey
+	l.cache.Add(cacheKey, result, 24*time.Hour)
+
+	return result
+}
+
+func (l *AccessStore) newAccessSet(user user.Info) *AccessSet {
 	result := l.usersPolicyRules.get(user.GetName())
 	for _, group := range user.GetGroups() {
 		result.Merge(l.groupsPolicyRules.get(group))
 	}
-
-	if l.cache != nil {
-		result.ID = cacheKey
-		l.cache.Add(cacheKey, result, 24*time.Hour)
-	}
-
 	return result
 }
 
