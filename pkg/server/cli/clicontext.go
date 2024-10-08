@@ -19,6 +19,8 @@ type Config struct {
 	HTTPListenPort  int
 	UIPath          string
 
+	SQLCache bool
+
 	WebhookConfig authcli.WebhookConfig
 }
 
@@ -57,6 +59,10 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 
 func Flags(config *Config) []cli.Flag {
 	flags := []cli.Flag{
+		cli.BoolFlag{
+			Name:        "sqlcache",
+			Destination: &config.SQLCache,
+		},
 		cli.StringFlag{
 			Name:        "kubeconfig",
 			EnvVar:      "KUBECONFIG",
