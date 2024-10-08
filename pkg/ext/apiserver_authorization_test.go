@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/server/options"
 )
 
 type authzTestStore struct {
@@ -81,12 +83,14 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	err = controllerFactory.Start(s.ctx, 2)
 	require.NoError(t, err)
 
+	ln, _, err := options.CreateListener("", ":0", net.ListenConfig{})
+	require.NoError(t, err)
+
 	store := &authzTestStore{
 		testStore: &testStore{},
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32000
+		opts.Listener = ln
 		opts.Client = s.client
 		opts.Authorizer = authz
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {

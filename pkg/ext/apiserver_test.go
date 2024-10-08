@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/server/options"
 )
 
 func authAsAdmin(req *http.Request) (*authenticator.Response, bool, error) {
@@ -35,10 +37,12 @@ func TestExtensionAPIServer(t *testing.T) {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
 
+	ln, _, err := options.CreateListener("", ":0", net.ListenConfig{})
+	require.NoError(t, err)
+
 	store := &testStore{}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32001
+		opts.Listener = ln
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 	})

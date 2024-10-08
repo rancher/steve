@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/server/options"
 )
 
 type authnTestStore struct {
@@ -87,9 +89,11 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 		require.NoError(t, err)
 	}()
 
+	ln, port, err := options.CreateListener("", ":0", net.ListenConfig{})
+	require.NoError(t, err)
+
 	_, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32003
+		opts.Listener = ln
 		opts.Client = s.client
 		opts.Authenticator = defaultAuth
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
@@ -194,7 +198,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 			}
 
 			for _, path := range test.paths {
-				req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", 32003, path), nil)
+				req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", port, path), nil)
 				require.NoError(t, err)
 				if test.user != "" {
 					req.Header.Set("X-Remote-User", test.user)
@@ -228,13 +232,15 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
 
+	ln, _, err := options.CreateListener("", ":0", net.ListenConfig{})
+	require.NoError(t, err)
+
 	store := &authnTestStore{
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32000
+		opts.Listener = ln
 		opts.Client = s.client
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -384,13 +390,15 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 		require.NoError(t, err)
 	}()
 
+	ln, port, err := options.CreateListener("", ":0", net.ListenConfig{})
+	require.NoError(t, err)
+
 	store := &authnTestStore{
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
-		// XXX: Find a way to get rid of this
-		opts.BindPort = 32004
+		opts.Listener = ln
 		opts.Client = s.client
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = auth
@@ -406,7 +414,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 			},
 		},
 	}
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", 32004, "/openapi/v2"), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", port, "/openapi/v2"), nil)
 	require.NoError(t, err)
 
 	userInfo := &user.DefaultInfo{

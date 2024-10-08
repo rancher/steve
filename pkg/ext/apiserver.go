@@ -45,7 +45,7 @@ type ExtensionAPIServerOptions struct {
 	OpenAPIDefinitionNameReplacements map[string]string
 
 	// Authenticator will be used to authenticate requests coming to the
-	// extension API server.
+	// extension API server. Required.
 	//
 	// If the authenticator implements [dynamiccertificates.CAContentProvider], the
 	// ClientCA will be set on the underlying SecureServing struct. If the authenticator
@@ -57,11 +57,15 @@ type ExtensionAPIServerOptions struct {
 	// [NewUnionAuthenticator] for an example.
 	Authenticator authenticator.Request
 
+	// Authorizer will be used to authorize requests based on the user,
+	// operation and resources.
+	//
+	// Use [NewAccessSetAuthorizer] for an authorizer that uses Steve's access set.
 	Authorizer authorizer.Authorizer
 
 	Client kubernetes.Interface
 
-	BindPort int
+	Listener net.Listener
 }
 
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
@@ -129,7 +133,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	// which will break kubectl explain
 	config.OpenAPIV3Config.Definitions = nil
 
-	recommendedOpts.SecureServing.BindPort = opts.BindPort
+	recommendedOpts.SecureServing.Listener = opts.Listener
 	if err := recommendedOpts.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
