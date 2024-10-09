@@ -162,7 +162,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 
 // Run prepares and runs the separate HTTPS server. It also configures the handler
 // so that ServeHTTP can be used.
-func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) error {
+func (s *ExtensionAPIServer) Run(ctx context.Context) error {
 	for _, apiGroup := range s.apiGroups {
 		err := s.genericAPIServer.InstallAPIGroup(&apiGroup)
 		if err != nil {
@@ -173,8 +173,6 @@ func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) err
 	s.handlerMu.Lock()
 	s.handler = prepared.Handler
 	s.handlerMu.Unlock()
-
-	readyCh <- struct{}{}
 
 	return nil
 }

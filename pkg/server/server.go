@@ -14,7 +14,6 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
 	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
-	"github.com/rancher/steve/pkg/ext"
 	"github.com/rancher/steve/pkg/resources"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/schemas"
@@ -32,6 +31,11 @@ import (
 
 var ErrConfigRequired = errors.New("rest config is required")
 
+type ExtensionAPIServer interface {
+	http.Handler
+	Run(ctx context.Context)
+}
+
 type Server struct {
 	http.Handler
 
@@ -45,7 +49,7 @@ type Server struct {
 	ClusterRegistry string
 	Version         string
 
-	extensionAPIServer *ext.ExtensionAPIServer
+	extensionAPIServer ExtensionAPIServer
 
 	authMiddleware      auth.Middleware
 	controllers         *Controllers
@@ -76,7 +80,7 @@ type Options struct {
 	// ExtensionAPIServer enables an extension API server that will be served
 	// under /ext
 	// If nil, Steve's default http handler for unknown routes will be served.
-	ExtensionAPIServer *ext.ExtensionAPIServer
+	ExtensionAPIServer ExtensionAPIServer
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -239,6 +243,9 @@ func (c *Server) start(ctx context.Context) error {
 		if err := c.controllers.Start(ctx); err != nil {
 			return err
 		}
+	}
+	if c.extensionAPIServer != nil {
+		c.extensionAPIServer.Run(ctx)
 	}
 	return nil
 }

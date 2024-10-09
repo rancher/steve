@@ -8,7 +8,6 @@ import (
 	"github.com/rancher/apiserver/pkg/urlbuilder"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/auth"
-	"github.com/rancher/steve/pkg/ext"
 	k8sproxy "github.com/rancher/steve/pkg/proxy"
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/server/router"
@@ -18,7 +17,7 @@ import (
 )
 
 func New(cfg *rest.Config, sf schema.Factory, authMiddleware auth.Middleware, next http.Handler,
-	routerFunc router.RouterFunc, extensionAPIServer *ext.ExtensionAPIServer) (*apiserver.Server, http.Handler, error) {
+	routerFunc router.RouterFunc, extensionAPIServer http.Handler) (*apiserver.Server, http.Handler, error) {
 	var (
 		proxy http.Handler
 		err   error
