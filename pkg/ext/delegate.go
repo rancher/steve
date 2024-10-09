@@ -126,6 +126,8 @@ func (s *delegate[T, TList]) Delete(parentCtx context.Context, name string, dele
 //
 // createValidation is used to do some validation on the object before creating
 // it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
+//
+//nolint:misspell
 func (s *delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	ctx, err := s.makeContext(parentCtx)
 	if err != nil {
