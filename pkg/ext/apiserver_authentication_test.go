@@ -97,7 +97,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 		opts.Client = s.client
 		opts.Authenticator = defaultAuth
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
-	})
+	}, nil)
 	require.NoError(t, err)
 	defer cleanup()
 
@@ -255,7 +255,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 				User: user,
 			}, true, nil
 		})
-	})
+	}, nil)
 	require.NoError(t, err)
 	defer cleanup()
 
@@ -402,7 +402,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 		opts.Client = s.client
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = auth
-	})
+	}, nil)
 	require.NoError(t, err)
 	defer cleanup()
 

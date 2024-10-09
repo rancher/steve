@@ -18,6 +18,8 @@ func addKnownTypesTest(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(testTypeGV,
 		&TestType{},
 		&TestTypeList{},
+		&TestTypeOther{},
+		&TestTypeOtherList{},
 	)
 	metav1.AddToGroupVersion(scheme, testTypeGV)
 	return nil
@@ -39,6 +41,19 @@ var (
 	testTypeFixture = TestType{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Test",
+			APIVersion: testTypeGV.String(),
+		},
+	}
+	testTypeOtherListFixture = TestTypeOtherList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TestOtherList",
+			APIVersion: testTypeGV.String(),
+		},
+	}
+
+	testTypeOtherFixture = TestTypeOther{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TestTypeOther",
 			APIVersion: testTypeGV.String(),
 		},
 	}
@@ -65,6 +80,22 @@ type TestType struct {
 }
 
 func (t *TestType) DeepCopyObject() runtime.Object {
+	return t
+}
+
+var _ runtime.Object = (*TestTypeOtherList)(nil)
+
+type TestTypeOtherList TestTypeList
+
+func (t *TestTypeOtherList) DeepCopyObject() runtime.Object {
+	return t
+}
+
+var _ runtime.Object = (*TestTypeOther)(nil)
+
+type TestTypeOther TestType
+
+func (t *TestTypeOther) DeepCopyObject() runtime.Object {
 	return t
 }
 
@@ -102,6 +133,8 @@ func getOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 	return map[string]common.OpenAPIDefinition{
 		"github.com/rancher/steve/pkg/ext.TestType":                      schema_ext_apis_extcattleio_v1_TestType(ref),
 		"github.com/rancher/steve/pkg/ext.TestTypeList":                  schema_ext_apis_extcattleio_v1_TestTypeList(ref),
+		"github.com/rancher/steve/pkg/ext.TestTypeOther":                 schema_ext_apis_extcattleio_v1_TestTypeOther(ref),
+		"github.com/rancher/steve/pkg/ext.TestTypeOtherList":             schema_ext_apis_extcattleio_v1_TestTypeOtherList(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                  schema_pkg_apis_meta_v1_APIGroup(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":              schema_pkg_apis_meta_v1_APIGroupList(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":               schema_pkg_apis_meta_v1_APIResource(ref),
@@ -192,6 +225,75 @@ func schema_ext_apis_extcattleio_v1_TestType(ref common.ReferenceCallback) commo
 }
 
 func schema_ext_apis_extcattleio_v1_TestTypeList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+				},
+				Required: []string{"metadata"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_ext_apis_extcattleio_v1_TestTypeOther(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_ext_apis_extcattleio_v1_TestTypeOtherList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

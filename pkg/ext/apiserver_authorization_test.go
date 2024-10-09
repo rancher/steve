@@ -102,7 +102,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 				User: user,
 			}, true, nil
 		})
-	})
+	}, nil)
 	require.NoError(t, err)
 	defer cleanup()
 
