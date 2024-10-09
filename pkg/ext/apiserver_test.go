@@ -395,24 +395,11 @@ func setupExtensionAPIServer[
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	stoppedCh := make(chan error, 1)
-	readyCh := make(chan struct{}, 1)
-	defer close(readyCh)
-	go func() {
-		err := extensionAPIServer.Run(ctx, readyCh)
-		stoppedCh <- err
-		close(stoppedCh)
-	}()
-	select {
-	case err := <-stoppedCh:
-		require.NoError(t, err)
-	case <-readyCh:
-	}
+	err = extensionAPIServer.Run(ctx)
+	require.NoError(t, err)
 
 	cleanup := func() {
 		cancel()
-		err := <-stoppedCh
-		require.NoError(t, err)
 	}
 
 	return extensionAPIServer, cleanup, nil
