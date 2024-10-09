@@ -111,9 +111,9 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		Authorizer: opts.Authorizer,
 	}
 
-	// XXX: kubectl doesn't show this, and it's listed as optional so it
-	//      should be safe to remove. I haven't found a lot of resource on
-	//      what this does.
+	// This feature is more of an optimization for clients that want to go directly to a custom API server
+	// instead of going through the main apiserver. We currently don't need to support this so we're leaving this
+	// empty.
 	config.DiscoveryAddresses = emptyAddresses{}
 	config.EffectiveVersion = utilversion.NewEffectiveVersion("")
 
