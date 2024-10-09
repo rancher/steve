@@ -105,8 +105,6 @@ func (e emptyAddresses) ServerAddressByClientCIDRs(clientIP net.IP) []metav1.Ser
 }
 
 func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactory, opts ExtensionAPIServerOptions) (*ExtensionAPIServer, error) {
-	recommendedOpts := genericoptions.NewRecommendedOptions("", codecs.LegacyCodec())
-
 	if opts.Authenticator == nil {
 		return nil, fmt.Errorf("authenticator must be provided")
 	}
@@ -114,6 +112,13 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	if opts.Authorizer == nil {
 		return nil, fmt.Errorf("authorizer must be provided")
 	}
+
+	if opts.Listener == nil {
+		return nil, fmt.Errorf("listener must be provided")
+	}
+
+	recommendedOpts := genericoptions.NewRecommendedOptions("", codecs.LegacyCodec())
+	recommendedOpts.SecureServing.Listener = opts.Listener
 
 	resolver := &request.RequestInfoFactory{APIPrefixes: sets.NewString("apis", "api"), GrouplessAPIPrefixes: sets.NewString("api")}
 	config := genericapiserver.NewRecommendedConfig(codecs)
@@ -144,7 +149,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	// which will break kubectl explain
 	config.OpenAPIV3Config.Definitions = nil
 
-	recommendedOpts.SecureServing.Listener = opts.Listener
 	if err := recommendedOpts.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
