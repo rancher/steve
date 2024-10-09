@@ -58,13 +58,15 @@ type ExtensionAPIServerOptions struct {
 	Authenticator authenticator.Request
 
 	// Authorizer will be used to authorize requests based on the user,
-	// operation and resources.
+	// operation and resources. Required.
 	//
 	// Use [NewAccessSetAuthorizer] for an authorizer that uses Steve's access set.
 	Authorizer authorizer.Authorizer
 
 	Client kubernetes.Interface
 
+	// Listener is the net.Listener for the HTTPS server that runs in the background
+	// when Run() is called. Required.
 	Listener net.Listener
 }
 
