@@ -94,7 +94,6 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 
 	_, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
-		opts.Client = s.client
 		opts.Authenticator = defaultAuth
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 	}, nil)
@@ -241,7 +240,6 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
-		opts.Client = s.client
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
 			user, ok := request.UserFrom(req.Context())
@@ -399,7 +397,6 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
-		opts.Client = s.client
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = auth
 	}, nil)

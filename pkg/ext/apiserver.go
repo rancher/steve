@@ -24,7 +24,6 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilversion "k8s.io/apiserver/pkg/util/version"
-	"k8s.io/client-go/kubernetes"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
@@ -62,8 +61,6 @@ type ExtensionAPIServerOptions struct {
 	//
 	// Use [NewAccessSetAuthorizer] for an authorizer that uses Steve's access set.
 	Authorizer authorizer.Authorizer
-
-	Client kubernetes.Interface
 
 	// Listener is the net.Listener for the HTTPS server that runs in the background
 	// when Run() is called. Required.

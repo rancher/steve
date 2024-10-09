@@ -92,7 +92,6 @@ func (s *ExtensionAPIServerSuite) TestDiscoveryAndOpenAPI() {
 	store := &testStore{}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
-		opts.Client = s.client
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, func(s *ExtensionAPIServer) error {

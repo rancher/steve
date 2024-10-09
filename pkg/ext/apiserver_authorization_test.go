@@ -91,7 +91,6 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
-		opts.Client = s.client
 		opts.Authorizer = authz
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
 			user, ok := request.UserFrom(req.Context())
