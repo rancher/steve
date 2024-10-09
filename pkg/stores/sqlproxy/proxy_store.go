@@ -274,15 +274,11 @@ func (s *Store) initializeNamespaceCache() error {
 func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
 	fields := [][]string{}
 	fields = append(fields, commonIndexFields...)
-	typeFields := typeSpecificIndexedFields[keyFromGVK(gvk)]
+	typeFields := typeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
 	if typeFields != nil {
 		fields = append(fields, typeFields...)
 	}
 	return fields
-}
-
-func keyFromGVK(gvk schema.GroupVersionKind) string {
-	return gvkKey(gvk.Group, gvk.Version, gvk.Kind)
 }
 
 func gvkKey(group, version, kind string) string {
