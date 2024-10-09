@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	openapiv2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/resources/apigroups"
@@ -12,7 +13,6 @@ import (
 	wranglerSchema "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

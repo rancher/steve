@@ -23,7 +23,6 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	utilversion "k8s.io/apiserver/pkg/util/version"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
@@ -131,7 +130,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	// instead of going through the main apiserver. We currently don't need to support this so we're leaving this
 	// empty.
 	config.DiscoveryAddresses = emptyAddresses{}
-	config.EffectiveVersion = utilversion.NewEffectiveVersion("")
 
 	config.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(opts.GetOpenAPIDefinitions, openapi.NewDefinitionNamer(scheme))
 	config.OpenAPIConfig.Info.Title = "Ext"
