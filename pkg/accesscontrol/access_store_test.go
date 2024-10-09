@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -197,6 +198,7 @@ func TestAccessStore_AccessFor(t *testing.T) {
 	}
 	asCache := cache.NewLRUExpireCache(10)
 	store := &AccessStore{
+		concurrentAccessFor: new(singleflight.Group),
 		usersPolicyRules: &policyRulesMock{
 			getRBFunc: func(s string) []*rbacv1.RoleBinding {
 				return []*rbacv1.RoleBinding{
@@ -301,10 +303,10 @@ func (c *spyCache) observeAdd(k interface{}) {
 }
 
 func TestAccessStore_AccessFor_concurrent(t *testing.T) {
-	t.Skipf("TODO - Add a fix for this test")
 	testUser := &user.DefaultInfo{Name: "test-user"}
 	asCache := &spyCache{accessStoreCache: cache.NewLRUExpireCache(100)}
 	store := &AccessStore{
+		concurrentAccessFor: new(singleflight.Group),
 		roles: roleRevisionsMock(func(ns, name string) string {
 			return fmt.Sprintf("%s%srev", ns, name)
 		}),

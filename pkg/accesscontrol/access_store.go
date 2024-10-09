@@ -9,6 +9,7 @@ import (
 	"time"
 
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
+	"golang.org/x/sync/singleflight"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -39,10 +40,11 @@ type accessStoreCache interface {
 }
 
 type AccessStore struct {
-	usersPolicyRules  policyRules
-	groupsPolicyRules policyRules
-	roles             roleRevisions
-	cache             accessStoreCache
+	usersPolicyRules    policyRules
+	groupsPolicyRules   policyRules
+	roles               roleRevisions
+	cache               accessStoreCache
+	concurrentAccessFor *singleflight.Group
 }
 
 type roleKey struct {
@@ -52,9 +54,10 @@ type roleKey struct {
 
 func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
 	as := &AccessStore{
-		usersPolicyRules:  newPolicyRuleIndex(true, rbac),
-		groupsPolicyRules: newPolicyRuleIndex(false, rbac),
-		roles:             newRoleRevision(ctx, rbac),
+		usersPolicyRules:    newPolicyRuleIndex(true, rbac),
+		groupsPolicyRules:   newPolicyRuleIndex(false, rbac),
+		roles:               newRoleRevision(ctx, rbac),
+		concurrentAccessFor: new(singleflight.Group),
 	}
 	if cacheResults {
 		as.cache = cache.NewLRUExpireCache(50)
@@ -69,16 +72,19 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 
 	cacheKey := l.CacheKey(user)
 
-	if val, ok := l.cache.Get(cacheKey); ok {
-		as, _ := val.(*AccessSet)
-		return as
-	}
+	res, _, _ := l.concurrentAccessFor.Do(cacheKey, func() (interface{}, error) {
+		if val, ok := l.cache.Get(cacheKey); ok {
+			as, _ := val.(*AccessSet)
+			return as, nil
+		}
 
-	result := l.newAccessSet(user)
-	result.ID = cacheKey
-	l.cache.Add(cacheKey, result, 24*time.Hour)
+		result := l.newAccessSet(user)
+		result.ID = cacheKey
+		l.cache.Add(cacheKey, result, 24*time.Hour)
 
-	return result
+		return result, nil
+	})
+	return res.(*AccessSet)
 }
 
 func (l *AccessStore) newAccessSet(user user.Info) *AccessSet {
