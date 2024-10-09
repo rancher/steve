@@ -33,21 +33,31 @@ var (
 
 	testTypeListFixture = TestTypeList{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "TestList",
+			Kind:       "TestTypeList",
 			APIVersion: testTypeGV.String(),
+		},
+		Items: []TestType{
+			testTypeFixture,
 		},
 	}
 
 	testTypeFixture = TestType{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Test",
+			Kind:       "TestType",
 			APIVersion: testTypeGV.String(),
 		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "foo",
+		},
 	}
+
 	testTypeOtherListFixture = TestTypeOtherList{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "TestOtherList",
+			Kind:       "TestTypeOtherList",
 			APIVersion: testTypeGV.String(),
+		},
+		Items: []TestTypeOther{
+			testTypeOtherFixture,
 		},
 	}
 
@@ -56,10 +66,16 @@ var (
 			Kind:       "TestTypeOther",
 			APIVersion: testTypeGV.String(),
 		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "bar",
+		},
 	}
 )
 
+var _ runtime.Object = (*TestType)(nil)
 var _ runtime.Object = (*TestTypeList)(nil)
+var _ runtime.Object = (*TestTypeOther)(nil)
+var _ runtime.Object = (*TestTypeOtherList)(nil)
 
 type TestTypeList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -72,8 +88,6 @@ func (t *TestTypeList) DeepCopyObject() runtime.Object {
 	return t
 }
 
-var _ runtime.Object = (*TestType)(nil)
-
 type TestType struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -83,17 +97,21 @@ func (t *TestType) DeepCopyObject() runtime.Object {
 	return t
 }
 
-var _ runtime.Object = (*TestTypeOtherList)(nil)
+type TestTypeOtherList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
 
-type TestTypeOtherList TestTypeList
+	Items []TestTypeOther `json:"items"`
+}
 
 func (t *TestTypeOtherList) DeepCopyObject() runtime.Object {
 	return t
 }
 
-var _ runtime.Object = (*TestTypeOther)(nil)
-
-type TestTypeOther TestType
+type TestTypeOther struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+}
 
 func (t *TestTypeOther) DeepCopyObject() runtime.Object {
 	return t
