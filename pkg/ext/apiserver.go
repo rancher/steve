@@ -71,9 +71,21 @@ type ExtensionAPIServerOptions struct {
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
 // a Kubernetes extension API server.
 //
+// Use [NewExtensionAPIServer] to create an ExtensionAPIServer.
+//
 // Use [InstallStore] to add a new resource store onto an existing ExtensionAPIServer.
 // Each resources will then be reachable via /apis/<group>/<version>/<resource> as
 // defined by the Kubernetes API.
+//
+// When Run() is called, a separate HTTPS server is started. This server is meant
+// for the main kube-apiserver to communicate with our extension API server. We
+// can expect the following requests from the main kube-apiserver:
+//
+// <path>                 <user>                 <groups>
+// /openapi/v2            system:aggregator      [system:authenticated]
+// /openapi/v3            system:aggregator      [system:authenticated]
+// /apis                  system:kube-aggregator [system:masters system:authenticated]
+// /apis/ext.cattle.io/v1 system:kube-aggregator [system:masters system:authenticated]
 type ExtensionAPIServer struct {
 	codecs serializer.CodecFactory
 	scheme *runtime.Scheme
