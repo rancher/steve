@@ -21,7 +21,6 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -44,15 +43,6 @@ type ExtensionAPIServerOptions struct {
 
 	// Authenticator will be used to authenticate requests coming to the
 	// extension API server. Required.
-	//
-	// If the authenticator implements [dynamiccertificates.CAContentProvider], the
-	// ClientCA will be set on the underlying SecureServing struct. If the authenticator
-	// implements [dynamiccertificates.ControllerRunner] too, then Run() will be called so
-	// that the authenticators can run in the background. (See DefaultAuthenticator for
-	// example).
-	//
-	// Use a UnionAuthenticator to have multiple ways of authenticating requests. See
-	// [NewUnionAuthenticator] for an example.
 	Authenticator authenticator.Request
 
 	// Authorizer will be used to authorize requests based on the user,
@@ -61,8 +51,8 @@ type ExtensionAPIServerOptions struct {
 	// Use [NewAccessSetAuthorizer] for an authorizer that uses Steve's access set.
 	Authorizer authorizer.Authorizer
 
-	// Listener is the net.Listener for the HTTPS server that runs in the background
-	// when Run() is called. Required.
+	// Listener is the TCP listener that is used to listen to the extension API server
+	// that is reached by the main kube-apiserver. Required.
 	Listener net.Listener
 }
 
@@ -152,9 +142,6 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	}
 
 	config.Authentication.Authenticator = opts.Authenticator
-	if caContentProvider, ok := opts.Authenticator.(dynamiccertificates.CAContentProvider); ok {
-		config.SecureServing.ClientCA = caContentProvider
-	}
 
 	completedConfig := config.Complete()
 	genericServer, err := completedConfig.New("imperative-api", genericapiserver.NewEmptyDelegate())
@@ -188,10 +175,6 @@ func (s *ExtensionAPIServer) Run(ctx context.Context, readyCh chan struct{}) err
 	s.handlerMu.Unlock()
 
 	readyCh <- struct{}{}
-
-	if err := prepared.RunWithContext(ctx); err != nil {
-		return err
-	}
 
 	return nil
 }
