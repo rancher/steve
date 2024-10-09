@@ -20,6 +20,7 @@ func NewAccessSetAuthorizer(asl accesscontrol.AccessSetLookup) *AccessSetAuthori
 	}
 }
 
+// Authorize implements [authorizer.Authorizer].
 func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
 	if !attrs.IsResourceRequest() {
 		// XXX: Implement
@@ -39,5 +40,8 @@ func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.At
 		return authorizer.DecisionAllow, "", nil
 	}
 
+	// An empty string reason will still provide enough information such as:
+	//
+	//     testtypes.ext.cattle.io is forbidden: User "unknown-user" cannot list resource "testtypes" in API group "ext.cattle.io" at the cluster scope
 	return authorizer.DecisionDeny, "", nil
 }
