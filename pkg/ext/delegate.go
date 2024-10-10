@@ -197,7 +197,7 @@ func (s *delegate[T, TList]) Update(
 		if err != nil {
 			return nil, false, err
 		}
-		return newObj, false, err
+		return newObj, true, err
 	}
 
 	newObj, err := objInfo.UpdatedObject(ctx, oldObj)

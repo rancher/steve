@@ -201,6 +201,11 @@ func (s *ExtensionAPIServerSuite) TestStore() {
 				Items: []TestType{},
 			},
 		},
+		{
+			name:               "create via update",
+			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", &testTypeFixture),
+			expectedStatusCode: http.StatusCreated,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
