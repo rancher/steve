@@ -23,11 +23,6 @@ type DefaultFields struct {
 	Cache SummaryCache
 }
 
-// GetTransform produces the default transformation func
-func (d *DefaultFields) GetTransform() func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
-	return d.TransformCommon
-}
-
 func (d *DefaultFields) GetUnstructuredObjectWrapper(obj interface{}) (interface{}, bool, error) {
 	raw, isSignal, err := GetUnstructured(obj)
 	if isSignal {

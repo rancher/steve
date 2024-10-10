@@ -175,7 +175,7 @@ func TestTransformCommonObjects(t *testing.T) {
 				require.Equal(t, test.input, test.wantOutput)
 				return
 			}
-			output, err := df.GetTransform()(raw)
+			output, err := df.TransformCommon(raw)
 			if test.wantError {
 				require.Error(t, err)
 			} else {
