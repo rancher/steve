@@ -3,7 +3,6 @@
 package virtual
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/rancher/steve/pkg/resources/virtual/common"
@@ -35,17 +34,14 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind) cache.T
 	}
 	converters = append(converters, t.defaultFields.TransformCommon)
 
-	return func(any interface{}) (interface{}, error) {
-		raw, isSignal, err := t.defaultFields.GetUnstructuredObjectWrapper(any)
-		if err != nil {
-			return nil, fmt.Errorf("GetTransformFunc: failed to get underlying object: %w", err)
-		}
+	return func(raw interface{}) (interface{}, error) {
+		obj, isSignal, err := common.GetUnstructured(raw)
 		if isSignal {
+			// isSignal= true overrides any error
 			return raw, err
 		}
-		obj, ok := raw.(*unstructured.Unstructured)
-		if !ok {
-			return raw, errors.New("GetTransformFunc: failed to cast raw object to unstructured")
+		if err != nil {
+			return nil, fmt.Errorf("GetUnstructured: failed to get underlying object: %w", err)
 		}
 		// Conversions are run in this loop:
 		for _, f := range converters {

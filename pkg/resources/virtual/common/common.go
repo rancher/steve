@@ -23,17 +23,6 @@ type DefaultFields struct {
 	Cache SummaryCache
 }
 
-func (d *DefaultFields) GetUnstructuredObjectWrapper(obj interface{}) (interface{}, bool, error) {
-	raw, isSignal, err := GetUnstructured(obj)
-	if isSignal {
-		return obj, true, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	return raw, false, nil
-}
-
 // TransformCommon implements virtual.VirtualTransformFunc, and adds reserved fields/summary
 func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	obj = addIDField(obj)
