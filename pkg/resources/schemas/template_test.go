@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	acfake "github.com/rancher/steve/pkg/accesscontrol/fake"
@@ -17,6 +16,7 @@ import (
 	schemafake "github.com/rancher/steve/pkg/schema/fake"
 	v1schema "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
