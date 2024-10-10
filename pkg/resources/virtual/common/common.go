@@ -30,11 +30,20 @@ func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstru
 	if err != nil {
 		return nil, fmt.Errorf("unable to add summary fields: %w", err)
 	}
-	err = addLabelFields(raw)
+	err = addLabelFields(obj)
 	if err != nil {
 		return nil, fmt.Errorf("unable to add label fields: %w", err)
 	}
-	return raw, nil
+	return obj, nil
+}
+
+// TransformLabels caches the labels
+func (d *DefaultFields) TransformLabels(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	err := addLabelFields(obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to add label fields: %w", err)
+	}
+	return obj, nil
 }
 
 func addLabelFields(raw *unstructured.Unstructured) error {
