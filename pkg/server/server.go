@@ -31,8 +31,13 @@ import (
 
 var ErrConfigRequired = errors.New("rest config is required")
 
+// ExtensionAPIServer will run an extension API server. The extension API server
+// will be accessible from Steve at the /ext endpoint and will be compatible with
+// the aggregate API server in Kubernetes.
 type ExtensionAPIServer interface {
+	// The ExtensionAPIServer is served at /ext in Steve's mux
 	http.Handler
+	// Run configures the API server and make the HTTP handler available
 	Run(ctx context.Context)
 }
 
@@ -80,6 +85,9 @@ type Options struct {
 	// ExtensionAPIServer enables an extension API server that will be served
 	// under /ext
 	// If nil, Steve's default http handler for unknown routes will be served.
+	//
+	// In most cases, you'll want to use [github.com/rancher/steve/pkg/ext.NewExtensionAPIServer]
+	// to create an ExtensionAPIServer.
 	ExtensionAPIServer ExtensionAPIServer
 }
 
