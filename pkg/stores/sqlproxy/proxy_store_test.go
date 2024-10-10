@@ -12,7 +12,6 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/golang/mock/gomock"
 	"github.com/rancher/lasso/pkg/cache/sql/informer"
 	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
 	"github.com/rancher/lasso/pkg/cache/sql/partition"
@@ -20,6 +19,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/pkg/errors"
