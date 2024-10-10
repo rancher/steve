@@ -109,7 +109,7 @@ func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule
 	}
 }
 
-// getRules obtain the actual Role or ClusterRole pointed at by a RoleRef, and returns PolicyRyles and the resource version
+// getRules obtain the actual Role or ClusterRole pointed at by a RoleRef, and returns PolicyRules and the resource version
 func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) ([]rbacv1.PolicyRule, string) {
 	switch roleRef.Kind {
 	case "ClusterRole":
