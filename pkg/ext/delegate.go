@@ -141,7 +141,12 @@ func (s *delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Objec
 		}
 	}
 
-	return s.store.Create(ctx, obj.(T), options)
+	tObj, ok := obj.(T)
+	if !ok {
+		return nil, fmt.Errorf("object was of type %T, not of expected type %T", obj, s.t)
+	}
+
+	return s.store.Create(ctx, tObj, options)
 }
 
 // Update implements [rest.Updater]
@@ -183,7 +188,12 @@ func (s *delegate[T, TList]) Update(
 			return nil, false, err
 		}
 
-		newObj, err := s.store.Create(ctx, obj.(T), &metav1.CreateOptions{})
+		tObj, ok := obj.(T)
+		if !ok {
+			return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", obj, s.t)
+		}
+
+		newObj, err := s.store.Create(ctx, tObj, &metav1.CreateOptions{})
 		if err != nil {
 			return nil, false, err
 		}
