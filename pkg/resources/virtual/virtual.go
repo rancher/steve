@@ -35,7 +35,6 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind) cache.T
 	converters = append(converters, t.defaultFields.TransformCommon)
 
 	return func(any interface{}) (interface{}, error) {
-		var raw interface{}
 		raw, isSignal, err := t.defaultFields.GetUnstructuredObjectWrapper(any)
 		if isSignal {
 			return raw, err
