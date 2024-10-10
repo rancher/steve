@@ -4,6 +4,7 @@ package virtual
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
@@ -36,12 +37,15 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind) cache.T
 
 	return func(any interface{}) (interface{}, error) {
 		raw, isSignal, err := t.defaultFields.GetUnstructuredObjectWrapper(any)
+		if err != nil {
+			return nil, fmt.Errorf("GetTransformFunc: failed to get underlying object: %w", err)
+		}
 		if isSignal {
 			return raw, err
 		}
 		obj, ok := raw.(*unstructured.Unstructured)
 		if !ok {
-			return raw, errors.New("failed to cast raw object to unstructured")
+			return raw, errors.New("GetTransformFunc: failed to cast raw object to unstructured")
 		}
 		// Conversions are run in this loop:
 		for _, f := range converters {
