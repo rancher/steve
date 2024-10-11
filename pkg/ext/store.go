@@ -53,17 +53,20 @@ type Context struct {
 type Store[T runtime.Object, TList runtime.Object] interface {
 	// Create stores the resource to some backing storage.
 	//
-	// It can apply modifications as necessary (think mutating webhook)
-	// before storing it. It must return the resource that was stored.
+	// It can apply modifications as necessary before storing it. It must
+	// return a resource of the type of the store, but can
+	// create/update/delete arbitrary objects in Kubernetes without
+	// returning them to the user.
 	//
 	// It is called either when a request creates a resource, or when a
 	// request updates a resource that doesn't exist.
 	Create(ctx Context, obj T, opts *metav1.CreateOptions) (T, error)
-	// Update overwrites the resource that is present in the backing storage with the
-	// one given.
+	// Update overwrites a resource that is present in the backing storage.
 	//
-	// It can apply modifications as necessary (think mutating webhook)
-	// before storing it. It must return the resource that was stored.
+	// It can apply modifications as necessary before storing it. It must
+	// return a resource of the type of the store, but can
+	// create/update/delete arbitrary objects in Kubernetes without
+	// returning them to the user.
 	//
 	// It is called when a request updates a resource (eg: through a patch or update request)
 	Update(ctx Context, obj T, opts *metav1.UpdateOptions) (T, error)
