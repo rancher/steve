@@ -31,6 +31,16 @@ import (
 
 var ErrConfigRequired = errors.New("rest config is required")
 
+// ExtensionAPIServer will run an extension API server. The extension API server
+// will be accessible from Steve at the /ext endpoint and will be compatible with
+// the aggregate API server in Kubernetes.
+type ExtensionAPIServer interface {
+	// The ExtensionAPIServer is served at /ext in Steve's mux
+	http.Handler
+	// Run configures the API server and make the HTTP handler available
+	Run(ctx context.Context)
+}
+
 type Server struct {
 	http.Handler
 
@@ -43,6 +53,8 @@ type Server struct {
 	APIServer       *apiserver.Server
 	ClusterRegistry string
 	Version         string
+
+	extensionAPIServer ExtensionAPIServer
 
 	authMiddleware      auth.Middleware
 	controllers         *Controllers
@@ -69,6 +81,14 @@ type Options struct {
 	ServerVersion              string
 	// SQLCache enables the SQLite-based lasso caching mechanism
 	SQLCache bool
+
+	// ExtensionAPIServer enables an extension API server that will be served
+	// under /ext
+	// If nil, Steve's default http handler for unknown routes will be served.
+	//
+	// In most cases, you'll want to use [github.com/rancher/steve/pkg/ext.NewExtensionAPIServer]
+	// to create an ExtensionAPIServer.
+	ExtensionAPIServer ExtensionAPIServer
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -89,7 +109,8 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
 		// SQLCache enables the SQLite-based lasso caching mechanism
-		SQLCache: opts.SQLCache,
+		SQLCache:           opts.SQLCache,
+		extensionAPIServer: opts.ExtensionAPIServer,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -213,7 +234,7 @@ func setup(ctx context.Context, server *Server) error {
 		onSchemasHandler,
 		sf)
 
-	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router)
+	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router, server.extensionAPIServer)
 	if err != nil {
 		return err
 	}
@@ -230,6 +251,9 @@ func (c *Server) start(ctx context.Context) error {
 		if err := c.controllers.Start(ctx); err != nil {
 			return err
 		}
+	}
+	if c.extensionAPIServer != nil {
+		c.extensionAPIServer.Run(ctx)
 	}
 	return nil
 }

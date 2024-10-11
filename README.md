@@ -795,3 +795,21 @@ Integration tests for the steve API are located among the [rancher integration
 tests](ihttps://github.com/rancher/rancher/tree/release/v2.8/tests/v2/integration/steveapi).
 See the documentation included there for running the tests and using them to
 generate API documentation.
+
+## Running Tests
+
+Some of steve's tests make use of [envtest](https://book.kubebuilder.io/reference/envtest) to run. Envtest allows tests to run against a "fake" kubernetes server with little/no overhead.
+
+To install the required `setup-envtest` binary, use the following command:
+
+```bash
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+```
+
+Before running the tests, you must run the following command to setup the fake server:
+
+```bash
+# note that this will use a new/latest version of k8s. Our CI will run against the version of k8s that corresponds to steve's
+# current client-go version, as seen in scripts/test.sh
+export KUBEBUILDER_ASSETS=$(setup-envtest use -p path)
+```
