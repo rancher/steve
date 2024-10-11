@@ -208,7 +208,7 @@ func (s *delegate[T, TList]) Update(
 
 	newT, ok := newObj.(T)
 	if !ok {
-		return nil, false, fmt.Errorf("wrong expected type")
+		return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", newObj, s.t)
 	}
 
 	if updateValidation != nil {
