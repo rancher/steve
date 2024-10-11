@@ -51,7 +51,7 @@ type Context struct {
 // meant to control the behavior of the stores. Note: We currently don't have
 // field-manager enabled.
 type Store[T runtime.Object, TList runtime.Object] interface {
-	// Create stores the resource to some backing storage.
+	// Create should store the resource to some backing storage.
 	//
 	// It can apply modifications as necessary before storing it. It must
 	// return a resource of the type of the store, but can
@@ -61,7 +61,7 @@ type Store[T runtime.Object, TList runtime.Object] interface {
 	// It is called either when a request creates a resource, or when a
 	// request updates a resource that doesn't exist.
 	Create(ctx Context, obj T, opts *metav1.CreateOptions) (T, error)
-	// Update overwrites a resource that is present in the backing storage.
+	// Update should overwrite a resource that is present in the backing storage.
 	//
 	// It can apply modifications as necessary before storing it. It must
 	// return a resource of the type of the store, but can
