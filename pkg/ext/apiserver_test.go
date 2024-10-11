@@ -386,47 +386,57 @@ func (s *ExtensionAPIServerSuite) TestDiscoveryAndOpenAPI() {
 		got                any
 		expectedStatusCode int
 		expectedBody       any
+		compareFunc        func(*testing.T, any)
 	}{
 		{
 			path:               "/apis",
 			got:                &metav1.APIGroupList{},
 			expectedStatusCode: http.StatusOK,
-			expectedBody: &metav1.APIGroupList{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "APIGroupList",
-				},
-				Groups: []metav1.APIGroup{
-					{
-						Name: "ext.cattle.io",
-						Versions: []metav1.GroupVersionForDiscovery{
-							{
+			// This is needed because the library loops over the apigroups
+			compareFunc: func(t *testing.T, gotObj any) {
+				apiGroupList, ok := gotObj.(*metav1.APIGroupList)
+				require.True(t, ok)
+
+				expectedAPIGroupList := &metav1.APIGroupList{
+					TypeMeta: metav1.TypeMeta{
+						Kind: "APIGroupList",
+					},
+					Groups: []metav1.APIGroup{
+						{
+							Name: "ext.cattle.io",
+							Versions: []metav1.GroupVersionForDiscovery{
+								{
+									GroupVersion: "ext.cattle.io/v2",
+									Version:      "v2",
+								},
+								{
+									GroupVersion: "ext.cattle.io/v1",
+									Version:      "v1",
+								},
+							},
+							PreferredVersion: metav1.GroupVersionForDiscovery{
 								GroupVersion: "ext.cattle.io/v2",
 								Version:      "v2",
 							},
-							{
-								GroupVersion: "ext.cattle.io/v1",
-								Version:      "v1",
+						},
+						{
+							Name: "ext2.cattle.io",
+							Versions: []metav1.GroupVersionForDiscovery{
+								{
+									GroupVersion: "ext2.cattle.io/v3",
+									Version:      "v3",
+								},
 							},
-						},
-						PreferredVersion: metav1.GroupVersionForDiscovery{
-							GroupVersion: "ext.cattle.io/v2",
-							Version:      "v2",
-						},
-					},
-					{
-						Name: "ext2.cattle.io",
-						Versions: []metav1.GroupVersionForDiscovery{
-							{
+							PreferredVersion: metav1.GroupVersionForDiscovery{
 								GroupVersion: "ext2.cattle.io/v3",
 								Version:      "v3",
 							},
 						},
-						PreferredVersion: metav1.GroupVersionForDiscovery{
-							GroupVersion: "ext2.cattle.io/v3",
-							Version:      "v3",
-						},
 					},
-				},
+				}
+				sortAPIGroupList(apiGroupList)
+				sortAPIGroupList(expectedAPIGroupList)
+				require.Equal(t, expectedAPIGroupList, apiGroupList)
 			},
 		},
 		{
@@ -613,8 +623,25 @@ func (s *ExtensionAPIServerSuite) TestDiscoveryAndOpenAPI() {
 				require.NoError(t, err)
 				require.Equal(t, test.expectedBody, test.got)
 			}
+			if test.got != nil && test.compareFunc != nil {
+				err = json.Unmarshal(body, test.got)
+				require.NoError(t, err)
+				test.compareFunc(t, test.got)
+			}
 		})
 	}
+}
+
+// Because the library has non-deterministic map iteration, changing the order of groups and versions
+func sortAPIGroupList(list *metav1.APIGroupList) {
+	for _, group := range list.Groups {
+		sort.Slice(group.Versions, func(i, j int) bool {
+			return group.Versions[i].GroupVersion > group.Versions[j].GroupVersion
+		})
+	}
+	sort.Slice(list.Groups, func(i, j int) bool {
+		return list.Groups[i].Name > list.Groups[j].Name
+	})
 }
 
 func (s *ExtensionAPIServerSuite) TestNoStore() {
