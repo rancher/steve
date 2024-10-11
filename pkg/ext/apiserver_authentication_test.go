@@ -42,9 +42,7 @@ func (t *authnTestStore) getUser() (user.Info, bool) {
 	}
 }
 
-func (s *ExtensionAPIServerSuite) TestAuthenticationCustom() {
-	t := s.T()
-
+func TestAuthenticationCustom(t *testing.T) {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
 

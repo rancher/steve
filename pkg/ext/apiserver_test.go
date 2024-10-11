@@ -118,9 +118,7 @@ func (t *mapStore) Delete(ctx Context, name string, opts *metav1.DeleteOptions) 
 	return nil
 }
 
-func (s *ExtensionAPIServerSuite) TestStore() {
-	t := s.T()
-
+func TestStore(t *testing.T) {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
 
@@ -332,9 +330,7 @@ func (t *testStoreOther) Delete(ctx Context, name string, opts *metav1.DeleteOpt
 
 // The POC had a bug where multiple resources couldn't be installed so we're
 // testing this here
-func (s *ExtensionAPIServerSuite) TestDiscoveryAndOpenAPI() {
-	t := s.T()
-
+func TestDiscoveryAndOpenAPI(t *testing.T) {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
 
@@ -644,9 +640,7 @@ func sortAPIGroupList(list *metav1.APIGroupList) {
 	})
 }
 
-func (s *ExtensionAPIServerSuite) TestNoStore() {
-	t := s.T()
-
+func TestNoStore(t *testing.T) {
 	scheme := runtime.NewScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 
