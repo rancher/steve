@@ -3,6 +3,7 @@ package ext
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -119,7 +120,7 @@ func (s *delegate[T, TList]) Delete(parentCtx context.Context, name string, dele
 	}
 
 	err = s.store.Delete(ctx, name, options)
-	return nil, true, err
+	return oldObj, true, err
 }
 
 // Create implements [rest.Creater]
@@ -226,19 +227,42 @@ func (s *delegate[T, TList]) Update(
 }
 
 type watcher struct {
-	ch chan watch.Event
+	closedLock sync.RWMutex
+	closed     bool
+	ch         chan watch.Event
 }
 
 func (w *watcher) Stop() {
-	close(w.ch)
+	w.closedLock.Lock()
+	defer w.closedLock.Unlock()
+	if !w.closed {
+		close(w.ch)
+		w.closed = true
+	}
+}
+
+func (w *watcher) addEvent(event watch.Event) bool {
+	w.closedLock.RLock()
+	defer w.closedLock.RUnlock()
+	if w.closed {
+		return false
+	}
+
+	w.ch <- event
+	return true
 }
 
 func (w *watcher) ResultChan() <-chan watch.Event {
 	return w.ch
 }
 
-func (s *delegate[T, TList]) Watch(parentCtx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+func (s *delegate[T, TList]) Watch(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (watch.Interface, error) {
 	ctx, err := s.makeContext(parentCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err := s.convertListOptions(internaloptions)
 	if err != nil {
 		return nil, err
 	}
@@ -247,15 +271,24 @@ func (s *delegate[T, TList]) Watch(parentCtx context.Context, options *metainter
 		ch: make(chan watch.Event),
 	}
 	go func() {
-		eventCh, err := s.store.Watch(ctx, &metav1.ListOptions{})
+		// Not much point continuing the watch if the store stopped its watch.
+		// Double stopping here is fine.
+		defer w.Stop()
+
+		// Closing eventCh is the responsibility of the store.Watch method
+		// to avoid the store panicking while trying to send to a close channel
+		eventCh, err := s.store.Watch(ctx, options)
 		if err != nil {
 			return
 		}
 
 		for event := range eventCh {
-			w.ch <- watch.Event{
+			added := w.addEvent(watch.Event{
 				Type:   event.Event,
 				Object: event.Object,
+			})
+			if !added {
+				break
 			}
 		}
 	}()

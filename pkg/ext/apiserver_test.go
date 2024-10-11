@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,9 +20,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
 
 func authAsAdmin(req *http.Request) (*authenticator.Response, bool, error) {
@@ -38,12 +42,14 @@ func authzAllowAll(ctx context.Context, a authorizer.Attributes) (authorizer.Dec
 }
 
 type mapStore struct {
-	items map[string]*TestType
+	items  map[string]*TestType
+	events chan WatchEvent[*TestType]
 }
 
 func newMapStore() *mapStore {
 	return &mapStore{
-		items: make(map[string]*TestType),
+		items:  make(map[string]*TestType),
+		events: make(chan WatchEvent[*TestType], 100),
 	}
 }
 
@@ -52,6 +58,10 @@ func (t *mapStore) Create(ctx Context, obj *TestType, opts *metav1.CreateOptions
 		return nil, apierrors.NewAlreadyExists(ctx.GroupVersionResource.GroupResource(), obj.Name)
 	}
 	t.items[obj.Name] = obj
+	t.events <- WatchEvent[*TestType]{
+		Event:  watch.Added,
+		Object: obj,
+	}
 	return obj, nil
 }
 
@@ -59,7 +69,12 @@ func (t *mapStore) Update(ctx Context, obj *TestType, opts *metav1.UpdateOptions
 	if _, found := t.items[obj.Name]; !found {
 		return nil, apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), obj.Name)
 	}
+	obj.ManagedFields = []metav1.ManagedFieldsEntry{}
 	t.items[obj.Name] = obj
+	t.events <- WatchEvent[*TestType]{
+		Event:  watch.Modified,
+		Object: obj,
+	}
 	return obj, nil
 }
 
@@ -86,14 +101,20 @@ func (t *mapStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, e
 }
 
 func (t *mapStore) Watch(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[*TestType], error) {
-	return nil, nil
+	return t.events, nil
 }
 
 func (t *mapStore) Delete(ctx Context, name string, opts *metav1.DeleteOptions) error {
-	if _, found := t.items[name]; !found {
+	obj, found := t.items[name]
+	if !found {
 		return apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
 	}
+
 	delete(t.items, name)
+	t.events <- WatchEvent[*TestType]{
+		Event:  watch.Deleted,
+		Object: obj,
+	}
 	return nil
 }
 
@@ -103,7 +124,10 @@ func (s *ExtensionAPIServerSuite) TestStore() {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
 
-	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":0")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":0")
 	require.NoError(t, err)
 
 	store := newMapStore()
@@ -115,25 +139,22 @@ func (s *ExtensionAPIServerSuite) TestStore() {
 	require.NoError(t, err)
 	defer cleanup()
 
-	updatedObj := &TestType{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TestType",
-			APIVersion: testTypeGV.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "foo",
-		},
+	ts := httptest.NewServer(extensionAPIServer)
+	defer ts.Close()
+
+	recWatch, err := createRecordingWatcher(scheme, testTypeGV.WithResource("testtypes"), ts.URL)
+	require.NoError(t, err)
+
+	updatedObj := testTypeFixture.DeepCopy()
+	updatedObj.Annotations = map[string]string{
+		"foo": "bar",
 	}
 
-	updatedObjList := &TestTypeList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TestTypeList",
-			APIVersion: testTypeGV.String(),
-		},
-		Items: []TestType{
-			*updatedObj,
-		},
-	}
+	updatedObjList := testTypeListFixture.DeepCopy()
+	updatedObjList.Items = []TestType{*updatedObj}
+
+	emptyList := testTypeListFixture.DeepCopy()
+	emptyList.Items = []TestType{}
 
 	createRequest := func(method string, path string, obj any) *http.Request {
 		var body io.Reader
@@ -148,63 +169,87 @@ func (s *ExtensionAPIServerSuite) TestStore() {
 	tests := []struct {
 		name               string
 		request            *http.Request
-		got                any
+		newType            any
 		expectedStatusCode int
 		expectedBody       any
 	}{
 		{
+			name:               "delete not existing",
 			request:            createRequest(http.MethodDelete, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
 			expectedStatusCode: http.StatusNotFound,
 		},
 		{
+			name:               "get empty list",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
+			newType:            &TestTypeList{},
 			expectedStatusCode: http.StatusOK,
-			expectedBody: &TestTypeList{
-				Items: []TestType{},
-			},
+			expectedBody:       emptyList,
 		},
 		{
-			request:            createRequest(http.MethodPost, "/apis/ext.cattle.io/v1/testtypes", &testTypeFixture),
+			name:               "create testtype",
+			request:            createRequest(http.MethodPost, "/apis/ext.cattle.io/v1/testtypes", testTypeFixture.DeepCopy()),
+			newType:            &TestType{},
 			expectedStatusCode: http.StatusCreated,
+			expectedBody:       &testTypeFixture,
 		},
 		{
+			name:               "get non-empty list",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
+			newType:            &TestTypeList{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       &testTypeListFixture,
 		},
 		{
-			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", updatedObj),
+			name:               "get specific object",
+			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
+			newType:            &TestType{},
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       &testTypeFixture,
+		},
+		{
+			name:               "update",
+			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", updatedObj.DeepCopy()),
+			newType:            &TestType{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       updatedObj,
 		},
 		{
+			name:               "get updated",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
+			newType:            &TestTypeList{},
 			expectedStatusCode: http.StatusOK,
-			expectedBody:       &updatedObjList,
+			expectedBody:       updatedObjList,
 		},
 		{
+			name:               "delete",
 			request:            createRequest(http.MethodDelete, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
+			newType:            &TestType{},
 			expectedStatusCode: http.StatusOK,
+			expectedBody:       updatedObj,
 		},
 		{
+			name:               "delete not found",
 			request:            createRequest(http.MethodDelete, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
 			expectedStatusCode: http.StatusNotFound,
 		},
 		{
+			name:               "get not found",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
 			expectedStatusCode: http.StatusNotFound,
 		},
 		{
+			name:               "get empty list again",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
+			newType:            &TestTypeList{},
 			expectedStatusCode: http.StatusOK,
-			expectedBody: &TestTypeList{
-				Items: []TestType{},
-			},
+			expectedBody:       emptyList,
 		},
 		{
 			name:               "create via update",
-			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", &testTypeFixture),
+			newType:            &TestType{},
+			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", testTypeFixture.DeepCopy()),
 			expectedStatusCode: http.StatusCreated,
+			expectedBody:       &testTypeFixture,
 		},
 	}
 	for _, test := range tests {
@@ -218,12 +263,40 @@ func (s *ExtensionAPIServerSuite) TestStore() {
 			body, _ := io.ReadAll(resp.Body)
 
 			require.Equal(t, test.expectedStatusCode, resp.StatusCode)
-			if test.expectedBody != nil && test.got != nil {
-				err = json.Unmarshal(body, test.got)
+			if test.expectedBody != nil && test.newType != nil {
+				err = json.Unmarshal(body, test.newType)
 				require.NoError(t, err)
-				require.Equal(t, test.expectedBody, test.got)
+				require.Equal(t, test.expectedBody, test.newType)
 			}
 		})
+	}
+
+	// Possibly flaky, find a better way to wait for all events
+	time.Sleep(1 * time.Second)
+	expectedEvents := []watch.Event{
+		{Type: watch.Added, Object: testTypeFixture.DeepCopy()},
+		{Type: watch.Modified, Object: updatedObj.DeepCopy()},
+		{Type: watch.Deleted, Object: updatedObj.DeepCopy()},
+		{Type: watch.Added, Object: testTypeFixture.DeepCopy()},
+	}
+
+	events := recWatch.getEvents()
+	require.Equal(t, len(expectedEvents), len(events))
+
+	for i, event := range events {
+		raw, err := json.Marshal(event.Object)
+		require.NoError(t, err)
+
+		obj := &TestType{}
+		err = json.Unmarshal(raw, obj)
+		require.NoError(t, err)
+
+		convertedEvent := watch.Event{
+			Type:   event.Type,
+			Object: obj,
+		}
+
+		require.Equal(t, expectedEvents[i], convertedEvent)
 	}
 }
 
@@ -596,4 +669,55 @@ func setupExtensionAPIServer[
 	}
 
 	return extensionAPIServer, cleanup, nil
+}
+
+type recordingWatcher struct {
+	ch   <-chan watch.Event
+	stop func()
+}
+
+func (w *recordingWatcher) getEvents() []watch.Event {
+	w.stop()
+	events := []watch.Event{}
+	for event := range w.ch {
+		events = append(events, event)
+	}
+	return events
+}
+
+func createRecordingWatcher(scheme *runtime.Scheme, gvr schema.GroupVersionResource, url string) (*recordingWatcher, error) {
+	codecs := serializer.NewCodecFactory(scheme)
+
+	gv := gvr.GroupVersion()
+	client, err := dynamic.NewForConfig(&rest.Config{
+		Host:    url,
+		APIPath: "/apis",
+		ContentConfig: rest.ContentConfig{
+			NegotiatedSerializer: codecs,
+			GroupVersion:         &gv,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	opts := metav1.ListOptions{
+		Watch: true,
+	}
+	myWatch, err := client.Resource(gvr).Watch(context.Background(), opts)
+	if err != nil {
+		return nil, err
+	}
+	// Should be plenty enough for most tests
+	ch := make(chan watch.Event, 100)
+	go func() {
+		for event := range myWatch.ResultChan() {
+			ch <- event
+		}
+		close(ch)
+	}()
+	return &recordingWatcher{
+		ch:   ch,
+		stop: myWatch.Stop,
+	}, nil
 }

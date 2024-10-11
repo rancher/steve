@@ -84,8 +84,34 @@ type TestTypeList struct {
 	Items []TestType `json:"items"`
 }
 
-func (t *TestTypeList) DeepCopyObject() runtime.Object {
-	return t
+func (in *TestTypeList) DeepCopyInto(out *TestTypeList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]TestType, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	return
+}
+
+func (in *TestTypeList) DeepCopy() *TestTypeList {
+	if in == nil {
+		return nil
+	}
+	out := new(TestTypeList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *TestTypeList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
 }
 
 type TestType struct {
@@ -93,8 +119,27 @@ type TestType struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
-func (t *TestType) DeepCopyObject() runtime.Object {
-	return t
+func (in *TestType) DeepCopyInto(out *TestType) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	return
+}
+
+func (in *TestType) DeepCopy() *TestType {
+	if in == nil {
+		return nil
+	}
+	out := new(TestType)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *TestType) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
 }
 
 type TestTypeOtherList struct {
