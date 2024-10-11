@@ -22,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
@@ -54,6 +55,16 @@ type ExtensionAPIServerOptions struct {
 	// Listener is the TCP listener that is used to listen to the extension API server
 	// that is reached by the main kube-apiserver. Required.
 	Listener net.Listener
+
+	// EffectiveVersion determines which features and apis are supported
+	// by our custom API server.
+	//
+	// This is a new alpha feature from Kubernetes, the details can be
+	// found here: https://github.com/kubernetes/enhancements/tree/master/keps/sig-architecture/4330-compatibility-versions
+	//
+	// If nil, the default version is the version of the Kubernetes Go library
+	// compiled in the final binary.
+	EffectiveVersion utilversion.EffectiveVersion
 }
 
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
@@ -114,6 +125,13 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	config.RequestInfoResolver = resolver
 	config.Authorization = genericapiserver.AuthorizationInfo{
 		Authorizer: opts.Authorizer,
+	}
+	// The default kube effective version ends up being the version of the
+	// library. (The value is hardcoded but it is kept up-to-date via some
+	// automation)
+	config.EffectiveVersion = utilversion.DefaultKubeEffectiveVersion()
+	if opts.EffectiveVersion != nil {
+		config.EffectiveVersion = opts.EffectiveVersion
 	}
 
 	// This feature is more of an optimization for clients that want to go directly to a custom API server
