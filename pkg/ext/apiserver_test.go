@@ -617,6 +617,32 @@ func (s *ExtensionAPIServerSuite) TestDiscoveryAndOpenAPI() {
 	}
 }
 
+func (s *ExtensionAPIServerSuite) TestNoStore() {
+	t := s.T()
+
+	scheme := runtime.NewScheme()
+	codecs := serializer.NewCodecFactory(scheme)
+
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":0")
+	require.NoError(t, err)
+
+	opts := ExtensionAPIServerOptions{
+		GetOpenAPIDefinitions: getOpenAPIDefinitions,
+		Listener:              ln,
+		Authorizer:            authorizer.AuthorizerFunc(authzAllowAll),
+		Authenticator:         authenticator.RequestFunc(authAsAdmin),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	extensionAPIServer, err := NewExtensionAPIServer(scheme, codecs, opts)
+	require.NoError(t, err)
+
+	err = extensionAPIServer.Run(ctx)
+	require.NoError(t, err)
+}
+
 func setupExtensionAPIServer[
 	T runtime.Object,
 	TList runtime.Object,
