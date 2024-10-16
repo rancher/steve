@@ -10,7 +10,6 @@ import (
 	wranglerSummary "github.com/rancher/wrangler/v3/pkg/summary"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/cache"
 )
 
 // SummaryCache provides an interface to get a summary/relationships for an object. Implemented by the summaryCache
@@ -24,26 +23,14 @@ type DefaultFields struct {
 	Cache SummaryCache
 }
 
-// GetTransform produces the default transformation func
-func (d *DefaultFields) GetTransform() cache.TransformFunc {
-	return d.transform
-}
-
-// transform implements virtual.VirtualTransformFunc, and adds reserved fields/summary
-func (d *DefaultFields) transform(obj any) (any, error) {
-	raw, isSignal, err := getUnstructured(obj)
-	if isSignal {
-		return obj, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	raw = addIDField(raw)
-	raw, err = addSummaryFields(raw, d.Cache)
+// TransformCommon implements virtual.VirtualTransformFunc, and adds reserved fields/summary
+func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	obj = addIDField(obj)
+	obj, err := addSummaryFields(obj, d.Cache)
 	if err != nil {
 		return nil, fmt.Errorf("unable to add summary fields: %w", err)
 	}
-	return raw, nil
+	return obj, nil
 }
 
 // addSummaryFields adds the virtual fields for object state.
