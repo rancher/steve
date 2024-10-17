@@ -1,6 +1,7 @@
 package accesscontrol
 
 import (
+	"path/filepath"
 	"sort"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -10,8 +11,9 @@ import (
 )
 
 type AccessSet struct {
-	ID  string
-	set map[key]resourceAccessSet
+	ID             string
+	set            map[key]resourceAccessSet
+	nonResourceSet map[nonResourceKey]bool
 }
 
 type resourceAccessSet map[Access]bool
@@ -19,6 +21,11 @@ type resourceAccessSet map[Access]bool
 type key struct {
 	verb string
 	gr   schema.GroupResource
+}
+
+type nonResourceKey struct {
+	verb string
+	url  string
 }
 
 func (a *AccessSet) Namespaces() (result []string) {
@@ -56,6 +63,13 @@ func (a *AccessSet) Merge(right *AccessSet) {
 			m[k] = v
 		}
 	}
+
+	for k, v := range right.nonResourceSet {
+		_, ok := a.nonResourceSet[k]
+		if !ok {
+			a.nonResourceSet[k] = v
+		}
+	}
 }
 
 func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name string) bool {
@@ -77,6 +91,25 @@ func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name 
 		}
 	}
 
+	return false
+}
+
+func (a *AccessSet) GrantsNonResource(verb, url string) bool {
+	if a.nonResourceSet == nil {
+		return false
+	}
+
+	if _, ok := a.nonResourceSet[nonResourceKey{url: url, verb: verb}]; ok {
+		return true
+	}
+
+	for key := range a.nonResourceSet {
+		verbAllowed := key.verb == verb || key.verb == All
+		pathAllowed, _ := filepath.Match(key.url, url)
+		if pathAllowed && verbAllowed {
+			return true
+		}
+	}
 	return false
 }
 
@@ -118,6 +151,17 @@ func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 		m[access] = true
 		a.set[k] = m
 	}
+}
+
+func (a *AccessSet) AddNonResource(verb, url string) {
+	if a.nonResourceSet == nil {
+		a.nonResourceSet = map[nonResourceKey]bool{}
+	}
+
+	a.nonResourceSet[nonResourceKey{
+		verb: verb,
+		url:  url,
+	}] = true
 }
 
 type AccessListByVerb map[string]AccessList
