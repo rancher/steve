@@ -23,19 +23,18 @@ import (
 func DefaultTemplate(clientGetter proxy.ClientGetter,
 	summaryCache *summarycache.SummaryCache,
 	asl accesscontrol.AccessSetLookup,
-	namespaceCache corecontrollers.NamespaceCache,
-	sqlCache bool) schema.Template {
+	namespaceCache corecontrollers.NamespaceCache) schema.Template {
 	return schema.Template{
 		Store:     metricsStore.NewMetricsStore(proxy.NewProxyStore(clientGetter, summaryCache, asl, namespaceCache)),
-		Formatter: formatter(summaryCache, sqlCache),
+		Formatter: formatter(summaryCache),
 	}
 }
 
 // DefaultTemplateForStore provides a default schema template which uses a provided, pre-initialized store. Primarily used when creating a Template that uses a Lasso SQL store internally.
-func DefaultTemplateForStore(store types.Store, summaryCache *summarycache.SummaryCache, sqlCache bool) schema.Template {
+func DefaultTemplateForStore(store types.Store, summaryCache *summarycache.SummaryCache) schema.Template {
 	return schema.Template{
 		Store:     store,
-		Formatter: formatter(summaryCache, sqlCache),
+		Formatter: formatter(summaryCache),
 	}
 }
 
@@ -72,7 +71,7 @@ func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix stri
 	return buf.String()
 }
 
-func formatter(summarycache *summarycache.SummaryCache, sqlCache bool) types.Formatter {
+func formatter(summarycache *summarycache.SummaryCache) types.Formatter {
 	return func(request *types.APIRequest, resource *types.RawResource) {
 		if resource.Schema == nil {
 			return
@@ -105,20 +104,19 @@ func formatter(summarycache *summarycache.SummaryCache, sqlCache bool) types.For
 		}
 
 		if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
-			if !sqlCache {
-				// with the sql cache, these were already added by the indexer
-				s, rel := summarycache.SummaryAndRelationship(unstr)
-				data.PutValue(unstr.Object, map[string]interface{}{
-					"name":          s.State,
-					"error":         s.Error,
-					"transitioning": s.Transitioning,
-					"message":       strings.Join(s.Message, ":"),
-				}, "metadata", "state")
-				data.PutValue(unstr.Object, rel, "metadata", "relationships")
+			// with the sql cache, these were already added by the indexer. However, the sql cache
+			// is only used for lists, so we need to re-add here for get/watch
+			s, rel := summarycache.SummaryAndRelationship(unstr)
+			data.PutValue(unstr.Object, map[string]interface{}{
+				"name":          s.State,
+				"error":         s.Error,
+				"transitioning": s.Transitioning,
+				"message":       strings.Join(s.Message, ":"),
+			}, "metadata", "state")
+			data.PutValue(unstr.Object, rel, "metadata", "relationships")
 
-				summary.NormalizeConditions(unstr)
+			summary.NormalizeConditions(unstr)
 
-			}
 			includeFields(request, unstr)
 			excludeFields(request, unstr)
 			excludeValues(request, unstr)
