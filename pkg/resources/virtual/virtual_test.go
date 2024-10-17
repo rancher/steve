@@ -8,6 +8,7 @@ import (
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/rancher/steve/pkg/resources/virtual/testutil"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/require"
@@ -548,7 +549,7 @@ func TestTransformChain(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fakeCache := common.FakeSummaryCache{
+			fakeCache := testutil.FakeSummaryCache{
 				SummarizedObject: test.hasSummary,
 				Relationships:    test.hasRelationships,
 			}
