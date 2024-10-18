@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	rbacGroup = "rbac.authorization.k8s.io"
-	All       = "*"
+	rbacGroup       = "rbac.authorization.k8s.io"
+	All             = "*"
+	clusterRoleKind = "ClusterRole"
+	roleKind        = "Role"
 )
 
 type policyRuleIndex struct {
@@ -86,23 +88,27 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
 	for _, rule := range p.getRules(namespace, roleRef) {
 		for _, group := range rule.APIGroups {
-			for _, resource := range rule.Resources {
-				names := rule.ResourceNames
-				if len(names) == 0 {
-					names = []string{All}
-				}
-				for _, resourceName := range names {
-					for _, verb := range rule.Verbs {
-						accessSet.Add(verb,
-							schema.GroupResource{
-								Group:    group,
-								Resource: resource,
-							}, Access{
-								Namespace:    namespace,
-								ResourceName: resourceName,
-							})
+			if len(rule.Resources) > 0 {
+				for _, resource := range rule.Resources {
+					names := rule.ResourceNames
+					if len(names) == 0 {
+						names = []string{All}
+					}
+					for _, resourceName := range names {
+						for _, verb := range rule.Verbs {
+							accessSet.Add(verb,
+								schema.GroupResource{
+									Group:    group,
+									Resource: resource,
+								}, Access{
+									Namespace:    namespace,
+									ResourceName: resourceName,
+								})
+						}
 					}
 				}
+			} else if roleRef.Kind == clusterRoleKind {
+				accessSet.AddNonResourceRule(&rule)
 			}
 		}
 	}

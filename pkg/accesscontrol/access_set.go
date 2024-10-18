@@ -3,15 +3,19 @@ package accesscontrol
 import (
 	"sort"
 
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/attributes"
+	v1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+	rbacv1 "k8s.io/kubernetes/pkg/apis/rbac/v1"
+
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/attributes"
 )
 
 type AccessSet struct {
-	ID  string
-	set map[key]resourceAccessSet
+	ID             string
+	set            map[key]resourceAccessSet
+	nonResourceSet map[nonResourceKey]*v1.PolicyRule
 }
 
 type resourceAccessSet map[Access]bool
@@ -19,6 +23,11 @@ type resourceAccessSet map[Access]bool
 type key struct {
 	verb string
 	gr   schema.GroupResource
+}
+
+type nonResourceKey struct {
+	verb string
+	url  string
 }
 
 func (a *AccessSet) Namespaces() (result []string) {
@@ -56,6 +65,13 @@ func (a *AccessSet) Merge(right *AccessSet) {
 			m[k] = v
 		}
 	}
+
+	for k, v := range right.nonResourceSet {
+		_, ok := a.nonResourceSet[k]
+		if !ok {
+			a.nonResourceSet[k] = v
+		}
+	}
 }
 
 func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name string) bool {
@@ -74,6 +90,24 @@ func (a AccessSet) Grants(verb string, gr schema.GroupResource, namespace, name 
 					}
 				}
 			}
+		}
+	}
+
+	return false
+}
+
+func (a *AccessSet) GrantsNonResource(verb, url string) bool {
+	if a.nonResourceSet == nil {
+		return false
+	}
+
+	if rule, ok := a.nonResourceSet[nonResourceKey{url: url, verb: verb}]; ok {
+		return rbacv1.NonResourceURLMatches(rule, url) && rbacv1.VerbMatches(rule, verb)
+	}
+
+	for _, rule := range a.nonResourceSet {
+		if rbacv1.NonResourceURLMatches(rule, url) && rbacv1.VerbMatches(rule, verb) {
+			return true
 		}
 	}
 
@@ -117,6 +151,37 @@ func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 		m = map[Access]bool{}
 		m[access] = true
 		a.set[k] = m
+	}
+}
+
+func (a *AccessSet) AddNonResouceURLs(verbs, urls []string) {
+	if len(verbs) == 0 || len(urls) == 0 {
+		return
+	}
+
+	var rule v1.PolicyRule
+	rule.NonResourceURLs = urls
+	rule.Verbs = verbs
+
+	a.AddNonResourceRule(&rule)
+}
+
+func (a *AccessSet) AddNonResourceRule(rule *v1.PolicyRule) {
+	if a.nonResourceSet == nil {
+		a.nonResourceSet = map[nonResourceKey]*v1.PolicyRule{}
+	}
+
+	if rule == nil {
+		return
+	}
+
+	for _, verb := range rule.Verbs {
+		for _, url := range rule.NonResourceURLs {
+			a.nonResourceSet[nonResourceKey{
+				verb: verb,
+				url:  url,
+			}] = rule
+		}
 	}
 }
 

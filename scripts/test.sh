@@ -6,7 +6,7 @@ if ! command -v setup-envtest; then
 	exit 127
 fi
 
-minor=$(go list -m all | grep 'k8s.io/client-go' | cut -d ' ' -f 2 | cut -d '.' -f 2)
+minor=$(go mod graph | grep ' k8s.io/client-go@' | head -n1 | cut -d@ -f2 | cut -d '.' -f 2)
 version="1.$minor.x"
 
 export KUBEBUILDER_ASSETS=$(setup-envtest use -p path "$version")
