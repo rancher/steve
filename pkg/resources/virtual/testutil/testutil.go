@@ -1,4 +1,4 @@
-package common
+package testutil
 
 import (
 	"github.com/rancher/steve/pkg/summarycache"
