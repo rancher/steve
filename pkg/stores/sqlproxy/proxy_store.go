@@ -59,12 +59,47 @@ var (
 	paramScheme               = runtime.NewScheme()
 	paramCodec                = runtime.NewParameterCodec(paramScheme)
 	typeSpecificIndexedFields = map[string][][]string{
-		"_v1_Namespace": {{`metadata`, `labels[field.cattle.io/projectId]`}},
-		"_v1_Node":      {{`status`, `nodeInfo`, `kubeletVersion`}, {`status`, `nodeInfo`, `operatingSystem`}},
-		"_v1_Pod":       {{`spec`, `containers`, `image`}, {`spec`, `nodeName`}},
-		"_v1_ConfigMap": {{`metadata`, `labels[harvesterhci.io/cloud-init-template]`}},
-
-		"management.cattle.io_v3_Node": {{`status`, `nodeName`}},
+		gvkKey("", "v1", "Event"): {
+			{"_type"},
+			{"involvedObject", "kind"},
+			{"message"},
+			{"reason"},
+		},
+		gvkKey("", "v1", "Namespace"): {
+			{"metadata", "labels[field.cattle.io/projectId]"}},
+		gvkKey("", "v1", "Node"): {
+			{"status", "nodeInfo", "kubeletVersion"},
+			{"status", "nodeInfo", "operatingSystem"}},
+		gvkKey("", "v1", "Pod"): {
+			{"spec", "containers", "image"},
+			{"spec", "nodeName"}},
+		gvkKey("", "v1", "ConfigMap"): {
+			{"metadata", "labels[harvesterhci.io/cloud-init-template]"}},
+		gvkKey("catalog.cattle.io", "v1", "ClusterRepo"): {
+			{"metadata", "annotations[clusterrepo.cattle.io/hidden]"},
+			{"spec", "gitBranch"},
+			{"spec", "gitRepo"},
+		},
+		gvkKey("catalog.cattle.io", "v1", "Operation"): {
+			{"status", "action"},
+			{"status", "namespace"},
+			{"status", "releaseName"},
+		},
+		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
+			{"spec", "clusterName"}},
+		gvkKey("management.cattle.io", "v3", "Node"): {
+			{"status", "nodeName"}},
+		gvkKey("management.cattle.io", "v3", "NodePool"): {
+			{"spec", "clusterName"}},
+		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
+			{"spec", "clusterName"}},
+		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
+			{"metadata", "labels[provider.cattle.io]"},
+			{"status", "provider"},
+			{"status", "allocatable", "cpu"},
+			{"status", "allocatable", "memory"},
+			{"status", "allocatable", "pods"},
+		},
 	}
 	commonIndexFields = [][]string{
 		{`id`},
@@ -239,15 +274,15 @@ func (s *Store) initializeNamespaceCache() error {
 func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
 	fields := [][]string{}
 	fields = append(fields, commonIndexFields...)
-	typeFields := typeSpecificIndexedFields[keyFromGVK(gvk)]
+	typeFields := typeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
 	if typeFields != nil {
 		fields = append(fields, typeFields...)
 	}
 	return fields
 }
 
-func keyFromGVK(gvk schema.GroupVersionKind) string {
-	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
+func gvkKey(group, version, kind string) string {
+	return group + "_" + version + "_" + kind
 }
 
 // getFieldsFromSchema converts object field names from types.APISchema's format into lasso's

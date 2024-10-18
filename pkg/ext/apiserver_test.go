@@ -388,7 +388,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			path:               "/apis",
 			got:                &metav1.APIGroupList{},
 			expectedStatusCode: http.StatusOK,
-			// This is needed because the library loops over the apigroups
+			// This is needed because the k8s.io/apiserver library loops over the apigroups
 			compareFunc: func(t *testing.T, gotObj any) {
 				apiGroupList, ok := gotObj.(*metav1.APIGroupList)
 				require.True(t, ok)
@@ -628,7 +628,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 	}
 }
 
-// Because the library has non-deterministic map iteration, changing the order of groups and versions
+// Because the k8s.io/apiserver library has non-deterministic map iteration, changing the order of groups and versions
 func sortAPIGroupList(list *metav1.APIGroupList) {
 	for _, group := range list.Groups {
 		sort.Slice(group.Versions, func(i, j int) bool {

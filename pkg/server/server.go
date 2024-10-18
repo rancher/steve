@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
 	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
+	"github.com/rancher/steve/pkg/ext"
 	"github.com/rancher/steve/pkg/resources"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/schemas"
@@ -31,6 +32,8 @@ import (
 
 var ErrConfigRequired = errors.New("rest config is required")
 
+var _ ExtensionAPIServer = (*ext.ExtensionAPIServer)(nil)
+
 // ExtensionAPIServer will run an extension API server. The extension API server
 // will be accessible from Steve at the /ext endpoint and will be compatible with
 // the aggregate API server in Kubernetes.
@@ -38,7 +41,7 @@ type ExtensionAPIServer interface {
 	// The ExtensionAPIServer is served at /ext in Steve's mux
 	http.Handler
 	// Run configures the API server and make the HTTP handler available
-	Run(ctx context.Context)
+	Run(ctx context.Context) error
 }
 
 type Server struct {
@@ -253,7 +256,9 @@ func (c *Server) start(ctx context.Context) error {
 		}
 	}
 	if c.extensionAPIServer != nil {
-		c.extensionAPIServer.Run(ctx)
+		if err := c.extensionAPIServer.Run(ctx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
