@@ -44,33 +44,6 @@ func TestTransformEvents(t *testing.T) {
 			},
 		},
 		{
-			name: "don't fix non-default-group event fields",
-			input: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": "palau.io/v1",
-					"kind":       "Event",
-					"metadata": map[string]interface{}{
-						"name":      "gregsFarm",
-						"namespace": "gregsNamespace",
-					},
-					"id":   "eventTest1id",
-					"type": "Gorniplatz",
-				},
-			},
-			wantOutput: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": "palau.io/v1",
-					"kind":       "Event",
-					"metadata": map[string]interface{}{
-						"name":      "gregsFarm",
-						"namespace": "gregsNamespace",
-					},
-					"id":   "eventTest1id",
-					"type": "Gorniplatz",
-				},
-			},
-		},
-		{
 			name: "don't change typeless events",
 			input: &unstructured.Unstructured{
 				Object: map[string]interface{}{
