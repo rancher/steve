@@ -70,6 +70,31 @@ func TestTransformEvents(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "don't change typeless events",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Event",
+					"metadata": map[string]interface{}{
+						"name":      "carysFarm",
+						"namespace": "carysNamespace",
+					},
+					"id": "eventTest3id",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Event",
+					"metadata": map[string]interface{}{
+						"name":      "carysFarm",
+						"namespace": "carysNamespace",
+					},
+					"id": "eventTest3id",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
