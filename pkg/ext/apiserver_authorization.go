@@ -31,7 +31,7 @@ func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.At
 			return authorizer.DecisionAllow, "", nil
 		}
 
-		return authorizer.DecisionDeny, "AccessSetAuthorizer does not support nonResourceURLs requests", nil
+		return authorizer.DecisionDeny, "", nil
 	}
 
 	namespace := attrs.GetNamespace()

@@ -87,8 +87,8 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 
 func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
 	for _, rule := range p.getRules(namespace, roleRef) {
-		for _, group := range rule.APIGroups {
-			if len(rule.Resources) > 0 {
+		if len(rule.Resources) > 0 {
+			for _, group := range rule.APIGroups {
 				for _, resource := range rule.Resources {
 					names := rule.ResourceNames
 					if len(names) == 0 {
@@ -107,9 +107,9 @@ func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, role
 						}
 					}
 				}
-			} else if roleRef.Kind == clusterRoleKind {
-				accessSet.AddNonResourceRule(&rule)
 			}
+		} else if roleRef.Kind == clusterRoleKind {
+			accessSet.AddNonResourceRule(&rule)
 		}
 	}
 }
