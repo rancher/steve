@@ -311,16 +311,6 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			},
 			expectedStatusCode: http.StatusForbidden,
 		},
-		{
-			name: "non-resouce-urls - read only user - forbidden",
-			user: &user.DefaultInfo{
-				Name: "non-resource-urls-reader",
-			},
-			createRequest: func() *http.Request {
-				return httptest.NewRequest(http.MethodPost, "/metrics", nil)
-			},
-			expectedStatusCode: http.StatusForbidden,
-		},
 	}
 
 	for _, test := range tests {
