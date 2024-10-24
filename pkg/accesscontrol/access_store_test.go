@@ -22,7 +22,7 @@ func (p policyRulesMock) getRoleRefs(s string) subjectGrants {
 	return p.roleRefs[s]
 }
 
-func TestAccessStore_toUserInfo(t *testing.T) {
+func TestAccessStore_userGrantsFor(t *testing.T) {
 	testUser := &user.DefaultInfo{
 		Name: "user-12345",
 		Groups: []string{
@@ -56,7 +56,7 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			verify: func(t *testing.T, store *AccessStore, res string) {
 				// iterate enough times to make possibly random iterators repeating order by coincidence
 				for range 5 {
-					if res != store.toUserInfo(testUser).hash() {
+					if res != store.userGrantsFor(testUser).hash() {
 						t.Fatal("hash is not the same on consecutive runs")
 					}
 				}
@@ -86,7 +86,7 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 				testUserAlt := *testUser
 				testUserAlt.Groups = []string{}
 
-				if store.toUserInfo(&testUserAlt).hash() == res {
+				if store.userGrantsFor(&testUserAlt).hash() == res {
 					t.Fatal("CacheKey does not use groups for hashing")
 				}
 			},
@@ -115,7 +115,7 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 				testUserAlt := &user.DefaultInfo{Name: testUser.Name, Groups: slices.Clone(testUser.Groups)}
 				slices.Reverse(testUserAlt.Groups)
 
-				if store.toUserInfo(testUserAlt).hash() != res {
+				if store.userGrantsFor(testUserAlt).hash() != res {
 					t.Fatal("CacheKey varies depending on groups order")
 				}
 			},
@@ -145,7 +145,7 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 						},
 					},
 				}
-				if store.toUserInfo(testUser).hash() == res {
+				if store.userGrantsFor(testUser).hash() == res {
 					t.Fatal("CacheKey did not change when on role change")
 				}
 			},
@@ -174,7 +174,7 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 					Name:   testUser.Name,
 					Groups: append(slices.Clone(testUser.Groups), "newgroup"),
 				}
-				if store.toUserInfo(testUserAlt).hash() == res {
+				if store.userGrantsFor(testUserAlt).hash() == res {
 					t.Fatal("CacheKey did not change when new group was added")
 				}
 			},
@@ -182,7 +182,7 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.verify(t, tt.store, tt.store.toUserInfo(testUser).hash())
+			tt.verify(t, tt.store, tt.store.userGrantsFor(testUser).hash())
 		})
 	}
 }

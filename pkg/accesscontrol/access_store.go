@@ -50,7 +50,7 @@ func NewAccessStore(_ context.Context, cacheResults bool, rbac v1.Interface) *Ac
 }
 
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
-	info := l.toUserInfo(user)
+	info := l.userGrantsFor(user)
 	if l.cache == nil {
 		return l.newAccessSet(info)
 	}
@@ -84,8 +84,8 @@ func (l *AccessStore) PurgeUserData(id string) {
 	l.cache.Remove(id)
 }
 
-// toUserInfo retrieves all the access information for a user
-func (l *AccessStore) toUserInfo(user user.Info) userGrants {
+// userGrantsFor retrieves all the access information for a user
+func (l *AccessStore) userGrantsFor(user user.Info) userGrants {
 	var res userGrants
 
 	groups := slices.Clone(user.GetGroups())
