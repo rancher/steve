@@ -247,6 +247,28 @@ func Test_HandleHelmData(t *testing.T) {
 			want:        newConfigMap("TILLER", map[string]interface{}{}),
 			helmVersion: 2,
 		},
+		{
+			name: "[no magic gzip] When receiving a SECRET resource with includeHelmData set to TRUE and owner set to HELM, it should decode the helm3 release",
+			resource: newSecret("helm", map[string]interface{}{
+				"release": base64.StdEncoding.EncodeToString([]byte(newV3ReleaseWithoutGzip())),
+			}),
+			request: newRequest("true"),
+			want: newSecret("helm", map[string]interface{}{
+				"release": &r,
+			}),
+			helmVersion: 3,
+		},
+		{
+			name: "[no magic gzip] When receiving a SECRET resource with includeHelmData set to TRUE and owner set to TILLER, it should decode the helm2 release",
+			resource: newSecret("TILLER", map[string]interface{}{
+				"release": base64.StdEncoding.EncodeToString([]byte(newV2ReleaseWithoutGzip())),
+			}),
+			request: newRequest("true"),
+			want: newSecret("TILLER", map[string]interface{}{
+				"release": &rv2,
+			}),
+			helmVersion: 2,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -320,6 +342,15 @@ func newV2Release() string {
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
+func newV2ReleaseWithoutGzip() string {
+	a := rv2
+	b, err := proto.Marshal(&a)
+	if err != nil {
+		logrus.Errorf("Failed to marshal release: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
 func newV3Release() string {
 	b, err := json.Marshal(r)
 	if err != nil {
@@ -330,6 +361,14 @@ func newV3Release() string {
 	gz.Write(b)
 	gz.Close()
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
+func newV3ReleaseWithoutGzip() string {
+	b, err := json.Marshal(r)
+	if err != nil {
+		logrus.Errorf("Failed to marshal release: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 func newRequest(value string) *types.APIRequest {
