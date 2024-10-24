@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"io"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
@@ -12,7 +14,6 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/sirupsen/logrus"
 	"helm.sh/helm/v3/pkg/release"
-	"io"
 	rspb "k8s.io/helm/pkg/proto/hapi/release"
 )
 
