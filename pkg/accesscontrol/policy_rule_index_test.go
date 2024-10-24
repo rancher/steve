@@ -98,7 +98,7 @@ func Test_policyRuleIndex_roleBindingBySubject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			indexFunc := roleBindingBySubjectIndexer(tt.kind)
 			if got, err := indexFunc(tt.rb); err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			} else if !slices.Equal(got, tt.want) {
 				t.Errorf("roleBindingBySubjectIndexer() got = %v, want %v", got, tt.want)
 			}
@@ -208,7 +208,7 @@ func Test_policyRuleIndex_clusterRoleBindingBySubject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			indexFunc := clusterRoleBindingBySubjectIndexer(tt.kind)
 			if got, err := indexFunc(tt.crb); err != nil {
-				t.Fatal(err)
+				t.Error(err)
 			} else if !slices.Equal(got, tt.want) {
 				t.Errorf("clusterRoleBindingBySubjectIndexer() got = %v, want %v", got, tt.want)
 			}
