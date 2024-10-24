@@ -15,7 +15,7 @@ import (
 type AccessSet struct {
 	ID             string
 	set            map[key]resourceAccessSet
-	nonResourceSet map[nonResourceKey]*v1.PolicyRule
+	nonResourceSet map[nonResourceKey]struct{}
 }
 
 type resourceAccessSet map[Access]bool
@@ -101,11 +101,13 @@ func (a *AccessSet) GrantsNonResource(verb, url string) bool {
 		return false
 	}
 
-	if rule, ok := a.nonResourceSet[nonResourceKey{url: url, verb: verb}]; ok {
+	if _, ok := a.nonResourceSet[nonResourceKey{url: url, verb: verb}]; ok {
+		rule := &v1.PolicyRule{NonResourceURLs: []string{url}, Verbs: []string{verb}}
 		return rbacv1.NonResourceURLMatches(rule, url) && rbacv1.VerbMatches(rule, verb)
 	}
 
-	for _, rule := range a.nonResourceSet {
+	for key := range a.nonResourceSet {
+		rule := &v1.PolicyRule{NonResourceURLs: []string{key.url}, Verbs: []string{key.verb}}
 		if rbacv1.NonResourceURLMatches(rule, url) && rbacv1.VerbMatches(rule, verb) {
 			return true
 		}
@@ -159,28 +161,16 @@ func (a *AccessSet) AddNonResouceURLs(verbs, urls []string) {
 		return
 	}
 
-	var rule v1.PolicyRule
-	rule.NonResourceURLs = urls
-	rule.Verbs = verbs
-
-	a.AddNonResourceRule(&rule)
-}
-
-func (a *AccessSet) AddNonResourceRule(rule *v1.PolicyRule) {
 	if a.nonResourceSet == nil {
-		a.nonResourceSet = map[nonResourceKey]*v1.PolicyRule{}
+		a.nonResourceSet = map[nonResourceKey]struct{}{}
 	}
 
-	if rule == nil {
-		return
-	}
-
-	for _, verb := range rule.Verbs {
-		for _, url := range rule.NonResourceURLs {
+	for _, verb := range verbs {
+		for _, url := range urls {
 			a.nonResourceSet[nonResourceKey{
 				verb: verb,
 				url:  url,
-			}] = rule
+			}] = struct{}{}
 		}
 	}
 }

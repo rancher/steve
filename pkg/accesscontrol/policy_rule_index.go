@@ -109,7 +109,7 @@ func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, role
 				}
 			}
 		} else if roleRef.Kind == clusterRoleKind {
-			accessSet.AddNonResourceRule(&rule)
+			accessSet.AddNonResouceURLs(rule.Verbs, rule.NonResourceURLs)
 		}
 	}
 }
