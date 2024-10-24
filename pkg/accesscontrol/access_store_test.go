@@ -15,14 +15,11 @@ import (
 )
 
 type policyRulesMock struct {
-	getRoleRefsFunc func(string) subjectGrants
+	roleRefs map[string]subjectGrants
 }
 
 func (p policyRulesMock) getRoleRefs(s string) subjectGrants {
-	if p.getRoleRefsFunc == nil {
-		return subjectGrants{}
-	}
-	return p.getRoleRefsFunc(s)
+	return p.roleRefs[s]
 }
 
 func TestAccessStore_toUserInfo(t *testing.T) {
@@ -43,15 +40,15 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			name: "consistently produces the same value",
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{
-					getRoleRefsFunc: func(s string) subjectGrants {
-						return subjectGrants{
+					roleRefs: map[string]subjectGrants{
+						testUser.Name: {
 							roleBindings: []roleRef{
 								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1"},
 							},
 							clusterRoleBindings: []roleRef{
 								{roleName: "testclusterrole", resourceVersion: "testclusterrolev1"},
 							},
-						}
+						},
 					},
 				},
 				groupsPolicyRules: &policyRulesMock{},
@@ -70,23 +67,17 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{},
 				groupsPolicyRules: &policyRulesMock{
-					getRoleRefsFunc: func(s string) subjectGrants {
-						switch s {
-						case testUser.Groups[0]:
-							return subjectGrants{
-								roleBindings: []roleRef{
-									{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
-								},
-							}
-						case testUser.Groups[1]:
-							return subjectGrants{
-								clusterRoleBindings: []roleRef{
-									{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
-								},
-							}
-						default:
-							return subjectGrants{}
-						}
+					roleRefs: map[string]subjectGrants{
+						testUser.Groups[0]: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
+							},
+						},
+						testUser.Groups[1]: {
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
+							},
+						},
 					},
 				},
 			},
@@ -105,23 +96,17 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{},
 				groupsPolicyRules: &policyRulesMock{
-					getRoleRefsFunc: func(s string) subjectGrants {
-						switch s {
-						case testUser.Groups[0]:
-							return subjectGrants{
-								roleBindings: []roleRef{
-									{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
-								},
-							}
-						case testUser.Groups[1]:
-							return subjectGrants{
-								clusterRoleBindings: []roleRef{
-									{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
-								},
-							}
-						default:
-							return subjectGrants{}
-						}
+					roleRefs: map[string]subjectGrants{
+						testUser.Groups[0]: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
+							},
+						},
+						testUser.Groups[0]: {
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
+							},
+						},
 					},
 				},
 			},
@@ -139,12 +124,12 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			name: "role changes produce a different value",
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{
-					getRoleRefsFunc: func(s string) subjectGrants {
-						return subjectGrants{
+					roleRefs: map[string]subjectGrants{
+						testUser.Name: {
 							roleBindings: []roleRef{
 								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1"},
 							},
-						}
+						},
 					},
 				},
 				groupsPolicyRules: &policyRulesMock{},
@@ -152,12 +137,12 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			verify: func(t *testing.T, store *AccessStore, res string) {
 				// new mock returns different resource version
 				store.usersPolicyRules = &policyRulesMock{
-					getRoleRefsFunc: func(s string) subjectGrants {
-						return subjectGrants{
+					roleRefs: map[string]subjectGrants{
+						testUser.Name: {
 							roleBindings: []roleRef{
 								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev2"},
 							},
-						}
+						},
 					},
 				}
 				if store.toUserInfo(testUser).hash() == res {
@@ -170,23 +155,17 @@ func TestAccessStore_toUserInfo(t *testing.T) {
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{},
 				groupsPolicyRules: &policyRulesMock{
-					getRoleRefsFunc: func(s string) subjectGrants {
-						switch s {
-						case testUser.Groups[0]:
-							return subjectGrants{
-								roleBindings: []roleRef{
-									{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
-								},
-							}
-						case "newgroup":
-							return subjectGrants{
-								clusterRoleBindings: []roleRef{
-									{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
-								},
-							}
-						default:
-							return subjectGrants{}
-						}
+					roleRefs: map[string]subjectGrants{
+						testUser.Groups[0]: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
+							},
+						},
+						"newgroup": {
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
+							},
+						},
 					},
 				},
 			},
@@ -217,8 +196,8 @@ func TestAccessStore_AccessFor(t *testing.T) {
 	store := &AccessStore{
 		concurrentAccessFor: new(singleflight.Group),
 		usersPolicyRules: &policyRulesMock{
-			getRoleRefsFunc: func(s string) subjectGrants {
-				return subjectGrants{
+			roleRefs: map[string]subjectGrants{
+				testUser.Name: {
 					clusterRoleBindings: []roleRef{
 						{
 							roleName: "testclusterrole", resourceVersion: "testclusterrolev1",
@@ -230,29 +209,24 @@ func TestAccessStore_AccessFor(t *testing.T) {
 							}},
 						},
 					},
-				}
+				},
 			},
 		},
 		groupsPolicyRules: &policyRulesMock{
-			getRoleRefsFunc: func(s string) subjectGrants {
-				switch s {
-				case testUser.Groups[0]:
-					return subjectGrants{
-						roleBindings: []roleRef{
-							{
-								namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1",
-								rules: []rbacv1.PolicyRule{{
-									Verbs:         []string{"list"},
-									APIGroups:     []string{appsv1.GroupName},
-									Resources:     []string{"Deployment"},
-									ResourceNames: []string{All},
-								}},
-							},
+			roleRefs: map[string]subjectGrants{
+				testUser.Groups[0]: {
+					roleBindings: []roleRef{
+						{
+							namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1",
+							rules: []rbacv1.PolicyRule{{
+								Verbs:         []string{"list"},
+								APIGroups:     []string{appsv1.GroupName},
+								Resources:     []string{"Deployment"},
+								ResourceNames: []string{All},
+							}},
 						},
-					}
-				default:
-					return subjectGrants{}
-				}
+					},
+				},
 			},
 		},
 		cache: asCache,
@@ -328,12 +302,12 @@ func TestAccessStore_AccessFor_concurrent(t *testing.T) {
 	store := &AccessStore{
 		concurrentAccessFor: new(singleflight.Group),
 		usersPolicyRules: &policyRulesMock{
-			getRoleRefsFunc: func(s string) subjectGrants {
-				return subjectGrants{
+			roleRefs: map[string]subjectGrants{
+				testUser.Name: {
 					roleBindings: []roleRef{
 						{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1"},
 					},
-				}
+				},
 			},
 		},
 		cache: asCache,
