@@ -135,7 +135,7 @@ func (p *policyRuleIndex) getClusterRoleBindings(subjectName string) []*rbacv1.C
 		return nil
 	}
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
+		return result[i].UID < result[j].UID
 	})
 	return result
 }
