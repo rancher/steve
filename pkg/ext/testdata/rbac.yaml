@@ -121,3 +121,45 @@ subjects:
 - apiGroup: rbac.authorization.k8s.io
   kind: User
   name: read-only-error
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openapi-v2-only-read
+rules:
+  - nonResourceURLs: ["/openapi/v2"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openapi-read
+rules:
+  - nonResourceURLs: ["/openapi/v2", "/openapi/v3", "/openapi/v3/*"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openapi-v2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openapi-v2-only-read
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: read-only
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openapi-v3
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openapi-read
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: read-write

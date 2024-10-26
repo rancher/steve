@@ -31,6 +31,9 @@ func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.At
 			return authorizer.DecisionAllow, "", nil
 		}
 
+		// An empty string reason will still provide enough information such as:
+		//
+		//    forbidden: User "unknown-user" cannot post path /openapi/v3
 		return authorizer.DecisionDeny, "", nil
 	}
 

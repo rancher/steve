@@ -65,7 +65,7 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 			verb: "get",
 			url:  "/healthz",
 			keys: map[nonResourceKey]struct{}{
-				{verb: "get", url: "/healthz"}: struct{}{},
+				{verb: "get", url: "/healthz"}: {},
 			},
 			expect: true,
 		},
@@ -74,7 +74,16 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 			verb: "get",
 			url:  "/api/resource",
 			keys: map[nonResourceKey]struct{}{
-				{verb: "get", url: "/api/*"}: struct{}{},
+				{verb: "get", url: "/api/*"}: {},
+			},
+			expect: true,
+		},
+		{
+			name: "wildcard in verb",
+			verb: "get",
+			url:  "/healthz",
+			keys: map[nonResourceKey]struct{}{
+				{verb: "*", url: "/healthz"}: {},
 			},
 			expect: true,
 		},
@@ -83,7 +92,7 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 			verb: "get",
 			url:  "/*", // that's invalid according to k8s rules
 			keys: map[nonResourceKey]struct{}{
-				{verb: "get", url: "/api/*"}: struct{}{},
+				{verb: "get", url: "/api/*"}: {},
 			},
 			expect: false,
 		},
@@ -92,7 +101,7 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 			verb: "post",
 			url:  "/healthz",
 			keys: map[nonResourceKey]struct{}{
-				{verb: "get", url: "/healthz"}: struct{}{},
+				{verb: "get", url: "/healthz"}: {},
 			},
 			expect: false,
 		},
@@ -101,7 +110,7 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 			verb: "post",
 			url:  "/metrics",
 			keys: map[nonResourceKey]struct{}{
-				{verb: "post", url: "/healthz"}: struct{}{},
+				{verb: "post", url: "/healthz"}: {},
 			},
 			expect: false,
 		},
@@ -135,18 +144,18 @@ func TestAccessSet_Merge(t *testing.T) {
 			name: "merging NonResouceURLs",
 			left: &AccessSet{
 				nonResourceSet: map[nonResourceKey]struct{}{
-					{url: "/healthz", verb: "get"}: struct{}{},
+					{url: "/healthz", verb: "get"}: {},
 				},
 			},
 			right: &AccessSet{
 				nonResourceSet: map[nonResourceKey]struct{}{
-					{url: "/metrics", verb: "post"}: struct{}{},
+					{url: "/metrics", verb: "post"}: {},
 				},
 			},
 			want: &AccessSet{
 				nonResourceSet: map[nonResourceKey]struct{}{
-					{url: "/healthz", verb: "get"}:  struct{}{},
-					{url: "/metrics", verb: "post"}: struct{}{},
+					{url: "/healthz", verb: "get"}:  {},
+					{url: "/metrics", verb: "post"}: {},
 				},
 			},
 		},
@@ -154,19 +163,19 @@ func TestAccessSet_Merge(t *testing.T) {
 			name: "merging NonResouceURLs - repeated items",
 			left: &AccessSet{
 				nonResourceSet: map[nonResourceKey]struct{}{
-					{url: "/healthz", verb: "get"}:  struct{}{},
-					{url: "/metrics", verb: "post"}: struct{}{},
+					{url: "/healthz", verb: "get"}:  {},
+					{url: "/metrics", verb: "post"}: {},
 				},
 			},
 			right: &AccessSet{
 				nonResourceSet: map[nonResourceKey]struct{}{
-					{url: "/metrics", verb: "post"}: struct{}{},
+					{url: "/metrics", verb: "post"}: {},
 				},
 			},
 			want: &AccessSet{
 				nonResourceSet: map[nonResourceKey]struct{}{
-					{url: "/healthz", verb: "get"}:  struct{}{},
-					{url: "/metrics", verb: "post"}: struct{}{},
+					{url: "/healthz", verb: "get"}:  {},
+					{url: "/metrics", verb: "post"}: {},
 				},
 			},
 		},

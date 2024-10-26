@@ -66,6 +66,10 @@ func (a *AccessSet) Merge(right *AccessSet) {
 		}
 	}
 
+	if a.nonResourceSet == nil {
+		a.nonResourceSet = map[nonResourceKey]struct{}{}
+	}
+
 	for k, v := range right.nonResourceSet {
 		_, ok := a.nonResourceSet[k]
 		if !ok {

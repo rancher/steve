@@ -88,28 +88,32 @@ func (p *policyRuleIndex) get(subjectName string) *AccessSet {
 func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
 	for _, rule := range p.getRules(namespace, roleRef) {
 		if len(rule.Resources) > 0 {
-			for _, group := range rule.APIGroups {
-				for _, resource := range rule.Resources {
-					names := rule.ResourceNames
-					if len(names) == 0 {
-						names = []string{All}
-					}
-					for _, resourceName := range names {
-						for _, verb := range rule.Verbs {
-							accessSet.Add(verb,
-								schema.GroupResource{
-									Group:    group,
-									Resource: resource,
-								}, Access{
-									Namespace:    namespace,
-									ResourceName: resourceName,
-								})
-						}
-					}
-				}
-			}
+			addResourceAccess(accessSet, namespace, rule)
 		} else if roleRef.Kind == clusterRoleKind {
 			accessSet.AddNonResouceURLs(rule.Verbs, rule.NonResourceURLs)
+		}
+	}
+}
+
+func addResourceAccess(accessSet *AccessSet, namespace string, rule rbacv1.PolicyRule) {
+	for _, group := range rule.APIGroups {
+		for _, resource := range rule.Resources {
+			names := rule.ResourceNames
+			if len(names) == 0 {
+				names = []string{All}
+			}
+			for _, resourceName := range names {
+				for _, verb := range rule.Verbs {
+					accessSet.Add(verb,
+						schema.GroupResource{
+							Group:    group,
+							Resource: resource,
+						}, Access{
+							Namespace:    namespace,
+							ResourceName: resourceName,
+						})
+				}
+			}
 		}
 	}
 }
