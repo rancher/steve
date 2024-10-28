@@ -317,7 +317,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		{
 			name: "authorized access to non-resource url",
 			user: &user.DefaultInfo{
-				Name: "read-only",
+				Name: "openapi-v2-only",
 			},
 			createRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
@@ -327,7 +327,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		{
 			name: "unauthorized verb to non-resource url",
 			user: &user.DefaultInfo{
-				Name: "read-only",
+				Name: "openapi-v2-only",
 			},
 			createRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodPost, "/openapi/v2", nil)
@@ -337,7 +337,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		{
 			name: "unauthorized access to non-resource url (user can access only openapi/v2)",
 			user: &user.DefaultInfo{
-				Name: "read-only",
+				Name: "openapi-v2-only",
 			},
 			createRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/openapi/v3", nil)
@@ -347,7 +347,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		{
 			name: "authorized user can access both openapi v2 and v3 (v2)",
 			user: &user.DefaultInfo{
-				Name: "read-write",
+				Name: "openapi-v2-v3",
 			},
 			createRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
@@ -357,7 +357,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		{
 			name: "authorized user can access both openapi v2 and v3 (v3)",
 			user: &user.DefaultInfo{
-				Name: "read-write",
+				Name: "openapi-v2-v3",
 			},
 			createRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/openapi/v3", nil)
@@ -367,7 +367,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		{
 			name: "authorized user can access url based in wildcard rule",
 			user: &user.DefaultInfo{
-				Name: "read-write",
+				Name: "openapi-v2-v3",
 			},
 			createRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/openapi/v3/apis/ext.cattle.io/v1", nil)

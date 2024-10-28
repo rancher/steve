@@ -25,6 +25,22 @@ func TestAccessSet_AddNonResourceURLs(t *testing.T) {
 			},
 		},
 		{
+			name:  "url wildcard",
+			verbs: []string{"get"},
+			urls:  []string{"/metrics/*"},
+			want: []nonResourceKey{
+				{"get", "/metrics/*"},
+			},
+		},
+		{
+			name:  "verb wildcard",
+			verbs: []string{"*"},
+			urls:  []string{"/metrics"},
+			want: []nonResourceKey{
+				{"*", "/metrics"},
+			},
+		},
+		{
 			name:  "empty urls",
 			verbs: []string{"get", "post"},
 			urls:  []string{},
@@ -125,7 +141,11 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			accessSet := &AccessSet{nonResourceSet: tt.keys}
+			accessSet := &AccessSet{}
+
+			for rule := range tt.keys {
+				accessSet.AddNonResouceURLs([]string{rule.verb}, []string{rule.url})
+			}
 
 			res := accessSet.GrantsNonResource(tt.verb, tt.url)
 			assert.Equal(t, tt.expect, res)
