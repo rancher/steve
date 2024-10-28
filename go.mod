@@ -12,6 +12,7 @@ replace (
 require (
 	github.com/adrg/xdg v0.4.0
 	github.com/golang/mock v1.6.0
+	github.com/golang/protobuf v1.5.3
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/pborman/uuid v1.2.1
@@ -28,17 +29,20 @@ require (
 	github.com/urfave/cli v1.22.14
 	github.com/urfave/cli/v2 v2.25.7
 	golang.org/x/sync v0.5.0
+	helm.sh/helm/v3 v3.11.0
 	k8s.io/api v0.28.6
 	k8s.io/apiextensions-apiserver v0.28.6
 	k8s.io/apimachinery v0.28.6
 	k8s.io/apiserver v0.28.6
 	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/helm v2.17.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.28.6
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
@@ -55,7 +59,6 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
