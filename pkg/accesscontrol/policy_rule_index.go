@@ -4,33 +4,35 @@ import (
 	"fmt"
 	"sort"
 
-	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
+	rbacv1controllers "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
-	rbacGroup = "rbac.authorization.k8s.io"
+	rbacGroup = rbacv1.GroupName
 	All       = "*"
+
+	groupKind      = rbacv1.GroupKind
+	userKind       = rbacv1.UserKind
+	svcAccountKind = rbacv1.ServiceAccountKind
 )
 
 type policyRuleIndex struct {
-	crCache             v1.ClusterRoleCache
-	rCache              v1.RoleCache
-	crbCache            v1.ClusterRoleBindingCache
-	rbCache             v1.RoleBindingCache
-	kind                string
+	crCache             rbacv1controllers.ClusterRoleCache
+	rCache              rbacv1controllers.RoleCache
+	crbCache            rbacv1controllers.ClusterRoleBindingCache
+	rbCache             rbacv1controllers.RoleBindingCache
 	roleIndexKey        string
 	clusterRoleIndexKey string
 }
 
-func newPolicyRuleIndex(user bool, rbac v1.Interface) *policyRuleIndex {
-	key := "Group"
+func newPolicyRuleIndex(user bool, rbac rbacv1controllers.Interface) *policyRuleIndex {
+	key := groupKind
 	if user {
-		key = "User"
+		key = userKind
 	}
 	pi := &policyRuleIndex{
-		kind:                key,
 		crCache:             rbac.ClusterRole().Cache(),
 		rCache:              rbac.Role().Cache(),
 		crbCache:            rbac.ClusterRoleBinding().Cache(),
@@ -39,52 +41,51 @@ func newPolicyRuleIndex(user bool, rbac v1.Interface) *policyRuleIndex {
 		roleIndexKey:        "rb" + key,
 	}
 
-	pi.crbCache.AddIndexer(pi.clusterRoleIndexKey, pi.clusterRoleBindingBySubjectIndexer)
-	pi.rbCache.AddIndexer(pi.roleIndexKey, pi.roleBindingBySubject)
+	pi.crbCache.AddIndexer(pi.clusterRoleIndexKey, clusterRoleBindingBySubjectIndexer(key))
+	pi.rbCache.AddIndexer(pi.roleIndexKey, roleBindingBySubjectIndexer(key))
 
 	return pi
 }
 
-func (p *policyRuleIndex) clusterRoleBindingBySubjectIndexer(crb *rbacv1.ClusterRoleBinding) (result []string, err error) {
-	for _, subject := range crb.Subjects {
-		if subject.APIGroup == rbacGroup && subject.Kind == p.kind && crb.RoleRef.Kind == "ClusterRole" {
+func clusterRoleBindingBySubjectIndexer(kind string) func(crb *rbacv1.ClusterRoleBinding) ([]string, error) {
+	return func(crb *rbacv1.ClusterRoleBinding) ([]string, error) {
+		if crb.RoleRef.Kind != "ClusterRole" {
+			return nil, nil
+		}
+		return indexSubjects(kind, crb.Subjects), nil
+	}
+}
+
+func roleBindingBySubjectIndexer(key string) func(rb *rbacv1.RoleBinding) ([]string, error) {
+	return func(rb *rbacv1.RoleBinding) ([]string, error) {
+		return indexSubjects(key, rb.Subjects), nil
+	}
+}
+
+func indexSubjects(kind string, subjects []rbacv1.Subject) []string {
+	var result []string
+	for _, subject := range subjects {
+		if subjectIs(kind, subject) {
 			result = append(result, subject.Name)
-		} else if subject.APIGroup == "" && p.kind == "User" && subject.Kind == "ServiceAccount" && subject.Namespace != "" && crb.RoleRef.Kind == "ClusterRole" {
+		} else if kind == userKind && subjectIsServiceAccount(subject) {
 			// Index is for Users and this references a service account
 			result = append(result, fmt.Sprintf("serviceaccount:%s:%s", subject.Namespace, subject.Name))
 		}
 	}
-	return
-}
-
-func (p *policyRuleIndex) roleBindingBySubject(rb *rbacv1.RoleBinding) (result []string, err error) {
-	for _, subject := range rb.Subjects {
-		if subject.APIGroup == rbacGroup && subject.Kind == p.kind {
-			result = append(result, subject.Name)
-		} else if subject.APIGroup == "" && p.kind == "User" && subject.Kind == "ServiceAccount" && subject.Namespace != "" {
-			// Index is for Users and this references a service account
-			result = append(result, fmt.Sprintf("serviceaccount:%s:%s", subject.Namespace, subject.Name))
-		}
-	}
-	return
-}
-
-func (p *policyRuleIndex) get(subjectName string) *AccessSet {
-	result := &AccessSet{}
-
-	for _, binding := range p.getRoleBindings(subjectName) {
-		p.addAccess(result, binding.Namespace, binding.RoleRef)
-	}
-
-	for _, binding := range p.getClusterRoleBindings(subjectName) {
-		p.addAccess(result, All, binding.RoleRef)
-	}
-
 	return result
 }
 
-func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, roleRef rbacv1.RoleRef) {
-	for _, rule := range p.getRules(namespace, roleRef) {
+func subjectIs(kind string, subject rbacv1.Subject) bool {
+	return subject.APIGroup == rbacGroup && subject.Kind == kind
+}
+
+func subjectIsServiceAccount(subject rbacv1.Subject) bool {
+	return subject.APIGroup == "" && subject.Kind == svcAccountKind && subject.Namespace != ""
+}
+
+// addAccess appends a set of PolicyRules to a given AccessSet
+func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule) {
+	for _, rule := range rules {
 		for _, group := range rule.APIGroups {
 			for _, resource := range rule.Resources {
 				names := rule.ResourceNames
@@ -108,23 +109,24 @@ func (p *policyRuleIndex) addAccess(accessSet *AccessSet, namespace string, role
 	}
 }
 
-func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) []rbacv1.PolicyRule {
+// getRules obtain the actual Role or ClusterRole pointed at by a RoleRef, and returns PolicyRules and the resource version
+func (p *policyRuleIndex) getRules(namespace string, roleRef rbacv1.RoleRef) ([]rbacv1.PolicyRule, string) {
 	switch roleRef.Kind {
 	case "ClusterRole":
 		role, err := p.crCache.Get(roleRef.Name)
 		if err != nil {
-			return nil
+			return nil, ""
 		}
-		return role.Rules
+		return role.Rules, role.ResourceVersion
 	case "Role":
 		role, err := p.rCache.Get(namespace, roleRef.Name)
 		if err != nil {
-			return nil
+			return nil, ""
 		}
-		return role.Rules
+		return role.Rules, role.ResourceVersion
 	}
 
-	return nil
+	return nil, ""
 }
 
 func (p *policyRuleIndex) getClusterRoleBindings(subjectName string) []*rbacv1.ClusterRoleBinding {
@@ -133,7 +135,7 @@ func (p *policyRuleIndex) getClusterRoleBindings(subjectName string) []*rbacv1.C
 		return nil
 	}
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
+		return result[i].UID < result[j].UID
 	})
 	return result
 }
@@ -147,4 +149,33 @@ func (p *policyRuleIndex) getRoleBindings(subjectName string) []*rbacv1.RoleBind
 		return string(result[i].UID) < string(result[j].UID)
 	})
 	return result
+}
+
+// getRoleRefs gathers rules from roles granted to a given subject through RoleBindings and ClusterRoleBindings
+func (p *policyRuleIndex) getRoleRefs(subjectName string) subjectGrants {
+	var clusterRoleBindings []roleRef
+	for _, crb := range p.getClusterRoleBindings(subjectName) {
+		rules, resourceVersion := p.getRules(All, crb.RoleRef)
+		clusterRoleBindings = append(clusterRoleBindings, roleRef{
+			roleName:        crb.RoleRef.Name,
+			resourceVersion: resourceVersion,
+			rules:           rules,
+		})
+	}
+
+	var roleBindings []roleRef
+	for _, rb := range p.getRoleBindings(subjectName) {
+		rules, resourceVersion := p.getRules(rb.Namespace, rb.RoleRef)
+		roleBindings = append(roleBindings, roleRef{
+			roleName:        rb.RoleRef.Name,
+			namespace:       rb.Namespace,
+			resourceVersion: resourceVersion,
+			rules:           rules,
+		})
+	}
+
+	return subjectGrants{
+		roleBindings:        roleBindings,
+		clusterRoleBindings: clusterRoleBindings,
+	}
 }
