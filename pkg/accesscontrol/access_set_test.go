@@ -63,6 +63,8 @@ func TestAccessSet_AddNonResourceURLs(t *testing.T) {
 				for _, key := range tt.want {
 					assert.Contains(t, accessSet.nonResourceSet, key)
 				}
+			} else {
+				assert.Len(t, accessSet.nonResourceSet, 0)
 			}
 		})
 	}
