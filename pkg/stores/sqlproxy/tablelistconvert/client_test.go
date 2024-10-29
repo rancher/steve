@@ -3,8 +3,8 @@ package tablelistconvert
 import (
 	"context"
 	"fmt"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	watch2 "k8s.io/apimachinery/pkg/watch"
