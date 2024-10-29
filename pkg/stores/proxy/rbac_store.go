@@ -65,7 +65,7 @@ func (p *rbacPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, 
 		fallthrough
 	case "watch":
 		if id != "" {
-			partitions := generatePartitionsById(apiOp, schema, verb, id)
+			partitions := generatePartitionsByID(apiOp, schema, verb, id)
 			return partitions, nil
 		}
 		partitions, passthrough := generateAggregatePartitions(apiOp, schema, verb)
@@ -122,7 +122,7 @@ func (b *byNameOrNamespaceStore) Watch(apiOp *types.APIRequest, schema *types.AP
 
 // generatePartitionsById determines whether a requester can access a particular resource
 // and if so, returns the corresponding partitions
-func generatePartitionsById(apiOp *types.APIRequest, schema *types.APISchema, verb string, id string) []partition.Partition {
+func generatePartitionsByID(apiOp *types.APIRequest, schema *types.APISchema, verb string, id string) []partition.Partition {
 	accessListByVerb, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
 	resources := accessListByVerb.Granted(verb)
 
@@ -141,7 +141,7 @@ func generatePartitionsById(apiOp *types.APIRequest, schema *types.APISchema, ve
 	//   {"id": "n1/r1"}
 	// however, the following conflicting request is not valid, but was previously accepted:
 	//   {"namespace": "n1", "id": "n2/r1"}
-	// To avoid breaking UI plugins that may inadvertantly rely on the feature, we issue a deprecation
+	// To avoid breaking UI plugins that may inadvertently rely on the feature, we issue a deprecation
 	// warning for now. We still need to pick one of the namespaces for permission verification purposes.
 	if idNamespace != "" && apiNamespace != "" && idNamespace != apiNamespace {
 		logrus.Warningf("DEPRECATION: Conflicting namespaces '%v' and '%v' requested. "+
