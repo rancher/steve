@@ -84,7 +84,7 @@ func addAccess(accessSet *AccessSet, namespace string, roleRef roleRef) {
 		if len(rule.Resources) > 0 {
 			addResourceAccess(accessSet, namespace, rule)
 		} else if roleRef.kind == clusterRoleKind {
-			accessSet.AddNonResouceURLs(rule.Verbs, rule.NonResourceURLs)
+			accessSet.AddNonResourceURLs(rule.Verbs, rule.NonResourceURLs)
 		}
 	}
 }

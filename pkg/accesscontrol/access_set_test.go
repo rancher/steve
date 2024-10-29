@@ -57,7 +57,7 @@ func TestAccessSet_AddNonResourceURLs(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			accessSet := &AccessSet{}
-			accessSet.AddNonResouceURLs(tt.verbs, tt.urls)
+			accessSet.AddNonResourceURLs(tt.verbs, tt.urls)
 
 			if len(tt.want) > 0 {
 				for _, key := range tt.want {
@@ -144,7 +144,7 @@ func TestAccessSet_GrantsNonResource(t *testing.T) {
 			accessSet := &AccessSet{}
 
 			for rule := range tt.keys {
-				accessSet.AddNonResouceURLs([]string{rule.verb}, []string{rule.url})
+				accessSet.AddNonResourceURLs([]string{rule.verb}, []string{rule.url})
 			}
 
 			res := accessSet.GrantsNonResource(tt.verb, tt.url)

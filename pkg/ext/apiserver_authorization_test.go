@@ -424,7 +424,7 @@ func TestAuthorization_NonResourceURLs(t *testing.T) {
 
 	sampleReadOnlyAccessSet := func() *accesscontrol.AccessSet {
 		accessSet := &accesscontrol.AccessSet{}
-		accessSet.AddNonResouceURLs([]string{
+		accessSet.AddNonResourceURLs([]string{
 			"get",
 		}, []string{
 			"/metrics",
@@ -439,7 +439,7 @@ func TestAuthorization_NonResourceURLs(t *testing.T) {
 
 	sampleReadWriteAccessSet := func() *accesscontrol.AccessSet {
 		accessSet := &accesscontrol.AccessSet{}
-		accessSet.AddNonResouceURLs([]string{
+		accessSet.AddNonResourceURLs([]string{
 			"get", "post",
 		}, []string{
 			"/metrics",

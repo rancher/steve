@@ -160,7 +160,7 @@ func (a *AccessSet) Add(verb string, gr schema.GroupResource, access Access) {
 	}
 }
 
-func (a *AccessSet) AddNonResouceURLs(verbs, urls []string) {
+func (a *AccessSet) AddNonResourceURLs(verbs, urls []string) {
 	if len(verbs) == 0 || len(urls) == 0 {
 		return
 	}
