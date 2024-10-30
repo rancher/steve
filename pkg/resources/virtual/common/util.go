@@ -11,7 +11,7 @@ import (
 // GetUnstructured retrieves an unstructured object from the provided input. If this is a signal
 // object (like cache.DeletedFinalStateUnknown), returns true, indicating that this wasn't an
 // unstructured object, but doesn't need to be processed by our transform function
-func getUnstructured(obj any) (*unstructured.Unstructured, bool, error) {
+func GetUnstructured(obj any) (*unstructured.Unstructured, bool, error) {
 	raw, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		_, isFinalUnknown := obj.(cache.DeletedFinalStateUnknown)

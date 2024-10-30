@@ -34,7 +34,7 @@ func main() {
 func run(_ *cli.Context) error {
 	ctx := signals.SetupSignalContext()
 	debugconfig.MustSetupDebug()
-	s, err := config.ToServer(ctx, false)
+	s, err := config.ToServer(ctx, debugconfig.SQLCache)
 	if err != nil {
 		return err
 	}
