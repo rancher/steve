@@ -16,6 +16,9 @@ const (
 	groupKind      = rbacv1.GroupKind
 	userKind       = rbacv1.UserKind
 	svcAccountKind = rbacv1.ServiceAccountKind
+
+	clusterRoleKind = "ClusterRole"
+	roleKind        = "Role"
 )
 
 type policyRuleIndex struct {
@@ -75,38 +78,46 @@ func indexSubjects(kind string, subjects []rbacv1.Subject) []string {
 	return result
 }
 
+// addAccess appends a set of PolicyRules to a given AccessSet
+func addAccess(accessSet *AccessSet, namespace string, roleRef roleRef) {
+	for _, rule := range roleRef.rules {
+		if len(rule.Resources) > 0 {
+			addResourceAccess(accessSet, namespace, rule)
+		} else if roleRef.kind == clusterRoleKind {
+			accessSet.AddNonResourceURLs(rule.Verbs, rule.NonResourceURLs)
+		}
+	}
+}
+
+func addResourceAccess(accessSet *AccessSet, namespace string, rule rbacv1.PolicyRule) {
+	for _, group := range rule.APIGroups {
+		for _, resource := range rule.Resources {
+			names := rule.ResourceNames
+			if len(names) == 0 {
+				names = []string{All}
+			}
+			for _, resourceName := range names {
+				for _, verb := range rule.Verbs {
+					accessSet.Add(verb,
+						schema.GroupResource{
+							Group:    group,
+							Resource: resource,
+						}, Access{
+							Namespace:    namespace,
+							ResourceName: resourceName,
+						})
+				}
+			}
+		}
+	}
+}
+
 func subjectIs(kind string, subject rbacv1.Subject) bool {
 	return subject.APIGroup == rbacGroup && subject.Kind == kind
 }
 
 func subjectIsServiceAccount(subject rbacv1.Subject) bool {
 	return subject.APIGroup == "" && subject.Kind == svcAccountKind && subject.Namespace != ""
-}
-
-// addAccess appends a set of PolicyRules to a given AccessSet
-func addAccess(accessSet *AccessSet, namespace string, rules []rbacv1.PolicyRule) {
-	for _, rule := range rules {
-		for _, group := range rule.APIGroups {
-			for _, resource := range rule.Resources {
-				names := rule.ResourceNames
-				if len(names) == 0 {
-					names = []string{All}
-				}
-				for _, resourceName := range names {
-					for _, verb := range rule.Verbs {
-						accessSet.Add(verb,
-							schema.GroupResource{
-								Group:    group,
-								Resource: resource,
-							}, Access{
-								Namespace:    namespace,
-								ResourceName: resourceName,
-							})
-					}
-				}
-			}
-		}
-	}
 }
 
 // getRules obtain the actual Role or ClusterRole pointed at by a RoleRef, and returns PolicyRules and the resource version
@@ -160,6 +171,7 @@ func (p *policyRuleIndex) getRoleRefs(subjectName string) subjectGrants {
 			roleName:        crb.RoleRef.Name,
 			resourceVersion: resourceVersion,
 			rules:           rules,
+			kind:            clusterRoleKind,
 		})
 	}
 
@@ -171,6 +183,7 @@ func (p *policyRuleIndex) getRoleRefs(subjectName string) subjectGrants {
 			namespace:       rb.Namespace,
 			resourceVersion: resourceVersion,
 			rules:           rules,
+			kind:            roleKind,
 		})
 	}
 

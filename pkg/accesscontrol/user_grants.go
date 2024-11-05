@@ -22,8 +22,8 @@ type subjectGrants struct {
 
 // roleRef contains information from a Role or ClusterRole
 type roleRef struct {
-	namespace, roleName, resourceVersion string
-	rules                                []rbacv1.PolicyRule
+	namespace, roleName, resourceVersion, kind string
+	rules                                      []rbacv1.PolicyRule
 }
 
 // hash calculates a unique identifier from all the grants for a user
@@ -51,11 +51,11 @@ func (b subjectGrants) toAccessSet() *AccessSet {
 	result := new(AccessSet)
 
 	for _, binding := range b.roleBindings {
-		addAccess(result, binding.namespace, binding.rules)
+		addAccess(result, binding.namespace, binding)
 	}
 
 	for _, binding := range b.clusterRoleBindings {
-		addAccess(result, All, binding.rules)
+		addAccess(result, All, binding)
 	}
 
 	return result

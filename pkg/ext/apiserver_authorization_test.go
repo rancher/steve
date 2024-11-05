@@ -2,6 +2,7 @@ package ext
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,9 +16,11 @@ import (
 
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/accesscontrol/fake"
 	wrbacv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -311,6 +314,66 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			},
 			expectedStatusCode: http.StatusForbidden,
 		},
+		{
+			name: "authorized access to non-resource url",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "unauthorized verb to non-resource url",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodPost, "/openapi/v2", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "unauthorized access to non-resource url (user can access only openapi/v2)",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v3", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "authorized user can access both openapi v2 and v3 (v2)",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-v3",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized user can access both openapi v2 and v3 (v3)",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-v3",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v3", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized user can access url based in wildcard rule",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-v3",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v3/apis/ext.cattle.io/v1", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
 	}
 
 	for _, test := range tests {
@@ -338,6 +401,155 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			require.Equal(t, test.expectedStatusCode, resp.StatusCode)
 			if test.expectedStatus != nil {
 				require.Equal(t, test.expectedStatus.Status(), responseStatus, "for request "+req.URL.String())
+			}
+		})
+	}
+}
+
+func TestAuthorization_NonResourceURLs(t *testing.T) {
+	type input struct {
+		ctx   context.Context
+		attrs authorizer.Attributes
+	}
+
+	type expected struct {
+		authorized authorizer.Decision
+		reason     string
+		err        error
+	}
+
+	sampleReadOnlyUser := &user.DefaultInfo{
+		Name: "read-only-user",
+	}
+
+	sampleReadOnlyAccessSet := func() *accesscontrol.AccessSet {
+		accessSet := &accesscontrol.AccessSet{}
+		accessSet.AddNonResourceURLs([]string{
+			"get",
+		}, []string{
+			"/metrics",
+			"/healthz",
+		})
+		return accessSet
+	}()
+
+	sampleReadWriteUser := &user.DefaultInfo{
+		Name: "read-write-user",
+	}
+
+	sampleReadWriteAccessSet := func() *accesscontrol.AccessSet {
+		accessSet := &accesscontrol.AccessSet{}
+		accessSet.AddNonResourceURLs([]string{
+			"get", "post",
+		}, []string{
+			"/metrics",
+			"/healthz",
+		})
+		return accessSet
+	}()
+
+	tests := []struct {
+		name     string
+		input    input
+		expected expected
+
+		mockUsername  *user.DefaultInfo
+		mockAccessSet *accesscontrol.AccessSet
+	}{
+		{
+			name: "authorized read-only user to read data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadOnlyUser,
+					ResourceRequest: false,
+					Path:            "/healthz",
+					Verb:            "get",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionAllow,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadOnlyUser,
+			mockAccessSet: sampleReadOnlyAccessSet,
+		},
+		{
+			name: "unauthorized read-only user to write data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadOnlyUser,
+					ResourceRequest: false,
+					Path:            "/metrics",
+					Verb:            "post",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionDeny,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadOnlyUser,
+			mockAccessSet: sampleReadOnlyAccessSet,
+		},
+		{
+			name: "authorized read-write user to read data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadWriteUser,
+					ResourceRequest: false,
+					Path:            "/metrics",
+					Verb:            "get",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionAllow,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadWriteUser,
+			mockAccessSet: sampleReadWriteAccessSet,
+		},
+		{
+			name: "authorized read-write user to write data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadWriteUser,
+					ResourceRequest: false,
+					Path:            "/metrics",
+					Verb:            "post",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionAllow,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadWriteUser,
+			mockAccessSet: sampleReadWriteAccessSet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			crtl := gomock.NewController(t)
+			asl := fake.NewMockAccessSetLookup(crtl)
+			asl.EXPECT().AccessFor(tt.mockUsername).Return(tt.mockAccessSet)
+
+			auth := NewAccessSetAuthorizer(asl)
+			authorized, reason, err := auth.Authorize(tt.input.ctx, tt.input.attrs)
+
+			require.Equal(t, tt.expected.authorized, authorized)
+			require.Equal(t, tt.expected.reason, reason)
+
+			if tt.expected.err != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
