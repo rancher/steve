@@ -267,6 +267,36 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() with a labels filter param " +
+			"should create a labels-specific filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]=heads"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
+							Match:   "heads",
+							Op:      "",
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
@@ -306,11 +336,10 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with a filter param with a comma separate value, should include a single or filter with" +
-			" multiple filters.",
+		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=a=c,b=d"},
+				URL: &url.URL{RawQuery: "filter=a=c&filter=b=d"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -324,11 +353,50 @@ func TestParseQuery(t *testing.T) {
 							Op:      "",
 							Partial: true,
 						},
+					},
+				},
+				{
+					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
 							Matches: []string{"d"},
 							Op:      "",
 							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle comma-separated standard and labels filters.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=beer='pabst',metadata.labels[beer2.io/ale]='schlitz'"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"beer"},
+							Match:   "pabst",
+							Op:      "",
+							Partial: false,
+						},
+						{
+							Field:   []string{"metadata", "labels", "beer2.io/ale"},
+							Match:   "schlitz",
+							Op:      "",
+							Partial: false,
 						},
 					},
 				},

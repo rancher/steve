@@ -34,6 +34,7 @@ const (
 )
 
 var opReg = regexp.MustCompile(`[!]?=`)
+var labelsRegex = regexp.MustCompile(`^(metadata).(labels)\[(.+)\]$`)
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
@@ -80,7 +81,8 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 			}
 			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
 			value := strings.TrimSuffix(strings.TrimPrefix(filter[1], "'"), "'")
-			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Matches: []string{value}, Op: op, Partial: usePartialMatch})
+			queryFields := splitQuery(filter[0])
+			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: queryFields, Matches: []string{value}, Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -157,6 +159,14 @@ func getLimit(apiOp *types.APIRequest) int {
 		limit = defaultLimit
 	}
 	return limit
+}
+
+func splitQuery(query string) []string {
+	m := labelsRegex.FindStringSubmatch(query)
+	if m != nil && len(m) >= 4 {
+		return m[1:]
+	}
+	return strings.Split(query, ".")
 }
 
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Cache) ([]informer.Filter, error) {
