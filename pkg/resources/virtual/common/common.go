@@ -51,11 +51,11 @@ func addLabelFields(raw *unstructured.Unstructured) error {
 	if len(labels) == 0 {
 		return nil
 	}
-	gibley := map[string]interface{}{}
+	labelHash := map[string]interface{}{}
 	for k, v := range labels {
-		gibley[k] = v
+		labelHash[k] = v
 	}
-	data.PutValue(raw.Object, gibley, "metadata", "labels")
+	data.PutValue(raw.Object, labelHash, "metadata", "labels")
 	return nil
 }
 
