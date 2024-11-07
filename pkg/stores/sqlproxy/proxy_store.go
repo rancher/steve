@@ -69,8 +69,6 @@ var (
 			{"message"},
 			{"reason"},
 		},
-		gvkKey("", "v1", "Namespace"): {
-			{"metadata", "labels[field.cattle.io/projectId]"}},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
 			{"status", "nodeInfo", "operatingSystem"}},
