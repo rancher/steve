@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	errMissingUserInfo error = errors.New("missing user info")
+	errMissingUserInfo = errors.New("missing user info")
 )
 
 // delegate is the bridge between k8s.io/apiserver's [rest.Storage] interface and
