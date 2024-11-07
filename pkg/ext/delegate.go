@@ -2,6 +2,7 @@ package ext
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -14,6 +15,10 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
+)
+
+var (
+	errMissingUserInfo error = errors.New("missing user info")
 )
 
 // delegate is the bridge between k8s.io/apiserver's [rest.Storage] interface and
@@ -328,7 +333,7 @@ func (s *delegate[T, TList]) GetSingularName() string {
 func (s *delegate[T, TList]) makeContext(parentCtx context.Context) (Context, error) {
 	userInfo, ok := request.UserFrom(parentCtx)
 	if !ok {
-		return Context{}, fmt.Errorf("missing user info")
+		return Context{}, errMissingUserInfo
 	}
 
 	ctx := Context{
