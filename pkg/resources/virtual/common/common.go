@@ -93,15 +93,6 @@ func addIDField(raw *unstructured.Unstructured) *unstructured.Unstructured {
 	return raw
 }
 
-// updateTypeField replaces the _type field with the contents of the field named "type", if it exists
-func fixTypeField(raw *unstructured.Unstructured) *unstructured.Unstructured {
-	currentTypeValue, ok := raw.Object["type"]
-	if ok {
-		raw.Object["_type"] = currentTypeValue
-	}
-	return raw
-}
-
 func normalizeConditions(raw *unstructured.Unstructured) {
 	var (
 		obj           data.Object
