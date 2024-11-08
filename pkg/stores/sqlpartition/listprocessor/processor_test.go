@@ -410,6 +410,41 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should handle simple dot-separated label filters.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=beer='natty-bo',metadata.labels.beer3=rainier"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"beer"},
+							Match:   "natty-bo",
+							Op:      "",
+							Partial: false,
+						},
+						{
+							Field:   []string{"metadata", "labels", "beer3"},
+							Match:   "rainier",
+							Op:      "",
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
 			" sort option should be set",
 		req: &types.APIRequest{
