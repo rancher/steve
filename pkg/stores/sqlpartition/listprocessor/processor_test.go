@@ -267,8 +267,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with a labels filter param " +
-			"should create a labels-specific filter.",
+		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]=heads"},

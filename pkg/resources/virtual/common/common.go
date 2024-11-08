@@ -30,11 +30,10 @@ func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstru
 	if err != nil {
 		return nil, fmt.Errorf("unable to add summary fields: %w", err)
 	}
-	addLabelFields(obj)
 	return obj, nil
 }
 
-// TransformLabels caches the labels
+// TransformLabels transfers the object's kubernetes labels to the cached part of `obj`
 func (d *DefaultFields) TransformLabels(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	addLabelFields(obj)
 	return obj, nil
