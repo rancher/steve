@@ -30,33 +30,26 @@ func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstru
 	if err != nil {
 		return nil, fmt.Errorf("unable to add summary fields: %w", err)
 	}
-	err = addLabelFields(obj)
-	if err != nil {
-		return nil, fmt.Errorf("unable to add label fields: %w", err)
-	}
+	addLabelFields(obj)
 	return obj, nil
 }
 
 // TransformLabels caches the labels
 func (d *DefaultFields) TransformLabels(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
-	err := addLabelFields(obj)
-	if err != nil {
-		return nil, fmt.Errorf("unable to add label fields: %w", err)
-	}
+	addLabelFields(obj)
 	return obj, nil
 }
 
-func addLabelFields(raw *unstructured.Unstructured) error {
+func addLabelFields(raw *unstructured.Unstructured) {
 	labels := raw.GetLabels()
 	if len(labels) == 0 {
-		return nil
+		return
 	}
 	labelHash := map[string]interface{}{}
 	for k, v := range labels {
 		labelHash[k] = v
 	}
 	data.PutValue(raw.Object, labelHash, "metadata", "labels")
-	return nil
 }
 
 // addSummaryFields adds the virtual fields for object state.
