@@ -239,7 +239,7 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 		apiGroup.VersionedResourcesStorageMap[gvk.Version] = make(map[string]rest.Storage)
 	}
 
-	delegate := &delegateError[T, TList]{
+	del := &delegateError[T, TList]{
 		inner: &delegate[T, TList]{
 			scheme: s.scheme,
 
@@ -257,7 +257,7 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 		},
 	}
 
-	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = delegate
+	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = del
 	s.apiGroups[gvk.Group] = apiGroup
 	return nil
 }

@@ -36,7 +36,7 @@ func TestDelegate_Watch(t *testing.T) {
 		input                   input
 		expected                output
 		storeSetup              func(*MockStore[*TestType, *TestTypeList])
-		simulateConvertionError bool
+		simulateConversionError bool
 		wantedErr               bool
 	}
 
@@ -61,7 +61,7 @@ func TestDelegate_Watch(t *testing.T) {
 				}),
 				internaloptions: &metainternalversion.ListOptions{},
 			},
-			simulateConvertionError: true,
+			simulateConversionError: true,
 			wantedErr:               true,
 			storeSetup:              func(ms *MockStore[*TestType, *TestTypeList]) {},
 		},
@@ -71,7 +71,7 @@ func TestDelegate_Watch(t *testing.T) {
 		scheme := runtime.NewScheme()
 		addToSchemeTest(scheme)
 
-		if !tt.simulateConvertionError {
+		if !tt.simulateConversionError {
 			scheme.AddConversionFunc(&metainternalversion.ListOptions{}, &metav1.ListOptions{}, convert_internalversion_ListOptions_to_v1_ListOptions)
 		}
 
@@ -83,7 +83,7 @@ func TestDelegate_Watch(t *testing.T) {
 
 		mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 
-		deleg4te := &delegate[*TestType, *TestTypeList]{
+		testDelegate := &delegate[*TestType, *TestTypeList]{
 			scheme: scheme,
 			t:      &TestType{},
 			tList:  &TestTypeList{},
@@ -92,7 +92,7 @@ func TestDelegate_Watch(t *testing.T) {
 			store:  mockStore,
 		}
 
-		watch, err := deleg4te.Watch(tt.input.ctx, tt.input.internaloptions)
+		watch, err := testDelegate.Watch(tt.input.ctx, tt.input.internaloptions)
 		if tt.wantedErr {
 			assert.Error(t, err)
 		} else {
@@ -438,7 +438,7 @@ func TestDelegate_Update(t *testing.T) {
 			tt.input.objInfo = mockObjInfo
 			tt.setup(mockObjInfo, mockStore)
 
-			deleg4te := &delegate[*TestType, *TestTypeList]{
+			testDelegate := &delegate[*TestType, *TestTypeList]{
 				scheme: scheme,
 				t:      &TestType{},
 				tList:  &TestTypeList{},
@@ -447,7 +447,7 @@ func TestDelegate_Update(t *testing.T) {
 				store:  mockStore,
 			}
 
-			obj, created, err := deleg4te.Update(tt.input.parentCtx, tt.input.name, tt.input.objInfo, tt.input.createValidation, tt.input.updateValidation, tt.input.forceAllowCreate, tt.input.options)
+			obj, created, err := testDelegate.Update(tt.input.parentCtx, tt.input.name, tt.input.objInfo, tt.input.createValidation, tt.input.updateValidation, tt.input.forceAllowCreate, tt.input.options)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -584,7 +584,7 @@ func TestDelegate_Create(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			deleg4te := &delegate[*TestType, *TestTypeList]{
+			testDelegate := &delegate[*TestType, *TestTypeList]{
 				scheme: scheme,
 				t:      &TestType{},
 				tList:  &TestTypeList{},
@@ -593,7 +593,7 @@ func TestDelegate_Create(t *testing.T) {
 				store:  mockStore,
 			}
 
-			result, err := deleg4te.Create(tt.input.ctx, tt.input.obj, tt.input.createValidation, tt.input.options)
+			result, err := testDelegate.Create(tt.input.ctx, tt.input.obj, tt.input.createValidation, tt.input.options)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -737,7 +737,7 @@ func TestDelegate_Delete(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			deleg4te := &delegate[*TestType, *TestTypeList]{
+			testDelegate := &delegate[*TestType, *TestTypeList]{
 				scheme: scheme,
 				t:      &TestType{},
 				tList:  &TestTypeList{},
@@ -746,7 +746,7 @@ func TestDelegate_Delete(t *testing.T) {
 				store:  mockStore,
 			}
 
-			result, completed, err := deleg4te.Delete(tt.input.ctx, tt.input.name, tt.input.deleteValidation, tt.input.options)
+			result, completed, err := testDelegate.Delete(tt.input.ctx, tt.input.name, tt.input.deleteValidation, tt.input.options)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -845,7 +845,7 @@ func TestDelegate_Get(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			deleg4te := &delegate[*TestType, *TestTypeList]{
+			testDelegate := &delegate[*TestType, *TestTypeList]{
 				scheme: scheme,
 				t:      &TestType{},
 				tList:  &TestTypeList{},
@@ -854,7 +854,7 @@ func TestDelegate_Get(t *testing.T) {
 				store:  mockStore,
 			}
 
-			result, err := deleg4te.Get(tt.input.ctx, tt.input.name, tt.input.options)
+			result, err := testDelegate.Get(tt.input.ctx, tt.input.name, tt.input.options)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -970,7 +970,7 @@ func TestDelegate_List(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			deleg4te := &delegate[*TestType, *TestTypeList]{
+			testDelegate := &delegate[*TestType, *TestTypeList]{
 				scheme: scheme,
 				t:      &TestType{},
 				tList:  &TestTypeList{},
@@ -979,7 +979,7 @@ func TestDelegate_List(t *testing.T) {
 				store:  mockStore,
 			}
 
-			result, err := deleg4te.List(tt.input.ctx, tt.input.listOptions)
+			result, err := testDelegate.List(tt.input.ctx, tt.input.listOptions)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
