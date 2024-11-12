@@ -17,14 +17,6 @@ type delegateError[T runtime.Object, TList runtime.Object] struct {
 	inner *delegate[T, TList]
 }
 
-func (d *delegateError[T, TList]) convertError(err error) error {
-	if _, ok := err.(errors.APIStatus); ok {
-		return err
-	}
-
-	return errors.NewInternalError(err)
-}
-
 func (d *delegateError[T, TList]) New() runtime.Object {
 	return d.inner.New()
 }
@@ -40,7 +32,7 @@ func (d *delegateError[T, TList]) NewList() runtime.Object {
 func (d *delegateError[T, TList]) List(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (runtime.Object, error) {
 	result, err := d.inner.List(parentCtx, internaloptions)
 	if err != nil {
-		return nil, d.convertError(err)
+		return nil, convertError(err)
 	}
 	return result, nil
 }
@@ -48,7 +40,7 @@ func (d *delegateError[T, TList]) List(parentCtx context.Context, internaloption
 func (d *delegateError[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	result, err := d.inner.ConvertToTable(ctx, object, tableOptions)
 	if err != nil {
-		return nil, d.convertError(err)
+		return nil, convertError(err)
 	}
 	return result, nil
 }
@@ -56,7 +48,7 @@ func (d *delegateError[T, TList]) ConvertToTable(ctx context.Context, object run
 func (d *delegateError[T, TList]) Get(parentCtx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	result, err := d.inner.Get(parentCtx, name, options)
 	if err != nil {
-		return nil, d.convertError(err)
+		return nil, convertError(err)
 	}
 	return result, nil
 }
@@ -64,7 +56,7 @@ func (d *delegateError[T, TList]) Get(parentCtx context.Context, name string, op
 func (d *delegateError[T, TList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	result, completed, err := d.inner.Delete(parentCtx, name, deleteValidation, options)
 	if err != nil {
-		return nil, false, d.convertError(err)
+		return nil, false, convertError(err)
 	}
 	return result, completed, nil
 }
@@ -72,7 +64,7 @@ func (d *delegateError[T, TList]) Delete(parentCtx context.Context, name string,
 func (d *delegateError[T, TList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	result, err := d.inner.Create(parentCtx, obj, createValidation, options)
 	if err != nil {
-		return nil, d.convertError(err)
+		return nil, convertError(err)
 	}
 	return result, nil
 }
@@ -80,7 +72,7 @@ func (d *delegateError[T, TList]) Create(parentCtx context.Context, obj runtime.
 func (d *delegateError[T, TList]) Update(parentCtx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
 	result, created, err := d.inner.Update(parentCtx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
 	if err != nil {
-		return nil, false, d.convertError(err)
+		return nil, false, convertError(err)
 	}
 	return result, created, nil
 }
@@ -88,7 +80,7 @@ func (d *delegateError[T, TList]) Update(parentCtx context.Context, name string,
 func (d *delegateError[T, TList]) Watch(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (watch.Interface, error) {
 	result, err := d.inner.Watch(parentCtx, internaloptions)
 	if err != nil {
-		return nil, d.convertError(err)
+		return nil, convertError(err)
 	}
 	return result, nil
 }
@@ -107,4 +99,12 @@ func (d *delegateError[T, TList]) Kind() string {
 
 func (d *delegateError[T, TList]) GetSingularName() string {
 	return d.inner.GetSingularName()
+}
+
+func convertError(err error) error {
+	if _, ok := err.(errors.APIStatus); ok {
+		return err
+	}
+
+	return errors.NewInternalError(err)
 }
