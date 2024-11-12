@@ -143,10 +143,8 @@ func TestDelegateError_Watch(t *testing.T) {
 			assert.Error(t, err)
 
 			// check if error is an api error
-			if _, ok := err.(apierrors.APIStatus); ok {
-				assert.True(t, ok)
-				return
-			}
+			_, ok := err.(apierrors.APIStatus)
+			assert.True(t, ok)
 		} else {
 			assert.NoError(t, err)
 			assert.Equal(t, watch, tt.expected.watch)
@@ -508,10 +506,8 @@ func TestDelegateError_Update(t *testing.T) {
 				assert.Error(t, err)
 
 				// check if error is an apierror
-				if _, ok := err.(apierrors.APIStatus); ok {
-					assert.True(t, ok)
-					return
-				}
+				_, ok := err.(apierrors.APIStatus)
+				assert.True(t, ok)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expect.obj, obj)
@@ -662,10 +658,8 @@ func TestDelegateError_Create(t *testing.T) {
 				assert.Error(t, err)
 
 				// check if error is an apierror
-				if _, ok := err.(apierrors.APIStatus); ok {
-					assert.True(t, ok)
-					return
-				}
+				_, ok := err.(apierrors.APIStatus)
+				assert.True(t, ok)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expect.createResult, result)
@@ -824,10 +818,8 @@ func TestDelegateError_Delete(t *testing.T) {
 				assert.Error(t, err)
 
 				// check if error is an apierror
-				if _, ok := err.(apierrors.APIStatus); ok {
-					assert.True(t, ok)
-					return
-				}
+				_, ok := err.(apierrors.APIStatus)
+				assert.True(t, ok)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expect.deleteResult, result)
@@ -941,10 +933,8 @@ func TestDelegateError_Get(t *testing.T) {
 				assert.Error(t, err)
 
 				// check if error is an apierror
-				if _, ok := err.(apierrors.APIStatus); ok {
-					assert.True(t, ok)
-					return
-				}
+				_, ok := err.(apierrors.APIStatus)
+				assert.True(t, ok)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expect.getResult, result)
@@ -1075,10 +1065,8 @@ func TestDelegateError_List(t *testing.T) {
 				assert.Error(t, err)
 
 				// check if error is an apierror
-				if _, ok := err.(apierrors.APIStatus); ok {
-					assert.True(t, ok)
-					return
-				}
+				_, ok := err.(apierrors.APIStatus)
+				assert.True(t, ok)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expect.listResult, result)
