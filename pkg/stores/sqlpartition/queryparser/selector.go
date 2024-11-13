@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 )
 
 var (
@@ -446,6 +446,7 @@ const (
 	GreaterThanToken
 	// IdentifierToken represents identifier, e.g. keys and values
 	IdentifierToken
+	QuotedStringToken
 	// InToken represents in
 	InToken
 	// LessThanToken represents less than
@@ -498,6 +499,10 @@ func isSpecialSymbol(ch byte) bool {
 	return false
 }
 
+func isQuoteDelimiter(ch byte) bool {
+	return ch == '"' || ch == '\''
+}
+
 // Lexer represents the Lexer struct for label selector.
 // It contains necessary informationt to tokenize the input string
 type Lexer struct {
@@ -523,7 +528,7 @@ func (l *Lexer) unread() {
 	l.pos--
 }
 
-// scanIDOrKeyword scans string to recognize literal token (for example 'in') or an identifier.
+// scanIDOrKeyword scans string to recognize literal token (for example 'in'), an identifier, or a quoted string.
 func (l *Lexer) scanIDOrKeyword() (tok Token, lit string) {
 	var buffer []byte
 IdentifierLoop:
@@ -534,6 +539,8 @@ IdentifierLoop:
 		case isSpecialSymbol(ch) || isWhitespace(ch):
 			l.unread()
 			break IdentifierLoop
+		case isQuoteDelimiter(ch):
+			return l.scanString(ch)
 		default:
 			buffer = append(buffer, ch)
 		}
@@ -543,6 +550,28 @@ IdentifierLoop:
 		return val, s
 	}
 	return IdentifierToken, s // otherwise is an identifier
+}
+
+func (l *Lexer) scanString(delimiter byte) (tok Token, lit string) {
+	var buffer []byte
+	escapeNext := false
+StringLoop:
+	for {
+		switch ch := l.read(); {
+		case ch == 0:
+			return ErrorToken, fmt.Sprintf("unclosed string, looking for %c, got eof in [%s]", delimiter, string(buffer))
+		case escapeNext:
+			buffer = append(buffer, ch)
+			escapeNext = false
+		case ch == '\\':
+			escapeNext = true
+		case ch == delimiter:
+			break StringLoop
+		default:
+			buffer = append(buffer, ch)
+		}
+	}
+	return QuotedStringToken, string(buffer)
 }
 
 // scanSpecialSymbol scans string starting with special symbol.
@@ -586,8 +615,8 @@ func (l *Lexer) skipWhiteSpaces(ch byte) byte {
 }
 
 // Lex returns a pair of Token and the literal
-// literal is meaningful only for IdentifierToken token
-func (l *Lexer) Lex() (tok Token, lit string) {
+// literal is meaningful only for IdentifierToken and QuotedStringToken
+func (l *Lexer) Lex() (Token, string) {
 	switch ch := l.skipWhiteSpaces(l.read()); {
 	case ch == 0:
 		return EndOfStringToken, ""
