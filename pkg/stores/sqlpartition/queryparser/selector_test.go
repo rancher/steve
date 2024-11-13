@@ -3,6 +3,7 @@ package queryparser
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -195,6 +196,8 @@ func TestLexer(t *testing.T) {
 		//Non-"special" characters are considered part of an identifier
 		{"~", IdentifierToken},
 		{"||", IdentifierToken},
+		{`"unclosed dq string`, ErrorToken},
+		{`'unclosed sq string`, ErrorToken},
 	}
 	for _, v := range testcases {
 		l := &Lexer{s: v.s, pos: 0}
@@ -204,6 +207,32 @@ func TestLexer(t *testing.T) {
 		}
 		if v.t != ErrorToken && lit != v.s {
 			t.Errorf("Got '%s' it should be '%s'", lit, v.s)
+		}
+	}
+}
+func TestQuotedStringLexer(t *testing.T) {
+	testcases := []struct {
+		s string
+		t Token
+	}{
+		{`"abc"`, QuotedStringToken},
+		{`'def'`, QuotedStringToken},
+		{`"abc, bs:\\, dq:\", sq:\', x:\x"`, QuotedStringToken},
+		{`'def, bs:\\, dq:\", sq:\', x:\x'`, QuotedStringToken},
+	}
+	rx := regexp.MustCompile(`\\(.)`)
+	for _, v := range testcases {
+		l := &Lexer{s: v.s, pos: 0}
+		token, lit := l.Lex()
+		if token != v.t {
+			t.Errorf("Got %d it should be %d for '%s'", token, v.t, v.s)
+		}
+		if v.t != ErrorToken {
+			expectedLit := v.s[1 : len(v.s)-1]
+			expectedLit = rx.ReplaceAllString(expectedLit, "$1")
+			if lit != expectedLit {
+				t.Errorf("Got '%s' it should be '%s'", lit, expectedLit)
+			}
 		}
 	}
 }
@@ -233,8 +262,8 @@ func TestLexerSequence(t *testing.T) {
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken}},
 		{"key=value", []Token{IdentifierToken, EqualsToken, IdentifierToken}},
 		{"key == value", []Token{IdentifierToken, DoubleEqualsToken, IdentifierToken}},
-		{"\"", []Token{DoubleQuoteToken}},
-		{"'", []Token{SingleQuoteToken}},
+		{`"abc"`, []Token{QuotedStringToken}},
+		{"'def'", []Token{QuotedStringToken}},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -247,7 +276,7 @@ func TestLexerSequence(t *testing.T) {
 			tokens = append(tokens, token)
 		}
 		if len(tokens) != len(v.t) {
-			t.Errorf("Bad number of tokens for '%s %d, %d", v.s, len(tokens), len(v.t))
+			t.Errorf("Bad number of tokens for '%s': got %d, wanted %d (got %v)", v.s, len(tokens), len(v.t), tokens)
 		}
 		for i := 0; i < min(len(tokens), len(v.t)); i++ {
 			if tokens[i] != v.t[i] {
