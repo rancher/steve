@@ -233,6 +233,8 @@ func TestLexerSequence(t *testing.T) {
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken}},
 		{"key=value", []Token{IdentifierToken, EqualsToken, IdentifierToken}},
 		{"key == value", []Token{IdentifierToken, DoubleEqualsToken, IdentifierToken}},
+		{"\"", []Token{DoubleQuoteToken}},
+		{"'", []Token{SingleQuoteToken}},
 	}
 	for _, v := range testcases {
 		var tokens []Token
