@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 const (
@@ -55,6 +56,67 @@ type Cache interface {
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
+// k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
+
+//type Requirement struct {
+//	key      string
+//	operator selection.Operator
+//	strValues []string
+//}
+
+//type Filter struct {
+//	Field   []string
+//	Match   string
+//	Op      Op
+//	Partial bool
+//}
+
+func k8sOpToRancherOp(k8sOp string) (informer.Op, error) {
+	switch k8sOp {
+	case "=":
+		return informer.Eq, nil
+	case "==":
+		return informer.Eq, nil
+	case "!=":
+		return informer.NotEq, nil
+	case "in":
+		return informer.In, nil
+	case "notin":
+		return informer.NotIn, nil
+	case "exists":
+		return informer.Exists, nil
+	case "!":
+		return informer.NotExists, nil
+	}
+	return "", fmt.Errorf("unknown k8sOp: %s", k8sOp)
+}
+
+func k8sRequirementToOrFilter(requirement labels.Requirement) ([]informer.Filter, error) {
+	values := requirement.Values()
+	queryFields := splitQuery(requirement.Key())
+	op, err := k8sOpToRancherOp(requirement.Operator())
+	if err != nil {
+		return nil, err
+	}
+	usePartialMatch := true
+	if len(values) == 1 && strings.HasPrefix(values[0], `'`) && strings.HasSuffix(values[0], `'`) {
+		usePartialMatch = false
+		// Strip off the quotes
+		values[0] = values[0][1 : len(values[0])-1]
+	}
+	filters := []informer.Filter{}
+	for _, value := range values {
+		filter := informer.Filter{
+			Field:   queryFields,
+			Match:   value,
+			Op:      op,
+			Partial: usePartialMatch,
+		}
+		filters = append(filters, filter)
+	}
+	return filters, nil
+}
+
 // ParseQuery parses the query params of a request and returns a ListOptions.
 func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOptions, error) {
 	opts := informer.ListOptions{}
@@ -69,20 +131,14 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	filterOpts := []informer.OrFilter{}
 	for _, filters := range filterParams {
 		orFilters := strings.Split(filters, orOp)
+		requirements := labels.ParseToRequirements(orFilters)
 		orFilter := informer.OrFilter{}
-		for _, filter := range orFilters {
-			var op informer.Op
-			if strings.Contains(filter, "!=") {
-				op = "!="
+		for _, requirement := range requirements {
+			filters, err := k8sRequirementToOrFilter(requirement)
+			if err != nil {
+				return opts, err
 			}
-			filter := opReg.Split(filter, -1)
-			if len(filter) != 2 {
-				continue
-			}
-			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
-			value := strings.TrimSuffix(strings.TrimPrefix(filter[1], "'"), "'")
-			queryFields := splitQuery(filter[0])
-			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: queryFields, Matches: []string{value}, Op: op, Partial: usePartialMatch})
+			orFilter.Filters = append(orFilter.Filters, filters...)
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
