@@ -60,8 +60,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
-							Op:      "",
+							Matches: []string{"ns1"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -89,14 +89,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -120,8 +120,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
-							Op:      "",
+							Matches: []string{"ns1"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -139,14 +139,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -170,8 +170,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
-							Op:      "",
+							Matches: []string{"ns1"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -192,14 +192,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -222,8 +222,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -251,8 +251,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -280,8 +280,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
-							Match:   "heads",
-							Op:      "",
+							Matches: []string{"heads"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -309,8 +309,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -319,8 +319,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
-							Match:   "d",
-							Op:      "",
+							Matches: []string{"d"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -348,8 +348,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -358,8 +358,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
-							Match:   "d",
-							Op:      "",
+							Matches: []string{"d"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -387,14 +387,14 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"beer"},
-							Match:   "pabst",
-							Op:      "",
+							Matches: []string{"pabst"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "beer2.io/ale"},
-							Match:   "schlitz",
-							Op:      "",
+							Matches: []string{"schlitz"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -422,14 +422,14 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"beer"},
-							Match:   "natty-bo",
-							Op:      "",
+							Matches: []string{"natty-bo"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "beer3"},
-							Match:   "rainier",
-							Op:      "",
+							Matches: []string{"rainier"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -615,6 +615,10 @@ func TestParseQuery(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			test.nsc = test.setupNSCache()
+			x := test.req.Request.URL.Query()
+			if x != nil {
+				fmt.Printf("stop here")
+			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)

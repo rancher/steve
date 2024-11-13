@@ -67,15 +67,6 @@ func (ls Set) AsSelectorPreValidated() Selector {
 	return SelectorFromValidatedSet(ls)
 }
 
-// FormatLabels converts label map into plain string
-func FormatLabels(labelMap map[string]string) string {
-	l := Set(labelMap).String()
-	if l == "" {
-		l = "<none>"
-	}
-	return l
-}
-
 // Conflicts takes 2 maps and returns true if there a key match between
 // the maps but the value doesn't match, and returns false in other cases
 func Conflicts(labels1, labels2 Set) bool {
@@ -145,13 +136,7 @@ func ConvertSelectorToLabelsMap(selector string, opts ...field.PathOption) (Set,
 			return labelsMap, fmt.Errorf("invalid selector: %s", l)
 		}
 		key := strings.TrimSpace(l[0])
-		if err := validateLabelKey(key, field.ToPath(opts...)); err != nil {
-			return labelsMap, err
-		}
 		value := strings.TrimSpace(l[1])
-		if err := validateLabelValue(key, value, field.ToPath(opts...)); err != nil {
-			return labelsMap, err
-		}
 		labelsMap[key] = value
 	}
 	return labelsMap, nil
