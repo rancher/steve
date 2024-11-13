@@ -61,7 +61,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"metadata", "namespace"},
 							Matches: []string{"ns1"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -121,7 +121,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"metadata", "namespace"},
 							Matches: []string{"ns1"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -171,7 +171,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"metadata", "namespace"},
 							Matches: []string{"ns1"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -223,7 +223,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -252,7 +252,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -280,8 +280,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
-							Match:   "heads",
-							Op:      "",
+							Matches: []string{"heads"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -310,7 +310,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -320,7 +320,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"b"},
 							Matches: []string{"d"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -349,7 +349,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -359,7 +359,7 @@ func TestParseQuery(t *testing.T) {
 						{
 							Field:   []string{"b"},
 							Matches: []string{"d"},
-							Op:      "",
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -387,14 +387,14 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"beer"},
-							Match:   "pabst",
-							Op:      "",
+							Matches: []string{"pabst"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "beer2.io/ale"},
-							Match:   "schlitz",
-							Op:      "",
+							Matches: []string{"schlitz"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -422,14 +422,14 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"beer"},
-							Match:   "natty-bo",
-							Op:      "",
+							Matches: []string{"natty-bo"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "beer3"},
-							Match:   "rainier",
-							Op:      "",
+							Matches: []string{"rainier"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -620,6 +620,10 @@ func TestParseQuery(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			test.nsc = test.setupNSCache()
+			x := test.req.Request.URL.Query()
+			if x != nil {
+				fmt.Printf("stop here")
+			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)
