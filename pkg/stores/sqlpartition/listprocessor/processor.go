@@ -15,7 +15,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 const (
@@ -56,47 +56,31 @@ type Cache interface {
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
-// k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
-
-//type Requirement struct {
-//	key      string
-//	operator selection.Operator
-//	strValues []string
-//}
-
-//type Filter struct {
-//	Field   []string
-//	Match   string
-//	Op      Op
-//	Partial bool
-//}
-
-func k8sOpToRancherOp(k8sOp string) (informer.Op, error) {
-	switch k8sOp {
-	case "=":
-		return informer.Eq, nil
-	case "==":
-		return informer.Eq, nil
-	case "!=":
-		return informer.NotEq, nil
-	case "in":
-		return informer.In, nil
-	case "notin":
-		return informer.NotIn, nil
-	case "exists":
-		return informer.Exists, nil
-	case "!":
-		return informer.NotExists, nil
+func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
+	h := map[selection.Operator]informer.Op{
+		selection.Equals:       informer.Eq,
+		selection.DoubleEquals: informer.Eq,
+		selection.NotEquals:    informer.NotEq,
+		selection.In:           informer.In,
+		selection.NotIn:        informer.NotIn,
+		selection.Exists:       informer.Exists,
+		selection.DoesNotExist: informer.NotExists,
+	}
+	v, ok := h[k8sOp]
+	if ok {
+		return v, nil
 	}
 	return "", fmt.Errorf("unknown k8sOp: %s", k8sOp)
 }
 
-func k8sRequirementToOrFilter(requirement labels.Requirement) ([]informer.Filter, error) {
+// k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
+
+func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Filter, error) {
 	values := requirement.Values()
 	queryFields := splitQuery(requirement.Key())
 	op, err := k8sOpToRancherOp(requirement.Operator())
 	if err != nil {
-		return nil, err
+		return informer.Filter{}, err
 	}
 	usePartialMatch := true
 	if len(values) == 1 && strings.HasPrefix(values[0], `'`) && strings.HasSuffix(values[0], `'`) {
@@ -104,17 +88,12 @@ func k8sRequirementToOrFilter(requirement labels.Requirement) ([]informer.Filter
 		// Strip off the quotes
 		values[0] = values[0][1 : len(values[0])-1]
 	}
-	filters := []informer.Filter{}
-	for _, value := range values {
-		filter := informer.Filter{
-			Field:   queryFields,
-			Match:   value,
-			Op:      op,
-			Partial: usePartialMatch,
-		}
-		filters = append(filters, filter)
-	}
-	return filters, nil
+	return informer.Filter{
+		Field:   queryFields,
+		Matches: values,
+		Op:      op,
+		Partial: usePartialMatch,
+	}, nil
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
@@ -130,15 +109,17 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	filterParams := q[filterParam]
 	filterOpts := []informer.OrFilter{}
 	for _, filters := range filterParams {
-		orFilters := strings.Split(filters, orOp)
-		requirements := labels.ParseToRequirements(orFilters)
+		requirements, err := queryparser.ParseToRequirements(filters)
+		if err != nil {
+			return informer.ListOptions{}, err
+		}
 		orFilter := informer.OrFilter{}
 		for _, requirement := range requirements {
-			filters, err := k8sRequirementToOrFilter(requirement)
+			filter, err := k8sRequirementToOrFilter(requirement)
 			if err != nil {
 				return opts, err
 			}
-			orFilter.Filters = append(orFilter.Filters, filters...)
+			orFilter.Filters = append(orFilter.Filters, filter)
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -177,7 +158,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	}
 	opts.Pagination = pagination
 
-	var op informer.Op
+	op := informer.Eq
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
