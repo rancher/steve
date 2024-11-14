@@ -73,6 +73,17 @@ func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
 	return "", fmt.Errorf("unknown k8sOp: %s", k8sOp)
 }
 
+func isQuotedStringTarget(values []string) bool {
+	if len(values) != 1 || len(values[0]) == 0 {
+		return false
+	}
+	s1 := values[0][0:1]
+	if !strings.Contains(`"'`, s1) {
+		return false
+	}
+	return strings.HasSuffix(values[0], s1)
+}
+
 // k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
 
 func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Filter, error) {
@@ -83,7 +94,7 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Fil
 		return informer.Filter{}, err
 	}
 	usePartialMatch := true
-	if len(values) == 1 && strings.HasPrefix(values[0], `'`) && strings.HasSuffix(values[0], `'`) {
+	if isQuotedStringTarget(values) {
 		usePartialMatch = false
 		// Strip off the quotes
 		values[0] = values[0][1 : len(values[0])-1]
