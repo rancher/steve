@@ -267,6 +267,35 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() with filter param set, with value in double quotes, should include filter with partial set to false in list options.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: `filter=a1="c1"`},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1"},
+							Matches: []string{"c1"},
+							Op:      informer.Eq,
+							Partial: false,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
 		req: &types.APIRequest{
 			Request: &http.Request{
