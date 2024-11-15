@@ -537,6 +537,70 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'notin' and 'NOTIN' with one arg",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1NotIn notin (x1),a2NotIn NOTIN (x2)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1NotIn"},
+							Matches: []string{"x1"},
+							Op:      informer.NotIn,
+							Partial: true,
+						},
+						{
+							Field:   []string{"a2NotIn"},
+							Matches: []string{"x2"},
+							Op:      informer.NotIn,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' with multiple args",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a3NotIn in (x3a, x3b)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a3NotIn"},
+							Matches: []string{"x3a", "x3b"},
+							Op:      informer.In,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given, primary field" +
 			" sort option should be set",
 		req: &types.APIRequest{
