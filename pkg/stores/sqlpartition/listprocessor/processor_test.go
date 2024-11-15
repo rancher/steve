@@ -473,6 +473,41 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' and 'IN' with one arg",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1In in (x1),a2In IN (x2)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1In"},
+							Matches: []string{"x1"},
+							Op:      informer.In,
+							Partial: true,
+						},
+						{
+							Field:   []string{"a2In"},
+							Matches: []string{"x2"},
+							Op:      informer.In,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
 			" sort option should be set",
 		req: &types.APIRequest{
@@ -680,6 +715,8 @@ func TestParseQuery(t *testing.T) {
 			if test.errExpected {
 				assert.NotNil(t, err)
 				return
+			} else {
+				assert.Nil(t, err)
 			}
 			assert.Equal(t, test.expectedLO, lo)
 		})
