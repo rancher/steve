@@ -349,11 +349,9 @@ var string2token = map[string]Token{
 	"=":     EqualsToken,
 	">":     GreaterThanToken,
 	"in":    InToken,
-	"IN":    InToken,
 	"<":     LessThanToken,
 	"!=":    NotEqualsToken,
 	"notin": NotInToken,
-	"NOTIN": NotInToken,
 	"(":     OpenParToken,
 	"'":     SingleQuoteToken,
 	"\"":    DoubleQuoteToken,
@@ -424,7 +422,7 @@ IdentifierLoop:
 		}
 	}
 	s := string(buffer)
-	if val, ok := string2token[s]; ok { // is a literal token?
+	if val, ok := string2token[strings.ToLower(s)]; ok { // is a literal token?
 		return val, s
 	}
 	return IdentifierToken, s // otherwise is an identifier
