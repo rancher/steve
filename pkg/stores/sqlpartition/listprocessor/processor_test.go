@@ -601,6 +601,41 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' and 'notin' in mixed case",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a4In iN (x4a),a4NotIn nOtIn (x4b)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a4In"},
+							Matches: []string{"x4a"},
+							Op:      informer.In,
+							Partial: true,
+						},
+						{
+							Field:   []string{"a4NotIn"},
+							Matches: []string{"x4b"},
+							Op:      informer.NotIn,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given, primary field" +
 			" sort option should be set",
 		req: &types.APIRequest{
