@@ -636,6 +636,47 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should handle exists tests",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a5In1,!a5In2, ! a5In3"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a5In1"},
+							Op:      informer.Exists,
+							Matches: []string{},
+							Partial: true,
+						},
+						{
+							Field:   []string{"a5In2"},
+							Op:      informer.NotExists,
+							Matches: []string{},
+							Partial: true,
+						},
+						{
+							Field:   []string{"a5In3"},
+							Op:      informer.NotExists,
+							Matches: []string{},
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given, primary field" +
 			" sort option should be set",
 		req: &types.APIRequest{
