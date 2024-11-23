@@ -19,7 +19,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.1
-	github.com/rancher/apiserver v0.0.0-20241009200134-5a4ecca7b988
+	github.com/rancher/apiserver v0.5.1
 	github.com/rancher/dynamiclistener v0.6.1-rc.2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/lasso v0.0.0-20240924233157-8f384efc8813
