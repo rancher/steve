@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/rancher/steve/pkg/resources/virtual/testutil"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/require"
@@ -12,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func TestTransformCommonObjects(t *testing.T) {
+func TestTransformCommon(t *testing.T) {
 	tests := []struct {
 		name             string
 		input            any
@@ -159,7 +160,7 @@ func TestTransformCommonObjects(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fakeCache := common.FakeSummaryCache{
+			fakeCache := testutil.FakeSummaryCache{
 				SummarizedObject: test.hasSummary,
 				Relationships:    test.hasRelationships,
 			}
