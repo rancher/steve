@@ -318,8 +318,8 @@ github.com/prometheus/procfs v0.10.1 h1:kYK1Va/YMlutzCGazswoHKo//tZVlFpKYh+Pymzi
 github.com/prometheus/procfs v0.10.1/go.mod h1:nwNm2aOCAYw8uTR/9bWRREkZFxAUcWzPHWJq+XBB/FM=
 github.com/rancher/apiserver v0.0.0-20240207153744-69b3c2b56f3f h1:51aGoMMuPO+JsoglWmXYgA9xLWPv/bnpT0/6zErgaIU=
 github.com/rancher/apiserver v0.0.0-20240207153744-69b3c2b56f3f/go.mod h1:RBcpQs/KjClGntgKCd5XcrUX5J2Rz9sW5DGEMd7H5bw=
-github.com/rancher/client-go v1.28.6-rancher1 h1:nSoGKs12BuPviZtzemO7wTX8jxABaLqfYKFLRBV8MI0=
-github.com/rancher/client-go v1.28.6-rancher1/go.mod h1:+nu0Yp21Oeo/cBCsprNVXB2BfJTV51lFfe5tXl2rUL8=
+github.com/rancher/client-go v1.28.6-rancher1-debug-45509-1 h1:/SX4lhH16SgtPP48K++ivMtUbG7RcAW8xdV6s6WVgg8=
+github.com/rancher/client-go v1.28.6-rancher1-debug-45509-1/go.mod h1:+nu0Yp21Oeo/cBCsprNVXB2BfJTV51lFfe5tXl2rUL8=
 github.com/rancher/dynamiclistener v0.4.0-rc2 h1:tgBtNnQ2cQIsjBvto2BYmwP8NGpyg3N4Mp6zFyoGx9E=
 github.com/rancher/dynamiclistener v0.4.0-rc2/go.mod h1:Y+VdjQH9KQGE97uMwYEWqNN6puFQ17aBemIjVLYdlD8=
 github.com/rancher/kubernetes-provider-detector v0.1.5 h1:hWRAsWuJOemzGjz/XrbTlM7QmfO4OedvFE3QwXiH60I=
