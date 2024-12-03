@@ -65,6 +65,8 @@ func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
 		selection.NotIn:        informer.NotIn,
 		selection.Exists:       informer.Exists,
 		selection.DoesNotExist: informer.NotExists,
+		selection.LessThan:     informer.Lt,
+		selection.GreaterThan:  informer.Gt,
 	}
 	v, ok := h[k8sOp]
 	if ok {
