@@ -670,7 +670,13 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 	case NotEqualsToken:
 		op = selection.NotEquals
 	default:
-		return "", fmt.Errorf("found '%s', expected: %v", lit, strings.Join(binaryOperators, ", "))
+		if lit == "lt" {
+			op = selection.LessThan
+		} else if lit == "gt" {
+			op = selection.GreaterThan
+		} else {
+			return "", fmt.Errorf("found '%s', expected: %v", lit, strings.Join(binaryOperators, ", "))
+		}
 	}
 	return op, nil
 }
