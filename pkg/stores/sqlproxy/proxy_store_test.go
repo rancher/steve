@@ -82,7 +82,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(c, nil)
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(c, nil)
 
 			s, err := NewProxyStore(scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
@@ -149,7 +149,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
 
 			s, err := NewProxyStore(scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
@@ -207,6 +207,7 @@ func TestListByPartitions(t *testing.T) {
 							Field: "some.field",
 						},
 					},
+					"verbs": []string{"list", "watch"},
 				}},
 			}
 			expectedItems := []unstructured.Unstructured{
@@ -240,7 +241,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), true).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
@@ -277,6 +278,7 @@ func TestListByPartitions(t *testing.T) {
 							Field: "some.field",
 						},
 					},
+					"verbs": []string{"list", "watch"},
 				}},
 			}
 			expectedItems := []unstructured.Unstructured{
@@ -343,6 +345,7 @@ func TestListByPartitions(t *testing.T) {
 							Field: "some.field",
 						},
 					},
+					"verbs": []string{"list", "watch"},
 				}},
 			}
 			expectedItems := []unstructured.Unstructured{
@@ -381,6 +384,88 @@ func TestListByPartitions(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "client ListByPartitions() should detect listable-but-unwatchable schema, still work normally",
+		test: func(t *testing.T) {
+			nsi := NewMockCache(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			c := factory.Cache{
+				ByOptionsLister: inf,
+			}
+			s := &Store{
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			var partitions []partition.Partition
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+					// note: no watch here
+					"verbs": []string{"list"},
+				}},
+			}
+			expectedItems := []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(expectedItems), len(expectedItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+
+			attributes.SetGVK(schema, gvk)
+			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
+			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
+			copy(listToReturn.Items, expectedItems)
+			opts, err := listprocessor.ParseQuery(req, nil)
+			assert.Nil(t, err)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
+
+			// This tests that fields are being extracted from schema columns and the type specific fields map
+			// note also the watchable bool is expected to be false
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), false).Return(c, nil)
+
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
+			assert.Nil(t, err)
+			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, len(expectedItems), total)
+			assert.Equal(t, "", contToken)
+		},
+	})
+	tests = append(tests, testCase{
 		description: "client ListByPartitions() with CacheFor() error returned should returned an errors. Should pass fields",
 		test: func(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
@@ -408,6 +493,7 @@ func TestListByPartitions(t *testing.T) {
 							Field: "some.field",
 						},
 					},
+					"verbs": []string{"list", "watch"},
 				}},
 			}
 			expectedItems := []unstructured.Unstructured{
@@ -442,7 +528,7 @@ func TestListByPartitions(t *testing.T) {
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), true).Return(factory.Cache{}, fmt.Errorf("error"))
 
 			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
@@ -483,6 +569,7 @@ func TestListByPartitions(t *testing.T) {
 							Field: "some.field",
 						},
 					},
+					"verbs": []string{"list", "watch"},
 				}},
 			}
 			expectedItems := []unstructured.Unstructured{
@@ -516,7 +603,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema)).Return(c, nil)
+			cf.EXPECT().CacheFor([][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), true).Return(c, nil)
 			bloi.EXPECT().ListByOptions(req.Context(), opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
@@ -558,7 +645,7 @@ func TestReset(t *testing.T) {
 			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(nsc2, nil)
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nsc2, nil)
 			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset()
 			assert.Nil(t, err)
@@ -661,7 +748,7 @@ func TestReset(t *testing.T) {
 			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor([][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels[field.cattle.io/projectId]"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset()
 			assert.NotNil(t, err)
