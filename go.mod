@@ -43,7 +43,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.31.1
 	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
-	sigs.k8s.io/controller-runtime v0.19.0
+	sigs.k8s.io/controller-runtime v0.19.3
 )
 
 require (
