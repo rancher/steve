@@ -607,6 +607,9 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 		return nil, err
 	}
 	if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
+		if !strings.HasPrefix(key, "metadata.labels.") {
+			return nil, fmt.Errorf("existence tests are valid only for labels; not valid for field '%s'", key)
+		}
 		return NewRequirement(key, operator, []string{}, field.WithPath(p.path))
 	}
 	operator, err = p.parseOperator()

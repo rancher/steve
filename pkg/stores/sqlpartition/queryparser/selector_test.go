@@ -48,14 +48,17 @@ func TestSelectorParse(t *testing.T) {
 		"x= ",
 		"x=,z= ",
 		"x= ,z= ",
-		"!x",
 		"x>1",
 		"x>1,z<5",
 		"x gt 1,z lt 5",
 		`x == "abc"`,
 		`y == 'def'`,
+		"metadata.labels.im-here",
+		"!metadata.labels.im-not-here",
 	}
 	testBadStrings := []string{
+		"!no-label-absence-test",
+		"no-label-presence-test",
 		"x=a||y=b",
 		"x==a==b",
 		"!x=a",

@@ -25,6 +25,7 @@ func TestParseQuery(t *testing.T) {
 		req          *types.APIRequest
 		expectedLO   informer.ListOptions
 		errExpected  bool
+		errorText    string
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -40,9 +41,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -233,9 +231,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with filter param set, with value in single quotes, should include filter with partial set to false in list options.",
@@ -261,9 +256,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -291,9 +283,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
@@ -320,9 +309,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
@@ -359,9 +345,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
@@ -397,9 +380,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -433,9 +413,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() should handle simple dot-separated label filters.",
@@ -467,9 +444,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -503,9 +477,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() should handle 'in' with multiple args",
@@ -531,9 +502,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -567,9 +535,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() should handle 'in' with multiple args",
@@ -595,9 +560,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -631,15 +593,22 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() should handle exists tests",
+		description: "ParseQuery() should complain on non-label exists tests",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "filter=a5In1,!a5In2, ! a5In3"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: existence tests are valid only for labels; not valid for field 'a5In1'",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should allow label exists tests",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels.a5In1,!metadata.labels.a5In2, ! metadata.labels.a5In3"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -648,19 +617,19 @@ func TestParseQuery(t *testing.T) {
 				{
 					Filters: []informer.Filter{
 						{
-							Field:   []string{"a5In1"},
+							Field:   []string{"metadata", "labels", "a5In1"},
 							Op:      informer.Exists,
 							Matches: []string{},
 							Partial: true,
 						},
 						{
-							Field:   []string{"a5In2"},
+							Field:   []string{"metadata", "labels", "a5In2"},
 							Op:      informer.NotExists,
 							Matches: []string{},
 							Partial: true,
 						},
 						{
-							Field:   []string{"a5In3"},
+							Field:   []string{"metadata", "labels", "a5In3"},
 							Op:      informer.NotExists,
 							Matches: []string{},
 							Partial: true,
@@ -671,9 +640,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -707,9 +673,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
@@ -731,9 +694,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given primary field " +
@@ -753,9 +713,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -782,9 +739,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 
@@ -829,9 +783,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If continue param is given, resume" +
@@ -849,9 +800,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If limit param is given, chunksize" +
@@ -868,9 +816,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If page param is given, page" +
@@ -886,9 +831,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 3,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -907,17 +849,22 @@ func TestParseQuery(t *testing.T) {
 				Page:     1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			test.nsc = test.setupNSCache()
+			if test.setupNSCache == nil {
+				test.nsc = nil
+			} else {
+				test.nsc = test.setupNSCache()
+			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)
+				if test.errorText != "" {
+					assert.Contains(t, test.errorText, err.Error())
+				}
+				//assert.Equal(t, err, errors.New("unable to parse requirement: existence tests are valid only for labels; not valid for field 'a5In1'"))
 				return
 			} else {
 				assert.Nil(t, err)
