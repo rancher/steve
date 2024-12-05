@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM registry.suse.com/bci/golang:1.20 as build
+FROM registry.suse.com/bci/golang:1.22 as build
 COPY go.mod go.sum main.go /src/
 COPY pkg /src/pkg/
 #RUN --mount=type=cache,target=/root/.cache/go-build \
