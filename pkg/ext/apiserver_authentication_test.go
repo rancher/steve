@@ -56,7 +56,7 @@ func TestAuthenticationCustom(t *testing.T) {
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -73,7 +73,6 @@ func TestAuthenticationCustom(t *testing.T) {
 		})
 	}, nil)
 	require.NoError(t, err)
-	defer cleanup()
 
 	unauthorized := apierrors.NewUnauthorized("Unauthorized")
 	unauthorized.ErrStatus.Kind = "Status"
@@ -219,13 +218,12 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 	ln, port, err := options.CreateListener("", ":0", net.ListenConfig{})
 	require.NoError(t, err)
 
-	_, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	_, err = setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authenticator = defaultAuth
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 	}, nil)
 	require.NoError(t, err)
-	defer cleanup()
 
 	allPaths := []string{
 		"/",
@@ -393,13 +391,12 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 		testStore: &testStore{},
 		userCh:    make(chan user.Info, 100),
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = auth
 	}, nil)
 	require.NoError(t, err)
-	defer cleanup()
 
 	httpClient := http.Client{
 		Transport: &http.Transport{
@@ -409,7 +406,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 			},
 		},
 	}
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d%s", port, "/openapi/v2"), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://127.0.0.1:%d/openapi/v2", port), nil)
 	require.NoError(t, err)
 
 	userInfo := &user.DefaultInfo{
