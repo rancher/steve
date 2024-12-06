@@ -73,8 +73,33 @@ var (
 		gvkKey("", "v1", "Pod"): {
 			{"spec", "containers", "image"},
 			{"spec", "nodeName"}},
+		gvkKey("", "v1", "Service"): {
+			{"spec", "targetPort"},
+			{"spec", "selector"},
+			{"spec", "type"},
+		},
+		gvkKey("networking.k8s.io", "v1", "Ingress"): {
+			{"spec", "rules"},
+			{"spec", "ingressClassName"},
+		},
 		gvkKey("", "v1", "ConfigMap"): {
 			{"metadata", "labels[harvesterhci.io/cloud-init-template]"}},
+		gvkKey("", "v1", "PersistentVolume"): {
+			{"status", "reason"},
+			{"spec", "persistentVolumeReclaimPolicy"},
+		},
+		gvkKey("", "v1", "PersistentVolumeClaim"): {
+			{"spec", "volumeName"}},
+		gvkKey("autoscaling", "v1", "HorizontalPodAutoscaler"): {
+			{"spec", "scaleTargetRef", "name"},
+			{"spec", "minReplicas"},
+			{"spec", "maxReplicas"},
+			{"spec", "currentReplicas"},
+		},
+		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
+			{"provisioner"},
+			{"metadata", "annotations[storageclass.kubernetes.io/is-default-class]"},
+		},
 		gvkKey("catalog.cattle.io", "v1", "ClusterRepo"): {
 			{"metadata", "annotations[clusterrepo.cattle.io/hidden]"},
 			{"spec", "gitBranch"},
@@ -87,6 +112,10 @@ var (
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			{"spec", "clusterName"}},
+		gvkKey("management.cattle.io", "v3", "Cluster"): {
+			{"spec", "internal"},
+			{"spec", "displayName"},
+		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
 			{"status", "nodeName"}},
 		gvkKey("management.cattle.io", "v3", "NodePool"): {
@@ -95,6 +124,7 @@ var (
 			{"spec", "clusterName"}},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
 			{"metadata", "labels[provider.cattle.io]"},
+			{"status", "clusterName"},
 			{"status", "provider"},
 			{"status", "allocatable", "cpu"},
 			{"status", "allocatable", "memory"},
