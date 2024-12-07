@@ -33,6 +33,24 @@ func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstru
 	return obj, nil
 }
 
+// TransformLabels transfers the object's kubernetes labels to the cached part of `obj`
+func (d *DefaultFields) TransformLabels(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	addLabelFields(obj)
+	return obj, nil
+}
+
+func addLabelFields(raw *unstructured.Unstructured) {
+	labels := raw.GetLabels()
+	if len(labels) == 0 {
+		return
+	}
+	labelHash := map[string]interface{}{}
+	for k, v := range labels {
+		labelHash[k] = v
+	}
+	data.PutValue(raw.Object, labelHash, "metadata", "labels")
+}
+
 // addSummaryFields adds the virtual fields for object state.
 func addSummaryFields(raw *unstructured.Unstructured, cache SummaryCache) (*unstructured.Unstructured, error) {
 	s, relationships := cache.SummaryAndRelationship(raw)

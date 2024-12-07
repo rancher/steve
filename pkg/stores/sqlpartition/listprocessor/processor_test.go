@@ -25,6 +25,7 @@ func TestParseQuery(t *testing.T) {
 		req          *types.APIRequest
 		expectedLO   informer.ListOptions
 		errExpected  bool
+		errorText    string
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -40,9 +41,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -60,8 +58,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
-							Op:      "",
+							Matches: []string{"ns1"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -89,14 +87,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -120,8 +118,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
-							Op:      "",
+							Matches: []string{"ns1"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -139,14 +137,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -170,8 +168,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
-							Op:      "",
+							Matches: []string{"ns1"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -192,14 +190,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -222,8 +220,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -232,9 +230,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -251,8 +246,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: false,
 						},
 					},
@@ -262,8 +257,57 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with filter param set, with value in double quotes, should include filter with partial set to false in list options.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: `filter=a1="c1"`},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1"},
+							Matches: []string{"c1"},
+							Op:      informer.Eq,
+							Partial: false,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]=heads"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
+							Matches: []string{"heads"},
+							Op:      informer.Eq,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
 		},
 	})
 	tests = append(tests, testCase{
@@ -280,8 +324,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -290,8 +334,8 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
-							Match:   "d",
-							Op:      "",
+							Matches: []string{"d"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -301,16 +345,12 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with a filter param with a comma separate value, should include a single or filter with" +
-			" multiple filters.",
+		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=a=c,b=d"},
+				URL: &url.URL{RawQuery: "filter=a=c&filter=b=d"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -320,14 +360,18 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
-							Op:      "",
+							Matches: []string{"c"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
+					},
+				},
+				{
+					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
-							Match:   "d",
-							Op:      "",
+							Matches: []string{"d"},
+							Op:      informer.Eq,
 							Partial: true,
 						},
 					},
@@ -337,8 +381,297 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle comma-separated standard and labels filters.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=beer='pabst',metadata.labels[beer2.io/ale]='schlitz'"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"beer"},
+							Matches: []string{"pabst"},
+							Op:      informer.Eq,
+							Partial: false,
+						},
+						{
+							Field:   []string{"metadata", "labels", "beer2.io/ale"},
+							Matches: []string{"schlitz"},
+							Op:      informer.Eq,
+							Partial: false,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle simple dot-separated label filters.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=beer='natty-bo',metadata.labels.beer3=rainier"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"beer"},
+							Matches: []string{"natty-bo"},
+							Op:      informer.Eq,
+							Partial: false,
+						},
+						{
+							Field:   []string{"metadata", "labels", "beer3"},
+							Matches: []string{"rainier"},
+							Op:      informer.Eq,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' and 'IN' with one arg",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1In in (x1),a2In IN (x2)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1In"},
+							Matches: []string{"x1"},
+							Op:      informer.In,
+							Partial: true,
+						},
+						{
+							Field:   []string{"a2In"},
+							Matches: []string{"x2"},
+							Op:      informer.In,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' with multiple args",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a2In in (x2a, x2b)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a2In"},
+							Matches: []string{"x2a", "x2b"},
+							Op:      informer.In,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'notin' and 'NOTIN' with one arg",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1NotIn notin (x1),a2NotIn NOTIN (x2)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1NotIn"},
+							Matches: []string{"x1"},
+							Op:      informer.NotIn,
+							Partial: true,
+						},
+						{
+							Field:   []string{"a2NotIn"},
+							Matches: []string{"x2"},
+							Op:      informer.NotIn,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' with multiple args",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a3NotIn in (x3a, x3b)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a3NotIn"},
+							Matches: []string{"x3a", "x3b"},
+							Op:      informer.In,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'in' and 'notin' in mixed case",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a4In iN (x4a),a4NotIn nOtIn (x4b)"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a4In"},
+							Matches: []string{"x4a"},
+							Op:      informer.In,
+							Partial: true,
+						},
+						{
+							Field:   []string{"a4NotIn"},
+							Matches: []string{"x4b"},
+							Op:      informer.NotIn,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain on non-label exists tests",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a5In1,!a5In2, ! a5In3"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: existence tests are valid only for labels; not valid for field 'a5In1'",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should allow label exists tests",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels.a5In1,!metadata.labels.a5In2, ! metadata.labels.a5In3"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "labels", "a5In1"},
+							Op:      informer.Exists,
+							Matches: []string{},
+							Partial: true,
+						},
+						{
+							Field:   []string{"metadata", "labels", "a5In2"},
+							Op:      informer.NotExists,
+							Matches: []string{},
+							Partial: true,
+						},
+						{
+							Field:   []string{"metadata", "labels", "a5In3"},
+							Op:      informer.NotExists,
+							Matches: []string{},
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle numeric comparisons",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a<1,b>2"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a"},
+							Op:      informer.Lt,
+							Matches: []string{"1"},
+							Partial: true,
+						},
+						{
+							Field:   []string{"b"},
+							Op:      informer.Gt,
+							Matches: []string{"2"},
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
 		},
 	})
 	tests = append(tests, testCase{
@@ -359,9 +692,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given primary field " +
@@ -381,9 +711,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -407,9 +734,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If continue params is given, resume" +
@@ -426,9 +750,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 1,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -447,9 +768,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If limit param is given, chunksize" +
@@ -466,9 +784,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If page param is given, page" +
@@ -484,9 +799,6 @@ func TestParseQuery(t *testing.T) {
 			Pagination: informer.Pagination{
 				Page: 3,
 			},
-		},
-		setupNSCache: func() Cache {
-			return nil
 		},
 	})
 	tests = append(tests, testCase{
@@ -505,18 +817,29 @@ func TestParseQuery(t *testing.T) {
 				Page:     1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			test.nsc = test.setupNSCache()
+			if test.setupNSCache == nil {
+				test.nsc = nil
+			} else {
+				test.nsc = test.setupNSCache()
+			}
+			x := test.req.Request.URL.Query()
+			if x != nil {
+				fmt.Printf("stop here")
+			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)
+				if test.errorText != "" {
+					assert.Contains(t, test.errorText, err.Error())
+				}
+				//assert.Equal(t, err, errors.New("unable to parse requirement: existence tests are valid only for labels; not valid for field 'a5In1'"))
 				return
+			} else {
+				assert.Nil(t, err)
 			}
 			assert.Equal(t, test.expectedLO, lo)
 		})

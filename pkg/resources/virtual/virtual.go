@@ -32,7 +32,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind) cache.T
 	if gvk.Kind == "Event" && gvk.Group == "" && gvk.Version == "v1" {
 		converters = append(converters, events.TransformEventObject)
 	}
-	converters = append(converters, t.defaultFields.TransformCommon)
+	converters = append(converters, t.defaultFields.TransformCommon, t.defaultFields.TransformLabels)
 
 	return func(raw interface{}) (interface{}, error) {
 		obj, isSignal, err := common.GetUnstructured(raw)
