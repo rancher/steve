@@ -83,6 +83,7 @@ var (
 			{"spec", "nodeName"}},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
+			{"spec", "targetPort"},
 			{"spec", "type"},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
@@ -121,6 +122,14 @@ var (
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			{"spec", "clusterName"}},
+		gvkKey("networking.k8s.io", "v1", "Ingress"): {
+			{"spec", "rules"},
+			{"spec", "ingressClassName"},
+		},
+		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
+			{"provisioner"},
+			{"metadata", "annotations[storageclass.kubernetes.io/is-default-class]"},
+		},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			{"metadata", "labels[provider.cattle.io]"},
 			{"spec", "internal"},
