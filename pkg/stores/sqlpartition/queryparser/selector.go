@@ -23,6 +23,7 @@ package queryparser
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -43,7 +44,12 @@ var (
 		string(selection.GreaterThan), string(selection.LessThan),
 	}
 	validRequirementOperators = append(binaryOperators, unaryOperators...)
+	labelSelectorRegex        *regexp.Regexp
 )
+
+func init() {
+	labelSelectorRegex = regexp.MustCompile(`^metadata.labels[[.]`)
+}
 
 // Requirements is AND of all requirements.
 type Requirements []Requirement
@@ -607,7 +613,7 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 		return nil, err
 	}
 	if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
-		if !strings.HasPrefix(key, "metadata.labels.") {
+		if !labelSelectorRegex.MatchString(key) {
 			return nil, fmt.Errorf("existence tests are valid only for labels; not valid for field '%s'", key)
 		}
 		return NewRequirement(key, operator, []string{}, field.WithPath(p.path))
