@@ -55,6 +55,8 @@ func TestSelectorParse(t *testing.T) {
 		`y == 'def'`,
 		"metadata.labels.im-here",
 		"!metadata.labels.im-not-here",
+		"metadata.labels[im.here]",
+		"!metadata.labels[im.not.here]",
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -66,6 +68,8 @@ func TestSelectorParse(t *testing.T) {
 		`x == "abc`,
 		`y == 'def`,
 		`z == 'ghi\`,
+		"metadata.labels-im.here",
+		"!metadata.labels(im.not.here)",
 	}
 	for _, test := range testGoodStrings {
 		_, err := Parse(test)
