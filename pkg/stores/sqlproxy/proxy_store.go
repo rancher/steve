@@ -41,6 +41,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary"
 
 	"github.com/rancher/steve/pkg/attributes"
+	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
@@ -214,7 +215,7 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool) (factory.Cache, error)
+	CacheFor(fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
 	Reset() error
 }
 
@@ -292,7 +293,7 @@ func (s *Store) initializeNamespaceCache() error {
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
 
 	// get the ns informer
-	nsInformer, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false)
+	nsInformer, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false, true)
 	if err != nil {
 		return err
 	}
@@ -732,7 +733,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	fields = append(fields, getFieldForGVK(gvk)...)
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
 
-	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema))
+	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema), controllerschema.IsListWatchable(schema))
 	if err != nil {
 		return nil, 0, "", err
 	}
