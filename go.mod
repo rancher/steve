@@ -22,7 +22,7 @@ require (
 	github.com/rancher/kubernetes-provider-detector v0.1.5
 	github.com/rancher/norman v0.0.0-20240207153035-cb54924f25c7
 	github.com/rancher/remotedialer v0.3.0
-	github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df
+	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	github.com/urfave/cli v1.22.14
