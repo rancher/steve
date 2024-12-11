@@ -1,17 +1,18 @@
 package virtual_test
 
 import (
-	"github.com/rancher/steve/pkg/resources/virtual"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 	"testing"
 
+	"github.com/rancher/steve/pkg/resources/virtual"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/rancher/steve/pkg/resources/virtual/testutil"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestTransformChain(t *testing.T) {
@@ -179,7 +180,7 @@ func TestTransformChain(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fakeCache := common.FakeSummaryCache{
+			fakeCache := testutil.FakeSummaryCache{
 				SummarizedObject: test.hasSummary,
 				Relationships:    test.hasRelationships,
 			}
