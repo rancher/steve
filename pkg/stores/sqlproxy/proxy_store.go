@@ -95,13 +95,13 @@ var (
 			{"spec", "maxReplicas"},
 			{"spec", "currentReplicas"},
 		},
-		gvkKey("appps", "v1", "DaemonSet"): {
+		gvkKey("apps", "v1", "DaemonSet"): {
 			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
 		},
-		gvkKey("appps", "v1", "Deployment"): {
+		gvkKey("apps", "v1", "Deployment"): {
 			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
 		},
-		gvkKey("appps", "v1", "StatefulSet"): {
+		gvkKey("apps", "v1", "StatefulSet"): {
 			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
 		},
 		gvkKey("batch", "v1", "CronJob"): {
