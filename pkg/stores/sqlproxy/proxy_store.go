@@ -76,7 +76,6 @@ var (
 			{"spec", "nodeName"}},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "targetPort"},
-			{"spec", "selector"},
 			{"spec", "type"},
 		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
@@ -97,9 +96,27 @@ var (
 			{"spec", "maxReplicas"},
 			{"spec", "currentReplicas"},
 		},
+		gvkKey("apps", "v1", "DaemonSet"): {
+			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+		},
+		gvkKey("apps", "v1", "Deployment"): {
+			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+		},
+		gvkKey("apps", "v1", "StatefulSet"): {
+			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+		},
+		gvkKey("batch", "v1", "CronJob"): {
+			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+		},
+		gvkKey("batch", "v1", "Job"): {
+			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+		},
 		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
 			{"provisioner"},
 			{"metadata", "annotations[storageclass.kubernetes.io/is-default-class]"},
+		},
+		gvkKey("catalog.cattle.io", "v1", "App"): {
+			{"spec", "chart", "metadata", "name"},
 		},
 		gvkKey("catalog.cattle.io", "v1", "ClusterRepo"): {
 			{"metadata", "annotations[clusterrepo.cattle.io/hidden]"},
@@ -114,8 +131,10 @@ var (
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
+			{"metadata", "labels[provider.cattle.io]"},
 			{"spec", "internal"},
 			{"spec", "displayName"},
+			{"status", "provider"},
 		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
 			{"status", "nodeName"}},
@@ -127,9 +146,6 @@ var (
 			{"metadata", "labels[provider.cattle.io]"},
 			{"status", "clusterName"},
 			{"status", "provider"},
-			{"status", "allocatable", "cpu"},
-			{"status", "allocatable", "memory"},
-			{"status", "allocatable", "pods"},
 		},
 	}
 	commonIndexFields = [][]string{
