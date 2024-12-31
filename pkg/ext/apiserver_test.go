@@ -24,6 +24,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	regrest "k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 )
@@ -328,6 +329,19 @@ func (t *testStoreOther) Delete(ctx Context, name string, opts *metav1.DeleteOpt
 	return nil
 }
 
+// This store tests when there's only a subset of verbs supported
+type partialStorage struct {
+	*Delegate[*TestType, *TestTypeList]
+}
+
+func (s *partialStorage) InjectDelegate(delegate *Delegate[*TestType, *TestTypeList]) {
+	s.Delegate = delegate
+}
+
+func (s *partialStorage) Create(ctx context.Context, obj runtime.Object, createValidation regrest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	return nil, nil
+}
+
 // The POC had a bug where multiple resources couldn't be installed so we're
 // testing this here
 func TestDiscoveryAndOpenAPI(t *testing.T) {
@@ -343,10 +357,17 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 		Group:   "ext2.cattle.io",
 		Version: "v3",
 	}
+
+	partialGroupVersion := schema.GroupVersion{
+		Group:   "ext.cattle.io",
+		Version: "v4",
+	}
 	scheme.AddKnownTypes(differentVersion, &TestType{}, &TestTypeList{})
 	scheme.AddKnownTypes(differentGroupVersion, &TestType{}, &TestTypeList{})
+	scheme.AddKnownTypes(partialGroupVersion, &TestType{}, &TestTypeList{})
 	metav1.AddToGroupVersion(scheme, differentVersion)
 	metav1.AddToGroupVersion(scheme, differentGroupVersion)
+	metav1.AddToGroupVersion(scheme, partialGroupVersion)
 
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":0")
 	require.NoError(t, err)
@@ -372,6 +393,12 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 		if err != nil {
 			return err
 		}
+
+		err = Install(s, &TestType{}, &TestTypeList{}, "testtypes", "testtype", partialGroupVersion.WithKind("TestType"), &partialStorage{})
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 	require.NoError(t, err)
@@ -401,6 +428,10 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 						{
 							Name: "ext.cattle.io",
 							Versions: []metav1.GroupVersionForDiscovery{
+								{
+									GroupVersion: "ext.cattle.io/v4",
+									Version:      "v4",
+								},
 								{
 									GroupVersion: "ext.cattle.io/v2",
 									Version:      "v2",
@@ -449,6 +480,10 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 					{
 						GroupVersion: "ext.cattle.io/v2",
 						Version:      "v2",
+					},
+					{
+						GroupVersion: "ext.cattle.io/v4",
+						Version:      "v4",
 					},
 					{
 						GroupVersion: "ext.cattle.io/v1",
@@ -564,6 +599,32 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 						Version:      "v3",
 						Verbs: metav1.Verbs{
 							"create", "delete", "get", "list", "patch", "update", "watch",
+						},
+					},
+				},
+			},
+		},
+		{
+			path:               "/apis/ext.cattle.io/v4",
+			got:                &metav1.APIResourceList{},
+			expectedStatusCode: http.StatusOK,
+			expectedBody: &metav1.APIResourceList{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "APIResourceList",
+					APIVersion: "v1",
+				},
+				GroupVersion: "ext.cattle.io/v4",
+				APIResources: []metav1.APIResource{
+					{
+						Name:         "testtypes",
+						SingularName: "testtype",
+						Namespaced:   false,
+						Kind:         "TestType",
+						Group:        "ext.cattle.io",
+						Version:      "v4",
+						// Only the create verb is supported for this store
+						Verbs: metav1.Verbs{
+							"create",
 						},
 					},
 				},

@@ -3,12 +3,14 @@ package ext
 import (
 	"context"
 
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/registry/rest"
 )
 
 // Context wraps a context.Context and adds a few fields that will be useful for
@@ -27,6 +29,22 @@ type Context struct {
 	// It makes it easy to create errors such as in:
 	//     apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
 	GroupVersionResource schema.GroupVersionResource
+}
+
+type CreateFunc[T runtime.Object] func(ctx Context, obj T, opts *metav1.CreateOptions) (T, error)
+type UpdateFunc[T runtime.Object] func(ctx Context, obj T, opts *metav1.UpdateOptions) (T, error)
+type GetFunc[T runtime.Object] func(ctx Context, name string, opts *metav1.GetOptions) (T, error)
+type ListFunc[TList runtime.Object] func(ctx Context, opts *metav1.ListOptions) (TList, error)
+type WatchFunc[T runtime.Object] func(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[T], error)
+type DeleteFunc[T runtime.Object] func(ctx Context, name string, opts *metav1.DeleteOptions) error
+
+type Storage[T runtime.Object, TList runtime.Object] interface {
+	InjectDelegate(*Delegate[T, TList])
+
+	rest.Storage
+	rest.Scoper
+	rest.KindProvider
+	rest.SingularNameProvider
 }
 
 // Store should provide all required operations to serve a given resource. A
@@ -90,4 +108,48 @@ type Store[T runtime.Object, TList runtime.Object] interface {
 type WatchEvent[T runtime.Object] struct {
 	Event  watch.EventType
 	Object T
+}
+
+type StandardStorage[
+	T runtime.Object,
+	TList runtime.Object,
+] struct {
+	*Delegate[T, TList]
+	store Store[T, TList]
+}
+
+func (s *StandardStorage[T, TList]) InjectDelegate(delegate *Delegate[T, TList]) {
+	s.Delegate = delegate
+}
+
+func (s *StandardStorage[T, TList]) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	return s.Delegate.Create(ctx, obj, createValidation, options, s.store.Create)
+}
+
+func (s *StandardStorage[T, TList]) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	return s.Delegate.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, s.store.Get, s.store.Create, s.store.Update)
+}
+
+func (s *StandardStorage[T, TList]) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	return s.Delegate.Get(ctx, name, options, s.store.Get)
+}
+
+func (s *StandardStorage[T, TList]) NewList() runtime.Object {
+	return s.Delegate.NewList()
+}
+
+func (s *StandardStorage[T, TList]) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	return s.Delegate.List(ctx, options, s.store.List)
+}
+
+func (s *StandardStorage[T, TList]) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+	return s.Delegate.Watch(ctx, options, s.store.Watch)
+}
+
+func (s *StandardStorage[T, TList]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	return s.Delegate.Delete(ctx, name, deleteValidation, options, s.store.Get, s.store.Delete)
+}
+
+func (s *StandardStorage[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	return s.Delegate.ConvertToTable(ctx, object, tableOptions)
 }

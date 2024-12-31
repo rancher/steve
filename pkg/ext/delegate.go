@@ -21,12 +21,12 @@ var (
 	errMissingUserInfo = errors.New("missing user info")
 )
 
-// delegate is the bridge between k8s.io/apiserver's [rest.Storage] interface and
+// Delegate is the bridge between k8s.io/apiserver's [rest.Storage] interface and
 // our own Store interface we want developers to use
 //
 // It currently supports non-namespaced stores only because Store[T, TList] doesn't
 // expose namespaces anywhere. When needed we'll add support to namespaced resources.
-type delegate[T runtime.Object, TList runtime.Object] struct {
+type Delegate[T runtime.Object, TList runtime.Object] struct {
 	scheme *runtime.Scheme
 	// t is the resource of the delegate (eg: *Token) and must be non-nil.
 	t T
@@ -35,16 +35,15 @@ type delegate[T runtime.Object, TList runtime.Object] struct {
 	gvk          schema.GroupVersionKind
 	gvr          schema.GroupVersionResource
 	singularName string
-	store        Store[T, TList]
 	authorizer   authorizer.Authorizer
 }
 
 // New implements [rest.Storage]
 //
 // It uses generics to create the resource and set its GVK.
-func (s *delegate[T, TList]) New() runtime.Object {
-	t := s.t.DeepCopyObject()
-	t.GetObjectKind().SetGroupVersionKind(s.gvk)
+func (d *Delegate[T, TList]) New() runtime.Object {
+	t := d.t.DeepCopyObject()
+	t.GetObjectKind().SetGroupVersionKind(d.gvk)
 	return t
 }
 
@@ -55,31 +54,39 @@ func (s *delegate[T, TList]) New() runtime.Object {
 // It is NOT meant to delete resources from the backing storage. It is meant to
 // stop clients, runners, etc that could be running for the store when the extension
 // API server gracefully shutdowns/exits.
-func (s *delegate[T, TList]) Destroy() {
+func (d *Delegate[T, TList]) Destroy() {
 }
 
 // NewList implements [rest.Lister]
 //
 // It uses generics to create the resource and set its GVK.
-func (s *delegate[T, TList]) NewList() runtime.Object {
-	tList := s.tList.DeepCopyObject()
-	tList.GetObjectKind().SetGroupVersionKind(s.gvk)
+func (d *Delegate[T, TList]) NewList() runtime.Object {
+	tList := d.tList.DeepCopyObject()
+	tList.GetObjectKind().SetGroupVersionKind(d.gvk)
 	return tList
 }
 
 // List implements [rest.Lister]
-func (s *delegate[T, TList]) List(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (runtime.Object, error) {
-	ctx, err := s.makeContext(parentCtx)
+func (d *Delegate[T, TList]) List(parentCtx context.Context, internaloptions *metainternalversion.ListOptions, listFn ListFunc[TList]) (runtime.Object, error) {
+	result, err := d.list(parentCtx, internaloptions, listFn)
+	if err != nil {
+		return nil, convertError(err)
+	}
+	return result, nil
+}
+
+func (d *Delegate[T, TList]) list(parentCtx context.Context, internaloptions *metainternalversion.ListOptions, listFn ListFunc[TList]) (runtime.Object, error) {
+	ctx, err := d.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	options, err := s.convertListOptions(internaloptions)
+	options, err := d.convertListOptions(internaloptions)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.store.List(ctx, options)
+	return listFn(ctx, options)
 }
 
 // ConvertToTable implements [rest.Lister]
@@ -88,32 +95,56 @@ func (s *delegate[T, TList]) List(parentCtx context.Context, internaloptions *me
 // (and Rancher UI) to display a table of the items.
 //
 // Currently, we use the default table convertor which will show two columns: Name and Created At.
-func (s *delegate[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	defaultTableConverter := rest.NewDefaultTableConvertor(s.gvr.GroupResource())
+func (d *Delegate[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	result, err := d.convertToTable(ctx, object, tableOptions)
+	if err != nil {
+		return nil, convertError(err)
+	}
+	return result, nil
+}
+
+func (d *Delegate[T, TList]) convertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	defaultTableConverter := rest.NewDefaultTableConvertor(d.gvr.GroupResource())
 	return defaultTableConverter.ConvertToTable(ctx, object, tableOptions)
 }
 
 // Get implements [rest.Getter]
-func (s *delegate[T, TList]) Get(parentCtx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	ctx, err := s.makeContext(parentCtx)
+func (d *Delegate[T, TList]) Get(parentCtx context.Context, name string, options *metav1.GetOptions, getFn GetFunc[T]) (runtime.Object, error) {
+	result, err := d.get(parentCtx, name, options, getFn)
+	if err != nil {
+		return nil, convertError(err)
+	}
+	return result, nil
+}
+
+func (d *Delegate[T, TList]) get(parentCtx context.Context, name string, options *metav1.GetOptions, getFn GetFunc[T]) (runtime.Object, error) {
+	ctx, err := d.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.store.Get(ctx, name, options)
+	return getFn(ctx, name, options)
 }
 
 // Delete implements [rest.GracefulDeleter]
 //
 // deleteValidation is used to do some validation on the object before deleting
 // it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
-func (s *delegate[T, TList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
-	ctx, err := s.makeContext(parentCtx)
+func (d *Delegate[T, TList]) Delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, getFn GetFunc[T], deleteFn DeleteFunc[T]) (runtime.Object, bool, error) {
+	result, completed, err := d.delete(parentCtx, name, deleteValidation, options, getFn, deleteFn)
+	if err != nil {
+		return nil, false, convertError(err)
+	}
+	return result, completed, nil
+}
+
+func (d *Delegate[T, TList]) delete(parentCtx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, getFn GetFunc[T], deleteFn DeleteFunc[T]) (runtime.Object, bool, error) {
+	ctx, err := d.makeContext(parentCtx)
 	if err != nil {
 		return nil, false, err
 	}
 
-	oldObj, err := s.store.Get(ctx, name, &metav1.GetOptions{})
+	oldObj, err := getFn(ctx, name, &metav1.GetOptions{})
 	if err != nil {
 		return nil, false, err
 	}
@@ -124,7 +155,7 @@ func (s *delegate[T, TList]) Delete(parentCtx context.Context, name string, dele
 		}
 	}
 
-	err = s.store.Delete(ctx, name, options)
+	err = deleteFn(ctx, name, options)
 	return oldObj, true, err
 }
 
@@ -134,8 +165,16 @@ func (s *delegate[T, TList]) Delete(parentCtx context.Context, name string, dele
 // it in the store. For example, running mutating/validating webhooks, though we're not using these yet.
 //
 //nolint:misspell
-func (s *delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
-	ctx, err := s.makeContext(parentCtx)
+func (d *Delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, createFn CreateFunc[T]) (runtime.Object, error) {
+	result, err := d.create(parentCtx, obj, createValidation, options, createFn)
+	if err != nil {
+		return nil, convertError(err)
+	}
+	return result, nil
+}
+
+func (d *Delegate[T, TList]) create(parentCtx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, createFn CreateFunc[T]) (runtime.Object, error) {
+	ctx, err := d.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -149,10 +188,10 @@ func (s *delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Objec
 
 	tObj, ok := obj.(T)
 	if !ok {
-		return nil, fmt.Errorf("object was of type %T, not of expected type %T", obj, s.t)
+		return nil, fmt.Errorf("object was of type %T, not of expected type %T", obj, d.t)
 	}
 
-	return s.store.Create(ctx, tObj, options)
+	return createFn(ctx, tObj, options)
 }
 
 // Update implements [rest.Updater]
@@ -165,7 +204,7 @@ func (s *delegate[T, TList]) Create(parentCtx context.Context, obj runtime.Objec
 //
 // updateValidation is used to do some validation on the object before updating it in the store.
 // One example is running mutating/validating webhooks, though we're not using these yet.
-func (s *delegate[T, TList]) Update(
+func (d *Delegate[T, TList]) Update(
 	parentCtx context.Context,
 	name string,
 	objInfo rest.UpdatedObjectInfo,
@@ -173,13 +212,35 @@ func (s *delegate[T, TList]) Update(
 	updateValidation rest.ValidateObjectUpdateFunc,
 	forceAllowCreate bool,
 	options *metav1.UpdateOptions,
+	getFn GetFunc[T],
+	createFn CreateFunc[T],
+	updateFn UpdateFunc[T],
 ) (runtime.Object, bool, error) {
-	ctx, err := s.makeContext(parentCtx)
+	result, created, err := d.update(parentCtx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, getFn, createFn, updateFn)
+	if err != nil {
+		return nil, false, convertError(err)
+	}
+	return result, created, nil
+}
+
+func (d *Delegate[T, TList]) update(
+	parentCtx context.Context,
+	name string,
+	objInfo rest.UpdatedObjectInfo,
+	createValidation rest.ValidateObjectFunc,
+	updateValidation rest.ValidateObjectUpdateFunc,
+	forceAllowCreate bool,
+	options *metav1.UpdateOptions,
+	getFn GetFunc[T],
+	createFn CreateFunc[T],
+	updateFn UpdateFunc[T],
+) (runtime.Object, bool, error) {
+	ctx, err := d.makeContext(parentCtx)
 	if err != nil {
 		return nil, false, err
 	}
 
-	oldObj, err := s.store.Get(ctx, name, &metav1.GetOptions{})
+	oldObj, err := getFn(ctx, name, &metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, false, err
@@ -196,10 +257,10 @@ func (s *delegate[T, TList]) Update(
 
 		tObj, ok := obj.(T)
 		if !ok {
-			return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", obj, s.t)
+			return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", obj, d.t)
 		}
 
-		newObj, err := s.store.Create(ctx, tObj, &metav1.CreateOptions{})
+		newObj, err := createFn(ctx, tObj, &metav1.CreateOptions{})
 		if err != nil {
 			return nil, false, err
 		}
@@ -213,7 +274,7 @@ func (s *delegate[T, TList]) Update(
 
 	newT, ok := newObj.(T)
 	if !ok {
-		return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", newObj, s.t)
+		return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", newObj, d.t)
 	}
 
 	if updateValidation != nil {
@@ -223,7 +284,7 @@ func (s *delegate[T, TList]) Update(
 		}
 	}
 
-	newT, err = s.store.Update(ctx, newT, options)
+	newT, err = updateFn(ctx, newT, options)
 	if err != nil {
 		return nil, false, err
 	}
@@ -261,13 +322,21 @@ func (w *watcher) ResultChan() <-chan watch.Event {
 	return w.ch
 }
 
-func (s *delegate[T, TList]) Watch(parentCtx context.Context, internaloptions *metainternalversion.ListOptions) (watch.Interface, error) {
-	ctx, err := s.makeContext(parentCtx)
+func (d *Delegate[T, TList]) Watch(parentCtx context.Context, internaloptions *metainternalversion.ListOptions, watchFn WatchFunc[T]) (watch.Interface, error) {
+	result, err := d.watch(parentCtx, internaloptions, watchFn)
+	if err != nil {
+		return nil, convertError(err)
+	}
+	return result, nil
+}
+
+func (d *Delegate[T, TList]) watch(parentCtx context.Context, internaloptions *metainternalversion.ListOptions, watchFn WatchFunc[T]) (watch.Interface, error) {
+	ctx, err := d.makeContext(parentCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	options, err := s.convertListOptions(internaloptions)
+	options, err := d.convertListOptions(internaloptions)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +351,7 @@ func (s *delegate[T, TList]) Watch(parentCtx context.Context, internaloptions *m
 
 		// Closing eventCh is the responsibility of the store.Watch method
 		// to avoid the store panicking while trying to send to a close channel
-		eventCh, err := s.store.Watch(ctx, options)
+		eventCh, err := watchFn(ctx, options)
 		if err != nil {
 			return
 		}
@@ -304,33 +373,33 @@ func (s *delegate[T, TList]) Watch(parentCtx context.Context, internaloptions *m
 // GroupVersionKind implements rest.GroupVersionKind
 //
 // This is used to generate the data for the Discovery API
-func (s *delegate[T, TList]) GroupVersionKind(_ schema.GroupVersion) schema.GroupVersionKind {
-	return s.gvk
+func (d *Delegate[T, TList]) GroupVersionKind(_ schema.GroupVersion) schema.GroupVersionKind {
+	return d.gvk
 }
 
 // NamespaceScoped implements rest.Scoper
 //
 // The delegate is used for non-namespaced resources so it always returns false
-func (s *delegate[T, TList]) NamespaceScoped() bool {
+func (d *Delegate[T, TList]) NamespaceScoped() bool {
 	return false
 }
 
 // Kind implements rest.KindProvider
 //
 // XXX: Example where / how this is used
-func (s *delegate[T, TList]) Kind() string {
-	return s.gvk.Kind
+func (d *Delegate[T, TList]) Kind() string {
+	return d.gvk.Kind
 }
 
 // GetSingularName implements rest.SingularNameProvider
 //
 // This is used by a variety of things such as kubectl to map singular name to
 // resource name. (eg: token => tokens)
-func (s *delegate[T, TList]) GetSingularName() string {
-	return s.singularName
+func (d *Delegate[T, TList]) GetSingularName() string {
+	return d.singularName
 }
 
-func (s *delegate[T, TList]) makeContext(parentCtx context.Context) (Context, error) {
+func (d *Delegate[T, TList]) makeContext(parentCtx context.Context) (Context, error) {
 	userInfo, ok := request.UserFrom(parentCtx)
 	if !ok {
 		return Context{}, errMissingUserInfo
@@ -339,18 +408,26 @@ func (s *delegate[T, TList]) makeContext(parentCtx context.Context) (Context, er
 	ctx := Context{
 		Context:              parentCtx,
 		User:                 userInfo,
-		Authorizer:           s.authorizer,
-		GroupVersionResource: s.gvr,
+		Authorizer:           d.authorizer,
+		GroupVersionResource: d.gvr,
 	}
 	return ctx, nil
 }
 
-func (s *delegate[T, TList]) convertListOptions(options *metainternalversion.ListOptions) (*metav1.ListOptions, error) {
+func (d *Delegate[T, TList]) convertListOptions(options *metainternalversion.ListOptions) (*metav1.ListOptions, error) {
 	var out metav1.ListOptions
-	err := s.scheme.Convert(options, &out, nil)
+	err := d.scheme.Convert(options, &out, nil)
 	if err != nil {
 		return nil, fmt.Errorf("convert list options: %w", err)
 	}
 
 	return &out, nil
+}
+
+func convertError(err error) error {
+	if _, ok := err.(apierrors.APIStatus); ok {
+		return err
+	}
+
+	return apierrors.NewInternalError(err)
 }

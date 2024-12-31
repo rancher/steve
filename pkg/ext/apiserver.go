@@ -201,6 +201,51 @@ func (s *ExtensionAPIServer) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	s.handler.ServeHTTP(w, req)
 }
 
+func Install[T runtime.Object, TList runtime.Object](
+	s *ExtensionAPIServer,
+	t T,
+	tList TList,
+	resourceName string,
+	singularName string,
+	gvk schema.GroupVersionKind,
+	storage Storage[T, TList],
+) error {
+	if !meta.IsListType(tList) {
+		return fmt.Errorf("tList (%T) is not a list type", tList)
+	}
+
+	apiGroup, ok := s.apiGroups[gvk.Group]
+	if !ok {
+		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
+	}
+
+	_, ok = apiGroup.VersionedResourcesStorageMap[gvk.Version]
+	if !ok {
+		apiGroup.VersionedResourcesStorageMap[gvk.Version] = make(map[string]rest.Storage)
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    gvk.Group,
+		Version:  gvk.Version,
+		Resource: resourceName,
+	}
+	delegate := &Delegate[T, TList]{
+		scheme: s.scheme,
+
+		t:            t,
+		tList:        tList,
+		singularName: singularName,
+		gvk:          gvk,
+		gvr:          gvr,
+		authorizer:   s.authorizer,
+	}
+	storage.InjectDelegate(delegate)
+
+	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = storage
+	s.apiGroups[gvk.Group] = apiGroup
+	return nil
+}
+
 // InstallStore installs a store on the given ExtensionAPIServer object.
 //
 // t and TList must be non-nil.
@@ -224,42 +269,10 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 	gvk schema.GroupVersionKind,
 	store Store[T, TList],
 ) error {
-
-	if !meta.IsListType(tList) {
-		return fmt.Errorf("tList (%T) is not a list type", tList)
+	storage := &StandardStorage[T, TList]{
+		store: store,
 	}
-
-	apiGroup, ok := s.apiGroups[gvk.Group]
-	if !ok {
-		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
-	}
-
-	_, ok = apiGroup.VersionedResourcesStorageMap[gvk.Version]
-	if !ok {
-		apiGroup.VersionedResourcesStorageMap[gvk.Version] = make(map[string]rest.Storage)
-	}
-
-	del := &delegateError[T, TList]{
-		inner: &delegate[T, TList]{
-			scheme: s.scheme,
-
-			t:            t,
-			tList:        tList,
-			singularName: singularName,
-			gvk:          gvk,
-			gvr: schema.GroupVersionResource{
-				Group:    gvk.Group,
-				Version:  gvk.Version,
-				Resource: resourceName,
-			},
-			authorizer: s.authorizer,
-			store:      store,
-		},
-	}
-
-	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = del
-	s.apiGroups[gvk.Group] = apiGroup
-	return nil
+	return Install(s, t, tList, resourceName, singularName, gvk, storage)
 }
 
 func getDefinitionName(scheme *runtime.Scheme, replacements map[string]string) func(string) (string, spec.Extensions) {

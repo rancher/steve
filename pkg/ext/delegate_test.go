@@ -66,7 +66,7 @@ func TestConvertError(t *testing.T) {
 
 }
 
-func TestDelegateError_Watch(t *testing.T) {
+func TestDelegate_ConvertError_Watch(t *testing.T) {
 	type input struct {
 		ctx             context.Context
 		internaloptions *metainternalversion.ListOptions
@@ -126,18 +126,15 @@ func TestDelegateError_Watch(t *testing.T) {
 
 		mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 
-		testDelegate := &delegateError[*TestType, *TestTypeList]{
-			inner: &delegate[*TestType, *TestTypeList]{
-				scheme: scheme,
-				t:      &TestType{},
-				tList:  &TestTypeList{},
-				gvk:    gvk,
-				gvr:    gvr,
-				store:  mockStore,
-			},
+		testDelegate := &Delegate[*TestType, *TestTypeList]{
+			scheme: scheme,
+			t:      &TestType{},
+			tList:  &TestTypeList{},
+			gvk:    gvk,
+			gvr:    gvr,
 		}
 
-		watch, err := testDelegate.Watch(tt.input.ctx, tt.input.internaloptions)
+		watch, err := testDelegate.Watch(tt.input.ctx, tt.input.internaloptions, mockStore.Watch)
 		if tt.wantedErr {
 			// check if we have an error
 			assert.Error(t, err)
@@ -152,7 +149,7 @@ func TestDelegateError_Watch(t *testing.T) {
 	}
 }
 
-func TestDelegateError_Update(t *testing.T) {
+func TestDelegate_ConvertError_Update(t *testing.T) {
 	type input struct {
 		parentCtx        context.Context
 		name             string
@@ -488,18 +485,15 @@ func TestDelegateError_Update(t *testing.T) {
 			tt.input.objInfo = mockObjInfo
 			tt.setup(mockObjInfo, mockStore)
 
-			testDelegate := &delegateError[*TestType, *TestTypeList]{
-				inner: &delegate[*TestType, *TestTypeList]{
-					scheme: scheme,
-					t:      &TestType{},
-					tList:  &TestTypeList{},
-					gvk:    gvk,
-					gvr:    gvr,
-					store:  mockStore,
-				},
+			testDelegate := &Delegate[*TestType, *TestTypeList]{
+				scheme: scheme,
+				t:      &TestType{},
+				tList:  &TestTypeList{},
+				gvk:    gvk,
+				gvr:    gvr,
 			}
 
-			obj, created, err := testDelegate.Update(tt.input.parentCtx, tt.input.name, tt.input.objInfo, tt.input.createValidation, tt.input.updateValidation, tt.input.forceAllowCreate, tt.input.options)
+			obj, created, err := testDelegate.Update(tt.input.parentCtx, tt.input.name, tt.input.objInfo, tt.input.createValidation, tt.input.updateValidation, tt.input.forceAllowCreate, tt.input.options, mockStore.Get, mockStore.Create, mockStore.Update)
 
 			if tt.wantErr {
 				// check if we have an error
@@ -518,7 +512,7 @@ func TestDelegateError_Update(t *testing.T) {
 
 }
 
-func TestDelegateError_Create(t *testing.T) {
+func TestDelegate_ConvertError_Create(t *testing.T) {
 	type input struct {
 		ctx              context.Context
 		obj              runtime.Object
@@ -641,18 +635,15 @@ func TestDelegateError_Create(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			testDelegate := &delegateError[*TestType, *TestTypeList]{
-				inner: &delegate[*TestType, *TestTypeList]{
-					scheme: scheme,
-					t:      &TestType{},
-					tList:  &TestTypeList{},
-					gvk:    gvk,
-					gvr:    gvr,
-					store:  mockStore,
-				},
+			testDelegate := &Delegate[*TestType, *TestTypeList]{
+				scheme: scheme,
+				t:      &TestType{},
+				tList:  &TestTypeList{},
+				gvk:    gvk,
+				gvr:    gvr,
 			}
 
-			result, err := testDelegate.Create(tt.input.ctx, tt.input.obj, tt.input.createValidation, tt.input.options)
+			result, err := testDelegate.Create(tt.input.ctx, tt.input.obj, tt.input.createValidation, tt.input.options, mockStore.Create)
 			if tt.wantErr {
 				// check if we have an error
 				assert.Error(t, err)
@@ -668,7 +659,7 @@ func TestDelegateError_Create(t *testing.T) {
 	}
 }
 
-func TestDelegateError_Delete(t *testing.T) {
+func TestDelegate_ConvertError_Delete(t *testing.T) {
 	type input struct {
 		ctx              context.Context
 		name             string
@@ -801,18 +792,15 @@ func TestDelegateError_Delete(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			testDelegate := &delegateError[*TestType, *TestTypeList]{
-				inner: &delegate[*TestType, *TestTypeList]{
-					scheme: scheme,
-					t:      &TestType{},
-					tList:  &TestTypeList{},
-					gvk:    gvk,
-					gvr:    gvr,
-					store:  mockStore,
-				},
+			testDelegate := &Delegate[*TestType, *TestTypeList]{
+				scheme: scheme,
+				t:      &TestType{},
+				tList:  &TestTypeList{},
+				gvk:    gvk,
+				gvr:    gvr,
 			}
 
-			result, completed, err := testDelegate.Delete(tt.input.ctx, tt.input.name, tt.input.deleteValidation, tt.input.options)
+			result, completed, err := testDelegate.Delete(tt.input.ctx, tt.input.name, tt.input.deleteValidation, tt.input.options, mockStore.Get, mockStore.Delete)
 			if tt.wantErr {
 				// check if we have an error
 				assert.Error(t, err)
@@ -829,7 +817,7 @@ func TestDelegateError_Delete(t *testing.T) {
 	}
 }
 
-func TestDelegateError_Get(t *testing.T) {
+func TestDelegate_ConvertError_Get(t *testing.T) {
 	type input struct {
 		ctx     context.Context
 		name    string
@@ -916,18 +904,15 @@ func TestDelegateError_Get(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			testDelegate := &delegateError[*TestType, *TestTypeList]{
-				inner: &delegate[*TestType, *TestTypeList]{
-					scheme: scheme,
-					t:      &TestType{},
-					tList:  &TestTypeList{},
-					gvk:    gvk,
-					gvr:    gvr,
-					store:  mockStore,
-				},
+			testDelegate := &Delegate[*TestType, *TestTypeList]{
+				scheme: scheme,
+				t:      &TestType{},
+				tList:  &TestTypeList{},
+				gvk:    gvk,
+				gvr:    gvr,
 			}
 
-			result, err := testDelegate.Get(tt.input.ctx, tt.input.name, tt.input.options)
+			result, err := testDelegate.Get(tt.input.ctx, tt.input.name, tt.input.options, mockStore.Get)
 			if tt.wantErr {
 				// check if we have an error
 				assert.Error(t, err)
@@ -944,7 +929,7 @@ func TestDelegateError_Get(t *testing.T) {
 	}
 }
 
-func TestDelegateError_List(t *testing.T) {
+func TestDelegate_ConvertError_List(t *testing.T) {
 	type input struct {
 		ctx         context.Context
 		listOptions *metainternalversion.ListOptions
@@ -1048,18 +1033,15 @@ func TestDelegateError_List(t *testing.T) {
 			mockStore := NewMockStore[*TestType, *TestTypeList](ctrl)
 			tt.storeSetup(mockStore)
 
-			testDelegate := &delegateError[*TestType, *TestTypeList]{
-				inner: &delegate[*TestType, *TestTypeList]{
-					scheme: scheme,
-					t:      &TestType{},
-					tList:  &TestTypeList{},
-					gvk:    gvk,
-					gvr:    gvr,
-					store:  mockStore,
-				},
+			testDelegate := &Delegate[*TestType, *TestTypeList]{
+				scheme: scheme,
+				t:      &TestType{},
+				tList:  &TestTypeList{},
+				gvk:    gvk,
+				gvr:    gvr,
 			}
 
-			result, err := testDelegate.List(tt.input.ctx, tt.input.listOptions)
+			result, err := testDelegate.List(tt.input.ctx, tt.input.listOptions, mockStore.List)
 			if tt.wantErr {
 				// check if we have an error
 				assert.Error(t, err)
