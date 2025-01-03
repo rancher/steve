@@ -11,11 +11,13 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -737,6 +739,22 @@ func setupExtensionAPIServer[
 	optionSetter func(*ExtensionAPIServerOptions),
 	extensionAPIServerSetter func(*ExtensionAPIServer) error,
 ) (*ExtensionAPIServer, func(), error) {
+	fn := func(e *ExtensionAPIServer) error {
+		err := InstallStore(e, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+		if err != nil {
+			return fmt.Errorf("InstallStore: %w", err)
+		}
+		return extensionAPIServerSetter(e)
+	}
+	return setupExtensionAPIServerNoStore(t, scheme, optionSetter, fn)
+}
+
+func setupExtensionAPIServerNoStore(
+	t *testing.T,
+	scheme *runtime.Scheme,
+	optionSetter func(*ExtensionAPIServerOptions),
+	extensionAPIServerSetter func(*ExtensionAPIServer) error,
+) (*ExtensionAPIServer, func(), error) {
 
 	addToSchemeTest(scheme)
 	codecs := serializer.NewCodecFactory(scheme)
@@ -753,11 +771,6 @@ func setupExtensionAPIServer[
 	extensionAPIServer, err := NewExtensionAPIServer(scheme, codecs, opts)
 	if err != nil {
 		return nil, func() {}, err
-	}
-
-	err = InstallStore(extensionAPIServer, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("InstallStore: %w", err)
 	}
 
 	if extensionAPIServerSetter != nil {
@@ -828,4 +841,236 @@ func createRecordingWatcher(scheme *runtime.Scheme, gvr schema.GroupVersionResou
 		ch:   ch,
 		stop: myWatch.Stop,
 	}, nil
+}
+
+// This store tests the printed columns functionality
+type customColumnsStore struct {
+	*Delegate[*TestType, *TestTypeList]
+	store *testStore
+
+	lock      sync.Mutex
+	columns   []metav1.TableColumnDefinition
+	convertFn func(obj *TestType) []string
+}
+
+func (s *customColumnsStore) InjectDelegate(delegate *Delegate[*TestType, *TestTypeList]) {
+	s.Delegate = delegate
+}
+
+func (s *customColumnsStore) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	return s.Delegate.Get(ctx, name, options, s.store.Get)
+}
+
+func (s *customColumnsStore) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	return s.Delegate.List(ctx, options, s.store.List)
+}
+
+func (s *customColumnsStore) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.Delegate.ConvertToTable(ctx, object, tableOptions, s.columns, s.convertFn)
+}
+
+func (s *customColumnsStore) Set(columns []metav1.TableColumnDefinition, convertFn func(obj *TestType) []string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.columns = columns
+	s.convertFn = convertFn
+}
+
+func TestCustomColumns(t *testing.T) {
+	scheme := runtime.NewScheme()
+	AddToScheme(scheme)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":0")
+	require.NoError(t, err)
+
+	store := &customColumnsStore{
+		store: &testStore{},
+	}
+
+	extensionAPIServer, cleanup, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {
+		opts.Listener = ln
+		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
+		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
+	}, func(s *ExtensionAPIServer) error {
+		err := Install(s, &TestType{}, &TestTypeList{}, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	require.NoError(t, err)
+	defer cleanup()
+
+	ts := httptest.NewServer(extensionAPIServer)
+	defer ts.Close()
+
+	createRequest := func(path string) *http.Request {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		// This asks the apiserver to give back a metav1.Table for List and Get operations
+		req.Header.Add("Accept", "application/json;as=Table;v=v1;g=meta.k8s.io")
+		return req
+	}
+
+	columns := []metav1.TableColumnDefinition{
+		{
+			Name: "Name",
+			Type: "name",
+		},
+		{
+			Name: "Foo",
+			Type: "string",
+		},
+		{
+			Name: "Bar",
+			Type: "number",
+		},
+	}
+	convertFn := func(obj *TestType) []string {
+		return []string{
+			"the name is " + obj.GetName(),
+			"the foo value",
+			"the bar value",
+		}
+	}
+
+	tests := []struct {
+		name               string
+		requests           []*http.Request
+		columns            []metav1.TableColumnDefinition
+		convertFn          func(obj *TestType) []string
+		expectedStatusCode int
+		expectedBody       any
+	}{
+		{
+			name: "default",
+			requests: []*http.Request{
+				createRequest("/apis/ext.cattle.io/v1/testtypes"),
+				createRequest("/apis/ext.cattle.io/v1/testtypes/foo"),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedBody: &metav1.Table{
+				TypeMeta: metav1.TypeMeta{Kind: "Table", APIVersion: "meta.k8s.io/v1"},
+				ColumnDefinitions: []metav1.TableColumnDefinition{
+					{Name: "Name", Type: "string", Format: "name", Description: "Name must be unique within a namespace. Is required when creating resources, although some resources may allow a client to request the generation of an appropriate name automatically. Name is primarily intended for creation idempotence and configuration definition. Cannot be updated. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names"},
+					{Name: "Created At", Type: "date", Description: "CreationTimestamp is a timestamp representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations. Clients may not set this value. It is represented in RFC3339 form and is in UTC.\n\nPopulated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata"},
+				},
+				Rows: []metav1.TableRow{
+					{
+						Cells: []any{"foo", "0001-01-01T00:00:00Z"},
+						Object: runtime.RawExtension{
+							Raw: []byte(`{"kind":"PartialObjectMetadata","apiVersion":"meta.k8s.io/v1","metadata":{"name":"foo","creationTimestamp":null}}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "custom include object default and metadata",
+			requests: []*http.Request{
+				createRequest("/apis/ext.cattle.io/v1/testtypes"),
+				createRequest("/apis/ext.cattle.io/v1/testtypes/foo"),
+				createRequest("/apis/ext.cattle.io/v1/testtypes?includeObject=Metadata"),
+				createRequest("/apis/ext.cattle.io/v1/testtypes/foo?includeObject=Metadata"),
+			},
+			columns:            columns,
+			convertFn:          convertFn,
+			expectedStatusCode: http.StatusOK,
+			expectedBody: &metav1.Table{
+				TypeMeta: metav1.TypeMeta{Kind: "Table", APIVersion: "meta.k8s.io/v1"},
+				ColumnDefinitions: []metav1.TableColumnDefinition{
+					{Name: "Name", Type: "name"},
+					{Name: "Foo", Type: "string"},
+					{Name: "Bar", Type: "number"},
+				},
+				Rows: []metav1.TableRow{
+					{
+						Cells: []any{"the name is foo", "the foo value", "the bar value"},
+						Object: runtime.RawExtension{
+							Raw: []byte(`{"kind":"PartialObjectMetadata","apiVersion":"meta.k8s.io/v1","metadata":{"name":"foo","creationTimestamp":null}}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "custom include object None",
+			requests: []*http.Request{
+				createRequest("/apis/ext.cattle.io/v1/testtypes?includeObject=None"),
+				createRequest("/apis/ext.cattle.io/v1/testtypes/foo?includeObject=None"),
+			},
+			columns:            columns,
+			convertFn:          convertFn,
+			expectedStatusCode: http.StatusOK,
+			expectedBody: &metav1.Table{
+				TypeMeta: metav1.TypeMeta{Kind: "Table", APIVersion: "meta.k8s.io/v1"},
+				ColumnDefinitions: []metav1.TableColumnDefinition{
+					{Name: "Name", Type: "name"},
+					{Name: "Foo", Type: "string"},
+					{Name: "Bar", Type: "number"},
+				},
+				Rows: []metav1.TableRow{
+					{
+						Cells: []any{"the name is foo", "the foo value", "the bar value"},
+					},
+				},
+			},
+		},
+		{
+			name: "custom include object Object",
+			requests: []*http.Request{
+				createRequest("/apis/ext.cattle.io/v1/testtypes?includeObject=Object"),
+				createRequest("/apis/ext.cattle.io/v1/testtypes/foo?includeObject=Object"),
+			},
+			columns:            columns,
+			convertFn:          convertFn,
+			expectedStatusCode: http.StatusOK,
+			expectedBody: &metav1.Table{
+				TypeMeta: metav1.TypeMeta{Kind: "Table", APIVersion: "meta.k8s.io/v1"},
+				ColumnDefinitions: []metav1.TableColumnDefinition{
+					{Name: "Name", Type: "name"},
+					{Name: "Foo", Type: "string"},
+					{Name: "Bar", Type: "number"},
+				},
+				Rows: []metav1.TableRow{
+					{
+						Cells: []any{"the name is foo", "the foo value", "the bar value"},
+						Object: runtime.RawExtension{
+							Raw: []byte(`{"kind":"TestType","apiVersion":"ext.cattle.io/v1","metadata":{"name":"foo","creationTimestamp":null}}`),
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.columns != nil {
+				store.Set(test.columns, test.convertFn)
+			}
+
+			for _, req := range test.requests {
+				w := httptest.NewRecorder()
+
+				extensionAPIServer.ServeHTTP(w, req)
+
+				resp := w.Result()
+				body, _ := io.ReadAll(resp.Body)
+
+				require.Equal(t, test.expectedStatusCode, resp.StatusCode)
+				if test.expectedBody != nil {
+					table := &metav1.Table{}
+					err = json.Unmarshal(body, table)
+					require.NoError(t, err)
+					require.Equal(t, test.expectedBody, table)
+				}
+			}
+		})
+	}
+
 }

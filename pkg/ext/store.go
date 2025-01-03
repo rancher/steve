@@ -38,6 +38,9 @@ type ListFunc[TList runtime.Object] func(ctx Context, opts *metav1.ListOptions) 
 type WatchFunc[T runtime.Object] func(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[T], error)
 type DeleteFunc[T runtime.Object] func(ctx Context, name string, opts *metav1.DeleteOptions) error
 
+// ConvertFunc will convert a object to a list of cell in a metav1.Table (think kubectl get table output)
+type ConvertFunc[T runtime.Object] func(obj T) []string
+
 type Storage[T runtime.Object, TList runtime.Object] interface {
 	InjectDelegate(*Delegate[T, TList])
 
@@ -105,6 +108,10 @@ type Store[T runtime.Object, TList runtime.Object] interface {
 	Delete(ctx Context, name string, opts *metav1.DeleteOptions) error
 }
 
+type TableConvertor[T runtime.Object] interface {
+	ConvertToTable() ([]metav1.TableColumnDefinition, func(obj T) []string)
+}
+
 type WatchEvent[T runtime.Object] struct {
 	Event  watch.EventType
 	Object T
@@ -151,5 +158,9 @@ func (s *StandardStorage[T, TList]) Delete(ctx context.Context, name string, del
 }
 
 func (s *StandardStorage[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return s.Delegate.ConvertToTable(ctx, object, tableOptions)
+	if converter, ok := s.store.(TableConvertor[T]); ok {
+		columnDefs, convertFn := converter.ConvertToTable()
+		return s.Delegate.ConvertToTable(ctx, object, tableOptions, columnDefs, convertFn)
+	}
+	return s.Delegate.ConvertToDefaultTable(ctx, object, tableOptions)
 }

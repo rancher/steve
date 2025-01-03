@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -95,17 +96,71 @@ func (d *Delegate[T, TList]) list(parentCtx context.Context, internaloptions *me
 // (and Rancher UI) to display a table of the items.
 //
 // Currently, we use the default table convertor which will show two columns: Name and Created At.
-func (d *Delegate[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	result, err := d.convertToTable(ctx, object, tableOptions)
+func (d *Delegate[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object, columnDefs []metav1.TableColumnDefinition, convertFn ConvertFunc[T]) (*metav1.Table, error) {
+	result, err := d.convertToTable(ctx, object, tableOptions, columnDefs, convertFn)
 	if err != nil {
 		return nil, convertError(err)
 	}
 	return result, nil
 }
 
-func (d *Delegate[T, TList]) convertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+func (d *Delegate[T, TList]) ConvertToDefaultTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	return d.ConvertToTable(ctx, object, tableOptions, nil, nil)
+}
+
+func (d *Delegate[T, TList]) convertToTable(parentCtx context.Context, object runtime.Object, tableOptions runtime.Object, columnDefs []metav1.TableColumnDefinition, convertFn ConvertFunc[T]) (*metav1.Table, error) {
 	defaultTableConverter := rest.NewDefaultTableConvertor(d.gvr.GroupResource())
-	return defaultTableConverter.ConvertToTable(ctx, object, tableOptions)
+	table, err := defaultTableConverter.ConvertToTable(parentCtx, object, tableOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	if columnDefs == nil {
+		return table, nil
+	}
+
+	// Override only if there were definitions before (to respect the NoHeader option)
+	if len(table.ColumnDefinitions) > 0 {
+		table.ColumnDefinitions = columnDefs
+	}
+	table.Rows = []metav1.TableRow{}
+	fn := func(obj runtime.Object) error {
+		objT, ok := obj.(T)
+		if !ok {
+			var zeroT T
+			return fmt.Errorf("expected %T but got %T", zeroT, obj)
+		}
+		cells := convertFn(objT)
+		if len(cells) != len(columnDefs) {
+			return fmt.Errorf("defined %d columns but got %d cells", len(columnDefs), len(cells))
+		}
+
+		table.Rows = append(table.Rows, metav1.TableRow{
+			Cells:  cellStringToCellAny(cells),
+			Object: runtime.RawExtension{Object: obj},
+		})
+		return nil
+	}
+	switch {
+	case meta.IsListType(object):
+		if err := meta.EachListItem(object, fn); err != nil {
+			return nil, err
+		}
+	default:
+		if err := fn(object); err != nil {
+			return nil, err
+		}
+	}
+
+	return table, nil
+}
+
+func cellStringToCellAny(cells []string) []any {
+	res := []any{}
+	for _, cell := range cells {
+		res = append(res, cell)
+	}
+	return res
 }
 
 // Get implements [rest.Getter]
