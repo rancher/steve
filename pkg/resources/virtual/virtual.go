@@ -35,7 +35,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind) cache.T
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
 	}
-	converters = append(converters, t.defaultFields.TransformCommon, t.defaultFields.TransformLabels)
+	converters = append(converters, t.defaultFields.TransformCommon)
 
 	return func(raw interface{}) (interface{}, error) {
 		obj, isSignal, err := common.GetUnstructured(raw)
