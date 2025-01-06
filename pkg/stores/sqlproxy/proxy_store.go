@@ -69,6 +69,8 @@ var (
 			{"message"},
 			{"reason"},
 		},
+		gvkKey("", "v1", "Namespace"): {
+			{"metadata", "labels[field.cattle.io/projectId]"}},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
 			{"status", "nodeInfo", "operatingSystem"}},
@@ -122,14 +124,6 @@ var (
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			{"spec", "clusterName"}},
-		gvkKey("networking.k8s.io", "v1", "Ingress"): {
-			{"spec", "rules"},
-			{"spec", "ingressClassName"},
-		},
-		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
-			{"provisioner"},
-			{"metadata", "annotations[storageclass.kubernetes.io/is-default-class]"},
-		},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			{"metadata", "labels[provider.cattle.io]"},
 			{"spec", "internal"},
