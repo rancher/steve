@@ -831,17 +831,12 @@ func TestParseQuery(t *testing.T) {
 			} else {
 				test.nsc = test.setupNSCache()
 			}
-			x := test.req.Request.URL.Query()
-			if x != nil {
-				fmt.Printf("stop here")
-			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)
 				if test.errorText != "" {
 					assert.Contains(t, test.errorText, err.Error())
 				}
-				//assert.Equal(t, err, errors.New("unable to parse requirement: existence tests are valid only for labels; not valid for field 'a5In1'"))
 				return
 			} else {
 				assert.Nil(t, err)
