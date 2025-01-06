@@ -75,6 +75,10 @@ func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
 	return "", fmt.Errorf("unknown k8sOp: %s", k8sOp)
 }
 
+// Determine if the value field is surrounded by a pair of single- or double-quotes
+// This is a difference we implement from the CLI: if the target value of a (not) equal
+// test is quoted, we use the full string. Otherwise we do a substring match
+// (which is implemented as 'SELECT ... some-field ... LIKE "%VALUE%" ...' in the query)
 func isQuotedStringTarget(values []string) bool {
 	if len(values) != 1 || len(values[0]) == 0 {
 		return false
@@ -211,9 +215,16 @@ func getLimit(apiOp *types.APIRequest) int {
 	return limit
 }
 
+// splitQuery takes a single-string metadata-labels filter and converts it into an array of 3 accessor strings,
+// where the first two strings are always "metadata" and "labels", and the third is the label name.
+// This is more complex than doing something like `strings.Split(".", "metadata.labels.fieldName")
+// because the fieldName can be more complex - in particular it can contain "."s) and needs to be
+// bracketed, as in `metadata.labels[rancher.io/cattle.and.beef]".
+// The `labelsRegex` looks for the bracketed form.
 func splitQuery(query string) []string {
 	m := labelsRegex.FindStringSubmatch(query)
 	if m != nil && len(m) >= 4 {
+		// m[0] contains the entire string, so just return all but that first item in `m`
 		return m[1:]
 	}
 	return strings.Split(query, ".")

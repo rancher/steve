@@ -864,7 +864,6 @@ func TestParseQuery(t *testing.T) {
 				if test.errorText != "" {
 					assert.Contains(t, test.errorText, err.Error())
 				}
-				//assert.Equal(t, err, errors.New("unable to parse requirement: existence tests are valid only for labels; not valid for field 'a5In1'"))
 				return
 			} else {
 				assert.Nil(t, err)
