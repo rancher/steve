@@ -56,21 +56,6 @@ type Cache interface {
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
-// k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
-
-//type Requirement struct {
-//	key      string
-//	operator selection.Operator
-//	strValues []string
-//}
-
-//type Filter struct {
-//	Field   []string
-//	Match   string
-//	Op      Op
-//	Partial bool
-//}
-
 func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
 	h := map[selection.Operator]informer.Op{
 		selection.Equals:       informer.Eq,
