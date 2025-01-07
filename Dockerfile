@@ -7,7 +7,7 @@ RUN \
     cd /src && \
     CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /steve
 
-FROM registry.suse.com/bci/bci-micro:15.5.11.2
+FROM registry.suse.com/bci/bci-micro:15.6.29.1
 COPY --from=build /steve /usr/bin/steve
 # Hack to make golang do files,dns search order
 ENV LOCALDOMAIN=""
