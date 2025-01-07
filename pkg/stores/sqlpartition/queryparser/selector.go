@@ -19,6 +19,29 @@ This file is derived from
 https://github.com/kubernetes/apimachinery/blob/master/pkg/labels/selector.go
 */
 
+/**
+Main changes:
+
+1. The upstream `selector.go` file does parsing and applying to the objects being test.
+We only care about the parser, so the selection part is dropped.
+
+2. I dropped label value validation in the parser
+
+3. Multiple values are returned as an array rather than a `k8s.io/utils/sets.String` object
+to avoid having to pull in that dependency as well (and it isn't needed because we convert
+the array into a sql statement. So the set gives us no benefit apart from removing duplicate target values).
+
+4. We added the `QuotedStringToken` constant to distinguish exact matches from substring matches.
+This needed the `SingleQuoteToken` and `DoubleQuoteToken` variants for the lexer.
+
+5. Our filter language ignores case for `in` and `notin`. These must be lower-case in kubectl filter expressions.
+
+6. The `Lexer.Lex` function names the return parameters in its header but has no argument-less
+   return statement, so I dropped the names.
+
+7.  We allow `lt` and `gt` as aliases for `<` and `>`.
+*/
+
 package queryparser
 
 import (
