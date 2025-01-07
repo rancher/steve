@@ -57,8 +57,8 @@ const (
 )
 
 var (
-	paramScheme               = runtime.NewScheme()
-	paramCodec                = runtime.NewParameterCodec(paramScheme)
+	paramScheme = runtime.NewScheme()
+	paramCodec  = runtime.NewParameterCodec(paramScheme)
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
 	typeSpecificIndexedFields = map[string][][]string{
 		gvkKey("", "v1", "ConfigMap"): {
