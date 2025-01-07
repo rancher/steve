@@ -23,32 +23,40 @@ import (
 	"go.uber.org/mock/gomock"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/server/options"
 )
 
 type authzTestStore struct {
-	*testStore
+	*testStore[*TestType, *TestTypeList]
+	authorizer authorizer.Authorizer
 }
 
-func (t *authzTestStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
-	if name == "not-found" {
-		return nil, apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
+// Get implements [rest.Getter]
+func (t *authzTestStore) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	return t.get(ctx, name, options)
+}
+
+// List implements [rest.Lister]
+func (t *authzTestStore) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	userInfo, ok := request.UserFrom(ctx)
+	if !ok {
+		return nil, convertError(fmt.Errorf("missing user info"))
 	}
-	return t.testStore.Get(ctx, name, opts)
-}
 
-func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
-	if ctx.User.GetName() == "read-only-error" {
-		decision, _, err := ctx.Authorizer.Authorize(ctx, authorizer.AttributesRecord{
-			User:            ctx.User,
+	if userInfo.GetName() == "read-only-error" {
+		decision, _, err := t.authorizer.Authorize(ctx, authorizer.AttributesRecord{
+			User:            userInfo,
 			Verb:            "customverb",
 			Resource:        "testtypes",
 			ResourceRequest: true,
@@ -58,13 +66,61 @@ func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeL
 			if err == nil {
 				err = fmt.Errorf("not allowed")
 			}
-			forbidden := apierrors.NewForbidden(ctx.GroupVersionResource.GroupResource(), "Forbidden", err)
+			forbidden := apierrors.NewForbidden(t.gvr.GroupResource(), "Forbidden", err)
 			forbidden.ErrStatus.Kind = "Status"
 			forbidden.ErrStatus.APIVersion = "v1"
 			return nil, forbidden
 		}
 	}
 	return &testTypeListFixture, nil
+}
+
+func (t *authzTestStore) get(ctx context.Context, name string, opts *metav1.GetOptions) (*TestType, error) {
+	if name == "not-found" {
+		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), name)
+	}
+	return &testTypeFixture, nil
+}
+
+func (t *authzTestStore) create(ctx context.Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
+	return &testTypeFixture, nil
+}
+
+func (t *authzTestStore) update(ctx context.Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
+	return &testTypeFixture, nil
+}
+
+// Create implements [rest.Creater]
+func (t *authzTestStore) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	if createValidation != nil {
+		err := createValidation(ctx, obj)
+		if err != nil {
+			return obj, err
+		}
+	}
+
+	objT, ok := obj.(*TestType)
+	if !ok {
+		var zeroT *TestType
+		return nil, fmt.Errorf("expected %T but got %T", zeroT, obj)
+	}
+
+	return t.create(ctx, objT, options)
+}
+
+// Update implements [rest.Updater]
+func (t *authzTestStore) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	return CreateOrUpdate(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, t.get, t.create, t.update)
+}
+
+// Watch implements [rest.GracefulDeleter]
+func (t *authzTestStore) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+	return nil, nil
+}
+
+// Delete implements [rest.GracefulDeleter]
+func (t *authzTestStore) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	return nil, false, nil
 }
 
 func (s *ExtensionAPIServerSuite) TestAuthorization() {
@@ -89,10 +145,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	ln, _, err := options.CreateListener("", ":0", net.ListenConfig{})
 	require.NoError(t, err)
 
-	store := &authzTestStore{
-		testStore: &testStore{},
-	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authz
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -104,7 +157,17 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 				User: user,
 			}, true, nil
 		})
-	}, nil)
+	}, func(s *ExtensionAPIServer) error {
+		store := &authzTestStore{
+			testStore:  newDefaultTestStore(scheme),
+			authorizer: s.GetAuthorizer(),
+		}
+		err := s.Install("testtypes", testTypeGV.WithKind("TestType"), store)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	require.NoError(t, err)
 	defer cleanup()
 

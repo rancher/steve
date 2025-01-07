@@ -16,8 +16,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -44,83 +42,6 @@ func authzAllowAll(ctx context.Context, a authorizer.Attributes) (authorizer.Dec
 	return authorizer.DecisionAllow, "", nil
 }
 
-type mapStore struct {
-	items  map[string]*TestType
-	events chan WatchEvent[*TestType]
-}
-
-func newMapStore() *mapStore {
-	return &mapStore{
-		items:  make(map[string]*TestType),
-		events: make(chan WatchEvent[*TestType], 100),
-	}
-}
-
-func (t *mapStore) Create(ctx Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
-	if _, found := t.items[obj.Name]; found {
-		return nil, apierrors.NewAlreadyExists(ctx.GroupVersionResource.GroupResource(), obj.Name)
-	}
-	t.items[obj.Name] = obj
-	t.events <- WatchEvent[*TestType]{
-		Event:  watch.Added,
-		Object: obj,
-	}
-	return obj, nil
-}
-
-func (t *mapStore) Update(ctx Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
-	if _, found := t.items[obj.Name]; !found {
-		return nil, apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), obj.Name)
-	}
-	obj.ManagedFields = []metav1.ManagedFieldsEntry{}
-	t.items[obj.Name] = obj
-	t.events <- WatchEvent[*TestType]{
-		Event:  watch.Modified,
-		Object: obj,
-	}
-	return obj, nil
-}
-
-func (t *mapStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
-	obj, found := t.items[name]
-	if !found {
-		return nil, apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
-	}
-	return obj, nil
-}
-
-func (t *mapStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
-	items := []TestType{}
-	for _, obj := range t.items {
-		items = append(items, *obj)
-	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Name > items[j].Name
-	})
-	list := &TestTypeList{
-		Items: items,
-	}
-	return list, nil
-}
-
-func (t *mapStore) Watch(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[*TestType], error) {
-	return t.events, nil
-}
-
-func (t *mapStore) Delete(ctx Context, name string, opts *metav1.DeleteOptions) error {
-	obj, found := t.items[name]
-	if !found {
-		return apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
-	}
-
-	delete(t.items, name)
-	t.events <- WatchEvent[*TestType]{
-		Event:  watch.Deleted,
-		Object: obj,
-	}
-	return nil
-}
-
 func TestStore(t *testing.T) {
 	scheme := runtime.NewScheme()
 	AddToScheme(scheme)
@@ -131,8 +52,10 @@ func TestStore(t *testing.T) {
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":0")
 	require.NoError(t, err)
 
-	store := newMapStore()
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	store := newDefaultTestStore(scheme)
+	store.items = make(map[string]*TestType)
+
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
@@ -301,46 +224,45 @@ func TestStore(t *testing.T) {
 	}
 }
 
-var _ Store[*TestTypeOther, *TestTypeOtherList] = (*testStoreOther)(nil)
-
-// This store is meant to be able to test many stores
-type testStoreOther struct {
-}
-
-func (t *testStoreOther) Create(ctx Context, obj *TestTypeOther, opts *metav1.CreateOptions) (*TestTypeOther, error) {
-	return &testTypeOtherFixture, nil
-}
-
-func (t *testStoreOther) Update(ctx Context, obj *TestTypeOther, opts *metav1.UpdateOptions) (*TestTypeOther, error) {
-	return &testTypeOtherFixture, nil
-}
-
-func (t *testStoreOther) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestTypeOther, error) {
-	return &testTypeOtherFixture, nil
-}
-
-func (t *testStoreOther) List(ctx Context, opts *metav1.ListOptions) (*TestTypeOtherList, error) {
-	return &testTypeOtherListFixture, nil
-}
-
-func (t *testStoreOther) Watch(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[*TestTypeOther], error) {
-	return nil, nil
-}
-
-func (t *testStoreOther) Delete(ctx Context, name string, opts *metav1.DeleteOptions) error {
-	return nil
-}
-
 // This store tests when there's only a subset of verbs supported
 type partialStorage struct {
-	*Delegate[*TestType, *TestTypeList]
+	gvk schema.GroupVersionKind
 }
 
-func (s *partialStorage) InjectDelegate(delegate *Delegate[*TestType, *TestTypeList]) {
-	s.Delegate = delegate
+// New implements [regrest.Storage]
+func (t *partialStorage) New() runtime.Object {
+	obj := &TestType{}
+	obj.GetObjectKind().SetGroupVersionKind(t.gvk)
+	return obj
+}
+
+// Destroy implements [regrest.Storage]
+func (t *partialStorage) Destroy() {
+}
+
+// GetSingularName implements [regrest.SingularNameProvider]
+func (t *partialStorage) GetSingularName() string {
+	return "testtype"
+}
+
+// NamespaceScoped implements [regrest.Scoper]
+func (t *partialStorage) NamespaceScoped() bool {
+	return false
+}
+
+// GroupVersionKind implements [regrest.GroupVersionKindProvider]
+func (t *partialStorage) GroupVersionKind(_ schema.GroupVersion) schema.GroupVersionKind {
+	return t.gvk
 }
 
 func (s *partialStorage) Create(ctx context.Context, obj runtime.Object, createValidation regrest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	if createValidation != nil {
+		err := createValidation(ctx, obj)
+		if err != nil {
+			return obj, err
+		}
+	}
+
 	return nil, nil
 }
 
@@ -374,29 +296,51 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":0")
 	require.NoError(t, err)
 
-	store := &testStore{}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	store := newDefaultTestStore(scheme)
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, func(s *ExtensionAPIServer) error {
-		store := &testStoreOther{}
-		err := InstallStore(s, &TestTypeOther{}, &TestTypeOtherList{}, "testtypeothers", "testtypeother", testTypeGV.WithKind("TestTypeOther"), store)
+		err = s.Install("testtypeothers", testTypeGV.WithKind("TestTypeOther"), &testStore[*TestTypeOther, *TestTypeOtherList]{
+			singular: "testtypeother",
+			objT:     &TestTypeOther{},
+			objListT: &TestTypeOtherList{},
+			gvk:      testTypeGV.WithKind("TestTypeOther"),
+			gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypes"},
+			scheme:   scheme,
+		})
 		if err != nil {
 			return err
 		}
 
-		err = InstallStore(s, &TestType{}, &TestTypeList{}, "testtypes", "testtype", differentVersion.WithKind("TestType"), &testStore{})
+		err = s.Install("testtypes", differentVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
+			singular: "testtype",
+			objT:     &TestType{},
+			objListT: &TestTypeList{},
+			gvk:      differentVersion.WithKind("TestType"),
+			gvr:      schema.GroupVersionResource{Group: differentVersion.Group, Version: differentVersion.Version, Resource: "testtypes"},
+			scheme:   scheme,
+		})
 		if err != nil {
 			return err
 		}
 
-		err = InstallStore(s, &TestType{}, &TestTypeList{}, "testtypes", "testtype", differentGroupVersion.WithKind("TestType"), &testStore{})
+		err = s.Install("testtypes", differentGroupVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
+			singular: "testtype",
+			objT:     &TestType{},
+			objListT: &TestTypeList{},
+			gvk:      differentGroupVersion.WithKind("TestType"),
+			gvr:      schema.GroupVersionResource{Group: differentGroupVersion.Group, Version: differentVersion.Version, Resource: "testtypes"},
+			scheme:   scheme,
+		})
 		if err != nil {
 			return err
 		}
 
-		err = Install(s, &TestType{}, &TestTypeList{}, "testtypes", "testtype", partialGroupVersion.WithKind("TestType"), &partialStorage{})
+		err = s.Install("testtypes", partialGroupVersion.WithKind("TestType"), &partialStorage{
+			gvk: partialGroupVersion.WithKind("TestType"),
+		})
 		if err != nil {
 			return err
 		}
@@ -727,24 +671,22 @@ func TestNoStore(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func setupExtensionAPIServer[
-	T runtime.Object,
-	TList runtime.Object,
-](
+func setupExtensionAPIServer(
 	t *testing.T,
 	scheme *runtime.Scheme,
-	objT T,
-	objTList TList,
-	store Store[T, TList],
+	store regrest.Storage,
 	optionSetter func(*ExtensionAPIServerOptions),
 	extensionAPIServerSetter func(*ExtensionAPIServer) error,
 ) (*ExtensionAPIServer, func(), error) {
 	fn := func(e *ExtensionAPIServer) error {
-		err := InstallStore(e, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+		err := e.Install("testtypes", testTypeGV.WithKind("TestType"), store)
 		if err != nil {
 			return fmt.Errorf("InstallStore: %w", err)
 		}
-		return extensionAPIServerSetter(e)
+		if extensionAPIServerSetter != nil {
+			return extensionAPIServerSetter(e)
+		}
+		return nil
 	}
 	return setupExtensionAPIServerNoStore(t, scheme, optionSetter, fn)
 }
@@ -845,30 +787,17 @@ func createRecordingWatcher(scheme *runtime.Scheme, gvr schema.GroupVersionResou
 
 // This store tests the printed columns functionality
 type customColumnsStore struct {
-	*Delegate[*TestType, *TestTypeList]
-	store *testStore
+	*testStore[*TestType, *TestTypeList]
 
 	lock      sync.Mutex
 	columns   []metav1.TableColumnDefinition
 	convertFn func(obj *TestType) []string
 }
 
-func (s *customColumnsStore) InjectDelegate(delegate *Delegate[*TestType, *TestTypeList]) {
-	s.Delegate = delegate
-}
-
-func (s *customColumnsStore) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	return s.Delegate.Get(ctx, name, options, s.store.Get)
-}
-
-func (s *customColumnsStore) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
-	return s.Delegate.List(ctx, options, s.store.List)
-}
-
 func (s *customColumnsStore) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.Delegate.ConvertToTable(ctx, object, tableOptions, s.columns, s.convertFn)
+	return ConvertToTable(ctx, object, tableOptions, s.testStore.gvr.GroupResource(), s.columns, s.convertFn)
 }
 
 func (s *customColumnsStore) Set(columns []metav1.TableColumnDefinition, convertFn func(obj *TestType) []string) {
@@ -889,7 +818,7 @@ func TestCustomColumns(t *testing.T) {
 	require.NoError(t, err)
 
 	store := &customColumnsStore{
-		store: &testStore{},
+		testStore: newDefaultTestStore(scheme),
 	}
 
 	extensionAPIServer, cleanup, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {
@@ -897,7 +826,7 @@ func TestCustomColumns(t *testing.T) {
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, func(s *ExtensionAPIServer) error {
-		err := Install(s, &TestType{}, &TestTypeList{}, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
+		err := s.Install("testtypes", testTypeGV.WithKind("TestType"), store)
 		if err != nil {
 			return err
 		}

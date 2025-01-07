@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -201,19 +200,11 @@ func (s *ExtensionAPIServer) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	s.handler.ServeHTTP(w, req)
 }
 
-func Install[T runtime.Object, TList runtime.Object](
-	s *ExtensionAPIServer,
-	t T,
-	tList TList,
-	resourceName string,
-	singularName string,
-	gvk schema.GroupVersionKind,
-	storage Storage[T, TList],
-) error {
-	if !meta.IsListType(tList) {
-		return fmt.Errorf("tList (%T) is not a list type", tList)
-	}
+func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
+	return s.authorizer
+}
 
+func (s *ExtensionAPIServer) Install(resourceName string, gvk schema.GroupVersionKind, storage rest.Storage) error {
 	apiGroup, ok := s.apiGroups[gvk.Group]
 	if !ok {
 		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
@@ -224,55 +215,9 @@ func Install[T runtime.Object, TList runtime.Object](
 		apiGroup.VersionedResourcesStorageMap[gvk.Version] = make(map[string]rest.Storage)
 	}
 
-	gvr := schema.GroupVersionResource{
-		Group:    gvk.Group,
-		Version:  gvk.Version,
-		Resource: resourceName,
-	}
-	delegate := &Delegate[T, TList]{
-		scheme: s.scheme,
-
-		t:            t,
-		tList:        tList,
-		singularName: singularName,
-		gvk:          gvk,
-		gvr:          gvr,
-		authorizer:   s.authorizer,
-	}
-	storage.InjectDelegate(delegate)
-
 	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = storage
 	s.apiGroups[gvk.Group] = apiGroup
 	return nil
-}
-
-// InstallStore installs a store on the given ExtensionAPIServer object.
-//
-// t and TList must be non-nil.
-//
-// Here's an example store for a Token and TokenList resource in the ext.cattle.io/v1 apiVersion:
-//
-//	gvk := schema.GroupVersionKind{
-//		Group: "ext.cattle.io",
-//		Version: "v1",
-//		Kind: "Token",
-//	}
-//	InstallStore(s, &Token{}, &TokenList{}, "tokens", "token", gvk, store)
-//
-// Note: Not using a method on ExtensionAPIServer object due to Go generic limitations.
-func InstallStore[T runtime.Object, TList runtime.Object](
-	s *ExtensionAPIServer,
-	t T,
-	tList TList,
-	resourceName string,
-	singularName string,
-	gvk schema.GroupVersionKind,
-	store Store[T, TList],
-) error {
-	storage := &StandardStorage[T, TList]{
-		store: store,
-	}
-	return Install(s, t, tList, resourceName, singularName, gvk, storage)
 }
 
 func getDefinitionName(scheme *runtime.Scheme, replacements map[string]string) func(string) (string, spec.Extensions) {
