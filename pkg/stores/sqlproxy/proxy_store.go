@@ -75,11 +75,11 @@ var (
 			{"spec", "containers", "image"},
 			{"spec", "nodeName"}},
 		gvkKey("", "v1", "Service"): {
-			{"spec", "targetPort"},
+			{"spec", "clusterIP"},
 			{"spec", "type"},
 		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
-			{"spec", "rules"},
+			{"spec", "rules", "host"},
 			{"spec", "ingressClassName"},
 		},
 		gvkKey("", "v1", "ConfigMap"): {
@@ -90,11 +90,10 @@ var (
 		},
 		gvkKey("", "v1", "PersistentVolumeClaim"): {
 			{"spec", "volumeName"}},
-		gvkKey("autoscaling", "v1", "HorizontalPodAutoscaler"): {
+		gvkKey("autoscaling", "v2", "HorizontalPodAutoscaler"): {
 			{"spec", "scaleTargetRef", "name"},
 			{"spec", "minReplicas"},
 			{"spec", "maxReplicas"},
-			{"spec", "currentReplicas"},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
 			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
