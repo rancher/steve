@@ -32,7 +32,7 @@ type authnTestStore struct {
 	userCh chan user.Info
 }
 
-func (t *authnTestStore) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+func (t *authnTestStore) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
 	userInfo, ok := request.UserFrom(ctx)
 	if !ok {
 		return nil, convertError(fmt.Errorf("missing user info"))

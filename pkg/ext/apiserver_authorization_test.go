@@ -48,7 +48,7 @@ func (t *authzTestStore) Get(ctx context.Context, name string, options *metav1.G
 }
 
 // List implements [rest.Lister]
-func (t *authzTestStore) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+func (t *authzTestStore) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
 	userInfo, ok := request.UserFrom(ctx)
 	if !ok {
 		return nil, convertError(fmt.Errorf("missing user info"))
@@ -75,18 +75,18 @@ func (t *authzTestStore) List(ctx context.Context, options *metainternalversion.
 	return &testTypeListFixture, nil
 }
 
-func (t *authzTestStore) get(ctx context.Context, name string, opts *metav1.GetOptions) (*TestType, error) {
+func (t *authzTestStore) get(_ context.Context, name string, _ *metav1.GetOptions) (*TestType, error) {
 	if name == "not-found" {
 		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), name)
 	}
 	return &testTypeFixture, nil
 }
 
-func (t *authzTestStore) create(ctx context.Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
+func (t *authzTestStore) create(_ context.Context, _ *TestType, _ *metav1.CreateOptions) (*TestType, error) {
 	return &testTypeFixture, nil
 }
 
-func (t *authzTestStore) update(ctx context.Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
+func (t *authzTestStore) update(_ context.Context, _ *TestType, _ *metav1.UpdateOptions) (*TestType, error) {
 	return &testTypeFixture, nil
 }
 
@@ -113,13 +113,13 @@ func (t *authzTestStore) Update(ctx context.Context, name string, objInfo rest.U
 	return CreateOrUpdate(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, t.get, t.create, t.update)
 }
 
-// Watch implements [rest.GracefulDeleter]
-func (t *authzTestStore) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+// Watch implements [rest.Watcher]
+func (t *authzTestStore) Watch(_ context.Context, _ *metainternalversion.ListOptions) (watch.Interface, error) {
 	return nil, nil
 }
 
 // Delete implements [rest.GracefulDeleter]
-func (t *authzTestStore) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+func (t *authzTestStore) Delete(_ context.Context, _ string, _ rest.ValidateObjectFunc, _ *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	return nil, false, nil
 }
 
