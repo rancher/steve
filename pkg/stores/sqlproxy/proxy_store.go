@@ -94,6 +94,7 @@ var (
 			{"spec", "scaleTargetRef", "name"},
 			{"spec", "minReplicas"},
 			{"spec", "maxReplicas"},
+			{"status", "currentReplicas"},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
 			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
