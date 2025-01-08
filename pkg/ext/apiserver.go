@@ -71,19 +71,19 @@ type ExtensionAPIServerOptions struct {
 //
 // Use [NewExtensionAPIServer] to create an ExtensionAPIServer.
 //
-// Use [InstallStore] to add a new resource store onto an existing ExtensionAPIServer.
+// Use [ExtensionAPIServer.Install] to add a new resource store onto an existing ExtensionAPIServer.
 // Each resources will then be reachable via /apis/<group>/<version>/<resource> as
 // defined by the Kubernetes API.
 //
-// When Run() is called, a separate HTTPS server is started. This server is meant
+// When [ExtensionAPIServer.Run] is called, a separate HTTPS server is started. This server is meant
 // for the main kube-apiserver to communicate with our extension API server. We
 // can expect the following requests from the main kube-apiserver:
 //
-// <path>                 <user>                 <groups>
-// /openapi/v2            system:aggregator      [system:authenticated]
-// /openapi/v3            system:aggregator      [system:authenticated]
-// /apis                  system:kube-aggregator [system:masters system:authenticated]
-// /apis/ext.cattle.io/v1 system:kube-aggregator [system:masters system:authenticated]
+//	<path>                 <user>                 <groups>
+//	/openapi/v2            system:aggregator      [system:authenticated]
+//	/openapi/v3            system:aggregator      [system:authenticated]
+//	/apis                  system:kube-aggregator [system:masters system:authenticated]
+//	/apis/ext.cattle.io/v1 system:kube-aggregator [system:masters system:authenticated]
 type ExtensionAPIServer struct {
 	codecs serializer.CodecFactory
 	scheme *runtime.Scheme
@@ -200,10 +200,39 @@ func (s *ExtensionAPIServer) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	s.handler.ServeHTTP(w, req)
 }
 
+// GetAuthorizer returns the authorizer used by the extension server to authorize
+// requests
+//
+// This can be used to inject the authorizer in stores that need them.
 func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
 	return s.authorizer
 }
 
+// Install adds a new store to the extension API server.
+//
+// A store implements handlers for the various operations (verbs) supported for
+// a defined GVK / GVR. For example, a store for a (apiVersion:
+// ext.cattle.io/v1, kind: Tokens) Custom Resource could implement create and
+// watch verbs.
+//
+// A store MUST implement the following interfaces: [rest.Storage], [rest.Scoper], [rest.GroupVersionKindProvider]
+// and [rest.SingularNameProvider].
+//
+// Implementing the various verbs goes as follows:
+//   - get: [rest.Getter] must be implemented
+//   - list: [rest.Lister] must be implemented. To help implement table conversion, we provide [ConvertToTable] and [ConvertToTableDefault].
+//   - watch: [rest.Watcher] must be implemented
+//   - create: [rest.Creater] must be implemented
+//   - update: [rest.Updater] must be implemented. To help implement this correctly with create-on-update support, we provide [CreateOrUpdate].
+//   - patch: [rest.Patcher] must be implemented, which is essentially [rest.Getter] and [rest.Updater]
+//   - delete: [rest.GracefulDeleter] must be implemented
+//   - deletecollection: [rest.CollectionDeleter] must be implemented
+//
+// For an example store implementing these, please look at the testStore type.
+//
+// Note that errors returned by any operations above MUST be of type [k8s.io/apimachinery/pkg/api/errors.APIStatus].
+// These can be created with [k8s.io/apimachinery/pkg/api/errors.NewNotFound], etc.
+// If an error of unknown type is returned, the library will log an error message.
 func (s *ExtensionAPIServer) Install(resourceName string, gvk schema.GroupVersionKind, storage rest.Storage) error {
 	apiGroup, ok := s.apiGroups[gvk.Group]
 	if !ok {

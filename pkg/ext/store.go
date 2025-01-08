@@ -18,7 +18,7 @@ import (
 // ConvertFunc will convert an object to a list of cell in a metav1.Table (think kubectl get table output)
 type ConvertFunc[T runtime.Object] func(obj T) []string
 
-// ConvertToTable helps implement [rest.Lister].
+// ConvertToTable helps implement [rest.Lister] and [rest.TableConvertor].
 //
 // It converts an object or a list of objects to a Table, which is used by kubectl
 // (and Rancher UI) to display a table of the items.
@@ -30,7 +30,7 @@ func ConvertToTable[T runtime.Object](ctx context.Context, object runtime.Object
 	return result, nil
 }
 
-// ConvertToTableDefault helps implement [rest.Lister].
+// ConvertToTableDefault helps implement [rest.Lister] and [rest.TableConvertor].
 //
 // This uses the default table conversion that displays the following two
 // columns: Name and Created At.
