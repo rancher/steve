@@ -125,41 +125,41 @@ func CreateOrUpdate[T runtime.Object](
 
 		obj, err := objInfo.UpdatedObject(ctx, nil)
 		if err != nil {
-			return nil, false, err
+			return nil, false, convertError(err)
 		}
 
 		if err = createValidation(ctx, obj); err != nil {
-			return nil, false, err
+			return nil, false, convertError(err)
 		}
 
 		tObj, ok := obj.(T)
 		if !ok {
 			var zeroT T
-			return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", obj, zeroT)
+			return nil, false, convertError(fmt.Errorf("object was of type %T, not of expected type %T", obj, zeroT))
 		}
 
 		newObj, err := createFn(ctx, tObj, &metav1.CreateOptions{})
 		if err != nil {
-			return nil, false, err
+			return nil, false, convertError(err)
 		}
-		return newObj, true, err
+		return newObj, true, nil
 	}
 
 	newObj, err := objInfo.UpdatedObject(ctx, oldObj)
 	if err != nil {
-		return nil, false, err
+		return nil, false, convertError(err)
 	}
 
 	newT, ok := newObj.(T)
 	if !ok {
 		var zeroT T
-		return nil, false, fmt.Errorf("object was of type %T, not of expected type %T", newObj, zeroT)
+		return nil, false, convertError(fmt.Errorf("object was of type %T, not of expected type %T", newObj, zeroT))
 	}
 
 	if updateValidation != nil {
 		err = updateValidation(ctx, newT, oldObj)
 		if err != nil {
-			return nil, false, err
+			return nil, false, convertError(err)
 		}
 	}
 
