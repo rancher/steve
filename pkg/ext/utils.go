@@ -209,11 +209,10 @@ type WatchEvent[T runtime.Object] struct {
 
 func doWatch[T runtime.Object](
 	ctx context.Context,
-	scheme *runtime.Scheme,
 	internaloptions *metainternalversion.ListOptions,
 	watchFn func(context.Context, *metav1.ListOptions) (chan WatchEvent[T], error),
 ) (watch.Interface, error) {
-	options, err := convertListOptions(internaloptions, scheme)
+	options, err := ConvertListOptions(internaloptions)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +246,16 @@ func doWatch[T runtime.Object](
 	return w, nil
 }
 
-func convertListOptions(options *metainternalversion.ListOptions, scheme *runtime.Scheme) (*metav1.ListOptions, error) {
+// ConvertListOptions converts an internal ListOptions to one used by client-go.
+//
+// This can be useful if wrapping Watch or List methods to client-go's equivalent.
+func ConvertListOptions(options *metainternalversion.ListOptions) (*metav1.ListOptions, error) {
+	scheme := sync.OnceValue(func() *runtime.Scheme {
+		scheme := runtime.NewScheme()
+		metainternalversion.AddToScheme(scheme)
+		return scheme
+	})()
+
 	var out metav1.ListOptions
 	err := scheme.Convert(options, &out, nil)
 	if err != nil {

@@ -221,7 +221,8 @@ func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
 // Implementing the various verbs goes as follows:
 //   - get: [rest.Getter] must be implemented
 //   - list: [rest.Lister] must be implemented. To help implement table conversion, we provide [ConvertToTable] and [ConvertToTableDefault].
-//   - watch: [rest.Watcher] must be implemented
+//     Use [ConvertListOptions] to convert the [metainternalversion.ListOptions] to a [metav1.ListOptions].
+//   - watch: [rest.Watcher] must be implemented. Use [ConvertListOptions] to convert the [metainternalversion.ListOptions] to a [metav1.ListOptions].
 //   - create: [rest.Creater] must be implemented
 //   - update: [rest.Updater] must be implemented. To help implement this correctly with create-on-update support, we provide [CreateOrUpdate].
 //   - patch: [rest.Patcher] must be implemented, which is essentially [rest.Getter] and [rest.Updater]

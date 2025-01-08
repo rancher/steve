@@ -61,7 +61,7 @@ func TestAuthenticationCustom(t *testing.T) {
 	require.NoError(t, err)
 
 	store := &authnTestStore{
-		testStore: newDefaultTestStore(scheme),
+		testStore: newDefaultTestStore(),
 		userCh:    make(chan user.Info, 100),
 	}
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {

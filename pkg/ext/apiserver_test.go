@@ -52,7 +52,7 @@ func TestStore(t *testing.T) {
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":0")
 	require.NoError(t, err)
 
-	store := newDefaultTestStore(scheme)
+	store := newDefaultTestStore()
 	store.items = make(map[string]*TestType)
 
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
@@ -296,7 +296,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":0")
 	require.NoError(t, err)
 
-	store := newDefaultTestStore(scheme)
+	store := newDefaultTestStore()
 	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
@@ -308,7 +308,6 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			objListT: &TestTypeOtherList{},
 			gvk:      testTypeGV.WithKind("TestTypeOther"),
 			gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypes"},
-			scheme:   scheme,
 		})
 		if err != nil {
 			return err
@@ -320,7 +319,6 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			objListT: &TestTypeList{},
 			gvk:      differentVersion.WithKind("TestType"),
 			gvr:      schema.GroupVersionResource{Group: differentVersion.Group, Version: differentVersion.Version, Resource: "testtypes"},
-			scheme:   scheme,
 		})
 		if err != nil {
 			return err
@@ -332,7 +330,6 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			objListT: &TestTypeList{},
 			gvk:      differentGroupVersion.WithKind("TestType"),
 			gvr:      schema.GroupVersionResource{Group: differentGroupVersion.Group, Version: differentVersion.Version, Resource: "testtypes"},
-			scheme:   scheme,
 		})
 		if err != nil {
 			return err
@@ -818,7 +815,7 @@ func TestCustomColumns(t *testing.T) {
 	require.NoError(t, err)
 
 	store := &customColumnsStore{
-		testStore: newDefaultTestStore(scheme),
+		testStore: newDefaultTestStore(),
 	}
 
 	extensionAPIServer, cleanup, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {

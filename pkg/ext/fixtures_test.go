@@ -183,21 +183,19 @@ type testStore[T runtime.Object, TList runtime.Object] struct {
 	objListT TList
 	gvk      schema.GroupVersionKind
 	gvr      schema.GroupVersionResource
-	scheme   *runtime.Scheme
 
 	lock   sync.Mutex
 	items  map[string]*TestType
 	events chan WatchEvent[*TestType]
 }
 
-func newDefaultTestStore(scheme *runtime.Scheme) *testStore[*TestType, *TestTypeList] {
+func newDefaultTestStore() *testStore[*TestType, *TestTypeList] {
 	return &testStore[*TestType, *TestTypeList]{
 		singular: "testtype",
 		objT:     &TestType{},
 		objListT: &TestTypeList{},
 		gvk:      testTypeGV.WithKind("TestType"),
 		gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypes"},
-		scheme:   scheme,
 		items: map[string]*TestType{
 			testTypeFixture.Name: &testTypeFixture,
 		},
@@ -332,7 +330,7 @@ func (t *testStore[T, TList]) ConvertToTable(ctx context.Context, object runtime
 
 // Watch implements [rest.Watcher]
 func (t *testStore[T, TList]) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
-	return doWatch(ctx, t.scheme, options, func(context.Context, *metav1.ListOptions) (chan WatchEvent[*TestType], error) {
+	return doWatch(ctx, options, func(context.Context, *metav1.ListOptions) (chan WatchEvent[*TestType], error) {
 		return t.events, nil
 	})
 }

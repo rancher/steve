@@ -159,7 +159,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		})
 	}, func(s *ExtensionAPIServer) error {
 		store := &authzTestStore{
-			testStore:  newDefaultTestStore(scheme),
+			testStore:  newDefaultTestStore(),
 			authorizer: s.GetAuthorizer(),
 		}
 		err := s.Install("testtypes", testTypeGV.WithKind("TestType"), store)
