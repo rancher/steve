@@ -267,7 +267,7 @@ func (t *testStore[T, TList]) Update(ctx context.Context, name string, objInfo r
 	return CreateOrUpdate(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, t.get, t.create, t.update)
 }
 
-func (t *testStore[T, TList]) get(ctx context.Context, name string, opts *metav1.GetOptions) (*TestType, error) {
+func (t *testStore[T, TList]) get(_ context.Context, name string, _ *metav1.GetOptions) (*TestType, error) {
 	obj, found := t.items[name]
 	if !found {
 		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), name)
@@ -275,7 +275,7 @@ func (t *testStore[T, TList]) get(ctx context.Context, name string, opts *metav1
 	return obj, nil
 }
 
-func (t *testStore[T, TList]) create(ctx context.Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
+func (t *testStore[T, TList]) create(_ context.Context, obj *TestType, _ *metav1.CreateOptions) (*TestType, error) {
 	if _, found := t.items[obj.Name]; found {
 		return nil, apierrors.NewAlreadyExists(t.gvr.GroupResource(), obj.Name)
 	}
@@ -287,7 +287,7 @@ func (t *testStore[T, TList]) create(ctx context.Context, obj *TestType, opts *m
 	return obj, nil
 }
 
-func (t *testStore[T, TList]) update(ctx context.Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
+func (t *testStore[T, TList]) update(_ context.Context, obj *TestType, _ *metav1.UpdateOptions) (*TestType, error) {
 	if _, found := t.items[obj.Name]; !found {
 		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), obj.Name)
 	}

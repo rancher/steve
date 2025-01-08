@@ -15,15 +15,13 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 )
 
-// ConvertFunc will convert a object to a list of cell in a metav1.Table (think kubectl get table output)
+// ConvertFunc will convert an object to a list of cell in a metav1.Table (think kubectl get table output)
 type ConvertFunc[T runtime.Object] func(obj T) []string
 
-// ConvertToTable implements [rest.Lister]
+// ConvertToTable helps implement [rest.Lister].
 //
-// It converts an object or a list of objects to a table, which is used by kubectl
+// It converts an object or a list of objects to a Table, which is used by kubectl
 // (and Rancher UI) to display a table of the items.
-//
-// Currently, we use the default table convertor which will show two columns: Name and Created At.
 func ConvertToTable[T runtime.Object](ctx context.Context, object runtime.Object, tableOptions runtime.Object, groupResource schema.GroupResource, columnDefs []metav1.TableColumnDefinition, convertFn ConvertFunc[T]) (*metav1.Table, error) {
 	result, err := convertToTable(ctx, object, tableOptions, groupResource, columnDefs, convertFn)
 	if err != nil {
@@ -32,6 +30,10 @@ func ConvertToTable[T runtime.Object](ctx context.Context, object runtime.Object
 	return result, nil
 }
 
+// ConvertToTableDefault helps implement [rest.Lister].
+//
+// This uses the default table conversion that displays the following two
+// columns: Name and Created At.
 func ConvertToTableDefault[T runtime.Object](ctx context.Context, object runtime.Object, tableOptions runtime.Object, groupResource schema.GroupResource) (*metav1.Table, error) {
 	return ConvertToTable[T](ctx, object, tableOptions, groupResource, nil, nil)
 }
@@ -84,7 +86,7 @@ func convertToTable[T runtime.Object](ctx context.Context, object runtime.Object
 }
 
 func cellStringToCellAny(cells []string) []any {
-	res := []any{}
+	var res []any
 	for _, cell := range cells {
 		res = append(res, cell)
 	}
@@ -93,14 +95,17 @@ func cellStringToCellAny(cells []string) []any {
 
 // CreateOrUpdate helps implement [rest.Updater] by handling most of the logic.
 //
-// createValidation is used to do some validation on the object before creating
-// it in the store. For example, it will do an authorization check for "create"
-// verb if the object needs to be created.
-// See here for details: https://github.com/kubernetes/apiserver/blob/70ed6fdbea9eb37bd1d7558e90c20cfe888955e8/pkg/endpoints/handlers/update.go#L190-L201
-// Another example is running mutating/validating webhooks, though we're not using these yet.
+// It will call getFn to find the object. If not found, then createFn will
+// be called, which should create the object. Otherwise, the updateFn will be called,
+// which should update the object.
 //
-// updateValidation is used to do some validation on the object before updating it in the store.
-// One example is running mutating/validating webhooks, though we're not using these yet.
+// createValidation is called before createFn. It will do validation such as:
+//   - verifying that the user is allowed to by checking for the "create" verb.
+//     See here for details: https://github.com/kubernetes/apiserver/blob/70ed6fdbea9eb37bd1d7558e90c20cfe888955e8/pkg/endpoints/handlers/update.go#L190-L201
+//   - running mutating/validating webhooks (though we're not using them yet)
+//
+// updateValidation is called before updateFn. It will do validation such as:
+// - running mutating/validating webhooks (though we're not using them yet)
 func CreateOrUpdate[T runtime.Object](
 	ctx context.Context,
 	name string,

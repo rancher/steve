@@ -48,9 +48,7 @@ func TestConvertError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := convertError(tt.input)
-			assert.Equal(t, tt.output, output)
+			assert.Equal(t, tt.output, convertError(tt.input))
 		})
 	}
-
 }
