@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 )
 
@@ -172,80 +171,6 @@ func CreateOrUpdate[T runtime.Object](
 	return newT, false, nil
 }
 
-type watcher struct {
-	closedLock sync.RWMutex
-	closed     bool
-	ch         chan watch.Event
-}
-
-func (w *watcher) Stop() {
-	w.closedLock.Lock()
-	defer w.closedLock.Unlock()
-	if !w.closed {
-		close(w.ch)
-		w.closed = true
-	}
-}
-
-func (w *watcher) addEvent(event watch.Event) bool {
-	w.closedLock.RLock()
-	defer w.closedLock.RUnlock()
-	if w.closed {
-		return false
-	}
-
-	w.ch <- event
-	return true
-}
-
-func (w *watcher) ResultChan() <-chan watch.Event {
-	return w.ch
-}
-
-type WatchEvent[T runtime.Object] struct {
-	Event  watch.EventType
-	Object T
-}
-
-func doWatch[T runtime.Object](
-	ctx context.Context,
-	internaloptions *metainternalversion.ListOptions,
-	watchFn func(context.Context, *metav1.ListOptions) (chan WatchEvent[T], error),
-) (watch.Interface, error) {
-	options, err := ConvertListOptions(internaloptions)
-	if err != nil {
-		return nil, err
-	}
-
-	w := &watcher{
-		ch: make(chan watch.Event),
-	}
-	go func() {
-		// Not much point continuing the watch if the store stopped its watch.
-		// Double stopping here is fine.
-		defer w.Stop()
-
-		// Closing eventCh is the responsibility of the store.Watch method
-		// to avoid the store panicking while trying to send to a close channel
-		eventCh, err := watchFn(ctx, options)
-		if err != nil {
-			return
-		}
-
-		for event := range eventCh {
-			added := w.addEvent(watch.Event{
-				Type:   event.Event,
-				Object: event.Object,
-			})
-			if !added {
-				break
-			}
-		}
-	}()
-
-	return w, nil
-}
-
 // ConvertListOptions converts an internal ListOptions to one used by client-go.
 //
 // This can be useful if wrapping Watch or List methods to client-go's equivalent.
@@ -259,7 +184,7 @@ func ConvertListOptions(options *metainternalversion.ListOptions) (*metav1.ListO
 	var out metav1.ListOptions
 	err := scheme.Convert(options, &out, nil)
 	if err != nil {
-		return nil, fmt.Errorf("convert list options: %w", err)
+		return nil, fmt.Errorf("converting list options: %w", err)
 	}
 
 	return &out, nil
