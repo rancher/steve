@@ -234,6 +234,8 @@ func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
 // Note that errors returned by any operations above MUST be of type [k8s.io/apimachinery/pkg/api/errors.APIStatus].
 // These can be created with [k8s.io/apimachinery/pkg/api/errors.NewNotFound], etc.
 // If an error of unknown type is returned, the library will log an error message.
+//
+//nolint:misspell
 func (s *ExtensionAPIServer) Install(resourceName string, gvk schema.GroupVersionKind, storage rest.Storage) error {
 	apiGroup, ok := s.apiGroups[gvk.Group]
 	if !ok {
