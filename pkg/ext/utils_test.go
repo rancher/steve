@@ -7,8 +7,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestConvertListOptions(t *testing.T) {
+	internal := &metainternalversion.ListOptions{
+		ResourceVersion: "foo",
+		Watch:           true,
+	}
+	expected := &metav1.ListOptions{
+		ResourceVersion: "foo",
+		Watch:           true,
+	}
+	got, err := ConvertListOptions(internal)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, got)
+}
 
 func TestConvertError(t *testing.T) {
 	tests := []struct {
