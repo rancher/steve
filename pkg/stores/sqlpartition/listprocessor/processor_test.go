@@ -342,7 +342,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given, primary field" +
+		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
 			" sort option should be set",
 		req: &types.APIRequest{
 			Request: &http.Request{
@@ -353,7 +353,8 @@ func TestParseQuery(t *testing.T) {
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
 				Fields: [][]string{
-					{"metadata", "name"},
+					{"metadata", "name"}},
+				Orders: []informer.SortOrder{informer.ASC},
 				},
 				Orders: []informer.SortOrder{
 					informer.ASC,
