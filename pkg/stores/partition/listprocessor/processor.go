@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -191,7 +192,7 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 	sortOpts := Sort{}
 	sortKeys := q.Get(sortParam)
 	if sortKeys != "" {
-		sortParts := strings.SplitN(sortKeys, ",", 2)
+		sortParts := strings.Split(sortKeys, ",")
 		for _, field := range sortParts {
 			sortOrder := ASC
 			if len(field) > 0 {
@@ -206,8 +207,7 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 				// we *DON'T sort
 				break
 			}
-			//TODO: Handle metadata.labels[SUBFIELD]
-			sortOpts.Fields = append(sortOpts.Fields, strings.Split(field, "."))
+			sortOpts.Fields = append(sortOpts.Fields, queryhelper.SafeSplit(field))
 			sortOpts.Orders = append(sortOpts.Orders, sortOrder)
 		}
 	}

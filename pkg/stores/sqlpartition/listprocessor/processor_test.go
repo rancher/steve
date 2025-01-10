@@ -421,6 +421,32 @@ func TestParseQuery(t *testing.T) {
 			return nil
 		},
 	})
+
+	tests = append(tests, testCase{
+		description: "sorting can parse bracketed field names correctly",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=-metadata.labels[beef.cattle.io/snort],metadata.labels.steer,metadata.labels[bossie.cattle.io/moo],spec.something"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Sort: informer.Sort{
+				Fields: [][]string{{"metadata", "labels", "beef.cattle.io/snort"},
+					{"metadata", "labels", "steer"},
+					{"metadata", "labels", "bossie.cattle.io/moo"},
+					{"spec", "something"}},
+				Orders: []informer.SortOrder{informer.DESC, informer.ASC, informer.ASC, informer.ASC},
+			},
+			Filters: make([]informer.OrFilter, 0),
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+		setupNSCache: func() Cache {
+			return nil
+		},
+	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If continue params is given, resume" +
 			" should be set with assigned value.",
@@ -523,6 +549,9 @@ func TestParseQuery(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			test.nsc = test.setupNSCache()
+			if test.description == "sorting can parse bracketed field names correctly" {
+				fmt.Printf("stop here")
+			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
 				assert.NotNil(t, err)

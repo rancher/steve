@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -88,7 +89,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	sortOpts := informer.Sort{}
 	sortKeys := q.Get(sortParam)
 	if sortKeys != "" {
-		sortParts := strings.SplitN(sortKeys, ",", 2)
+		sortParts := strings.Split(sortKeys, ",")
 		for _, sortPart := range sortParts {
 			field := sortPart
 			if len(field) > 0 {
@@ -98,7 +99,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 					field = field[1:]
 				}
 				if len(field) > 0 {
-					sortOpts.Fields = append(sortOpts.Fields, strings.Split(field, "."))
+					sortOpts.Fields = append(sortOpts.Fields, queryhelper.SafeSplit(field))
 					sortOpts.Orders = append(sortOpts.Orders, sortOrder)
 				}
 			}
