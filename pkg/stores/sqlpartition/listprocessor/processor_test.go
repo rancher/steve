@@ -342,7 +342,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given, primary field" +
+		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
 			" sort option should be set",
 		req: &types.APIRequest{
 			Request: &http.Request{
@@ -352,7 +352,8 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField: []string{"metadata", "name"},
+				Fields: [][]string{{"metadata", "name"}},
+				Orders: []informer.SortOrder{informer.ASC},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -374,8 +375,8 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField: []string{"metadata", "name"},
-				PrimaryOrder: informer.DESC,
+				Fields: [][]string{{"metadata", "name"}},
+				Orders: []informer.SortOrder{informer.DESC},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -397,10 +398,8 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField:   []string{"metadata", "name"},
-				PrimaryOrder:   informer.DESC,
-				SecondaryField: []string{"spec", "something"},
-				SecondaryOrder: informer.ASC,
+				Fields: [][]string{{"metadata", "name"}, {"spec", "something"}},
+				Orders: []informer.SortOrder{informer.DESC, informer.ASC},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{

@@ -1787,7 +1787,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField: []string{"metadata", "name"},
+				Fields: [][]string{{"metadata", "name"}},
+				Orders: []SortOrder{ASC},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -1863,8 +1864,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField: []string{"metadata", "name"},
-				primaryOrder: DESC,
+				Fields: [][]string{{"metadata", "name"}},
+				Orders: []SortOrder{DESC},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -1940,7 +1941,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField: []string{"data", "productType"},
+				Fields: [][]string{{"data", "productType"}},
+				Orders: []SortOrder{ASC},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -2090,8 +2092,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField:   []string{"data", "color"},
-				secondaryField: []string{"metadata", "name"},
+				Fields: [][]string{{"data", "color"}, {"metadata", "name"}},
+				Orders: []SortOrder{ASC, ASC},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -2130,7 +2132,7 @@ func TestSortList(t *testing.T) {
 			},
 		},
 		{
-			name: "primary sort ascending, secondary sort descending",
+			name: "1st sort ascending, 2nd sort descending",
 			objects: []unstructured.Unstructured{
 				{
 					Object: map[string]interface{}{
@@ -2167,9 +2169,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField:   []string{"data", "color"},
-				secondaryField: []string{"metadata", "name"},
-				secondaryOrder: DESC,
+				Fields: [][]string{{"data", "color"}, {"metadata", "name"}},
+				Orders: []SortOrder{ASC, DESC},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -2245,9 +2246,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField:   []string{"data", "color"},
-				primaryOrder:   DESC,
-				secondaryField: []string{"metadata", "name"},
+				Fields: [][]string{{"data", "color"}, {"metadata", "name"}},
+				Orders: []SortOrder{DESC, ASC},
 			},
 			want: []unstructured.Unstructured{
 				{
@@ -2323,10 +2323,8 @@ func TestSortList(t *testing.T) {
 				},
 			},
 			sort: Sort{
-				primaryField:   []string{"data", "color"},
-				primaryOrder:   DESC,
-				secondaryField: []string{"metadata", "name"},
-				secondaryOrder: DESC,
+				Fields: [][]string{{"data", "color"}, {"metadata", "name"}},
+				Orders: []SortOrder{DESC, DESC},
 			},
 			want: []unstructured.Unstructured{
 				{
