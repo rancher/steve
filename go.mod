@@ -10,7 +10,7 @@ toolchain go1.22.7
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.17.8
 	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.16.0
-	github.com/prometheus/client_model => github.com/prometheus/client_model v0.4.0
+	github.com/prometheus/client_model => github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common => github.com/prometheus/common v0.44.0
 	k8s.io/api => k8s.io/api v0.30.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.30.1
