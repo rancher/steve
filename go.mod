@@ -8,7 +8,7 @@ toolchain go1.22.7
 // Rancher 2.9 is compiled against as newer lasso versions
 // pull in newer Kubernetes dependencies
 replace (
-	github.com/google/cel-go => github.com/google/cel-go v0.17.8
+	github.com/google/cel-go => github.com/google/cel-go v0.22.1
 	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model => github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common => github.com/prometheus/common v0.44.0
