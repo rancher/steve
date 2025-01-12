@@ -40,7 +40,7 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.30.1
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.1
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.30.1
-	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.18.5
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.19.4
 )
 
 replace (
