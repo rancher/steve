@@ -191,22 +191,22 @@ func TestTransformChain(t *testing.T) {
 						"displayName": "boris",
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
@@ -229,24 +229,25 @@ func TestTransformChain(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "boris",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
@@ -273,22 +274,22 @@ func TestTransformChain(t *testing.T) {
 						"displayName": "natasha",
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "Ready",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
@@ -311,24 +312,25 @@ func TestTransformChain(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "natasha",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "Ready",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",

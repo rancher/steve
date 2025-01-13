@@ -28,22 +28,22 @@ func TestTransformManagedCluster(t *testing.T) {
 						"displayName": "boris",
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
@@ -63,24 +63,25 @@ func TestTransformManagedCluster(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "boris",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:52:16Z",
 								"status":         "True",
@@ -106,15 +107,15 @@ func TestTransformManagedCluster(t *testing.T) {
 						"displayName": "local",
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
 								"status":         "True",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
@@ -122,7 +123,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "",
 								"status":         "True",
@@ -142,10 +143,11 @@ func TestTransformManagedCluster(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "local",
+						"internal":    true,
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
@@ -153,7 +155,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
@@ -161,7 +163,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "",
 								"status":         "True",
@@ -187,8 +189,8 @@ func TestTransformManagedCluster(t *testing.T) {
 						"displayName": "c-m-natasha",
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
+						"conditions": []interface{}{
+							map[string]interface{}{
 
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
@@ -196,7 +198,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
@@ -204,7 +206,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "",
 								"status":         "True",
@@ -224,18 +226,18 @@ func TestTransformManagedCluster(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "c-m-natasha",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
-						"conditions": []map[string]interface{}{
-							{
-
+						"conditions": []interface{}{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
 								"status":         "Ready",
 								"transitioning":  false,
 								"type":           "BackingNamespaceCreated",
 							},
-							{
+							map[string]interface{}{
 
 								"error":          false,
 								"lastUpdateTime": "2025-01-10T22:41:37Z",
@@ -243,7 +245,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"transitioning":  false,
 								"type":           "DefaultProjectCreated",
 							},
-							{
+							map[string]interface{}{
 								"error":          false,
 								"lastUpdateTime": "",
 								"status":         "True",

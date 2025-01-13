@@ -3,6 +3,7 @@ package clusters
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -20,12 +21,26 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 		return obj, fmt.Errorf("failed to find status.conditions block in cluster %s", obj.GetName())
 	}
 	connectedStatus := false
-	for _, condition := range conditions.([]map[string]interface{}) {
-		if condition["type"] == "Ready" {
+	conditionsAsArray, ok := conditions.([]interface{})
+	if !ok {
+		return obj, fmt.Errorf("failed to parse status.conditions as array")
+	}
+	for i, condition := range conditionsAsArray {
+		conditionMap, ok := condition.(map[string]interface{})
+		if !ok {
+			logrus.Errorf("Failed to process condition %v (%d) as a map", condition, i)
+			return obj, fmt.Errorf("failed to parse a condition as a map")
+		}
+		if conditionMap["type"] == "Ready" {
 			connectedStatus = true
 			break
 		}
 	}
 	err = unstructured.SetNestedField(obj.Object, connectedStatus, "status", "connected")
+	if err != nil {
+		return obj, err
+	}
+	name := obj.GetName()
+	err = unstructured.SetNestedField(obj.Object, name == "local", "spec", "internal")
 	return obj, err
 }
