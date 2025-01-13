@@ -18,7 +18,7 @@ func TestTransformManagedCluster(t *testing.T) {
 		{
 			name: "a non-ready cluster",
 			input: &unstructured.Unstructured{
-				Object: map[string]interface{} {
+				Object: map[string]interface{}{
 					"id":   1,
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
@@ -88,7 +88,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"type":           "SystemProjectCreated",
 							},
 						},
-						"ready": false,
+						"connected": false,
 					},
 				},
 			},
@@ -169,7 +169,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"type":           "Ready",
 							},
 						},
-						"ready": true,
+						"connected": true,
 					},
 				},
 			},
@@ -251,7 +251,7 @@ func TestTransformManagedCluster(t *testing.T) {
 								"type":           "Ready",
 							},
 						},
-						"ready": true,
+						"connected": true,
 					},
 				},
 			},

@@ -4,6 +4,7 @@ package virtual
 
 import (
 	"fmt"
+
 	"github.com/rancher/steve/pkg/resources/virtual/clusters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
