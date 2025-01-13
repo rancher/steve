@@ -31,7 +31,7 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 			logrus.Errorf("Failed to process condition %v (%d) as a map", condition, i)
 			return obj, fmt.Errorf("failed to parse a condition as a map")
 		}
-		if conditionMap["type"] == "Ready" {
+		if conditionMap["type"] == "Ready" && conditionMap["status"] == "True" {
 			connectedStatus = true
 			break
 		}
