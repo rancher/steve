@@ -187,9 +187,9 @@ The list can be negated to exclude results:
 
 #### `sort`
 
-Results can be sorted lexicographically by primary and secondary columns.
+Results can be sorted lexicographically by any number of columns given in descending order of importance.
 
-Sorting by only a primary column, for example name:
+Sorting by only a single column, for example name:
 
 ```
 /v1/{type}?sort=metadata.name
@@ -201,24 +201,24 @@ Reverse sorting by name:
 /v1/{type}?sort=-metadata.name
 ```
 
-The secondary sort criteria is comma separated.
+Multiple sort criteria are comma separated.
 
-Example, sorting by name and creation time in ascending order:
+Example, sorting first by name and then by creation time in ascending order:
 
 ```
 /v1/{type}?sort=metadata.name,metadata.creationTimestamp
 ```
 
-Reverse sort by name, normal sort by creation time:
+Reverse sort by name, then normal sort by creation time:
 
 ```
 /v1/{type}?sort=-metadata.name,metadata.creationTimestamp
 ```
 
-Normal sort by name, reverse sort by creation time:
+Normal sort by namespace, then by name, reverse sort by creation time:
 
 ```
-/v1/{type}?sort=metadata.name,-metadata.creationTimestamp
+/v1/{type}?sort=metadata.namespace,metadata.name,-metadata.creationTimestamp
 ```
 
 **If SQLite caching is enabled** (`server.Options.SQLCache=true`),
