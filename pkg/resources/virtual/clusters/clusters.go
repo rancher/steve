@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -18,13 +19,13 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 	if !ok {
 		return obj, fmt.Errorf("failed to find status.conditions block in cluster %s", obj.GetName())
 	}
-	readyStatus := false
+	connectedStatus := false
 	for _, condition := range conditions.([]map[string]interface{}) {
 		if condition["type"] == "Ready" {
-			readyStatus = true
+			connectedStatus = true
 			break
 		}
 	}
-	err = unstructured.SetNestedField(obj.Object, readyStatus, "status", "ready")
+	err = unstructured.SetNestedField(obj.Object, connectedStatus, "status", "connected")
 	return obj, err
 }
