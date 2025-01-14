@@ -127,6 +127,7 @@ var (
 			{"metadata", "labels[provider.cattle.io]"},
 			{"spec", "internal"},
 			{"spec", "displayName"},
+			{"status", "connected"},
 			{"status", "provider"},
 		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
