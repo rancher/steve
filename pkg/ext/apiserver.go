@@ -229,7 +229,13 @@ func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
 //   - delete: [rest.GracefulDeleter] must be implemented
 //   - deletecollection: [rest.CollectionDeleter] must be implemented
 //
-// For an example store implementing these, please look at the testStore type.
+// Most of these methods have a [context.Context] parameter that can be used to get more information
+// about the request. Here are some examples:
+//   - [request.UserFrom] to get the user info
+//   - [request.NamespaceFrom] to get the namespace (if applicable)
+//
+// For an example store implementing these, please look at the testStore type with the caveat that it is a dummy test-special purpose
+// store.
 //
 // Note that errors returned by any operations above MUST be of type [k8s.io/apimachinery/pkg/api/errors.APIStatus].
 // These can be created with [k8s.io/apimachinery/pkg/api/errors.NewNotFound], etc.
