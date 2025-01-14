@@ -252,7 +252,7 @@ func (t *testStore[T, TList]) Create(ctx context.Context, obj runtime.Object, cr
 	objT, ok := obj.(*TestType)
 	if !ok {
 		var zeroT T
-		return nil, fmt.Errorf("expected %T but got %T", zeroT, obj)
+		return nil, convertError(fmt.Errorf("expected %T but got %T", zeroT, obj))
 	}
 
 	return t.create(ctx, objT, options)

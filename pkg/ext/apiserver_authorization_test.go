@@ -102,7 +102,7 @@ func (t *authzTestStore) Create(ctx context.Context, obj runtime.Object, createV
 	objT, ok := obj.(*TestType)
 	if !ok {
 		var zeroT *TestType
-		return nil, fmt.Errorf("expected %T but got %T", zeroT, obj)
+		return nil, convertError(fmt.Errorf("expected %T but got %T", zeroT, obj))
 	}
 
 	return t.create(ctx, objT, options)
