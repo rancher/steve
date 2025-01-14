@@ -65,6 +65,7 @@ var (
 		gvkKey("", "v1", "Event"): {
 			{"_type"},
 			{"involvedObject", "kind"},
+			{"involvedObject", "uid"},
 			{"message"},
 			{"reason"},
 		},
