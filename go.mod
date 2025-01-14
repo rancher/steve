@@ -1,8 +1,8 @@
 module github.com/rancher/steve
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.22.7
+toolchain go1.23.4
 
 // pin Kubernetes dependencies to v0.30.1, which is the version
 // Rancher 2.9 is compiled against as newer lasso versions
