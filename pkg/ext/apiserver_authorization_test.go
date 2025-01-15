@@ -92,7 +92,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	store := &authzTestStore{
 		testStore: &testStore{},
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authz
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -106,7 +106,6 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 		})
 	}, nil)
 	require.NoError(t, err)
-	defer cleanup()
 
 	rbacBytes, err := os.ReadFile(filepath.Join("testdata", "rbac.yaml"))
 	require.NoError(t, err)

@@ -129,13 +129,12 @@ func TestStore(t *testing.T) {
 	require.NoError(t, err)
 
 	store := newMapStore()
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, nil)
 	require.NoError(t, err)
-	defer cleanup()
 
 	ts := httptest.NewServer(extensionAPIServer)
 	defer ts.Close()
@@ -352,7 +351,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 	require.NoError(t, err)
 
 	store := &testStore{}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
@@ -375,7 +374,6 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	defer cleanup()
 
 	tests := []struct {
 		path               string
@@ -675,7 +673,7 @@ func setupExtensionAPIServer[
 	store Store[T, TList],
 	optionSetter func(*ExtensionAPIServerOptions),
 	extensionAPIServerSetter func(*ExtensionAPIServer) error,
-) (*ExtensionAPIServer, func(), error) {
+) (*ExtensionAPIServer, error) {
 
 	addToSchemeTest(scheme)
 	codecs := serializer.NewCodecFactory(scheme)
@@ -691,18 +689,18 @@ func setupExtensionAPIServer[
 	}
 	extensionAPIServer, err := NewExtensionAPIServer(scheme, codecs, opts)
 	if err != nil {
-		return nil, func() {}, err
+		return nil, err
 	}
 
 	err = InstallStore(extensionAPIServer, objT, objTList, "testtypes", "testtype", testTypeGV.WithKind("TestType"), store)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("InstallStore: %w", err)
+		return nil, fmt.Errorf("InstallStore: %w", err)
 	}
 
 	if extensionAPIServerSetter != nil {
 		err = extensionAPIServerSetter(extensionAPIServer)
 		if err != nil {
-			return nil, func() {}, fmt.Errorf("extensionAPIServerSetter: %w", err)
+			return nil, fmt.Errorf("extensionAPIServerSetter: %w", err)
 		}
 	}
 
@@ -711,11 +709,11 @@ func setupExtensionAPIServer[
 	err = extensionAPIServer.Run(ctx)
 	require.NoError(t, err)
 
-	cleanup := func() {
+	t.Cleanup(func() {
 		cancel()
-	}
+	})
 
-	return extensionAPIServer, cleanup, nil
+	return extensionAPIServer, nil
 }
 
 type recordingWatcher struct {
