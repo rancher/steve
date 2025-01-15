@@ -775,8 +775,8 @@ func Test_formatterLinks(t *testing.T) {
 			},
 			currentLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
-				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 			},
 			wantLinks: map[string]string{
 				"default": "defaultVal",
@@ -810,12 +810,12 @@ func Test_formatterLinks(t *testing.T) {
 			},
 			currentLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
-				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 			},
 			wantLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
 				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
@@ -846,12 +846,12 @@ func Test_formatterLinks(t *testing.T) {
 			},
 			currentLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
-				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 			},
 			wantLinks: map[string]string{
 				"default": "defaultVal",
-				"remove":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
@@ -883,13 +883,13 @@ func Test_formatterLinks(t *testing.T) {
 			},
 			currentLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
-				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 			},
 			wantLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "/api/v1/namespaces/example-ns/pods/example-pod",
-				"remove":  "/api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
@@ -925,8 +925,8 @@ func Test_formatterLinks(t *testing.T) {
 			},
 			currentLinks: map[string]string{
 				"default": "defaultVal",
-				"update":  "../api/v1/namespaces/example-ns/pods/example-pod",
-				"remove":  "../api/v1/namespaces/example-ns/pods/example-pod",
+				"update":  "../v1/namespaces/example-ns/pods/example-pod",
+				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
 			},
 			wantLinks: map[string]string{
 				"default": "defaultVal",
