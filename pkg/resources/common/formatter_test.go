@@ -634,6 +634,7 @@ func Test_formatterLinks(t *testing.T) {
 		hasGet    bool
 		hasUpdate bool
 		hasRemove bool
+		hasPatch  bool
 	}
 	tests := []struct {
 		name         string
@@ -935,6 +936,79 @@ func Test_formatterLinks(t *testing.T) {
 				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
+		{
+			name:    "patch permissions",
+			hasUser: true,
+			permissions: &permissions{
+				hasPatch: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "apps",
+						"version":  "v1",
+						"resource": "deployments",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-deployment",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"view":    "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
+				"view":    "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
+			},
+		},
+		{
+			name:    "patch permissions, but blocked",
+			hasUser: true,
+			permissions: &permissions{
+				hasPatch: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "apps",
+						"version":  "v1",
+						"resource": "deployments",
+						"disallowMethods": map[string]bool{
+							http.MethodPatch: true,
+						},
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-deployment",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+				"view":    "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"patch":   "blocked",
+				"view":    "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -960,6 +1034,12 @@ func Test_formatterLinks(t *testing.T) {
 				}
 				if test.permissions.hasRemove {
 					accessSet.Add("delete", gvr.GroupResource(), accesscontrol.Access{
+						Namespace:    meta.GetNamespace(),
+						ResourceName: meta.GetName(),
+					})
+				}
+				if test.permissions.hasPatch {
+					accessSet.Add("patch", gvr.GroupResource(), accesscontrol.Access{
 						Namespace:    meta.GetNamespace(),
 						ResourceName: meta.GetName(),
 					})

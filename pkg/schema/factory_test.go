@@ -38,6 +38,15 @@ func TestSchemas(t *testing.T) {
 				errDesired:             false,
 			},
 		},
+		{
+			name: "basic patch schema test",
+			config: schemaTestConfig{
+				permissionVerbs:        []string{"patch"},
+				desiredResourceVerbs:   []string{"PATCH"},
+				desiredCollectionVerbs: []string{},
+				errDesired:             false,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -162,7 +171,7 @@ func makeSchema(resourceType string) *types.APISchema {
 				"group":    testGroup,
 				"version":  testVersion,
 				"resource": resourceType,
-				"verbs":    []string{"get", "list", "watch", "delete", "update", "create"},
+				"verbs":    []string{"get", "list", "watch", "delete", "update", "create", "patch"},
 			},
 		},
 	}
