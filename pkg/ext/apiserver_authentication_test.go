@@ -1,6 +1,7 @@
 package ext
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,22 +13,32 @@ import (
 
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/server/options"
 )
 
+var _ rest.Storage = (*authnTestStore)(nil)
+var _ rest.Lister = (*authnTestStore)(nil)
+
 type authnTestStore struct {
-	*testStore
+	*testStore[*TestType, *TestTypeList]
 	userCh chan user.Info
 }
 
-func (t *authnTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
-	t.userCh <- ctx.User
+func (t *authnTestStore) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
+	userInfo, ok := request.UserFrom(ctx)
+	if !ok {
+		return nil, convertError(fmt.Errorf("missing user info"))
+	}
+
+	t.userCh <- userInfo
 	return &testTypeListFixture, nil
 }
 
@@ -50,10 +61,10 @@ func TestAuthenticationCustom(t *testing.T) {
 	require.NoError(t, err)
 
 	store := &authnTestStore{
-		testStore: &testStore{},
+		testStore: newDefaultTestStore(),
 		userCh:    make(chan user.Info, 100),
 	}
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
