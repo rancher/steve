@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
-	"github.com/rancher/lasso/pkg/log"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"

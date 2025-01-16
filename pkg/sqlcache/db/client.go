@@ -17,6 +17,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	// needed for drivers
 	_ "modernc.org/sqlite"
 )
 
