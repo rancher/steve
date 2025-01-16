@@ -79,7 +79,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 			}
 			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
 			value := strings.TrimSuffix(strings.TrimPrefix(filter[1], "'"), "'")
-			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Match: value, Op: op, Partial: usePartialMatch})
+			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Matches: []string{value}, Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -170,14 +170,14 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op inf
 				{
 					Filters: []informer.Filter{
 						{
-							Field: []string{"metadata", "name"},
-							Match: pn,
-							Op:    informer.Eq,
+							Field:   []string{"metadata", "name"},
+							Matches: []string{pn},
+							Op:      informer.Eq,
 						},
 						{
-							Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-							Match: pn,
-							Op:    informer.Eq,
+							Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+							Matches: []string{pn},
+							Op:      informer.Eq,
 						},
 					},
 				},
@@ -189,7 +189,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op inf
 		for _, item := range uList.Items {
 			filters = append(filters, informer.Filter{
 				Field:   []string{"metadata", "namespace"},
-				Match:   item.GetName(),
+				Matches: []string{item.GetName()},
 				Op:      op,
 				Partial: false,
 			})
