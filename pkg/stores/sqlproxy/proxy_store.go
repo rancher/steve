@@ -756,7 +756,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 
 	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
 	if err != nil {
-		if errors.Is(err, informer.InvalidColumnErr) {
+		if errors.Is(err, informer.ErrInvalidColumn) {
 			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
 		return nil, 0, "", err

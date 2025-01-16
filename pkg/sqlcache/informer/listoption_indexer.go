@@ -38,7 +38,7 @@ var (
 	defaultIndexNamespaced = "metadata.namespace"
 	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[a-zA-Z./]+])|(\[[0-9]+])`)
 
-	InvalidColumnErr = errors.New("supplied column is invalid")
+	ErrInvalidColumn = errors.New("supplied column is invalid")
 )
 
 const (
@@ -428,7 +428,7 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("column is invalid [%s]: %w", column, InvalidColumnErr)
+	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
 }
 
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
