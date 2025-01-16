@@ -22,12 +22,21 @@ func NewAccessSetAuthorizer(asl accesscontrol.AccessSetLookup) *AccessSetAuthori
 
 // Authorize implements [authorizer.Authorizer].
 func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
+	verb := attrs.GetVerb()
+	path := attrs.GetPath()
+	accessSet := a.asl.AccessFor(attrs.GetUser())
+
 	if !attrs.IsResourceRequest() {
-		// XXX: Implement
-		return authorizer.DecisionDeny, "AccessSetAuthorizer does not support nonResourceURLs requests", nil
+		if accessSet.GrantsNonResource(verb, path) {
+			return authorizer.DecisionAllow, "", nil
+		}
+
+		// An empty string reason will still provide enough information such as:
+		//
+		//    forbidden: User "unknown-user" cannot post path /openapi/v3
+		return authorizer.DecisionDeny, "", nil
 	}
 
-	verb := attrs.GetVerb()
 	namespace := attrs.GetNamespace()
 	name := attrs.GetName()
 	gr := schema.GroupResource{
@@ -35,7 +44,6 @@ func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.At
 		Resource: attrs.GetResource(),
 	}
 
-	accessSet := a.asl.AccessFor(attrs.GetUser())
 	if accessSet.Grants(verb, gr, namespace, name) {
 		return authorizer.DecisionAllow, "", nil
 	}

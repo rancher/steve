@@ -2,15 +2,12 @@ package accesscontrol
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"hash"
+	"slices"
 	"sort"
 	"time"
 
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"golang.org/x/sync/singleflight"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
@@ -23,13 +20,7 @@ type AccessSetLookup interface {
 }
 
 type policyRules interface {
-	get(string) *AccessSet
-	getRoleBindings(string) []*rbacv1.RoleBinding
-	getClusterRoleBindings(string) []*rbacv1.ClusterRoleBinding
-}
-
-type roleRevisions interface {
-	roleRevision(string, string) string
+	getRoleRefs(subjectName string) subjectGrants
 }
 
 // accessStoreCache is a subset of the methods implemented by LRUExpireCache
@@ -42,21 +33,14 @@ type accessStoreCache interface {
 type AccessStore struct {
 	usersPolicyRules    policyRules
 	groupsPolicyRules   policyRules
-	roles               roleRevisions
 	cache               accessStoreCache
 	concurrentAccessFor *singleflight.Group
 }
 
-type roleKey struct {
-	namespace string
-	name      string
-}
-
-func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
+func NewAccessStore(_ context.Context, cacheResults bool, rbac v1.Interface) *AccessStore {
 	as := &AccessStore{
 		usersPolicyRules:    newPolicyRuleIndex(true, rbac),
 		groupsPolicyRules:   newPolicyRuleIndex(false, rbac),
-		roles:               newRoleRevision(ctx, rbac),
 		concurrentAccessFor: new(singleflight.Group),
 	}
 	if cacheResults {
@@ -66,11 +50,12 @@ func NewAccessStore(ctx context.Context, cacheResults bool, rbac v1.Interface) *
 }
 
 func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
+	info := l.userGrantsFor(user)
 	if l.cache == nil {
-		return l.newAccessSet(user)
+		return l.newAccessSet(info)
 	}
 
-	cacheKey := l.CacheKey(user)
+	cacheKey := info.hash()
 
 	res, _, _ := l.concurrentAccessFor.Do(cacheKey, func() (interface{}, error) {
 		if val, ok := l.cache.Get(cacheKey); ok {
@@ -78,7 +63,7 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 			return as, nil
 		}
 
-		result := l.newAccessSet(user)
+		result := l.newAccessSet(info)
 		result.ID = cacheKey
 		l.cache.Add(cacheKey, result, 24*time.Hour)
 
@@ -87,10 +72,10 @@ func (l *AccessStore) AccessFor(user user.Info) *AccessSet {
 	return res.(*AccessSet)
 }
 
-func (l *AccessStore) newAccessSet(user user.Info) *AccessSet {
-	result := l.usersPolicyRules.get(user.GetName())
-	for _, group := range user.GetGroups() {
-		result.Merge(l.groupsPolicyRules.get(group))
+func (l *AccessStore) newAccessSet(info userGrants) *AccessSet {
+	result := info.user.toAccessSet()
+	for _, group := range info.groups {
+		result.Merge(group.toAccessSet())
 	}
 	return result
 }
@@ -99,33 +84,17 @@ func (l *AccessStore) PurgeUserData(id string) {
 	l.cache.Remove(id)
 }
 
-func (l *AccessStore) CacheKey(user user.Info) string {
-	d := sha256.New()
+// userGrantsFor retrieves all the access information for a user
+func (l *AccessStore) userGrantsFor(user user.Info) userGrants {
+	var res userGrants
 
-	groupBase := user.GetGroups()
-	groups := make([]string, len(groupBase))
-	copy(groups, groupBase)
+	groups := slices.Clone(user.GetGroups())
 	sort.Strings(groups)
 
-	l.addRolesToHash(d, user.GetName(), l.usersPolicyRules)
+	res.user = l.usersPolicyRules.getRoleRefs(user.GetName())
 	for _, group := range groups {
-		l.addRolesToHash(d, group, l.groupsPolicyRules)
+		res.groups = append(res.groups, l.groupsPolicyRules.getRoleRefs(group))
 	}
 
-	return hex.EncodeToString(d.Sum(nil))
-}
-
-func (l *AccessStore) addRolesToHash(digest hash.Hash, subjectName string, rules policyRules) {
-	for _, crb := range rules.getClusterRoleBindings(subjectName) {
-		digest.Write([]byte(crb.RoleRef.Name))
-		digest.Write([]byte(l.roles.roleRevision("", crb.RoleRef.Name)))
-	}
-
-	for _, rb := range rules.getRoleBindings(subjectName) {
-		digest.Write([]byte(rb.RoleRef.Name))
-		if rb.Namespace != "" {
-			digest.Write([]byte(rb.Namespace))
-		}
-		digest.Write([]byte(l.roles.roleRevision(rb.Namespace, rb.RoleRef.Name)))
-	}
+	return res
 }

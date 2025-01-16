@@ -813,3 +813,8 @@ Before running the tests, you must run the following command to setup the fake s
 # current client-go version, as seen in scripts/test.sh
 export KUBEBUILDER_ASSETS=$(setup-envtest use -p path)
 ```
+
+# Versioning
+
+See [VERSION.md](VERSION.md).
+

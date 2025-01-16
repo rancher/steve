@@ -1,9 +1,17 @@
 package ext
 
 import (
+	"context"
+	"fmt"
+	"sort"
+	"sync"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 	common "k8s.io/kube-openapi/pkg/common"
 	spec "k8s.io/kube-openapi/pkg/validation/spec"
@@ -162,33 +170,239 @@ func (t *TestTypeOther) DeepCopyObject() runtime.Object {
 	return t
 }
 
-var _ Store[*TestType, *TestTypeList] = (*testStore)(nil)
+var _ rest.Storage = (*testStore[*TestType, *TestTypeList])(nil)
+var _ rest.Lister = (*testStore[*TestType, *TestTypeList])(nil)
+var _ rest.GracefulDeleter = (*testStore[*TestType, *TestTypeList])(nil)
+var _ rest.Creater = (*testStore[*TestType, *TestTypeList])(nil)
+var _ rest.Updater = (*testStore[*TestType, *TestTypeList])(nil)
+var _ rest.Getter = (*testStore[*TestType, *TestTypeList])(nil)
 
-type testStore struct {
+type testStore[T runtime.Object, TList runtime.Object] struct {
+	singular string
+	objT     T
+	objListT TList
+	gvk      schema.GroupVersionKind
+	gvr      schema.GroupVersionResource
+
+	// lock protects both items and watcher
+	lock    sync.Mutex
+	items   map[string]*TestType
+	watcher *watcher
 }
 
-func (t *testStore) Create(ctx Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
-	return &testTypeFixture, nil
+func newDefaultTestStore() *testStore[*TestType, *TestTypeList] {
+	return &testStore[*TestType, *TestTypeList]{
+		singular: "testtype",
+		objT:     &TestType{},
+		objListT: &TestTypeList{},
+		gvk:      testTypeGV.WithKind("TestType"),
+		gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypes"},
+		items: map[string]*TestType{
+			testTypeFixture.Name: &testTypeFixture,
+		},
+	}
 }
 
-func (t *testStore) Update(ctx Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
-	return &testTypeFixture, nil
+// New implements [rest.Storage]
+func (t *testStore[T, TList]) New() runtime.Object {
+	obj := t.objT.DeepCopyObject()
+	obj.GetObjectKind().SetGroupVersionKind(t.gvk)
+	return obj
 }
 
-func (t *testStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
-	return &testTypeFixture, nil
+// GetSingularName implements [rest.SingularNameProvider]
+func (t *testStore[T, TList]) GetSingularName() string {
+	return t.singular
 }
 
-func (t *testStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
-	return &testTypeListFixture, nil
+// NamespaceScoped implements [rest.Scoper]
+func (t *testStore[T, TList]) NamespaceScoped() bool {
+	return false
 }
 
-func (t *testStore) Watch(ctx Context, opts *metav1.ListOptions) (<-chan WatchEvent[*TestType], error) {
-	return nil, nil
+// GroupVersionKind implements [rest.GroupVersionKindProvider]
+func (t *testStore[T, TList]) GroupVersionKind(_ schema.GroupVersion) schema.GroupVersionKind {
+	return t.gvk
 }
 
-func (t *testStore) Delete(ctx Context, name string, opts *metav1.DeleteOptions) error {
-	return nil
+// Destroy implements [rest.Storage]
+func (t *testStore[T, TList]) Destroy() {
+}
+
+// Get implements [rest.Getter]
+func (t *testStore[T, TList]) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	return t.get(ctx, name, options)
+}
+
+// Create implements [rest.Creater]
+func (t *testStore[T, TList]) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if createValidation != nil {
+		err := createValidation(ctx, obj)
+		if err != nil {
+			return obj, err
+		}
+	}
+
+	objT, ok := obj.(*TestType)
+	if !ok {
+		var zeroT T
+		return nil, convertError(fmt.Errorf("expected %T but got %T", zeroT, obj))
+	}
+
+	return t.create(ctx, objT, options)
+}
+
+// Update implements [rest.Updater]
+func (t *testStore[T, TList]) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	return CreateOrUpdate(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, t.get, t.create, t.update)
+}
+
+func (t *testStore[T, TList]) get(_ context.Context, name string, _ *metav1.GetOptions) (*TestType, error) {
+	obj, found := t.items[name]
+	if !found {
+		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), name)
+	}
+	return obj, nil
+}
+
+func (t *testStore[T, TList]) create(_ context.Context, obj *TestType, _ *metav1.CreateOptions) (*TestType, error) {
+	if _, found := t.items[obj.Name]; found {
+		return nil, apierrors.NewAlreadyExists(t.gvr.GroupResource(), obj.Name)
+	}
+	t.items[obj.Name] = obj
+	t.addEventLocked(watch.Event{
+		Type:   watch.Added,
+		Object: obj,
+	})
+	return obj, nil
+}
+
+func (t *testStore[T, TList]) update(_ context.Context, obj *TestType, _ *metav1.UpdateOptions) (*TestType, error) {
+	if _, found := t.items[obj.Name]; !found {
+		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), obj.Name)
+	}
+	obj.ManagedFields = []metav1.ManagedFieldsEntry{}
+	t.items[obj.Name] = obj
+	t.addEventLocked(watch.Event{
+		Type:   watch.Modified,
+		Object: obj,
+	})
+	return obj, nil
+}
+
+// NewList implements [rest.Lister]
+func (t *testStore[T, TList]) NewList() runtime.Object {
+	objList := t.objListT.DeepCopyObject()
+	objList.GetObjectKind().SetGroupVersionKind(t.gvk)
+	return objList
+}
+
+// List implements [rest.Lister]
+func (t *testStore[T, TList]) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	items := []TestType{}
+	for _, obj := range t.items {
+		items = append(items, *obj)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name > items[j].Name
+	})
+	list := &TestTypeList{
+		Items: items,
+	}
+	return list, nil
+}
+
+// ConvertToTable implements [rest.Lister]
+func (t *testStore[T, TList]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	return ConvertToTableDefault[T](ctx, object, tableOptions, t.gvr.GroupResource())
+}
+
+// Watch implements [rest.Watcher]
+func (t *testStore[T, TList]) Watch(ctx context.Context, internaloptions *metainternalversion.ListOptions) (watch.Interface, error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	w := &watcher{
+		ch: make(chan watch.Event, 100),
+	}
+	t.watcher = w
+	return w, nil
+}
+
+func (t *testStore[T, TList]) addEventLocked(event watch.Event) {
+	if t.watcher != nil {
+		t.watcher.addEvent(event)
+	}
+}
+
+// Delete implements [rest.GracefulDeleter]
+func (t *testStore[T, TList]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	obj, found := t.items[name]
+	if !found {
+		return nil, false, apierrors.NewNotFound(t.gvr.GroupResource(), name)
+	}
+
+	if deleteValidation != nil {
+		err := deleteValidation(ctx, obj)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	delete(t.items, name)
+	t.addEventLocked(watch.Event{
+		Type:   watch.Deleted,
+		Object: obj,
+	})
+	return obj, true, nil
+}
+
+type watcher struct {
+	closedLock sync.RWMutex
+	closed     bool
+	ch         chan watch.Event
+}
+
+// Stop implements [watch.Interface]
+//
+// As documented, Stop must only be called by the consumer (the k8s library) not the producer (our store)
+func (w *watcher) Stop() {
+	w.closedLock.Lock()
+	defer w.closedLock.Unlock()
+	if !w.closed {
+		close(w.ch)
+		w.closed = true
+	}
+}
+
+// ResultChan implements [watch.Interface]
+func (w *watcher) ResultChan() <-chan watch.Event {
+	return w.ch
+}
+
+func (w *watcher) addEvent(event watch.Event) bool {
+	w.closedLock.RLock()
+	defer w.closedLock.RUnlock()
+	if w.closed {
+		return false
+	}
+
+	w.ch <- event
+	return true
 }
 
 // This was autogenerated.
@@ -2929,18 +3143,3 @@ func schema_k8sio_apimachinery_pkg_version_Info(ref common.ReferenceCallback) co
 		},
 	}
 }
-
-// XXX: Implement DeleteCollection to simplify everything here
-// var _ rest.StandardStorage = (*delegate[*TestType, typeChecker, *typeCheckerList, typeCheckerList])(nil)
-var _ rest.Storage = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Scoper = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.KindProvider = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.GroupVersionKindProvider = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.SingularNameProvider = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Getter = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Lister = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.GracefulDeleter = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Creater = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Updater = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Watcher = (*delegate[*TestType, *TestTypeList])(nil)
-var _ rest.Patcher = (*delegate[*TestType, *TestTypeList])(nil)

@@ -1,7 +1,6 @@
 package accesscontrol
 
 import (
-	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -11,12 +10,19 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
-func TestAccessStore_CacheKey(t *testing.T) {
+type policyRulesMock struct {
+	roleRefs map[string]subjectGrants
+}
+
+func (p policyRulesMock) getRoleRefs(s string) subjectGrants {
+	return p.roleRefs[s]
+}
+
+func TestAccessStore_userGrantsFor(t *testing.T) {
 	testUser := &user.DefaultInfo{
 		Name: "user-12345",
 		Groups: []string{
@@ -34,27 +40,24 @@ func TestAccessStore_CacheKey(t *testing.T) {
 			name: "consistently produces the same value",
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{
-					getRBFunc: func(s string) []*rbacv1.RoleBinding {
-						return []*rbacv1.RoleBinding{
-							makeRB("testns", "testrb", testUser.Name, "testrole"),
-						}
-					},
-					getCRBFunc: func(s string) []*rbacv1.ClusterRoleBinding {
-						return []*rbacv1.ClusterRoleBinding{
-							makeCRB("testcrb", testUser.Name, "testclusterrole"),
-						}
+					roleRefs: map[string]subjectGrants{
+						testUser.Name: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1"},
+							},
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolev1"},
+							},
+						},
 					},
 				},
 				groupsPolicyRules: &policyRulesMock{},
-				roles: roleRevisionsMock(func(ns, name string) string {
-					return fmt.Sprintf("%s%srev", ns, name)
-				}),
 			},
 			verify: func(t *testing.T, store *AccessStore, res string) {
 				// iterate enough times to make possibly random iterators repeating order by coincidence
 				for range 5 {
-					if res != store.CacheKey(testUser) {
-						t.Fatal("CacheKey is not the same on consecutive runs")
+					if res != store.userGrantsFor(testUser).hash() {
+						t.Fatal("hash is not the same on consecutive runs")
 					}
 				}
 			},
@@ -64,27 +67,26 @@ func TestAccessStore_CacheKey(t *testing.T) {
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{},
 				groupsPolicyRules: &policyRulesMock{
-					getRBFunc: func(s string) []*rbacv1.RoleBinding {
-						return []*rbacv1.RoleBinding{
-							makeRB("testns", "testrb", testUser.Name, "testrole"),
-						}
-					},
-					getCRBFunc: func(s string) []*rbacv1.ClusterRoleBinding {
-						return []*rbacv1.ClusterRoleBinding{
-							makeCRB("testcrb", testUser.Name, "testclusterrole"),
-						}
+					roleRefs: map[string]subjectGrants{
+						testUser.Groups[0]: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
+							},
+						},
+						testUser.Groups[1]: {
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
+							},
+						},
 					},
 				},
-				roles: roleRevisionsMock(func(ns, name string) string {
-					return fmt.Sprintf("%s%srev", ns, name)
-				}),
 			},
 			verify: func(t *testing.T, store *AccessStore, res string) {
-				// remove users
+				// remove groups
 				testUserAlt := *testUser
 				testUserAlt.Groups = []string{}
 
-				if store.CacheKey(&testUserAlt) == res {
+				if store.userGrantsFor(&testUserAlt).hash() == res {
 					t.Fatal("CacheKey does not use groups for hashing")
 				}
 			},
@@ -94,33 +96,26 @@ func TestAccessStore_CacheKey(t *testing.T) {
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{},
 				groupsPolicyRules: &policyRulesMock{
-					getRBFunc: func(s string) []*rbacv1.RoleBinding {
-						if s == testUser.Groups[0] {
-							return []*rbacv1.RoleBinding{
-								makeRB("testns", "testrb", testUser.Name, "testrole"),
-							}
-						}
-						return nil
-					},
-					getCRBFunc: func(s string) []*rbacv1.ClusterRoleBinding {
-						if s == testUser.Groups[1] {
-							return []*rbacv1.ClusterRoleBinding{
-								makeCRB("testcrb", testUser.Name, "testclusterrole"),
-							}
-						}
-						return nil
+					roleRefs: map[string]subjectGrants{
+						testUser.Groups[0]: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
+							},
+						},
+						testUser.Groups[0]: {
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
+							},
+						},
 					},
 				},
-				roles: roleRevisionsMock(func(ns, name string) string {
-					return fmt.Sprintf("%s%srev", ns, name)
-				}),
 			},
 			verify: func(t *testing.T, store *AccessStore, res string) {
 				// swap order of groups
 				testUserAlt := &user.DefaultInfo{Name: testUser.Name, Groups: slices.Clone(testUser.Groups)}
 				slices.Reverse(testUserAlt.Groups)
 
-				if store.CacheKey(testUserAlt) != res {
+				if store.userGrantsFor(testUserAlt).hash() != res {
 					t.Fatal("CacheKey varies depending on groups order")
 				}
 			},
@@ -129,23 +124,28 @@ func TestAccessStore_CacheKey(t *testing.T) {
 			name: "role changes produce a different value",
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{
-					getRBFunc: func(s string) []*rbacv1.RoleBinding {
-						return []*rbacv1.RoleBinding{
-							makeRB("testns", "testrb", testUser.Name, "testrole"),
-						}
+					roleRefs: map[string]subjectGrants{
+						testUser.Name: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1"},
+							},
+						},
 					},
 				},
 				groupsPolicyRules: &policyRulesMock{},
-				roles: roleRevisionsMock(func(ns, name string) string {
-					return "rev1"
-				}),
 			},
 			verify: func(t *testing.T, store *AccessStore, res string) {
-				store.roles = roleRevisionsMock(func(ns, name string) string {
-					return "rev2"
-
-				})
-				if store.CacheKey(testUser) == res {
+				// new mock returns different resource version
+				store.usersPolicyRules = &policyRulesMock{
+					roleRefs: map[string]subjectGrants{
+						testUser.Name: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev2"},
+							},
+						},
+					},
+				}
+				if store.userGrantsFor(testUser).hash() == res {
 					t.Fatal("CacheKey did not change when on role change")
 				}
 			},
@@ -155,30 +155,26 @@ func TestAccessStore_CacheKey(t *testing.T) {
 			store: &AccessStore{
 				usersPolicyRules: &policyRulesMock{},
 				groupsPolicyRules: &policyRulesMock{
-					getRBFunc: func(s string) []*rbacv1.RoleBinding {
-						return []*rbacv1.RoleBinding{
-							makeRB("testns", "testrb", testUser.Name, "testrole"),
-						}
-					},
-					getCRBFunc: func(s string) []*rbacv1.ClusterRoleBinding {
-						if s == "newgroup" {
-							return []*rbacv1.ClusterRoleBinding{
-								makeCRB("testcrb", testUser.Name, "testclusterrole"),
-							}
-						}
-						return nil
+					roleRefs: map[string]subjectGrants{
+						testUser.Groups[0]: {
+							roleBindings: []roleRef{
+								{namespace: "testns", roleName: "testrole", resourceVersion: "testrolegroup0"},
+							},
+						},
+						"newgroup": {
+							clusterRoleBindings: []roleRef{
+								{roleName: "testclusterrole", resourceVersion: "testclusterrolegroup1"},
+							},
+						},
 					},
 				},
-				roles: roleRevisionsMock(func(ns, name string) string {
-					return fmt.Sprintf("%s%srev", ns, name)
-				}),
 			},
 			verify: func(t *testing.T, store *AccessStore, res string) {
 				testUserAlt := &user.DefaultInfo{
 					Name:   testUser.Name,
 					Groups: append(slices.Clone(testUser.Groups), "newgroup"),
 				}
-				if store.CacheKey(testUserAlt) == res {
+				if store.userGrantsFor(testUserAlt).hash() == res {
 					t.Fatal("CacheKey did not change when new group was added")
 				}
 			},
@@ -186,7 +182,7 @@ func TestAccessStore_CacheKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.verify(t, tt.store, tt.store.CacheKey(testUser))
+			tt.verify(t, tt.store, tt.store.userGrantsFor(testUser).hash())
 		})
 	}
 }
@@ -200,43 +196,39 @@ func TestAccessStore_AccessFor(t *testing.T) {
 	store := &AccessStore{
 		concurrentAccessFor: new(singleflight.Group),
 		usersPolicyRules: &policyRulesMock{
-			getRBFunc: func(s string) []*rbacv1.RoleBinding {
-				return []*rbacv1.RoleBinding{
-					makeRB("testns", "testrb", testUser.Name, "testrole"),
-				}
-			},
-			getFunc: func(_ string) *AccessSet {
-				return &AccessSet{
-					set: map[key]resourceAccessSet{
-						{"get", corev1.Resource("ConfigMap")}: map[Access]bool{
-							{Namespace: All, ResourceName: All}: true,
+			roleRefs: map[string]subjectGrants{
+				testUser.Name: {
+					clusterRoleBindings: []roleRef{
+						{
+							roleName: "testclusterrole", resourceVersion: "testclusterrolev1",
+							rules: []rbacv1.PolicyRule{{
+								Verbs:         []string{"get"},
+								APIGroups:     []string{corev1.GroupName},
+								Resources:     []string{"ConfigMap"},
+								ResourceNames: []string{All},
+							}},
 						},
 					},
-				}
+				},
 			},
 		},
 		groupsPolicyRules: &policyRulesMock{
-			getCRBFunc: func(s string) []*rbacv1.ClusterRoleBinding {
-				if s == "mygroup" {
-					return []*rbacv1.ClusterRoleBinding{
-						makeCRB("testcrb", testUser.Name, "testclusterrole"),
-					}
-				}
-				return nil
-			},
-			getFunc: func(_ string) *AccessSet {
-				return &AccessSet{
-					set: map[key]resourceAccessSet{
-						{"list", appsv1.Resource("Deployment")}: map[Access]bool{
-							{Namespace: "testns", ResourceName: All}: true,
+			roleRefs: map[string]subjectGrants{
+				testUser.Groups[0]: {
+					roleBindings: []roleRef{
+						{
+							namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1",
+							rules: []rbacv1.PolicyRule{{
+								Verbs:         []string{"list"},
+								APIGroups:     []string{appsv1.GroupName},
+								Resources:     []string{"Deployment"},
+								ResourceNames: []string{All},
+							}},
 						},
 					},
-				}
+				},
 			},
 		},
-		roles: roleRevisionsMock(func(ns, name string) string {
-			return fmt.Sprintf("%s%srev", ns, name)
-		}),
 		cache: asCache,
 	}
 
@@ -247,12 +239,14 @@ func TestAccessStore_AccessFor(t *testing.T) {
 		if as.ID == "" {
 			t.Fatal("AccessSet has empty ID")
 		}
-		if !as.Grants("get", corev1.Resource("ConfigMap"), "default", "cm") ||
+		if !as.Grants("get", corev1.Resource("ConfigMap"), "anyns", "cm") ||
 			!as.Grants("list", appsv1.Resource("Deployment"), "testns", "deploy") {
 			t.Error("AccessSet does not grant desired permissions")
 		}
-		// wrong verbs
-		if as.Grants("delete", corev1.Resource("ConfigMap"), "default", "cm") ||
+		// wrong ns
+		if as.Grants("list", appsv1.Resource("Deployment"), "default", "deploy") ||
+			// wrong verbs
+			as.Grants("delete", corev1.Resource("ConfigMap"), "default", "cm") ||
 			as.Grants("get", appsv1.Resource("Deployment"), "testns", "deploy") ||
 			// wrong resource
 			as.Grants("get", corev1.Resource("Secret"), "testns", "s") {
@@ -307,23 +301,13 @@ func TestAccessStore_AccessFor_concurrent(t *testing.T) {
 	asCache := &spyCache{accessStoreCache: cache.NewLRUExpireCache(100)}
 	store := &AccessStore{
 		concurrentAccessFor: new(singleflight.Group),
-		roles: roleRevisionsMock(func(ns, name string) string {
-			return fmt.Sprintf("%s%srev", ns, name)
-		}),
 		usersPolicyRules: &policyRulesMock{
-			getRBFunc: func(s string) []*rbacv1.RoleBinding {
-				return []*rbacv1.RoleBinding{
-					makeRB("testns", "testrb", testUser.Name, "testrole"),
-				}
-			},
-			getFunc: func(_ string) *AccessSet {
-				return &AccessSet{
-					set: map[key]resourceAccessSet{
-						{"get", corev1.Resource("ConfigMap")}: map[Access]bool{
-							{Namespace: All, ResourceName: All}: true,
-						},
+			roleRefs: map[string]subjectGrants{
+				testUser.Name: {
+					roleBindings: []roleRef{
+						{namespace: "testns", roleName: "testrole", resourceVersion: "testrolev1"},
 					},
-				}
+				},
 			},
 		},
 		cache: asCache,
@@ -351,57 +335,4 @@ func TestAccessStore_AccessFor_concurrent(t *testing.T) {
 	if got, want := asCache.setCalls[id], 1; got != want {
 		t.Errorf("Unexpected number of calls to cache.Set(): got %d, want %d", got, want)
 	}
-}
-
-func makeRB(ns, name, user, role string) *rbacv1.RoleBinding {
-	return &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
-		Subjects: []rbacv1.Subject{
-			{Name: user},
-		},
-		RoleRef: rbacv1.RoleRef{Name: role},
-	}
-}
-
-func makeCRB(name, user, role string) *rbacv1.ClusterRoleBinding {
-	return &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Subjects: []rbacv1.Subject{
-			{Name: user},
-		},
-		RoleRef: rbacv1.RoleRef{Name: role},
-	}
-}
-
-type policyRulesMock struct {
-	getFunc    func(string) *AccessSet
-	getRBFunc  func(string) []*rbacv1.RoleBinding
-	getCRBFunc func(string) []*rbacv1.ClusterRoleBinding
-}
-
-func (p policyRulesMock) get(s string) *AccessSet {
-	if p.getFunc == nil {
-		return nil
-	}
-	return p.getFunc(s)
-}
-
-func (p policyRulesMock) getRoleBindings(s string) []*rbacv1.RoleBinding {
-	if p.getRBFunc == nil {
-		return nil
-	}
-	return p.getRBFunc(s)
-}
-
-func (p policyRulesMock) getClusterRoleBindings(s string) []*rbacv1.ClusterRoleBinding {
-	if p.getCRBFunc == nil {
-		return nil
-	}
-	return p.getCRBFunc(s)
-}
-
-type roleRevisionsMock func(ns, name string) string
-
-func (fn roleRevisionsMock) roleRevision(ns, name string) string {
-	return fn(ns, name)
 }

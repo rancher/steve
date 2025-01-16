@@ -2,6 +2,7 @@ package ext
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,37 +16,47 @@ import (
 
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/accesscontrol/fake"
 	wrbacv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/server/options"
 )
 
 type authzTestStore struct {
-	*testStore
+	*testStore[*TestType, *TestTypeList]
+	authorizer authorizer.Authorizer
 }
 
-func (t *authzTestStore) Get(ctx Context, name string, opts *metav1.GetOptions) (*TestType, error) {
-	if name == "not-found" {
-		return nil, apierrors.NewNotFound(ctx.GroupVersionResource.GroupResource(), name)
+// Get implements [rest.Getter]
+func (t *authzTestStore) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	return t.get(ctx, name, options)
+}
+
+// List implements [rest.Lister]
+func (t *authzTestStore) List(ctx context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
+	userInfo, ok := request.UserFrom(ctx)
+	if !ok {
+		return nil, convertError(fmt.Errorf("missing user info"))
 	}
-	return t.testStore.Get(ctx, name, opts)
-}
 
-func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeList, error) {
-	if ctx.User.GetName() == "read-only-error" {
-		decision, _, err := ctx.Authorizer.Authorize(ctx, authorizer.AttributesRecord{
-			User:            ctx.User,
+	if userInfo.GetName() == "read-only-error" {
+		decision, _, err := t.authorizer.Authorize(ctx, authorizer.AttributesRecord{
+			User:            userInfo,
 			Verb:            "customverb",
 			Resource:        "testtypes",
 			ResourceRequest: true,
@@ -55,13 +66,61 @@ func (t *authzTestStore) List(ctx Context, opts *metav1.ListOptions) (*TestTypeL
 			if err == nil {
 				err = fmt.Errorf("not allowed")
 			}
-			forbidden := apierrors.NewForbidden(ctx.GroupVersionResource.GroupResource(), "Forbidden", err)
+			forbidden := apierrors.NewForbidden(t.gvr.GroupResource(), "Forbidden", err)
 			forbidden.ErrStatus.Kind = "Status"
 			forbidden.ErrStatus.APIVersion = "v1"
 			return nil, forbidden
 		}
 	}
 	return &testTypeListFixture, nil
+}
+
+func (t *authzTestStore) get(_ context.Context, name string, _ *metav1.GetOptions) (*TestType, error) {
+	if name == "not-found" {
+		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), name)
+	}
+	return &testTypeFixture, nil
+}
+
+func (t *authzTestStore) create(_ context.Context, _ *TestType, _ *metav1.CreateOptions) (*TestType, error) {
+	return &testTypeFixture, nil
+}
+
+func (t *authzTestStore) update(_ context.Context, _ *TestType, _ *metav1.UpdateOptions) (*TestType, error) {
+	return &testTypeFixture, nil
+}
+
+// Create implements [rest.Creater]
+func (t *authzTestStore) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	if createValidation != nil {
+		err := createValidation(ctx, obj)
+		if err != nil {
+			return obj, err
+		}
+	}
+
+	objT, ok := obj.(*TestType)
+	if !ok {
+		var zeroT *TestType
+		return nil, convertError(fmt.Errorf("expected %T but got %T", zeroT, obj))
+	}
+
+	return t.create(ctx, objT, options)
+}
+
+// Update implements [rest.Updater]
+func (t *authzTestStore) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	return CreateOrUpdate(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options, t.get, t.create, t.update)
+}
+
+// Watch implements [rest.Watcher]
+func (t *authzTestStore) Watch(_ context.Context, _ *metainternalversion.ListOptions) (watch.Interface, error) {
+	return nil, nil
+}
+
+// Delete implements [rest.GracefulDeleter]
+func (t *authzTestStore) Delete(_ context.Context, _ string, _ rest.ValidateObjectFunc, _ *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	return nil, false, nil
 }
 
 func (s *ExtensionAPIServerSuite) TestAuthorization() {
@@ -86,10 +145,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 	ln, _, err := options.CreateListener("", ":0", net.ListenConfig{})
 	require.NoError(t, err)
 
-	store := &authzTestStore{
-		testStore: &testStore{},
-	}
-	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, &TestType{}, &TestTypeList{}, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authz
 		opts.Authenticator = authenticator.RequestFunc(func(req *http.Request) (*authenticator.Response, bool, error) {
@@ -101,7 +157,17 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 				User: user,
 			}, true, nil
 		})
-	}, nil)
+	}, func(s *ExtensionAPIServer) error {
+		store := &authzTestStore{
+			testStore:  newDefaultTestStore(),
+			authorizer: s.GetAuthorizer(),
+		}
+		err := s.Install("testtypes", testTypeGV.WithKind("TestType"), store)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	require.NoError(t, err)
 
 	rbacBytes, err := os.ReadFile(filepath.Join("testdata", "rbac.yaml"))
@@ -310,6 +376,66 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			},
 			expectedStatusCode: http.StatusForbidden,
 		},
+		{
+			name: "authorized access to non-resource url",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "unauthorized verb to non-resource url",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodPost, "/openapi/v2", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "unauthorized access to non-resource url (user can access only openapi/v2)",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-only",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v3", nil)
+			},
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name: "authorized user can access both openapi v2 and v3 (v2)",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-v3",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized user can access both openapi v2 and v3 (v3)",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-v3",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v3", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "authorized user can access url based in wildcard rule",
+			user: &user.DefaultInfo{
+				Name: "openapi-v2-v3",
+			},
+			createRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/openapi/v3/apis/ext.cattle.io/v1", nil)
+			},
+			expectedStatusCode: http.StatusOK,
+		},
 	}
 
 	for _, test := range tests {
@@ -337,6 +463,155 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			require.Equal(t, test.expectedStatusCode, resp.StatusCode)
 			if test.expectedStatus != nil {
 				require.Equal(t, test.expectedStatus.Status(), responseStatus, "for request "+req.URL.String())
+			}
+		})
+	}
+}
+
+func TestAuthorization_NonResourceURLs(t *testing.T) {
+	type input struct {
+		ctx   context.Context
+		attrs authorizer.Attributes
+	}
+
+	type expected struct {
+		authorized authorizer.Decision
+		reason     string
+		err        error
+	}
+
+	sampleReadOnlyUser := &user.DefaultInfo{
+		Name: "read-only-user",
+	}
+
+	sampleReadOnlyAccessSet := func() *accesscontrol.AccessSet {
+		accessSet := &accesscontrol.AccessSet{}
+		accessSet.AddNonResourceURLs([]string{
+			"get",
+		}, []string{
+			"/metrics",
+			"/healthz",
+		})
+		return accessSet
+	}()
+
+	sampleReadWriteUser := &user.DefaultInfo{
+		Name: "read-write-user",
+	}
+
+	sampleReadWriteAccessSet := func() *accesscontrol.AccessSet {
+		accessSet := &accesscontrol.AccessSet{}
+		accessSet.AddNonResourceURLs([]string{
+			"get", "post",
+		}, []string{
+			"/metrics",
+			"/healthz",
+		})
+		return accessSet
+	}()
+
+	tests := []struct {
+		name     string
+		input    input
+		expected expected
+
+		mockUsername  *user.DefaultInfo
+		mockAccessSet *accesscontrol.AccessSet
+	}{
+		{
+			name: "authorized read-only user to read data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadOnlyUser,
+					ResourceRequest: false,
+					Path:            "/healthz",
+					Verb:            "get",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionAllow,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadOnlyUser,
+			mockAccessSet: sampleReadOnlyAccessSet,
+		},
+		{
+			name: "unauthorized read-only user to write data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadOnlyUser,
+					ResourceRequest: false,
+					Path:            "/metrics",
+					Verb:            "post",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionDeny,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadOnlyUser,
+			mockAccessSet: sampleReadOnlyAccessSet,
+		},
+		{
+			name: "authorized read-write user to read data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadWriteUser,
+					ResourceRequest: false,
+					Path:            "/metrics",
+					Verb:            "get",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionAllow,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadWriteUser,
+			mockAccessSet: sampleReadWriteAccessSet,
+		},
+		{
+			name: "authorized read-write user to write data",
+			input: input{
+				ctx: context.TODO(),
+				attrs: authorizer.AttributesRecord{
+					User:            sampleReadWriteUser,
+					ResourceRequest: false,
+					Path:            "/metrics",
+					Verb:            "post",
+				},
+			},
+			expected: expected{
+				authorized: authorizer.DecisionAllow,
+				reason:     "",
+				err:        nil,
+			},
+			mockUsername:  sampleReadWriteUser,
+			mockAccessSet: sampleReadWriteAccessSet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			crtl := gomock.NewController(t)
+			asl := fake.NewMockAccessSetLookup(crtl)
+			asl.EXPECT().AccessFor(tt.mockUsername).Return(tt.mockAccessSet)
+
+			auth := NewAccessSetAuthorizer(asl)
+			authorized, reason, err := auth.Authorize(tt.input.ctx, tt.input.attrs)
+
+			require.Equal(t, tt.expected.authorized, authorized)
+			require.Equal(t, tt.expected.reason, reason)
+
+			if tt.expected.err != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}

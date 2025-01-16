@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -85,19 +84,19 @@ type ExtensionAPIServerOptions struct {
 //
 // Use [NewExtensionAPIServer] to create an ExtensionAPIServer.
 //
-// Use [InstallStore] to add a new resource store onto an existing ExtensionAPIServer.
+// Use [ExtensionAPIServer.Install] to add a new resource store onto an existing ExtensionAPIServer.
 // Each resources will then be reachable via /apis/<group>/<version>/<resource> as
 // defined by the Kubernetes API.
 //
-// When Run() is called, a separate HTTPS server is started. This server is meant
+// When [ExtensionAPIServer.Run] is called, a separate HTTPS server is started. This server is meant
 // for the main kube-apiserver to communicate with our extension API server. We
 // can expect the following requests from the main kube-apiserver:
 //
-// <path>                 <user>                 <groups>
-// /openapi/v2            system:aggregator      [system:authenticated]
-// /openapi/v3            system:aggregator      [system:authenticated]
-// /apis                  system:kube-aggregator [system:masters system:authenticated]
-// /apis/ext.cattle.io/v1 system:kube-aggregator [system:masters system:authenticated]
+//	<path>                 <user>                 <groups>
+//	/openapi/v2            system:aggregator      [system:authenticated]
+//	/openapi/v3            system:aggregator      [system:authenticated]
+//	/apis                  system:kube-aggregator [system:masters system:authenticated]
+//	/apis/ext.cattle.io/v1 system:kube-aggregator [system:masters system:authenticated]
 type ExtensionAPIServer struct {
 	codecs serializer.CodecFactory
 	scheme *runtime.Scheme
@@ -223,34 +222,49 @@ func (s *ExtensionAPIServer) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	s.handler.ServeHTTP(w, req)
 }
 
-// InstallStore installs a store on the given ExtensionAPIServer object.
+// GetAuthorizer returns the authorizer used by the extension server to authorize
+// requests
 //
-// t and TList must be non-nil.
-//
-// Here's an example store for a Token and TokenList resource in the ext.cattle.io/v1 apiVersion:
-//
-//	gvk := schema.GroupVersionKind{
-//		Group: "ext.cattle.io",
-//		Version: "v1",
-//		Kind: "Token",
-//	}
-//	InstallStore(s, &Token{}, &TokenList{}, "tokens", "token", gvk, store)
-//
-// Note: Not using a method on ExtensionAPIServer object due to Go generic limitations.
-func InstallStore[T runtime.Object, TList runtime.Object](
-	s *ExtensionAPIServer,
-	t T,
-	tList TList,
-	resourceName string,
-	singularName string,
-	gvk schema.GroupVersionKind,
-	store Store[T, TList],
-) error {
+// This can be used to inject the authorizer in stores that need them.
+func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
+	return s.authorizer
+}
 
-	if !meta.IsListType(tList) {
-		return fmt.Errorf("tList (%T) is not a list type", tList)
-	}
-
+// Install adds a new store to the extension API server.
+//
+// A store implements handlers for the various operations (verbs) supported for
+// a defined GVK / GVR. For example, a store for a (apiVersion:
+// ext.cattle.io/v1, kind: Tokens) Custom Resource could implement create and
+// watch verbs.
+//
+// A store MUST implement the following interfaces: [rest.Storage], [rest.Scoper], [rest.GroupVersionKindProvider]
+// and [rest.SingularNameProvider].
+//
+// Implementing the various verbs goes as follows:
+//   - get: [rest.Getter] must be implemented
+//   - list: [rest.Lister] must be implemented. To help implement table conversion, we provide [ConvertToTable] and [ConvertToTableDefault].
+//     Use [ConvertListOptions] to convert the [metainternalversion.ListOptions] to a [metav1.ListOptions].
+//   - watch: [rest.Watcher] must be implemented. Use [ConvertListOptions] to convert the [metainternalversion.ListOptions] to a [metav1.ListOptions].
+//   - create: [rest.Creater] must be implemented
+//   - update: [rest.Updater] must be implemented. To help implement this correctly with create-on-update support, we provide [CreateOrUpdate].
+//   - patch: [rest.Patcher] must be implemented, which is essentially [rest.Getter] and [rest.Updater]
+//   - delete: [rest.GracefulDeleter] must be implemented
+//   - deletecollection: [rest.CollectionDeleter] must be implemented
+//
+// Most of these methods have a [context.Context] parameter that can be used to get more information
+// about the request. Here are some examples:
+//   - [request.UserFrom] to get the user info
+//   - [request.NamespaceFrom] to get the namespace (if applicable)
+//
+// For an example store implementing these, please look at the testStore type with the caveat that it is a dummy test-special purpose
+// store.
+//
+// Note that errors returned by any operations above MUST be of type [k8s.io/apimachinery/pkg/api/errors.APIStatus].
+// These can be created with [k8s.io/apimachinery/pkg/api/errors.NewNotFound], etc.
+// If an error of unknown type is returned, the library will log an error message.
+//
+//nolint:misspell
+func (s *ExtensionAPIServer) Install(resourceName string, gvk schema.GroupVersionKind, storage rest.Storage) error {
 	apiGroup, ok := s.apiGroups[gvk.Group]
 	if !ok {
 		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
@@ -261,23 +275,7 @@ func InstallStore[T runtime.Object, TList runtime.Object](
 		apiGroup.VersionedResourcesStorageMap[gvk.Version] = make(map[string]rest.Storage)
 	}
 
-	delegate := &delegate[T, TList]{
-		scheme: s.scheme,
-
-		t:            t,
-		tList:        tList,
-		singularName: singularName,
-		gvk:          gvk,
-		gvr: schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: resourceName,
-		},
-		authorizer: s.authorizer,
-		store:      store,
-	}
-
-	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = delegate
+	apiGroup.VersionedResourcesStorageMap[gvk.Version][resourceName] = storage
 	s.apiGroups[gvk.Group] = apiGroup
 	return nil
 }
