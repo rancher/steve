@@ -16,7 +16,7 @@ limitations under the License.
 
 /*
 This file is derived from
-https://github.com/kubernetes/apimachinery/blob/master/pkg/labels/selector.go
+https://github.com/kubernetes/apimachinery/blob/90df4d1d2d40ea9b3a522bec6e3577237358de00/pkg/labels/selector.go
 */
 
 /**
