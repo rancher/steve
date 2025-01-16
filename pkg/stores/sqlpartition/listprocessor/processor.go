@@ -91,20 +91,20 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 		sortParts := strings.SplitN(sortKeys, ",", 2)
 		primaryField := sortParts[0]
 		if primaryField != "" && primaryField[0] == '-' {
-			sortOpts.PrimaryOrder = informer.DESC
+			sortOpts.Orders = append(sortOpts.Orders, informer.DESC)
 			primaryField = primaryField[1:]
 		}
 		if primaryField != "" {
-			sortOpts.PrimaryField = strings.Split(primaryField, ".")
+			sortOpts.Fields = append(sortOpts.Fields, strings.Split(primaryField, "."))
 		}
 		if len(sortParts) > 1 {
 			secondaryField := sortParts[1]
 			if secondaryField != "" && secondaryField[0] == '-' {
-				sortOpts.SecondaryOrder = informer.DESC
+				sortOpts.Orders = append(sortOpts.Orders, informer.DESC)
 				secondaryField = secondaryField[1:]
 			}
 			if secondaryField != "" {
-				sortOpts.SecondaryField = strings.Split(secondaryField, ".")
+				sortOpts.Fields = append(sortOpts.Fields, strings.Split(secondaryField, "."))
 			}
 		}
 	}

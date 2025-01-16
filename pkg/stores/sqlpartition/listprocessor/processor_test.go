@@ -352,7 +352,9 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField: []string{"metadata", "name"},
+				Fields: [][]string{
+					{"metadata", "name"},
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -374,8 +376,8 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField: []string{"metadata", "name"},
-				PrimaryOrder: informer.DESC,
+				Fields: [][]string{{"metadata", "name"}},
+				Orders: []informer.SortOrder{informer.DESC},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -397,10 +399,13 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField:   []string{"metadata", "name"},
-				PrimaryOrder:   informer.DESC,
-				SecondaryField: []string{"spec", "something"},
-				SecondaryOrder: informer.ASC,
+				Fields: [][]string{
+					{"metadata", "name"},
+					{"spec", "something"},
+				},
+				Orders: []informer.SortOrder{
+					informer.DESC,
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
