@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"
+
 	// needed for drivers
 	_ "modernc.org/sqlite"
 )
