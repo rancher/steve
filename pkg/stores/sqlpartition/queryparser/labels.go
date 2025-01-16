@@ -16,7 +16,9 @@ limitations under the License.
 
 /*
 This file is derived from
-https://github.com/kubernetes/apimachinery/blob/master/pkg/labels/labels.go
+https://github.com/kubernetes/apimachinery/blob/90df4d1d2d40ea9b3a522bec6e3577237358de00/pkg/labels/labels.go
+ - FormatLabels was dropped
+ - validateLabelKey calls from ConvertSelectorToLabelsMap were dropped
 */
 
 package queryparser
