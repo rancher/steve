@@ -60,7 +60,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
+							Matches: []string{"ns1"},
 							Op:      "",
 							Partial: false,
 						},
@@ -89,14 +89,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -120,7 +120,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
+							Matches: []string{"ns1"},
 							Op:      "",
 							Partial: false,
 						},
@@ -139,14 +139,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -170,7 +170,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
+							Matches: []string{"ns1"},
 							Op:      "",
 							Partial: false,
 						},
@@ -192,14 +192,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -222,7 +222,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: true,
 						},
@@ -251,7 +251,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: false,
 						},
@@ -280,7 +280,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: true,
 						},
@@ -290,7 +290,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
-							Match:   "d",
+							Matches: []string{"d"},
 							Op:      "",
 							Partial: true,
 						},
@@ -320,13 +320,13 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: true,
 						},
 						{
 							Field:   []string{"b"},
-							Match:   "d",
+							Matches: []string{"d"},
 							Op:      "",
 							Partial: true,
 						},
