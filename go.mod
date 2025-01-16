@@ -14,6 +14,7 @@ require (
 	github.com/adrg/xdg v0.5.0
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic-models v0.6.8
+	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/pborman/uuid v1.2.1
@@ -22,7 +23,7 @@ require (
 	github.com/rancher/apiserver v0.0.0-20241009200134-5a4ecca7b988
 	github.com/rancher/dynamiclistener v0.6.1-rc.2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/lasso v0.0.0-20241202185148-04649f379358
+	github.com/rancher/lasso v0.0.0-20250116001102-9e2b68739ccc
 	github.com/rancher/norman v0.0.0-20241001183610-78a520c160ab
 	github.com/rancher/remotedialer v0.3.2
 	github.com/rancher/wrangler/v3 v3.0.1-rc.2
@@ -76,7 +77,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/cel-go v0.20.1 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
