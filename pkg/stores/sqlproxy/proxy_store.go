@@ -86,7 +86,6 @@ var (
 			{"spec", "nodeName"}},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
-			{"spec", "targetPort"},
 			{"spec", "type"},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
