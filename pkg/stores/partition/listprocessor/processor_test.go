@@ -2371,6 +2371,61 @@ func TestSortList(t *testing.T) {
 	}
 }
 
+func TestSortString(t *testing.T) {
+	tests := []struct {
+		name string
+		sort Sort
+		want string
+	}{
+		{
+			name: "empty sort list",
+			sort: Sort{},
+			want: "",
+		},
+		{
+			name: "single sort asc",
+			sort: Sort{
+				Fields: [][]string{{"field1a", "field1b"}},
+				Orders: []SortOrder{ASC},
+			},
+			want: "field1a.field1b",
+		},
+		{
+			name: "single sort desc",
+			sort: Sort{
+				Fields: [][]string{{"field2a", "field2b"}},
+				Orders: []SortOrder{DESC},
+			},
+			want: "-field2a.field2b",
+		},
+		{
+			name: "multiple sort with complex name, asc",
+			sort: Sort{
+				Fields: [][]string{{"field3a", "field3b"}, {"metadata", "labels", "slash/warning"}},
+				Orders: []SortOrder{ASC, DESC},
+			},
+			want: "field3a.field3b,-metadata.labels[slash/warning]",
+		},
+		{
+			name: "multiple sort with complex name, asc",
+			sort: Sort{
+				Fields: [][]string{{"metadata", "labels", "cows/dogs"},
+					{"metadata", "labels", "hyphens-are-special"},
+					{"metadata", "labels", "dots.are.special"}},
+				Orders: []SortOrder{DESC, ASC, DESC},
+			},
+			want: "-metadata.labels[cows/dogs],metadata.labels[hyphens-are-special],-metadata.labels[dots.are.special]",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := test.sort.String()
+			assert.Equal(t, test.want, got)
+		})
+	}
+
+}
+
 func TestPaginateList(t *testing.T) {
 	objects := []unstructured.Unstructured{
 		{
