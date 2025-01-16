@@ -5,6 +5,7 @@ package sqlpartition
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
@@ -134,6 +135,8 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 
 	store := s.Partitioner.Store()
 
+	fmt.Println("HITHERE from watch")
+
 	response := make(chan types.APIEvent)
 	c, err := store.WatchByPartitions(apiOp, schema, wr, partitions)
 	if err != nil {
@@ -143,10 +146,12 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 	go func() {
 		defer close(response)
 
-		for range c {
+		for revision := range c {
+			fmt.Println("Revision from watch", revision)
 			response <- types.APIEvent{
 				Name:         "resource.changes",
 				ResourceType: schema.ID,
+				Revision:     revision,
 			}
 		}
 	}()

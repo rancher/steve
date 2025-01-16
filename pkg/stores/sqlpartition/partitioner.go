@@ -29,7 +29,7 @@ type UnstructuredStore interface {
 	Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error)
 
 	ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error)
-	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan struct{}, error)
+	WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan string, error)
 }
 
 // rbacPartitioner is an implementation of the sqlpartition.Partitioner interface.

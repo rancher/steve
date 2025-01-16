@@ -2,6 +2,7 @@ package sqlproxy
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,17 +12,17 @@ import (
 var _ informer.Listener = (*debounceListener)(nil)
 
 type debounceListener struct {
-	lock     sync.Mutex
-	notified bool
+	lock         sync.Mutex
+	lastRevision string
 
 	debounceRate time.Duration
-	ch           chan struct{}
+	ch           chan string
 }
 
 func newDebounceListener(debounceRate time.Duration) *debounceListener {
 	listener := &debounceListener{
 		debounceRate: debounceRate,
-		ch:           make(chan struct{}, 100),
+		ch:           make(chan string, 100),
 	}
 	return listener
 }
@@ -36,23 +37,24 @@ func (d *debounceListener) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			d.lock.Lock()
-			if d.notified {
-				d.ch <- struct{}{}
+			if d.lastRevision != "" {
+				d.ch <- d.lastRevision
+				d.lastRevision = ""
 			}
-			d.notified = false
 			d.lock.Unlock()
 		}
 	}
 }
 
-func (d *debounceListener) NotifyNow() {
+func (d *debounceListener) NotifyNow(revision string) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	d.ch <- struct{}{}
+	d.ch <- revision
 }
 
-func (d *debounceListener) Notify() {
+func (d *debounceListener) Notify(revision string) {
+	fmt.Println("Notify(", revision, ")")
 	d.lock.Lock()
 	defer d.lock.Unlock()
-	d.notified = true
+	d.lastRevision = revision
 }

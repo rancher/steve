@@ -130,6 +130,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	q := apiOp.Request.URL.Query()
 	cont := q.Get(continueParam)
 	opts.Resume = cont
+	opts.Revision = q.Get(revisionParam)
 
 	filterParams := q[filterParam]
 	filterOpts := []informer.OrFilter{}

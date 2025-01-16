@@ -38,7 +38,6 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary"
 
 	"github.com/rancher/steve/pkg/attributes"
-	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
@@ -630,7 +629,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
-func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan struct{}, error) {
+func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan string, error) {
 	ctx := apiOp.Context()
 
 	revision := 0
@@ -641,6 +640,7 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 		}
 		revision = int(parsedRevision)
 	}
+	_ = revision
 
 	// XXX: Why was this needed at all??
 	apiOp = apiOp.Clone().WithContext(ctx)
@@ -665,10 +665,10 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 	}
 
 	debounceListener := newDebounceListener(5 * time.Second)
-	latestRevision := inf.Watch(ctx, debounceListener)
-	if latestRevision > revision {
-		debounceListener.NotifyNow()
-	}
+	_ = inf.Watch(ctx, debounceListener)
+	resourceVersion := inf.ByOptionsLister.(*informer.Informer).ByOptionsLister.(*informer.ListOptionIndexer).GetLastResourceVersion()
+	debounceListener.NotifyNow(resourceVersion)
+
 	go debounceListener.Run(ctx)
 
 	return debounceListener.ch, nil
