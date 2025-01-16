@@ -259,7 +259,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with filter param set, with value in double quotes, should include filter with partial set to false in list options.",
+		description: "ParseQuery() with filter param set, with value in double quotes, should include filter with partial set to true in list options.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: `filter=a1="c1"`},
@@ -274,7 +274,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a1"},
 							Matches: []string{"c1"},
 							Op:      informer.Eq,
-							Partial: false,
+							Partial: true,
 						},
 					},
 				},

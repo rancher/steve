@@ -76,18 +76,23 @@ func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
 }
 
 // Determine if the value field is surrounded by a pair of single- or double-quotes
-// This is a difference we implement from the CLI: if the target value of a (not) equal
-// test is quoted, we use the full string. Otherwise we do a substring match
+// This is a difference we implement from the kubernetes CLI: if the target value of a (not) equal
+// test is single-quoted, we use the full string. Otherwise we do a substring match
 // (which is implemented as 'SELECT ... some-field ... LIKE "%VALUE%" ...' in the query)
-func isQuotedStringTarget(values []string) bool {
+//
+// The caller also needs to know if it should strip delimiting quotes, so this returns two bools
+func isQuotedStringTarget(values []string) (isQuoted bool, isSingleQuoted bool) {
 	if len(values) != 1 || len(values[0]) == 0 {
-		return false
+		return false, false
 	}
 	s1 := values[0][0:1]
 	if !strings.Contains(`"'`, s1) {
-		return false
+		return false, false
 	}
-	return strings.HasSuffix(values[0], s1)
+	if !strings.HasSuffix(values[0], s1) {
+		return false, false
+	}
+	return true, s1[0] == '\''
 }
 
 // k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
@@ -100,10 +105,13 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Fil
 		return informer.Filter{}, err
 	}
 	usePartialMatch := true
-	if isQuotedStringTarget(values) {
-		usePartialMatch = false
+	isQuoted, isSingleQuoted := isQuotedStringTarget(values)
+	if isQuoted {
 		// Strip off the quotes
 		values[0] = values[0][1 : len(values[0])-1]
+		if isSingleQuoted {
+			usePartialMatch = false
+		}
 	}
 	return informer.Filter{
 		Field:   queryFields,
