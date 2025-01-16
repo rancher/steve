@@ -8,13 +8,13 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	lassopartition "github.com/rancher/steve/pkg/sqlcache/partition"
+	cachepartition "github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/stores/partition"
 )
 
 // Partitioner is an interface for interacting with partitions.
 type Partitioner interface {
-	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]lassopartition.Partition, error)
+	All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]cachepartition.Partition, error)
 	Store() UnstructuredStore
 }
 
