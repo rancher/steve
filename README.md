@@ -108,13 +108,30 @@ is empty.
 #### `filter`
 
 Filter results by a designated field. Filter keys use dot notation to denote
-the subfield of an object to filter on. The filter value is matched as a
+the subfield of an object to filter on. The filter value is normally matched as a
 substring.
 
 Example, filtering by object name:
 
 ```
 /v1/{type}?filter=metadata.name=foo
+```
+
+if a target value is surrounded by single-quotes, it succeeds only on an exact match:
+
+Example, filtering by object name:
+
+```
+/v1/{type}?filter=metadata.name='match-this-exactly'
+```
+```
+
+A target value can be delimited by double-quotes, but this will succeed on a partial match:
+
+Example, filtering by object name:
+
+```
+/v1/{type}?filter=metadata.name="can-be-a-substri"
 ```
 
 One filter can list multiple possible fields to match, these are ORed together:
