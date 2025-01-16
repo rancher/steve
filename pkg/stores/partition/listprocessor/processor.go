@@ -203,10 +203,11 @@ func ParseQuery(apiOp *types.APIRequest) *ListOptions {
 				}
 			}
 			if len(field) == 0 {
-				// Current semantics: if we have a sort query like
+				// Old semantics: if we have a sort query like
 				// sort=,metadata.someOtherField
 				// we *DON'T sort
-				break
+				// Fixed: skip empty-strings.
+				continue
 			}
 			sortOpts.Fields = append(sortOpts.Fields, queryhelper.SafeSplit(field))
 			sortOpts.Orders = append(sortOpts.Orders, sortOrder)

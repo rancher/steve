@@ -523,7 +523,7 @@ func TestList(t *testing.T) {
 			},
 		},
 		{
-			name: "sorting with missing primary sort is unsorted",
+			name: "sorting with missing primary sort continues",
 			apiOps: []*types.APIRequest{
 				newRequest("sort=,metadata.name", "user1"),
 			},
@@ -553,8 +553,8 @@ func TestList(t *testing.T) {
 					Count: 3,
 					Objects: []types.APIObject{
 						newApple("fuji").toObj(),
-						newApple("honeycrisp").toObj(),
 						newApple("granny-smith").toObj(),
+						newApple("honeycrisp").toObj(),
 					},
 				},
 			},
