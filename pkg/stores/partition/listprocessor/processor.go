@@ -107,15 +107,16 @@ type Sort struct {
 
 // String returns the sort parameters as a query string.
 func (s Sort) String() string {
-	dottableRegex := regexp.MustCompile(`[^a-zA-Z0-9_]`)
+	nonIdentifierField := regexp.MustCompile(`[^a-zA-Z0-9_]`)
 	fields := make([]string, len(s.Fields))
 	for i, field := range s.Fields {
 		lastIndex := len(field) - 1
 		newField := strings.Join(field[0:lastIndex], ".")
-		if dottableRegex.MatchString(field[lastIndex]) {
-			newField += fmt.Sprintf(".%s", field[lastIndex])
-		} else {
+		if nonIdentifierField.MatchString(field[lastIndex]) {
+			// label keys may contain non-identifier characters `/`, `.` and `-`
 			newField += fmt.Sprintf("[%s]", field[lastIndex])
+		} else {
+			newField += fmt.Sprintf(".%s", field[lastIndex])
 		}
 		if s.Orders[i] == DESC {
 			newField = fmt.Sprintf("-%s", newField)
