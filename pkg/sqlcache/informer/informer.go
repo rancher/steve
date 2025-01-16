@@ -8,8 +8,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rancher/lasso/pkg/cache/sql/partition"
-	sqlStore "github.com/rancher/lasso/pkg/cache/sql/store"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
+	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"

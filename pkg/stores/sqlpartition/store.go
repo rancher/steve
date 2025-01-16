@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/rancher/apiserver/pkg/types"
-	lassopartition "github.com/rancher/lasso/pkg/cache/sql/partition"
+	lassopartition "github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/partition"
 )

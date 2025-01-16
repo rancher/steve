@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/lasso/pkg/cache/sql/informer"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
 
-	sqlStore "github.com/rancher/lasso/pkg/cache/sql/store"
+	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./factory_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/informer/factory DBClient
-//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./db_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/db TXClient
+//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./factory_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer/factory DBClient
+//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient
 //go:generate mockgen --build_flags=--mod=mod -package factory -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 //go:generate mockgen --build_flags=--mod=mod -package factory -destination ./k8s_cache_mocks_test.go k8s.io/client-go/tools/cache SharedIndexInformer
 

@@ -7,9 +7,9 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./store_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/store DBClient
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/db TXClient,Rows
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./tx_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/db/transaction Stmt
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./store_mocks_test.go github.com/rancher/steve/pkg/sqlcache/store DBClient
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient,Rows
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./tx_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rancher/lasso/pkg/cache/sql/db"
+	"github.com/rancher/steve/pkg/sqlcache/db"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
