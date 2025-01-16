@@ -76,6 +76,8 @@ type ExtensionAPIServerOptions struct {
 	// If nil, the default version is the version of the Kubernetes Go library
 	// compiled in the final binary.
 	EffectiveVersion utilversion.EffectiveVersion
+
+	SNICerts []dynamiccertificates.SNICertKeyContentProvider
 }
 
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
@@ -169,6 +171,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	if err := recommendedOpts.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
+	config.SecureServing.SNICerts = opts.SNICerts
 
 	config.Authentication.Authenticator = opts.Authenticator
 	if caContentProvider, ok := opts.Authenticator.(dynamiccertificates.CAContentProvider); ok {
