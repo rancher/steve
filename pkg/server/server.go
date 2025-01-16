@@ -67,7 +67,7 @@ type Options struct {
 	AggregationSecretName      string
 	ClusterRegistry            string
 	ServerVersion              string
-	// SQLCache enables the SQLite-based lasso caching mechanism
+	// SQLCache enables the SQLite-based caching mechanism
 	SQLCache bool
 }
 

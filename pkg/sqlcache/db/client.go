@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	// InformerObjectCacheDBPath is where SQLite's object database file will be stored relative to process running lasso
+	// InformerObjectCacheDBPath is where SQLite's object database file will be stored relative to process running steve
 	InformerObjectCacheDBPath = "informer_object_cache.db"
 
 	informerObjectCachePerms fs.FileMode = 0o600

@@ -105,7 +105,7 @@ that contains the functionality needed to conform to cache.Indexer.
 ### SQLite Driver
 There are multiple SQLite drivers that this package could have used. One of the most, if not the most, popular SQLite golang
 drivers is [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3). This driver is not being used because it requires enabling
-the cgo option when compiling and at the moment lasso's main consumer, rancher, does not compile with cgo. We did not want
+the cgo option when compiling and at the moment steve's main consumer, rancher, does not compile with cgo. We did not want
 the SQL informer to be the sole driver in switching to using cgo. Instead, modernc's driver which is in pure golang. Side-by-side
 comparisons can be found indicating the cgo version is, as expected, more performant. If in the future it is deemed worthwhile
 then the driver can be easily switched by replacing the empty import in `pkg/cache/sql/store` from `_ "modernc.org/sqlite"` to `_ "github.com/mattn/go-sqlite3"`.
@@ -117,7 +117,7 @@ connections attached to a sql.Connection. `database/sql` manages this connection
 application only need one sql.Connection, although sometimes application use two: one for writes, the other for reads. To
 read more about the `sql` package's connection pooling read [Managing connections](https://go.dev/doc/database/manage-connections).
 
-The use of connection pooling and the fact that lasso potentially has many go routines accessing the same connection pool,
+The use of connection pooling and the fact that steve potentially has many go routines accessing the same connection pool,
 means we have to be careful with writes. Exclusively using sql transaction to write helps ensure safety. To read more about
 sql transactions read SQLite's [Transaction docs](https://www.sqlite.org/lang_transaction.html).
 
