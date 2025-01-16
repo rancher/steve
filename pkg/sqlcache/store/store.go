@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
-	"github.com/rancher/lasso/pkg/log"
 	"k8s.io/client-go/tools/cache"
 	_ "modernc.org/sqlite"
 )

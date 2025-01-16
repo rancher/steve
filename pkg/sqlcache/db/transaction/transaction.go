@@ -7,9 +7,9 @@ package transaction
 import (
 	"context"
 	"database/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Client provides a way to interact with the underlying sql transaction.
