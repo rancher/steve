@@ -8,7 +8,6 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.2.0
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
-	github.com/rancher/lasso => ../lasso
 )
 
 require (
@@ -23,7 +22,7 @@ require (
 	github.com/rancher/apiserver v0.0.0-20241009200134-5a4ecca7b988
 	github.com/rancher/dynamiclistener v0.6.1-rc.2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/lasso v0.0.0-20241202185148-04649f379358
+	github.com/rancher/lasso v0.0.0-20250116175138-91795f788942
 	github.com/rancher/norman v0.0.0-20241001183610-78a520c160ab
 	github.com/rancher/remotedialer v0.3.2
 	github.com/rancher/wrangler/v3 v3.0.1-rc.2
