@@ -35,7 +35,7 @@ const (
 )
 
 var opReg = regexp.MustCompile(`[!]?=`)
-var labelsRegex = regexp.MustCompile(`^(metadata).(labels)\[(.+)\]$`)
+var labelsRegex = regexp.MustCompile(`^(metadata)\.(labels)\[(.+)\]$`)
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
@@ -223,7 +223,7 @@ func getLimit(apiOp *types.APIRequest) int {
 // The `labelsRegex` looks for the bracketed form.
 func splitQuery(query string) []string {
 	m := labelsRegex.FindStringSubmatch(query)
-	if m != nil && len(m) >= 4 {
+	if m != nil && len(m) == 4 {
 		// m[0] contains the entire string, so just return all but that first item in `m`
 		return m[1:]
 	}
