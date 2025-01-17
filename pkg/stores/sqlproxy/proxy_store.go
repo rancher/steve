@@ -32,9 +32,9 @@ import (
 
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/lasso/pkg/cache/sql/informer"
-	"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
-	"github.com/rancher/lasso/pkg/cache/sql/partition"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
+	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
@@ -333,7 +333,7 @@ func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
 
-// getFieldsFromSchema converts object field names from types.APISchema's format into lasso's
+// getFieldsFromSchema converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 func getFieldsFromSchema(schema *types.APISchema) [][]string {
 	var fields [][]string
@@ -757,7 +757,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 
 	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), opts, partitions, apiOp.Namespace)
 	if err != nil {
-		if errors.Is(err, informer.InvalidColumnErr) {
+		if errors.Is(err, informer.ErrInvalidColumn) {
 			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
 		return nil, 0, "", err

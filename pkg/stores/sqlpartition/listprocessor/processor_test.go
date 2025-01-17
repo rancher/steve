@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/lasso/pkg/cache/sql/informer"
-	"github.com/rancher/lasso/pkg/cache/sql/partition"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -60,7 +60,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
+							Matches: []string{"ns1"},
 							Op:      "",
 							Partial: false,
 						},
@@ -89,14 +89,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -120,7 +120,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
+							Matches: []string{"ns1"},
 							Op:      "",
 							Partial: false,
 						},
@@ -139,14 +139,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -170,7 +170,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
-							Match:   "ns1",
+							Matches: []string{"ns1"},
 							Op:      "",
 							Partial: false,
 						},
@@ -192,14 +192,14 @@ func TestParseQuery(t *testing.T) {
 					{
 						Filters: []informer.Filter{
 							{
-								Field: []string{"metadata", "name"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "name"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 							{
-								Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-								Match: "somethin",
-								Op:    informer.Eq,
+								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Matches: []string{"somethin"},
+								Op:      informer.Eq,
 							},
 						},
 					},
@@ -222,7 +222,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: true,
 						},
@@ -251,7 +251,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: false,
 						},
@@ -280,7 +280,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: true,
 						},
@@ -290,7 +290,7 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"b"},
-							Match:   "d",
+							Matches: []string{"d"},
 							Op:      "",
 							Partial: true,
 						},
@@ -320,13 +320,13 @@ func TestParseQuery(t *testing.T) {
 					Filters: []informer.Filter{
 						{
 							Field:   []string{"a"},
-							Match:   "c",
+							Matches: []string{"c"},
 							Op:      "",
 							Partial: true,
 						},
 						{
 							Field:   []string{"b"},
-							Match:   "d",
+							Matches: []string{"d"},
 							Op:      "",
 							Partial: true,
 						},
@@ -352,7 +352,9 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField: []string{"metadata", "name"},
+				Fields: [][]string{
+					{"metadata", "name"},
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -374,8 +376,8 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField: []string{"metadata", "name"},
-				PrimaryOrder: informer.DESC,
+				Fields: [][]string{{"metadata", "name"}},
+				Orders: []informer.SortOrder{informer.DESC},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -397,10 +399,13 @@ func TestParseQuery(t *testing.T) {
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
 			Sort: informer.Sort{
-				PrimaryField:   []string{"metadata", "name"},
-				PrimaryOrder:   informer.DESC,
-				SecondaryField: []string{"spec", "something"},
-				SecondaryOrder: informer.ASC,
+				Fields: [][]string{
+					{"metadata", "name"},
+					{"spec", "something"},
+				},
+				Orders: []informer.SortOrder{
+					informer.DESC,
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{

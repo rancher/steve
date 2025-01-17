@@ -10,8 +10,8 @@ import (
 
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/lasso/pkg/cache/sql/informer"
-	"github.com/rancher/lasso/pkg/cache/sql/partition"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -79,7 +79,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 			}
 			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
 			value := strings.TrimSuffix(strings.TrimPrefix(filter[1], "'"), "'")
-			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Match: value, Op: op, Partial: usePartialMatch})
+			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Matches: []string{value}, Op: op, Partial: usePartialMatch})
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -91,20 +91,20 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 		sortParts := strings.SplitN(sortKeys, ",", 2)
 		primaryField := sortParts[0]
 		if primaryField != "" && primaryField[0] == '-' {
-			sortOpts.PrimaryOrder = informer.DESC
+			sortOpts.Orders = append(sortOpts.Orders, informer.DESC)
 			primaryField = primaryField[1:]
 		}
 		if primaryField != "" {
-			sortOpts.PrimaryField = strings.Split(primaryField, ".")
+			sortOpts.Fields = append(sortOpts.Fields, strings.Split(primaryField, "."))
 		}
 		if len(sortParts) > 1 {
 			secondaryField := sortParts[1]
 			if secondaryField != "" && secondaryField[0] == '-' {
-				sortOpts.SecondaryOrder = informer.DESC
+				sortOpts.Orders = append(sortOpts.Orders, informer.DESC)
 				secondaryField = secondaryField[1:]
 			}
 			if secondaryField != "" {
-				sortOpts.SecondaryField = strings.Split(secondaryField, ".")
+				sortOpts.Fields = append(sortOpts.Fields, strings.Split(secondaryField, "."))
 			}
 		}
 	}
@@ -170,14 +170,14 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op inf
 				{
 					Filters: []informer.Filter{
 						{
-							Field: []string{"metadata", "name"},
-							Match: pn,
-							Op:    informer.Eq,
+							Field:   []string{"metadata", "name"},
+							Matches: []string{pn},
+							Op:      informer.Eq,
 						},
 						{
-							Field: []string{"metadata", "labels[field.cattle.io/projectId]"},
-							Match: pn,
-							Op:    informer.Eq,
+							Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+							Matches: []string{pn},
+							Op:      informer.Eq,
 						},
 					},
 				},
@@ -189,7 +189,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op inf
 		for _, item := range uList.Items {
 			filters = append(filters, informer.Filter{
 				Field:   []string{"metadata", "namespace"},
-				Match:   item.GetName(),
+				Matches: []string{item.GetName()},
 				Op:      op,
 				Partial: false,
 			})
