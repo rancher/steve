@@ -355,10 +355,6 @@ func TestParseQuery(t *testing.T) {
 				Fields: [][]string{
 					{"metadata", "name"}},
 				Orders: []informer.SortOrder{informer.ASC},
-				},
-				Orders: []informer.SortOrder{
-					informer.ASC,
-				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
