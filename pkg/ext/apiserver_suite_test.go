@@ -179,8 +179,7 @@ func (s *ExtensionAPIServerSuite) SetupSuite() {
 	cert, key, err := s.cert.AsBytes()
 	s.Require().NoError(err)
 
-	s.certTempPath, err = os.MkdirTemp("", "steve_test")
-	s.Require().NoError(err)
+	s.certTempPath = s.T().TempDir()
 
 	caFilepath := filepath.Join(s.certTempPath, "request-header-ca.crt")
 	certFilepath := filepath.Join(s.certTempPath, "client-auth-proxy.crt")

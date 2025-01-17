@@ -718,13 +718,14 @@ func setupExtensionAPIServerNoStore(
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	err = extensionAPIServer.Run(ctx)
-	require.NoError(t, err)
-
 	t.Cleanup(func() {
 		cancel()
 	})
+
+	err = extensionAPIServer.Run(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	return extensionAPIServer, nil
 }
