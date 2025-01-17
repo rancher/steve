@@ -624,6 +624,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		}
 		return nil, 0, "", err
 	}
+	resourceVersion := inf.ByOptionsLister.(*informer.Informer).ByOptionsLister.(*informer.ListOptionIndexer).GetLastResourceVersion()
+	list.SetResourceVersion(resourceVersion)
 
 	return list, total, continueToken, nil
 }
@@ -667,7 +669,9 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 	debounceListener := newDebounceListener(5 * time.Second)
 	_ = inf.Watch(ctx, debounceListener)
 	resourceVersion := inf.ByOptionsLister.(*informer.Informer).ByOptionsLister.(*informer.ListOptionIndexer).GetLastResourceVersion()
-	debounceListener.NotifyNow(resourceVersion)
+	if wr.Revision != resourceVersion {
+		debounceListener.NotifyNow(resourceVersion)
+	}
 
 	go debounceListener.Run(ctx)
 
