@@ -624,8 +624,12 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		}
 		return nil, 0, "", err
 	}
-	resourceVersion := inf.ByOptionsLister.(*informer.Informer).ByOptionsLister.(*informer.ListOptionIndexer).GetLastResourceVersion()
-	list.SetResourceVersion(resourceVersion)
+	if total > 0 {
+		resourceVersion := inf.ByOptionsLister.(*informer.Informer).ByOptionsLister.(*informer.ListOptionIndexer).GetLastResourceVersion()
+		list.SetResourceVersion(resourceVersion)
+	} else {
+		list.SetResourceVersion("")
+	}
 
 	return list, total, continueToken, nil
 }
