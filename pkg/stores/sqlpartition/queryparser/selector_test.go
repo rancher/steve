@@ -69,6 +69,7 @@ func TestSelectorParse(t *testing.T) {
 		`y == 'def`,
 		`z == 'ghi\`,
 		"metadata.labels-im.here",
+		"metadata.labels[missing/close-bracket",
 		"!metadata.labels(im.not.here)",
 	}
 	for _, test := range testGoodStrings {

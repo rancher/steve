@@ -71,7 +71,7 @@ var (
 )
 
 func init() {
-	labelSelectorRegex = regexp.MustCompile(`^metadata.labels[[.]`)
+	labelSelectorRegex = regexp.MustCompile(`^metadata.labels(?:\.\w[-a-zA-Z0-9_./]*|\[.*])$`)
 }
 
 // Requirements is AND of all requirements.

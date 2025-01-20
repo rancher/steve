@@ -95,7 +95,7 @@ func isQuotedStringTarget(values []string) (isQuoted bool, isSingleQuoted bool) 
 	return true, s1[0] == '\''
 }
 
-// k8sRequirementToOrFilter - convert one k8s Requirement to a list of Filter's:
+// k8sRequirementToOrFilter converta a k8s Requirement to a Filter
 
 func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Filter, error) {
 	values := requirement.Values()
