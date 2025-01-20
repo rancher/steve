@@ -38,6 +38,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary"
 
 	"github.com/rancher/steve/pkg/attributes"
+	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
