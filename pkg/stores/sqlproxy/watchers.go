@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rancher/lasso/pkg/cache/sql/informer"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
 )
 
 var _ informer.Listener = (*debounceListener)(nil)

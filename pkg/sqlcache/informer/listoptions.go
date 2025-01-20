@@ -30,6 +30,7 @@ type ListOptions struct {
 	Filters    []OrFilter
 	Sort       Sort
 	Pagination Pagination
+	Revision   string
 }
 
 // Filter represents a field to filter by.

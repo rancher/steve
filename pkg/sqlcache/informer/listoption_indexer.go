@@ -10,8 +10,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
 
@@ -35,6 +37,8 @@ type ListOptionIndexer struct {
 	deleteFieldStmt  *sql.Stmt
 	upsertLabelsStmt *sql.Stmt
 	deleteLabelsStmt *sql.Stmt
+
+	resourceVersionCache *resourceVersionCache
 }
 
 var (
@@ -94,14 +98,17 @@ func NewListOptionIndexer(fields [][]string, s Store, namespaced bool) (*ListOpt
 	}
 
 	l := &ListOptionIndexer{
-		Indexer:       i,
-		namespaced:    namespaced,
-		indexedFields: indexedFields,
+		Indexer:              i,
+		namespaced:           namespaced,
+		indexedFields:        indexedFields,
+		resourceVersionCache: newResourceVersionCache(1000),
 	}
 	l.RegisterAfterUpsert(l.addIndexFields)
 	l.RegisterAfterUpsert(l.addLabels)
+	l.RegisterAfterUpsert(l.updateResourceVersionCache)
 	l.RegisterAfterDelete(l.deleteIndexFields)
 	l.RegisterAfterDelete(l.deleteLabels)
+	l.RegisterAfterDelete(l.updateResourceVersionCache)
 	columnDefs := make([]string, len(indexedFields))
 	for index, field := range indexedFields {
 		column := fmt.Sprintf(`"%s" TEXT`, field)
@@ -216,6 +223,15 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TXClient) 
 	return nil
 }
 
+func (l *ListOptionIndexer) updateResourceVersionCache(key string, obj any, tx db.TXClient) error {
+	objMeta, err := meta.Accessor(obj)
+	if err != nil {
+		return err
+	}
+	l.resourceVersionCache.add(objMeta.GetResourceVersion())
+	return nil
+}
+
 // labels are stored in tables that shadow the underlying object table for each GVK
 func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TXClient) error {
 	k8sObj, ok := obj.(*unstructured.Unstructured)
@@ -232,7 +248,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TXClient) error
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteIndexFields(key string, tx db.TXClient) error {
+func (l *ListOptionIndexer) deleteIndexFields(key string, _ any, tx db.TXClient) error {
 	args := []any{key}
 
 	err := tx.StmtExec(tx.Stmt(l.deleteFieldStmt), args...)
@@ -242,12 +258,16 @@ func (l *ListOptionIndexer) deleteIndexFields(key string, tx db.TXClient) error 
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabels(key string, tx db.TXClient) error {
+func (l *ListOptionIndexer) deleteLabels(key string, _ any, tx db.TXClient) error {
 	err := tx.StmtExec(tx.Stmt(l.deleteLabelsStmt), key)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
 	}
 	return nil
+}
+
+func (l *ListOptionIndexer) GetLastResourceVersion() string {
+	return l.resourceVersionCache.getLatest()
 }
 
 // ListByOptions returns objects according to the specified list options and partitions.
@@ -257,6 +277,12 @@ func (l *ListOptionIndexer) deleteLabels(key string, tx db.TXClient) error {
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
 func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+	isMaybeStale := lo.Revision != "" && !l.resourceVersionCache.contains(lo.Revision)
+	if isMaybeStale {
+		// TODO: The meat of the logic would be here
+		return nil, 0, "", fmt.Errorf("might be stale, try again maybe")
+	}
+
 	queryInfo, err := l.constructQuery(lo, partitions, namespace, db.Sanitize(l.GetName()))
 	if err != nil {
 		return nil, 0, "", err
@@ -850,4 +876,51 @@ func toUnstructuredList(items []any) *unstructured.UnstructuredList {
 		objectItems[i] = item.(*unstructured.Unstructured).Object
 	}
 	return result
+}
+
+type resourceVersionCache struct {
+	lock             sync.RWMutex
+	resourceVersions []string
+	items            map[string]struct{}
+	nextIndex        int
+}
+
+func newResourceVersionCache(size int) *resourceVersionCache {
+	return &resourceVersionCache{
+		resourceVersions: make([]string, size),
+		nextIndex:        0,
+		items:            make(map[string]struct{}),
+	}
+}
+
+func (c *resourceVersionCache) add(resourceVersion string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	oldResourceVersion := c.resourceVersions[c.nextIndex]
+	delete(c.items, oldResourceVersion)
+
+	c.resourceVersions[c.nextIndex] = resourceVersion
+	c.items[resourceVersion] = struct{}{}
+	c.nextIndex = (c.nextIndex + 1) % len(c.resourceVersions)
+}
+
+func (c *resourceVersionCache) contains(target string) bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	_, found := c.items[target]
+	return found
+}
+
+func (c *resourceVersionCache) getLatest() string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	index := c.nextIndex - 1
+	if index < 0 {
+		index = len(c.resourceVersions) - 1
+	}
+
+	return c.resourceVersions[index]
 }

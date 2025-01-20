@@ -68,7 +68,7 @@ type Store interface {
 	GetByKey(key string) (item any, exists bool, err error)
 	GetName() string
 	RegisterAfterUpsert(f func(key string, obj any, tx db.TXClient) error)
-	RegisterAfterDelete(f func(key string, tx db.TXClient) error)
+	RegisterAfterDelete(f func(key string, obj any, tx db.TXClient) error)
 	GetShouldEncrypt() bool
 	GetType() reflect.Type
 }

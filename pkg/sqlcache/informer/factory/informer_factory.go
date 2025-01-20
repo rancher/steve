@@ -54,6 +54,7 @@ type DBClient interface {
 
 type Cache struct {
 	informer.ByOptionsLister
+	informer.Watcher
 }
 
 type connector interface {
@@ -152,7 +153,7 @@ func (f *CacheFactory) CacheFor(fields [][]string, transform cache.TransformFunc
 	}
 
 	// At this point the informer is ready, return it
-	return Cache{ByOptionsLister: gi.informer}, nil
+	return Cache{ByOptionsLister: gi.informer, Watcher: gi.informer}, nil
 }
 
 // Reset closes the stopCh which stops any running informers, assigns a new stopCh, resets the GVK-informer cache, and resets
