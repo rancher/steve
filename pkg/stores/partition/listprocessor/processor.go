@@ -361,12 +361,6 @@ func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructu
 		leftNode := list[i].Object
 		rightNode := list[j].Object
 		for i, field := range s.Fields {
-			//itfs := make([]interface{}, len(field))
-			//for j, f := range field {
-			//	itfs[j] = f
-			//}
-			//leftValue := convert.ToString(data.GetValueN(leftNode, itfs...))
-			//rightValue := convert.ToString(data.GetValueN(rightNode, itfs...))
 			leftValue := convert.ToString(data.GetValueN(leftNode, field...))
 			rightValue := convert.ToString(data.GetValueN(rightNode, field...))
 			if leftValue != rightValue {
