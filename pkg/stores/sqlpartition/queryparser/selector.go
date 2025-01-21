@@ -65,12 +65,8 @@ var (
 		string(selection.GreaterThan), string(selection.LessThan),
 	}
 	validRequirementOperators = append(binaryOperators, unaryOperators...)
-	labelSelectorRegex        *regexp.Regexp
+	labelSelectorRegex        = regexp.MustCompile(`^metadata.labels(?:\.\w[-a-zA-Z0-9_./]*|\[.*])$`)
 )
-
-func init() {
-	labelSelectorRegex = regexp.MustCompile(`^metadata.labels(?:\.\w[-a-zA-Z0-9_./]*|\[.*])$`)
-}
 
 // Requirements is AND of all requirements.
 type Requirements []Requirement
