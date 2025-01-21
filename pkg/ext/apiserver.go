@@ -210,6 +210,12 @@ func (s *ExtensionAPIServer) GetAuthorizer() authorizer.Authorizer {
 
 // Install adds a new store to the extension API server.
 //
+// resourceName should be the plural form of the resource, the same that usually
+// goes in a [schema.GroupVersionResource]. For example, for a token store, it would be tokens.
+//
+// gvk is the [schema.GroupVersionKind] that defines the input / output for the store. The kind must be
+// singular name and in PascalCase. For example, for a token store, the kind would be Token.
+//
 // A store implements handlers for the various operations (verbs) supported for
 // a defined GVK / GVR. For example, a store for a (apiVersion:
 // ext.cattle.io/v1, kind: Tokens) Custom Resource could implement create and
