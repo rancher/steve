@@ -112,33 +112,16 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 	}()
 }
 
-/*
-func getRuntimeObject(u *unstructured.Unstructured) (*runtime.Object, error) {
-	obj, ok := u.(runtime.Object)
-	if !ok {
-		return nil, fmt.Errorf("can't convert an unstructured object into a runtime.Object")
-	}
-	return obj, nil
-}
-*/
-
 func createWatchEvent(event watch.EventType, u *unstructured.Unstructured) (watch.Event, error) {
-	/*
-		obj, err := getRuntimeObject(u)
-		if err != nil {
-			return watch.Event{}, err
-		}
-		return watch.Event{Type: event, Object: *obj}, nil
-	*/
 	return watch.Event{Type: event, Object: u}, nil
 }
 
-// ResultChan implements Interface.
+// ResultChan implements [k8s.io/apimachinery/pkg/watch].Interface.
 func (rw *SyntheticWatcher) ResultChan() <-chan watch.Event {
 	return rw.resultChan
 }
 
-// Stop implements Interface.
+// Stop implements [k8s.io/apimachinery/pkg/watch].Interface.
 func (rw *SyntheticWatcher) Stop() {
 	rw.stopChanLock.Lock()
 	defer rw.stopChanLock.Unlock()
@@ -151,7 +134,6 @@ func (rw *SyntheticWatcher) Stop() {
 	}
 }
 
-// Done allows the caller to be notified when Retry watcher stops.
 func (rw *SyntheticWatcher) Done() <-chan struct{} {
 	return rw.doneChan
 }
