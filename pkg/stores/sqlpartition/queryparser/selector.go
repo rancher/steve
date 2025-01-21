@@ -31,15 +31,12 @@ We only care about the parser, so the selection part is dropped.
 to avoid having to pull in that dependency as well (and it isn't needed because we convert
 the array into a sql statement. So the set gives us no benefit apart from removing duplicate target values).
 
-4. We added the `QuotedStringToken` constant to distinguish exact matches from substring matches.
-This needed the `SingleQuoteToken` and `DoubleQuoteToken` variants for the lexer.
+4. Our filter language ignores case for `in` and `notin`. These must be lower-case in kubectl filter expressions.
 
-5. Our filter language ignores case for `in` and `notin`. These must be lower-case in kubectl filter expressions.
-
-6. The `Lexer.Lex` function names the return parameters in its header but has no argument-less
+5. The `Lexer.Lex` function names the return parameters in its header but has no argument-less
    return statement, so I dropped the names.
 
-7.  We allow `lt` and `gt` as aliases for `<` and `>`.
+6.  We allow `lt` and `gt` as aliases for `<` and `>`.
 */
 
 package queryparser
@@ -51,6 +48,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -392,6 +390,11 @@ type ScannedItem struct {
 	literal string
 }
 
+func isIdentifierStartChar(ch byte) bool {
+	r := rune(ch)
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || ch == '_'
+}
+
 // isWhitespace returns true if the rune is a space, tab, or newline.
 func isWhitespace(ch byte) bool {
 	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
@@ -529,11 +532,13 @@ func (l *Lexer) Lex() (Token, string) {
 	case isSpecialSymbol(ch):
 		l.unread()
 		return l.scanSpecialSymbol()
-	case isQuoteDelimiter(ch):
+	case ch == '\'':
 		return l.scanString(ch)
-	default:
+	case isIdentifierStartChar(ch):
 		l.unread()
 		return l.scanIDOrKeyword()
+	default:
+		return ErrorToken, fmt.Sprintf("unexpected character '%c'", ch)
 	}
 }
 

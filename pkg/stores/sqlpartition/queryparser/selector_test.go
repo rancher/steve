@@ -51,7 +51,6 @@ func TestSelectorParse(t *testing.T) {
 		"x>1",
 		"x>1,z<5",
 		"x gt 1,z lt 5",
-		`x == "abc"`,
 		`y == 'def'`,
 		"metadata.labels.im-here",
 		"!metadata.labels.im-not-here",
@@ -65,12 +64,13 @@ func TestSelectorParse(t *testing.T) {
 		"x==a==b",
 		"!x=a",
 		"x<a",
-		`x == "abc`,
-		`y == 'def`,
-		`z == 'ghi\`,
+		`y == 'missing end-quote`,
+		`z == 'missing char after backslash\`,
 		"metadata.labels-im.here",
 		"metadata.labels[missing/close-bracket",
 		"!metadata.labels(im.not.here)",
+		`x="no double quotes allowed"`,
+		`x == "single double quote not allowed`,
 	}
 	for _, test := range testGoodStrings {
 		_, err := Parse(test)
@@ -104,12 +104,11 @@ func TestLexer(t *testing.T) {
 		{"!=", NotEqualsToken},
 		{"(", OpenParToken},
 		{")", ClosedParToken},
-		//Non-"special" characters are considered part of an identifier
-		{"~", IdentifierToken},
-		{"||", IdentifierToken},
-		{`"unclosed dq string`, ErrorToken},
 		{`'unclosed sq string`, ErrorToken},
 		{`'unclosed sq string on an escape \`, ErrorToken},
+		{"~", ErrorToken},
+		{"||", ErrorToken},
+		{`"unclosed dq string`, ErrorToken},
 	}
 	for _, v := range testcases {
 		l := &Lexer{s: v.s, pos: 0}
@@ -127,9 +126,7 @@ func TestQuotedStringLexer(t *testing.T) {
 		s string
 		t Token
 	}{
-		{`"abc"`, QuotedStringToken},
 		{`'def'`, QuotedStringToken},
-		{`"abc, bs:\\, dq:\", sq:\', x:\x"`, QuotedStringToken},
 		{`'def, bs:\\, dq:\", sq:\', x:\x'`, QuotedStringToken},
 	}
 	rx := regexp.MustCompile(`\\(.)`)
@@ -177,7 +174,6 @@ func TestLexerSequence(t *testing.T) {
 		{"key lt 4", []Token{IdentifierToken, IdentifierToken, IdentifierToken}},
 		{"key=value", []Token{IdentifierToken, EqualsToken, IdentifierToken}},
 		{"key == value", []Token{IdentifierToken, DoubleEqualsToken, IdentifierToken}},
-		{`"abc"`, []Token{QuotedStringToken}},
 		{"'def'", []Token{QuotedStringToken}},
 	}
 	for _, v := range testcases {
@@ -218,7 +214,6 @@ func TestParserLookahead(t *testing.T) {
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
 		{"key gt 3", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key lt 4", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
-		{`key == "dq string"`, []Token{IdentifierToken, DoubleEqualsToken, QuotedStringToken, EndOfStringToken}},
 		{`key = 'sq string'`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
 	}
 	for _, v := range testcases {
