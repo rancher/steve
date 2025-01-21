@@ -189,6 +189,7 @@ func TestTransformChain(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "boris",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
@@ -272,6 +273,7 @@ func TestTransformChain(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "natasha",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{

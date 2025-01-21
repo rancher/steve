@@ -34,10 +34,5 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 		}
 	}
 	err = unstructured.SetNestedField(obj.Object, connectedStatus, "status", "connected")
-	if err != nil {
-		return obj, err
-	}
-	name := obj.GetName()
-	err = unstructured.SetNestedField(obj.Object, name == "local", "spec", "internal")
 	return obj, err
 }

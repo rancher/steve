@@ -26,6 +26,7 @@ func TestTransformManagedCluster(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "boris",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
@@ -119,6 +120,7 @@ func TestTransformManagedCluster(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "local",
+						"internal":    true,
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
@@ -201,6 +203,7 @@ func TestTransformManagedCluster(t *testing.T) {
 					},
 					"spec": map[string]interface{}{
 						"displayName": "c-m-natasha",
+						"internal":    false,
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
