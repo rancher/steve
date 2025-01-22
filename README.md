@@ -225,6 +225,14 @@ Normal sort by namespace, then by name, reverse sort by creation time:
 sorting is only supported for the set of attributes supported by
 filtering (see above).
 
+Sorting by labels (also requires SQLite caching) can use complex label names.
+This query sorts by app name within their architectures, with the architectures
+listed in reverse lexicographic order. Note that complex label names need to be
+surrounded by square brackets (which themselves need to be percent-escaped for some web queries)
+
+```
+/v1/nodes?sort=-metadata.labels[kubernetes.io/arch],metadata.name
+```
 
 #### `page`, `pagesize`, and `revision`
 
