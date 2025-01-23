@@ -677,7 +677,12 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 		idNamespace = apiOp.Namespace
 	}
 
-	debounceListener := newDebounceListener(5 * time.Second)
+	debounceRate := 5 * time.Second
+	if wr.DebounceRate != 0 {
+		debounceRate = wr.DebounceRate
+	}
+	fmt.Printf("req debounce=%q, debounce=%q", wr.DebounceRate, debounceRate)
+	debounceListener := newDebounceListener(debounceRate)
 	debounceListener.filterName = name
 	debounceListener.filterNamespace = idNamespace
 	debounceListener.filterSelector = wr.Selector
