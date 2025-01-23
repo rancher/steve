@@ -135,8 +135,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 
 	store := s.Partitioner.Store()
 
-	fmt.Println("HITHERE from watch")
-
 	response := make(chan types.APIEvent)
 	c, err := store.WatchByPartitions(apiOp, schema, wr, partitions)
 	if err != nil {

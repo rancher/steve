@@ -79,13 +79,13 @@ func NewInformer(client dynamic.ResourceInterface, fields [][]string, transform 
 	listeners := newlisteners()
 	sii.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			listeners.Notify(loi.resourceVersionCache.getLatest())
+			listeners.Notify(loi.resourceVersionCache.getLatest(), nil, obj)
 		},
 		UpdateFunc: func(obj any, newObj any) {
-			listeners.Notify(loi.resourceVersionCache.getLatest())
+			listeners.Notify(loi.resourceVersionCache.getLatest(), obj, newObj)
 		},
 		DeleteFunc: func(obj any) {
-			listeners.Notify(loi.resourceVersionCache.getLatest())
+			listeners.Notify(loi.resourceVersionCache.getLatest(), nil, obj)
 		},
 	})
 

@@ -33,6 +33,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/wrangler/v3/pkg/data"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"github.com/rancher/wrangler/v3/pkg/summary"
@@ -671,7 +672,16 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 		return nil, err
 	}
 
+	idNamespace, name := kv.RSplit(wr.ID, "/")
+	if idNamespace == "" {
+		idNamespace = apiOp.Namespace
+	}
+
 	debounceListener := newDebounceListener(5 * time.Second)
+	debounceListener.filterName = name
+	debounceListener.filterNamespace = idNamespace
+	debounceListener.filterSelector = wr.Selector
+
 	_ = inf.Watch(ctx, debounceListener)
 	resourceVersion := inf.ByOptionsLister.(*informer.Informer).ByOptionsLister.(*informer.ListOptionIndexer).GetLastResourceVersion()
 	if wr.Revision != resourceVersion {
