@@ -72,6 +72,12 @@ var (
 			Description: "testArbitrary",
 		},
 	}
+	protoNestedMap = proto.Map{
+		BaseSchema: proto.BaseSchema{
+			Description: "nestedMap",
+		},
+		SubType: &protoKind,
+	}
 )
 
 func TestSchemaFieldVisitor(t *testing.T) {
@@ -87,9 +93,8 @@ func TestSchemaFieldVisitor(t *testing.T) {
 			inputSchema:     &protoArray,
 			wantDefinitions: map[string]definition{},
 			wantField: definitionField{
-				Type:        "array",
+				Type:        "array[string]",
 				Description: protoArray.Description,
-				SubType:     protoPrimitive.Type,
 			},
 		},
 		{
@@ -97,9 +102,8 @@ func TestSchemaFieldVisitor(t *testing.T) {
 			inputSchema:     &protoMap,
 			wantDefinitions: map[string]definition{},
 			wantField: definitionField{
-				Type:        "map",
+				Type:        "map[string]string",
 				Description: protoMap.Description,
-				SubType:     protoPrimitive.Type,
 			},
 		},
 		{
@@ -136,15 +140,13 @@ func TestSchemaFieldVisitor(t *testing.T) {
 				protoKind.Path.String(): {
 					ResourceFields: map[string]definitionField{
 						"protoArray": {
-							Type:        "array",
+							Type:        "array[" + protoPrimitive.Type + "]",
 							Description: protoArray.Description,
-							SubType:     protoPrimitive.Type,
 							Required:    true,
 						},
 						"protoMap": {
-							Type:        "map",
+							Type:        "map[" + protoPrimitive.Type + "]string",
 							Description: protoMap.Description,
-							SubType:     protoPrimitive.Type,
 						},
 						"protoPrimitive": {
 							Type:        protoPrimitive.Type,
@@ -181,15 +183,13 @@ func TestSchemaFieldVisitor(t *testing.T) {
 				protoKind.Path.String(): {
 					ResourceFields: map[string]definitionField{
 						"protoArray": {
-							Type:        "array",
+							Type:        "array[string]",
 							Description: protoArray.Description,
-							SubType:     protoPrimitive.Type,
 							Required:    true,
 						},
 						"protoMap": {
-							Type:        "map",
+							Type:        "map[string]string",
 							Description: protoMap.Description,
-							SubType:     protoPrimitive.Type,
 						},
 						"protoPrimitive": {
 							Type:        protoPrimitive.Type,
@@ -217,6 +217,40 @@ func TestSchemaFieldVisitor(t *testing.T) {
 			wantField: definitionField{
 				Type:        "string",
 				Description: protoArbitrary.Description,
+			},
+		},
+		{
+			name:        "nested map with kind",
+			inputSchema: &protoNestedMap,
+			wantDefinitions: map[string]definition{
+				protoKind.Path.String(): {
+					ResourceFields: map[string]definitionField{
+						"protoArray": {
+							Type:        "array[string]",
+							Description: protoArray.Description,
+							Required:    true,
+						},
+						"protoMap": {
+							Type:        "map[string]string",
+							Description: protoMap.Description,
+						},
+						"protoPrimitive": {
+							Type:        protoPrimitive.Type,
+							Description: protoPrimitive.Description,
+							Required:    true,
+						},
+						"protoRef": {
+							Type:        protoKind.Path.String(),
+							Description: protoRef.Description,
+						},
+					},
+					Type:        protoKind.Path.String(),
+					Description: protoKind.Description,
+				},
+			},
+			wantField: definitionField{
+				Type:        "map[string]io.cattle.test",
+				Description: protoNestedMap.Description,
 			},
 		},
 	}

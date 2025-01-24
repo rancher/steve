@@ -20,23 +20,34 @@ func (s *schemaFieldVisitor) VisitArray(array *proto.Array) {
 	// it was kept this way to provide backwards compat with previous endpoints.
 	array.SubType.Accept(s)
 	subField := s.field
-	field.Type = "array"
-	field.SubType = subField.Type
+	field.Type = "array[" + subField.Type + "]"
 	s.field = field
 }
 
 // VisitMap turns a map into a definitionField (stored on the receiver). For maps of complex types, will also visit the
 // subtype.
+//func (s *schemaFieldVisitor) VisitMap(protoMap *proto.Map) {
+//	field := definitionField{
+//		Description: protoMap.GetDescription(),
+//	}
+//	// this currently is not recursive and provides little information for nested types- while this isn't optimal,
+//	// it was kept this way to provide backwards compat with previous endpoints.
+//	protoMap.SubType.Accept(s)
+//	subField := s.field
+//	field.Type = "map[" + subField.Type + "]"
+//	s.field = field
+//}
+
 func (s *schemaFieldVisitor) VisitMap(protoMap *proto.Map) {
 	field := definitionField{
 		Description: protoMap.GetDescription(),
 	}
-	// this currently is not recursive and provides little information for nested types- while this isn't optimal,
-	// it was kept this way to provide backwards compat with previous endpoints.
-	protoMap.SubType.Accept(s)
-	subField := s.field
-	field.Type = "map"
-	field.SubType = subField.Type
+	// Recursively visit the value subtype
+	subVisitor := &schemaFieldVisitor{definitions: s.definitions}
+	protoMap.SubType.Accept(subVisitor)
+	subField := subVisitor.field
+	// Represent the map as "map[string]<value_type>"
+	field.Type = "map[string]" + subField.Type
 	s.field = field
 }
 
