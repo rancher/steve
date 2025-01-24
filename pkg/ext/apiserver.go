@@ -170,7 +170,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	if err := recommendedOpts.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
-	config.SecureServing.SNICerts = opts.SNICerts
+	config.SecureServing.SNICerts = append(config.SecureServing.SNICerts, opts.SNICerts...)
 
 	config.Authentication.Authenticator = opts.Authenticator
 	if caContentProvider, ok := opts.Authenticator.(dynamiccertificates.CAContentProvider); ok {
