@@ -24,13 +24,12 @@ package queryparser
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"k8s.io/apimachinery/pkg/selection"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -44,18 +43,17 @@ func TestSelectorParse(t *testing.T) {
 		"x=a,y=b,z=c",
 		"",
 		"x!=a,y=b",
-		"x=",
-		"x= ",
-		"x=,z= ",
-		"x= ,z= ",
+		"close ~ value",
+		"notclose !~ value",
 		"x>1",
 		"x>1,z<5",
 		"x gt 1,z lt 5",
-		`y == 'def'`,
+		`y == def`,
 		"metadata.labels.im-here",
 		"!metadata.labels.im-not-here",
 		"metadata.labels[im.here]",
 		"!metadata.labels[im.not.here]",
+		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -64,13 +62,21 @@ func TestSelectorParse(t *testing.T) {
 		"x==a==b",
 		"!x=a",
 		"x<a",
-		`y == 'missing end-quote`,
-		`z == 'missing char after backslash\`,
+		"x=",
+		"x= ",
+		"x=,z= ",
+		"x= ,z= ",
+		"x ~",
+		"x !~",
+		"~ val",
+		"!~ val",
+		"= val",
+		"== val",
 		"metadata.labels-im.here",
 		"metadata.labels[missing/close-bracket",
 		"!metadata.labels(im.not.here)",
 		`x="no double quotes allowed"`,
-		`x == "single double quote not allowed`,
+		`x='no single quotes allowed'`,
 	}
 	for _, test := range testGoodStrings {
 		_, err := Parse(test)
@@ -104,11 +110,11 @@ func TestLexer(t *testing.T) {
 		{"!=", NotEqualsToken},
 		{"(", OpenParToken},
 		{")", ClosedParToken},
-		{`'unclosed sq string`, ErrorToken},
-		{`'unclosed sq string on an escape \`, ErrorToken},
-		{"~", ErrorToken},
+		{`'sq string''`, ErrorToken},
+		{`"dq string"`, ErrorToken},
+		{"~", PartialEqualsToken},
+		{"!~", NotPartialEqualsToken},
 		{"||", ErrorToken},
-		{`"unclosed dq string`, ErrorToken},
 	}
 	for _, v := range testcases {
 		l := &Lexer{s: v.s, pos: 0}
@@ -118,31 +124,6 @@ func TestLexer(t *testing.T) {
 		}
 		if v.t != ErrorToken && lit != v.s {
 			t.Errorf("Got '%s' it should be '%s'", lit, v.s)
-		}
-	}
-}
-func TestQuotedStringLexer(t *testing.T) {
-	testcases := []struct {
-		s string
-		t Token
-	}{
-		{`'def'`, QuotedStringToken},
-		{`'def, bs:\\, dq:\", sq:\', x:\x'`, QuotedStringToken},
-	}
-	rx := regexp.MustCompile(`\\(.)`)
-	for _, v := range testcases {
-		l := &Lexer{s: v.s, pos: 0}
-		token, lit := l.Lex()
-		if token != v.t {
-			t.Errorf("Got %d it should be %d for '%s'", token, v.t, v.s)
-		}
-		if v.t != ErrorToken {
-			//expectedLit := v.s[1 : len(v.s)-1]
-			expectedLit := v.s
-			expectedLit = rx.ReplaceAllString(expectedLit, "$1")
-			if lit != expectedLit {
-				t.Errorf("Got '%s' it should be '%s'", lit, expectedLit)
-			}
 		}
 	}
 }
@@ -174,7 +155,14 @@ func TestLexerSequence(t *testing.T) {
 		{"key lt 4", []Token{IdentifierToken, IdentifierToken, IdentifierToken}},
 		{"key=value", []Token{IdentifierToken, EqualsToken, IdentifierToken}},
 		{"key == value", []Token{IdentifierToken, DoubleEqualsToken, IdentifierToken}},
-		{"'def'", []Token{QuotedStringToken}},
+		{"key ~ value", []Token{IdentifierToken, PartialEqualsToken, IdentifierToken}},
+		{"key~ value", []Token{IdentifierToken, PartialEqualsToken, IdentifierToken}},
+		{"key ~value", []Token{IdentifierToken, PartialEqualsToken, IdentifierToken}},
+		{"key~value", []Token{IdentifierToken, PartialEqualsToken, IdentifierToken}},
+		{"key !~ value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{"key!~ value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{"key !~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{"key!~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -214,13 +202,13 @@ func TestParserLookahead(t *testing.T) {
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
 		{"key gt 3", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key lt 4", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
-		{`key = 'sq string'`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
+		{`key = multi-word-string`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
 		p.scan()
 		if len(p.scannedItems) != len(v.t) {
-			t.Errorf("Expected %d items found %d", len(v.t), len(p.scannedItems))
+			t.Errorf("Expected %d items for test %s, found %d", len(v.t), v.s, len(p.scannedItems))
 		}
 		for {
 			token, lit := p.lookahead(KeyAndOperator)
@@ -244,12 +232,14 @@ func TestParseOperator(t *testing.T) {
 		{"in", nil},
 		{"=", nil},
 		{"==", nil},
+		{"~", nil},
 		{">", nil},
 		{"<", nil},
 		{"lt", nil},
 		{"gt", nil},
 		{"notin", nil},
 		{"!=", nil},
+		{"!~", nil},
 		{"!", fmt.Errorf("found '%s', expected: %v", selection.DoesNotExist, strings.Join(binaryOperators, ", "))},
 		{"exists", fmt.Errorf("found '%s', expected: %v", selection.Exists, strings.Join(binaryOperators, ", "))},
 		{"(", fmt.Errorf("found '%s', expected: %v", "(", strings.Join(binaryOperators, ", "))},
@@ -397,37 +387,16 @@ func TestRequirementConstructor(t *testing.T) {
 		{
 			Key: strings.Repeat("a", 254), //breaks DNS rule that len(key) <= 253
 			Op:  selection.Exists,
-			//WantErr: field.ErrorList{
-			//	&field.Error{
-			//		Type:     field.ErrorTypeInvalid,
-			//		Field:    "key",
-			//		BadValue: strings.Repeat("a", 254),
-			//	},
-			//},
 		},
 		{
 			Key:  "x16",
 			Op:   selection.Equals,
 			Vals: sets.NewString(strings.Repeat("a", 254)),
-			//WantErr: field.ErrorList{
-			//	&field.Error{
-			//		Type:     field.ErrorTypeInvalid,
-			//		Field:    "values[0][x16]",
-			//		BadValue: strings.Repeat("a", 254),
-			//	},
-			//},
 		},
 		{
 			Key:  "x17",
 			Op:   selection.Equals,
 			Vals: sets.NewString("a b"),
-			//WantErr: field.ErrorList{
-			//	&field.Error{
-			//		Type:     field.ErrorTypeInvalid,
-			//		Field:    "values[0][x17]",
-			//		BadValue: "a b",
-			//	},
-			//},
 		},
 		{
 			Key: "x18",

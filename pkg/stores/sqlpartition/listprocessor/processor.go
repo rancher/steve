@@ -13,9 +13,10 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/selection"
 )
 
 const (
@@ -56,23 +57,25 @@ type Cache interface {
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
-func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, error) {
+func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, bool, error) {
 	h := map[selection.Operator]informer.Op{
-		selection.Equals:       informer.Eq,
-		selection.DoubleEquals: informer.Eq,
-		selection.NotEquals:    informer.NotEq,
-		selection.In:           informer.In,
-		selection.NotIn:        informer.NotIn,
-		selection.Exists:       informer.Exists,
-		selection.DoesNotExist: informer.NotExists,
-		selection.LessThan:     informer.Lt,
-		selection.GreaterThan:  informer.Gt,
+		selection.Equals:           informer.Eq,
+		selection.DoubleEquals:     informer.Eq,
+		selection.PartialEquals:    informer.Eq,
+		selection.NotEquals:        informer.NotEq,
+		selection.NotPartialEquals: informer.NotEq,
+		selection.In:               informer.In,
+		selection.NotIn:            informer.NotIn,
+		selection.Exists:           informer.Exists,
+		selection.DoesNotExist:     informer.NotExists,
+		selection.LessThan:         informer.Lt,
+		selection.GreaterThan:      informer.Gt,
 	}
 	v, ok := h[k8sOp]
 	if ok {
-		return v, nil
+		return v, k8sOp == selection.PartialEquals || k8sOp == selection.NotPartialEquals, nil
 	}
-	return "", fmt.Errorf("unknown k8sOp: %s", k8sOp)
+	return "", false, fmt.Errorf("unknown k8sOp: %s", k8sOp)
 }
 
 // Determine if the value field is surrounded by a pair of single- or double-quotes
@@ -100,25 +103,13 @@ func isQuotedStringTarget(values []string) (isQuoted bool, isSingleQuoted bool) 
 func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Filter, error) {
 	values := requirement.Values()
 	queryFields := splitQuery(requirement.Key())
-	op, err := k8sOpToRancherOp(requirement.Operator())
-	if err != nil {
-		return informer.Filter{}, err
-	}
-	usePartialMatch := true
-	isQuoted, isSingleQuoted := isQuotedStringTarget(values)
-	if isQuoted {
-		// Strip off the quotes
-		values[0] = values[0][1 : len(values[0])-1]
-		if isSingleQuoted {
-			usePartialMatch = false
-		}
-	}
+	op, usePartialMatch, err := k8sOpToRancherOp(requirement.Operator())
 	return informer.Filter{
 		Field:   queryFields,
 		Matches: values,
 		Op:      op,
 		Partial: usePartialMatch,
-	}, nil
+	}, err
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.

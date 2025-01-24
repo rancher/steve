@@ -37,11 +37,14 @@ the array into a sql statement. So the set gives us no benefit apart from removi
    return statement, so I dropped the names.
 
 6.  We allow `lt` and `gt` as aliases for `<` and `>`.
+
+7. We added the '~' and '!~' operators to indicate partial match and non-match
 */
 
 package queryparser
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -50,18 +53,22 @@ import (
 	"strings"
 	"unicode"
 
-	"k8s.io/apimachinery/pkg/selection"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
+type Operator string
+
 var (
+	a              = Equals
 	unaryOperators = []string{
 		string(selection.Exists), string(selection.DoesNotExist),
 	}
 	binaryOperators = []string{
 		string(selection.In), string(selection.NotIn),
 		string(selection.Equals), string(selection.DoubleEquals), string(selection.NotEquals),
+		string(selection.PartialEquals), string(selection.NotPartialEquals),
 		string(selection.GreaterThan), string(selection.LessThan),
 	}
 	validRequirementOperators = append(binaryOperators, unaryOperators...)
@@ -156,6 +163,10 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "exact-match compatibility requires one single value"))
 		}
+	case selection.PartialEquals, selection.NotPartialEquals:
+		if len(vals) != 1 {
+			allErrs = append(allErrs, field.Invalid(valuePath, vals, "partial-match compatibility requires one single value"))
+		}
 	case selection.Exists, selection.DoesNotExist:
 		if len(vals) != 0 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "values set must be empty for exists and does not exist"))
@@ -246,6 +257,10 @@ func (r *Requirement) String() string {
 		sb.WriteString("==")
 	case selection.NotEquals:
 		sb.WriteString("!=")
+	case selection.PartialEquals:
+		sb.WriteString("~")
+	case selection.NotPartialEquals:
+		sb.WriteString("!~")
 	case selection.In:
 		sb.WriteString(" in ")
 	case selection.NotIn:
@@ -343,6 +358,8 @@ const (
 	DoubleEqualsToken
 	// EqualsToken represents equal
 	EqualsToken
+	// PartialEqualsToken does a partial match
+	PartialEqualsToken
 	// GreaterThanToken represents greater than
 	GreaterThanToken
 	// IdentifierToken represents identifier, e.g. keys and values
@@ -356,10 +373,10 @@ const (
 	NotEqualsToken
 	// NotInToken represents not in
 	NotInToken
+	// NotPartialEqualsToken does a partial match
+	NotPartialEqualsToken
 	// OpenParToken represents open parenthesis
 	OpenParToken
-	SingleQuoteToken
-	DoubleQuoteToken
 )
 
 // string2token contains the mapping between lexer Token and token literal
@@ -370,14 +387,14 @@ var string2token = map[string]Token{
 	"!":     DoesNotExistToken,
 	"==":    DoubleEqualsToken,
 	"=":     EqualsToken,
+	"~":     PartialEqualsToken,
 	">":     GreaterThanToken,
 	"in":    InToken,
 	"<":     LessThanToken,
 	"!=":    NotEqualsToken,
+	"!~":    NotPartialEqualsToken,
 	"notin": NotInToken,
 	"(":     OpenParToken,
-	"'":     SingleQuoteToken,
-	"\"":    DoubleQuoteToken,
 }
 
 // ScannedItem contains the Token and the literal produced by the lexer.
@@ -399,14 +416,10 @@ func isWhitespace(ch byte) bool {
 // isSpecialSymbol detects if the character ch can be an operator
 func isSpecialSymbol(ch byte) bool {
 	switch ch {
-	case '=', '!', '(', ')', ',', '>', '<':
+	case '=', '!', '(', ')', ',', '>', '<', '~':
 		return true
 	}
 	return false
-}
-
-func isQuoteDelimiter(ch byte) bool {
-	return ch == '"' || ch == '\''
 }
 
 // Lexer represents the Lexer struct for label selector.
@@ -456,31 +469,8 @@ IdentifierLoop:
 	return IdentifierToken, s // otherwise is an identifier
 }
 
-func (l *Lexer) scanString(delimiter byte) (tok Token, lit string) {
-	buffer := []byte{delimiter}
-	escapeNext := false
-StringLoop:
-	for {
-		switch ch := l.read(); {
-		case ch == 0:
-			return ErrorToken, fmt.Sprintf("unclosed string, looking for %c, got eof in [%s]", delimiter, string(buffer))
-		case escapeNext:
-			buffer = append(buffer, ch)
-			escapeNext = false
-		case ch == '\\':
-			escapeNext = true
-		case ch == delimiter:
-			buffer = append(buffer, ch)
-			break StringLoop
-		default:
-			buffer = append(buffer, ch)
-		}
-	}
-	return QuotedStringToken, string(buffer)
-}
-
 // scanSpecialSymbol scans string starting with special symbol.
-// special symbol identify non literal operators. "!=", "==", "="
+// special symbol identify non literal operators. "!=", "==", "=", "!~"
 func (l *Lexer) scanSpecialSymbol() (Token, string) {
 	lastScannedItem := ScannedItem{}
 	var buffer []byte
@@ -528,8 +518,6 @@ func (l *Lexer) Lex() (Token, string) {
 	case isSpecialSymbol(ch):
 		l.unread()
 		return l.scanSpecialSymbol()
-	case ch == '\'':
-		return l.scanString(ch)
 	case isIdentifierStartChar(ch):
 		l.unread()
 		return l.scanIDOrKeyword()
@@ -608,7 +596,7 @@ func (p *Parser) parse() (internalSelector, error) {
 		case IdentifierToken, DoesNotExistToken:
 			r, err := p.parseRequirement()
 			if err != nil {
-				return nil, fmt.Errorf("unable to parse requirement: %v", err)
+				return nil, err
 			}
 			requirements = append(requirements, *r)
 			t, l := p.consume(Values)
@@ -650,8 +638,8 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	switch operator {
 	case selection.In, selection.NotIn:
 		values, err = p.parseValues()
-	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan:
-		values, err = p.parseExactValue()
+	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.PartialEquals, selection.NotPartialEquals:
+		values, err = p.parseSingleValue()
 	}
 	if err != nil {
 		return nil, err
@@ -692,6 +680,8 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 		op = selection.In
 	case EqualsToken:
 		op = selection.Equals
+	case PartialEqualsToken:
+		op = selection.PartialEquals
 	case DoubleEqualsToken:
 		op = selection.DoubleEquals
 	case GreaterThanToken:
@@ -702,6 +692,8 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 		op = selection.NotIn
 	case NotEqualsToken:
 		op = selection.NotEquals
+	case NotPartialEqualsToken:
+		op = selection.NotPartialEquals
 	default:
 		if lit == "lt" {
 			op = selection.LessThan
@@ -776,13 +768,12 @@ func (p *Parser) parseIdentifiersList() (sets.String, error) {
 	}
 }
 
-// parseExactValue parses the only value for exact match style
-func (p *Parser) parseExactValue() (sets.String, error) {
+// parseSingleValue parses the only value for exact match style
+func (p *Parser) parseSingleValue() (sets.String, error) {
 	s := sets.NewString()
 	tok, _ := p.lookahead(Values)
 	if tok == EndOfStringToken || tok == CommaToken {
-		s.Insert("")
-		return s, nil
+		return s, errors.New("found end of a query string, expected: a comparison value")
 	}
 	tok, lit := p.consume(Values)
 	if tok == IdentifierToken || tok == QuotedStringToken {

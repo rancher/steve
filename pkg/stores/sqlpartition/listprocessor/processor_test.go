@@ -210,7 +210,7 @@ func TestParseQuery(t *testing.T) {
 		description: "ParseQuery() with filter param set should include filter with partial set to true in list options.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=a=c"},
+				URL: &url.URL{RawQuery: "filter=a~c"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -233,10 +233,10 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with filter param set, with value in single quotes, should include filter with partial set to false in list options.",
+		description: "ParseQuery() with filter param set, should include filter with partial set to false in list options.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=a='c'"},
+				URL: &url.URL{RawQuery: "filter=a=c"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -271,7 +271,7 @@ func TestParseQuery(t *testing.T) {
 		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]=heads"},
+				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]~heads"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -309,7 +309,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a"},
 							Matches: []string{"c"},
 							Op:      informer.Eq,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -319,7 +319,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"b"},
 							Matches: []string{"d"},
 							Op:      informer.Eq,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -345,7 +345,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a"},
 							Matches: []string{"c"},
 							Op:      informer.Eq,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -355,7 +355,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"b"},
 							Matches: []string{"d"},
 							Op:      informer.Eq,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -369,7 +369,7 @@ func TestParseQuery(t *testing.T) {
 		description: "ParseQuery() should handle comma-separated standard and labels filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=beer='pabst',metadata.labels[beer2.io/ale]='schlitz'"},
+				URL: &url.URL{RawQuery: "filter=beer=pabst,metadata.labels[beer2.io/ale] ~schlitz"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -387,7 +387,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"metadata", "labels", "beer2.io/ale"},
 							Matches: []string{"schlitz"},
 							Op:      informer.Eq,
-							Partial: false,
+							Partial: true,
 						},
 					},
 				},
@@ -401,7 +401,7 @@ func TestParseQuery(t *testing.T) {
 		description: "ParseQuery() should handle simple dot-separated label filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "filter=beer='natty-bo',metadata.labels.beer3=rainier"},
+				URL: &url.URL{RawQuery: "filter=beer=natty-bo,metadata.labels.beer3~rainier"},
 			},
 		},
 		expectedLO: informer.ListOptions{
@@ -445,13 +445,13 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a1In"},
 							Matches: []string{"x1"},
 							Op:      informer.In,
-							Partial: true,
+							Partial: false,
 						},
 						{
 							Field:   []string{"a2In"},
 							Matches: []string{"x2"},
 							Op:      informer.In,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -477,7 +477,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a2In"},
 							Matches: []string{"x2a", "x2b"},
 							Op:      informer.In,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -503,13 +503,13 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a1NotIn"},
 							Matches: []string{"x1"},
 							Op:      informer.NotIn,
-							Partial: true,
+							Partial: false,
 						},
 						{
 							Field:   []string{"a2NotIn"},
 							Matches: []string{"x2"},
 							Op:      informer.NotIn,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -535,7 +535,7 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a3NotIn"},
 							Matches: []string{"x3a", "x3b"},
 							Op:      informer.In,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -561,13 +561,13 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a4In"},
 							Matches: []string{"x4a"},
 							Op:      informer.In,
-							Partial: true,
+							Partial: false,
 						},
 						{
 							Field:   []string{"a4NotIn"},
 							Matches: []string{"x4b"},
 							Op:      informer.NotIn,
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -603,19 +603,19 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"metadata", "labels", "a5In1"},
 							Op:      informer.Exists,
 							Matches: []string{},
-							Partial: true,
+							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "a5In2"},
 							Op:      informer.NotExists,
 							Matches: []string{},
-							Partial: true,
+							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "a5In3"},
 							Op:      informer.NotExists,
 							Matches: []string{},
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
@@ -641,13 +641,13 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a"},
 							Op:      informer.Lt,
 							Matches: []string{"1"},
-							Partial: true,
+							Partial: false,
 						},
 						{
 							Field:   []string{"b"},
 							Op:      informer.Gt,
 							Matches: []string{"2"},
-							Partial: true,
+							Partial: false,
 						},
 					},
 				},
