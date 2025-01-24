@@ -454,13 +454,17 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	return queryInfo, nil
 }
 
-func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryInfo) (*unstructured.UnstructuredList, int, string, error) {
+func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryInfo) (result *unstructured.UnstructuredList, total int, token string, err error) {
 	stmt := l.Prepare(queryInfo.query)
-	defer l.CloseStmt(stmt)
+	defer func() {
+		cerr := l.CloseStmt(stmt)
+		if cerr != nil {
+			err = errors.Join(err, &db.QueryError{QueryString: queryInfo.query, Err: cerr})
+		}
+	}()
 
 	var items []any
-	var total int
-	err := l.WithTransaction(ctx, false, func(tx transaction.Client) error {
+	err = l.WithTransaction(ctx, false, func(tx transaction.Client) error {
 		txStmt := tx.Stmt(stmt)
 		rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
 		if err != nil {
@@ -474,7 +478,12 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		total = len(items)
 		if queryInfo.countQuery != "" {
 			countStmt := l.Prepare(queryInfo.countQuery)
-			defer l.CloseStmt(countStmt)
+			defer func() {
+				cerr := l.CloseStmt(countStmt)
+				if cerr != nil {
+					err = errors.Join(err, &db.QueryError{QueryString: queryInfo.countQuery, Err: cerr})
+				}
+			}()
 			txStmt := tx.Stmt(countStmt)
 			rows, err := txStmt.QueryContext(ctx, queryInfo.countParams...)
 			if err != nil {
