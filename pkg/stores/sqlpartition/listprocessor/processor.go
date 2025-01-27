@@ -35,8 +35,20 @@ const (
 	notOp = "!"
 )
 
-var opReg = regexp.MustCompile(`[!]?=`)
 var labelsRegex = regexp.MustCompile(`^(metadata)\.(labels)\[(.+)\]$`)
+var mapK8sOpToRancherOp = map[selection.Operator]informer.Op{
+	selection.Equals:           informer.Eq,
+	selection.DoubleEquals:     informer.Eq,
+	selection.PartialEquals:    informer.Eq,
+	selection.NotEquals:        informer.NotEq,
+	selection.NotPartialEquals: informer.NotEq,
+	selection.In:               informer.In,
+	selection.NotIn:            informer.NotIn,
+	selection.Exists:           informer.Exists,
+	selection.DoesNotExist:     informer.NotExists,
+	selection.LessThan:         informer.Lt,
+	selection.GreaterThan:      informer.Gt,
+}
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
@@ -58,20 +70,7 @@ type Cache interface {
 }
 
 func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, bool, error) {
-	h := map[selection.Operator]informer.Op{
-		selection.Equals:           informer.Eq,
-		selection.DoubleEquals:     informer.Eq,
-		selection.PartialEquals:    informer.Eq,
-		selection.NotEquals:        informer.NotEq,
-		selection.NotPartialEquals: informer.NotEq,
-		selection.In:               informer.In,
-		selection.NotIn:            informer.NotIn,
-		selection.Exists:           informer.Exists,
-		selection.DoesNotExist:     informer.NotExists,
-		selection.LessThan:         informer.Lt,
-		selection.GreaterThan:      informer.Gt,
-	}
-	v, ok := h[k8sOp]
+	v, ok := mapK8sOpToRancherOp[k8sOp]
 	if ok {
 		return v, k8sOp == selection.PartialEquals || k8sOp == selection.NotPartialEquals, nil
 	}
