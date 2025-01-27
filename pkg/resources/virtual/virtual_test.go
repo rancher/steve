@@ -1,6 +1,7 @@
 package virtual_test
 
 import (
+	"fmt"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
@@ -176,6 +177,174 @@ func TestTransformChain(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "a non-ready cluster",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "management.cattle.io/v3",
+					"kind":       "Cluster",
+					"id":         1,
+					"metadata": map[string]interface{}{
+						"name": "c-m-boris",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "boris",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "SystemProjectCreated",
+							},
+						},
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "management.cattle.io/v3",
+					"kind":       "Cluster",
+					"id":         "c-m-boris",
+					"_id":        1,
+					"metadata": map[string]interface{}{
+						"name":          "c-m-boris",
+						"relationships": []any(nil),
+					},
+					"spec": map[string]interface{}{
+						"displayName": "boris",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "SystemProjectCreated",
+							},
+						},
+						"connected": false,
+					},
+				},
+			},
+		},
+		{
+			name: "a ready cluster",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "management.cattle.io/v3",
+					"kind":       "Cluster",
+					"id":         2,
+					"metadata": map[string]interface{}{
+						"name": "c-m-natasha",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "natasha",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "SystemProjectCreated",
+							},
+						},
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "management.cattle.io/v3",
+					"kind":       "Cluster",
+					"id":         "c-m-natasha",
+					"_id":        2,
+					"metadata": map[string]interface{}{
+						"name":          "c-m-natasha",
+						"relationships": []any(nil),
+					},
+					"spec": map[string]interface{}{
+						"displayName": "natasha",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:16Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "SystemProjectCreated",
+							},
+						},
+						"connected": true,
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -190,6 +359,9 @@ func TestTransformChain(t *testing.T) {
 			apiVersion := raw.GetAPIVersion()
 			parts := strings.Split(apiVersion, "/")
 			gvk := schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: raw.GetKind()}
+			if test.name == "a non-ready cluster" {
+				fmt.Printf("Stop here")
+			}
 			output, err := tb.GetTransformFunc(gvk)(test.input)
 			require.Equal(t, test.wantOutput, output)
 			if test.wantError {

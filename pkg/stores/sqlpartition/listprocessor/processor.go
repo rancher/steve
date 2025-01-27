@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -88,27 +89,19 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	sortOpts := informer.Sort{}
 	sortKeys := q.Get(sortParam)
 	if sortKeys != "" {
-		sortParts := strings.SplitN(sortKeys, ",", 2)
-		primaryField := sortParts[0]
-		if primaryField != "" {
-			if primaryField[0] == '-' {
-				sortOpts.Orders = append(sortOpts.Orders, informer.DESC)
-				primaryField = primaryField[1:]
-			} else {
-				sortOpts.Orders = append(sortOpts.Orders, informer.ASC)
-			}
-			sortOpts.Fields = append(sortOpts.Fields, strings.Split(primaryField, "."))
-		}
-		if len(sortParts) > 1 {
-			secondaryField := sortParts[1]
-			if secondaryField != "" {
-				if secondaryField[0] == '-' {
-					sortOpts.Orders = append(sortOpts.Orders, informer.DESC)
-					secondaryField = secondaryField[1:]
-				} else {
-					sortOpts.Orders = append(sortOpts.Orders, informer.ASC)
+		sortParts := strings.Split(sortKeys, ",")
+		for _, sortPart := range sortParts {
+			field := sortPart
+			if len(field) > 0 {
+				sortOrder := informer.ASC
+				if field[0] == '-' {
+					sortOrder = informer.DESC
+					field = field[1:]
 				}
-				sortOpts.Fields = append(sortOpts.Fields, strings.Split(secondaryField, "."))
+				if len(field) > 0 {
+					sortOpts.Fields = append(sortOpts.Fields, queryhelper.SafeSplit(field))
+					sortOpts.Orders = append(sortOpts.Orders, sortOrder)
+				}
 			}
 		}
 	}
