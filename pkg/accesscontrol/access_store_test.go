@@ -315,24 +315,27 @@ func TestAccessStore_AccessFor_concurrent(t *testing.T) {
 
 	const n = 5 // observation showed cases with up to 5 (or more) concurrent queries for the same user
 
+	ids := make([]string, n)
 	wait := make(chan struct{})
 	var wg sync.WaitGroup
-	var id string
-	for range n {
+	for i := range n {
 		wg.Add(1)
 		go func() {
 			<-wait
-			id = store.AccessFor(testUser).ID
+			ids[i] = store.AccessFor(testUser).ID
 			wg.Done()
 		}()
 	}
 	close(wait)
 	wg.Wait()
 
+	if got, want := len(slices.Compact(ids)), 1; got != want {
+		t.Errorf("Unexpected number of ids: got %d, want %d", got, want)
+	}
 	if got, want := len(asCache.setCalls), 1; got != want {
 		t.Errorf("Unexpected number of cache entries: got %d, want %d", got, want)
 	}
-	if got, want := asCache.setCalls[id], 1; got != want {
+	if got, want := asCache.setCalls[ids[0]], 1; got != want {
 		t.Errorf("Unexpected number of calls to cache.Set(): got %d, want %d", got, want)
 	}
 }
