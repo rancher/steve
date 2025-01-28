@@ -73,12 +73,12 @@ const (
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields.
 // Fields are specified as slices (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
-func NewListOptionIndexer(fields [][]string, s Store, namespaced bool) (*ListOptionIndexer, error) {
+func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, namespaced bool) (*ListOptionIndexer, error) {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]interface{}{})
 	gob.Register([]interface{}{})
 
-	i, err := NewIndexer(cache.Indexers{}, s)
+	i, err := NewIndexer(ctx, cache.Indexers{}, s)
 	if err != nil {
 		return nil, err
 	}

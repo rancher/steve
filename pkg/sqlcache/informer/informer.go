@@ -73,7 +73,7 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	if err != nil {
 		return nil, err
 	}
-	loi, err := NewListOptionIndexer(fields, s, namespaced)
+	loi, err := NewListOptionIndexer(ctx, fields, s, namespaced)
 	if err != nil {
 		return nil, err
 	}

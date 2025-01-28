@@ -74,10 +74,10 @@ type Store interface {
 }
 
 // NewIndexer returns a cache.Indexer backed by SQLite for objects of the given example type
-func NewIndexer(indexers cache.Indexers, s Store) (*Indexer, error) {
+func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer, error) {
 	dbName := db.Sanitize(s.GetName())
 
-	err := s.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+	err := s.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
 		_, err := tx.Exec(createTableQuery)
 		if err != nil {
