@@ -726,7 +726,7 @@ func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
 	return dbC, txC
 }
 func SetupStore(t *testing.T, client *MockClient, shouldEncrypt bool) *Store {
-	store, err := NewStore(testStoreObject{}, testStoreKeyFunc, client, shouldEncrypt, "testStoreObject")
+	store, err := NewStore(context.Background(), testStoreObject{}, testStoreKeyFunc, client, shouldEncrypt, "testStoreObject")
 	if err != nil {
 		t.Error(err)
 	}
