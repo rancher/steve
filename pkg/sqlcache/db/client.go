@@ -31,13 +31,13 @@ const (
 
 // Client is a database client that provides encrypting, decrypting, and database resetting
 type Client interface {
-	BeginTx(ctx context.Context, forWriting bool) (transaction.TXClient, error)
+	BeginTx(ctx context.Context, forWriting bool) (transaction.Client, error)
 	Prepare(stmt string) *sql.Stmt
 	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadInt(rows Rows) (int, error)
-	Upsert(tx transaction.TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
+	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable Closable) error
 	NewConnection() error
 }
@@ -238,7 +238,7 @@ func (c *client) ReadInt(rows Rows) (int, error) {
 // Not respecting the above rule might result in transactions failing with unexpected
 // SQLITE_BUSY (5) errors (aka "Runtime error: database is locked").
 // See discussion in https://github.com/rancher/lasso/pull/98 for details
-func (c *client) BeginTx(ctx context.Context, forWriting bool) (transaction.TXClient, error) {
+func (c *client) BeginTx(ctx context.Context, forWriting bool) (transaction.Client, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 	// note: this assumes _txlock=immediate in the connection string, see NewConnection
@@ -269,7 +269,7 @@ func (c *client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
 }
 
 // Upsert used to be called upsertEncrypted in store package before move
-func (c *client) Upsert(tx transaction.TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
 	objBytes := toBytes(obj)
 	var dataNonce []byte
 	var err error

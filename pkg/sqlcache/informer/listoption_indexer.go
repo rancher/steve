@@ -181,7 +181,7 @@ func NewListOptionIndexer(fields [][]string, s Store, namespaced bool) (*ListOpt
 /* Core methods */
 
 // addIndexFields saves sortable/filterable fields into tables
-func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.TXClient) error {
+func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.Client) error {
 	args := []any{key}
 	for _, field := range l.indexedFields {
 		value, err := getField(obj, field)
@@ -218,7 +218,7 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.T
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK
-func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.TXClient) error {
+func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client) error {
 	k8sObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("addLabels: unexpected object type, expected unstructured.Unstructured: %v", obj)
@@ -233,7 +233,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.TXClie
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.TXClient) error {
+func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.Client) error {
 	args := []any{key}
 
 	err := tx.StmtExec(tx.Stmt(l.deleteFieldStmt), args...)
@@ -243,7 +243,7 @@ func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.TXClien
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.TXClient) error {
+func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) error {
 	err := tx.StmtExec(tx.Stmt(l.deleteLabelsStmt), key)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}

@@ -17,7 +17,7 @@ import (
 
 // Mocks for this test are generated with the following command.
 //go:generate mockgen --build_flags=--mod=mod -package db -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Connection,Encryptor,Decryptor
-//go:generate mockgen --build_flags=--mod=mod -package db -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,SQLTx,TXClient
+//go:generate mockgen --build_flags=--mod=mod -package db -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,SQLTx,Client
 
 type testStoreObject struct {
 	Id  string
@@ -459,7 +459,7 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		stmt := NewMockStmt(gomock.NewController(t))
 		testObjBytes := toBytes(testObject)
@@ -477,7 +477,7 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		testObjBytes := toBytes(testObject)
 		e.EXPECT().Encrypt(testObjBytes).Return(nil, nil, uint32(0), fmt.Errorf("error"))
@@ -491,7 +491,7 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		stmt := NewMockStmt(gomock.NewController(t))
 		testObjBytes := toBytes(testObject)
@@ -509,7 +509,7 @@ func TestUpsert(t *testing.T) {
 		e := SetupMockEncryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		stmt := NewMockStmt(gomock.NewController(t))
 		var testByteValue []byte

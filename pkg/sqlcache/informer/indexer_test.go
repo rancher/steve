@@ -20,7 +20,7 @@ import (
 
 //go:generate mockgen --build_flags=--mod=mod -package informer -destination ./sql_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer Store
 //go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,TXClient
+//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
 
 type testStoreObject struct {
 	Id  string
@@ -35,7 +35,7 @@ func TestNewIndexer(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "NewIndexer() with no errors returned from Store or TXClient, should return no error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with no errors returned from Store or Client, should return no error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -74,7 +74,7 @@ func TestNewIndexer(t *testing.T) {
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with TXClient Exec() error on first call to Exec(), should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on first call to Exec(), should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -91,7 +91,7 @@ func TestNewIndexer(t *testing.T) {
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with TXClient Exec() error on second call to Exec(), should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on second call to Exec(), should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -109,7 +109,7 @@ func TestNewIndexer(t *testing.T) {
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with TXClient Commit() error, should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with Client Commit() error, should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -142,7 +142,7 @@ func TestAfterUpsert(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "AfterUpsert() with no errors returned from TXClient should return no error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "AfterUpsert() with no errors returned from Client should return no error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 		deleteStmt := &sql.Stmt{}
@@ -167,7 +167,7 @@ func TestAfterUpsert(t *testing.T) {
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.Nil(t, err)
 	}})
-	tests = append(tests, testCase{description: "AfterUpsert() with error returned from TXClient StmtExec() should return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client StmtExec() should return an error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 		deleteStmt := &sql.Stmt{}
@@ -190,7 +190,7 @@ func TestAfterUpsert(t *testing.T) {
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "AfterUpsert() with error returned from TXClient second StmtExec() call should return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client second StmtExec() call should return an error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 		deleteStmt := &sql.Stmt{}

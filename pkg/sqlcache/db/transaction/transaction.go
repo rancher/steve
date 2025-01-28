@@ -12,8 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// TXClient represents a sql transaction. The TXClient must manage rollbacks as rollback functionality is not exposed.
-type TXClient interface {
+// Client represents a sql transaction. The Client must manage rollbacks as rollback functionality is not exposed.
+type Client interface {
 	StmtExec(stmt Stmt, args ...any) error
 	Exec(stmt string, args ...any) error
 	Commit() error
@@ -21,7 +21,7 @@ type TXClient interface {
 	Cancel() error
 }
 
-// client is the main implementation of TXClient. Other implementations exist for test purposes
+// client is the main implementation of Client. Other implementations exist for test purposes
 type client struct {
 	sqlTx SQLTx
 }
@@ -42,8 +42,8 @@ type Stmt interface {
 	QueryContext(ctx context.Context, args ...any) (*sql.Rows, error)
 }
 
-// NewClient returns a TXClient with the given transaction assigned.
-func NewClient(tx SQLTx) TXClient {
+// NewClient returns a Client with the given transaction assigned.
+func NewClient(tx SQLTx) Client {
 	return &client{sqlTx: tx}
 }
 

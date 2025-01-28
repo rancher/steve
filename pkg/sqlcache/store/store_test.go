@@ -8,7 +8,7 @@ package store
 
 // Mocks for this test are generated with the following command.
 //go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,TXClient
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func TestAdd(t *testing.T) {
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx transaction.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx transaction.Client) error {
 			count++
 			return nil
 		})
@@ -78,7 +78,7 @@ func TestAdd(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Add(testObject)
@@ -164,7 +164,7 @@ func TestUpdate(t *testing.T) {
 		txC.EXPECT().Commit().Return(nil)
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
 			count++
 			return nil
 		})
@@ -180,7 +180,7 @@ func TestUpdate(t *testing.T) {
 		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
 
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Update(testObject)

@@ -43,10 +43,10 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // BeginTx mocks base method.
-func (m *MockClient) BeginTx(arg0 context.Context, arg1 bool) (transaction.TXClient, error) {
+func (m *MockClient) BeginTx(arg0 context.Context, arg1 bool) (transaction.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BeginTx", arg0, arg1)
-	ret0, _ := ret[0].(transaction.TXClient)
+	ret0, _ := ret[0].(transaction.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -165,7 +165,7 @@ func (mr *MockClientMockRecorder) ReadStrings(arg0 any) *gomock.Call {
 }
 
 // Upsert mocks base method.
-func (m *MockClient) Upsert(arg0 transaction.TXClient, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
+func (m *MockClient) Upsert(arg0 transaction.Client, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Upsert", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
