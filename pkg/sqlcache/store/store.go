@@ -11,7 +11,6 @@ import (
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"
 
 	// needed for drivers
@@ -34,7 +33,7 @@ const (
 
 // Store is a SQLite-backed cache.Store
 type Store struct {
-	DBClient
+	db.DBClient
 
 	name          string
 	typ           reflect.Type
@@ -60,20 +59,8 @@ type Store struct {
 // Test that Store implements cache.Indexer
 var _ cache.Store = (*Store)(nil)
 
-type DBClient interface {
-	BeginTx(ctx context.Context, forWriting bool) (db.TXClient, error)
-	Prepare(stmt string) *sql.Stmt
-	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
-	ReadObjects(rows db.Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
-	ReadStrings(rows db.Rows) ([]string, error)
-	ReadInt(rows db.Rows) (int, error)
-	Upsert(tx db.TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
-	CloseStmt(closable db.Closable) error
-	NewConnection() error
-}
-
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(example any, keyFunc cache.KeyFunc, c DBClient, shouldEncrypt bool, name string) (*Store, error) {
+func NewStore(example any, keyFunc cache.KeyFunc, c db.DBClient, shouldEncrypt bool, name string) (*Store, error) {
 	s := &Store{
 		name:          name,
 		typ:           reflect.TypeOf(example),

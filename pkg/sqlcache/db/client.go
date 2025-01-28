@@ -29,6 +29,18 @@ const (
 	informerObjectCachePerms fs.FileMode = 0o600
 )
 
+type DBClient interface {
+	BeginTx(ctx context.Context, forWriting bool) (TXClient, error)
+	Prepare(stmt string) *sql.Stmt
+	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
+	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
+	ReadStrings(rows Rows) ([]string, error)
+	ReadInt(rows Rows) (int, error)
+	Upsert(tx TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
+	CloseStmt(closable Closable) error
+	NewConnection() error
+}
+
 // Client is a database client that provides encrypting, decrypting, and database resetting.
 type Client struct {
 	conn      Connection
