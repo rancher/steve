@@ -177,6 +177,7 @@ func TestAfterUpsert(t *testing.T) {
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
+			ctx:               context.Background(),
 			Store: store,
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
@@ -199,6 +200,7 @@ func TestAfterUpsert(t *testing.T) {
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
+			ctx:               context.Background(),
 			Store: store,
 
 			indexers: map[string]cache.IndexFunc{
@@ -221,6 +223,7 @@ func TestAfterUpsert(t *testing.T) {
 		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		objKey := "key"
 		indexer := &Indexer{
+			ctx:               context.Background(),
 			Store: store,
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
@@ -258,6 +261,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -268,7 +272,7 @@ func TestIndex(t *testing.T) {
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
@@ -283,6 +287,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -293,7 +298,7 @@ func TestIndex(t *testing.T) {
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject, testObject}, nil)
@@ -308,6 +313,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -318,7 +324,7 @@ func TestIndex(t *testing.T) {
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{}, nil)
@@ -332,6 +338,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -351,6 +358,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -361,7 +369,7 @@ func TestIndex(t *testing.T) {
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(nil, fmt.Errorf("error"))
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(nil, fmt.Errorf("error"))
 		_, err := indexer.Index(indexName, testObject)
 		assert.NotNil(t, err)
 	}})
@@ -372,6 +380,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -382,7 +391,7 @@ func TestIndex(t *testing.T) {
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, fmt.Errorf("error"))
@@ -396,6 +405,7 @@ func TestIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 			indexers: map[string]cache.IndexFunc{
@@ -409,7 +419,7 @@ func TestIndex(t *testing.T) {
 		store.EXPECT().GetName().Return("name")
 		stmt := &sql.Stmt{}
 		store.EXPECT().Prepare(fmt.Sprintf(selectQueryFmt, "name", ", ?")).Return(stmt)
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey, objKey+"2").Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey, objKey+"2").Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
@@ -439,12 +449,13 @@ func TestByIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
@@ -459,12 +470,13 @@ func TestByIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject, testObject}, nil)
@@ -479,12 +491,13 @@ func TestByIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{}, nil)
@@ -498,11 +511,12 @@ func TestByIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(nil, fmt.Errorf("error"))
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(nil, fmt.Errorf("error"))
 		_, err := indexer.ByIndex(indexName, objKey)
 		assert.NotNil(t, err)
 	}})
@@ -513,12 +527,13 @@ func TestByIndex(t *testing.T) {
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, fmt.Errorf("error"))
@@ -545,10 +560,11 @@ func TestListIndexFuncValues(t *testing.T) {
 		listStmt := &sql.Stmt{}
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listIndexValuesStmt, indexName).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listIndexValuesStmt, indexName).Return(rows, nil)
 		store.EXPECT().ReadStrings(rows).Return([]string{"somestrings"}, nil)
 		vals := indexer.ListIndexFuncValues(indexName)
 		assert.Equal(t, []string{"somestrings"}, vals)
@@ -558,10 +574,11 @@ func TestListIndexFuncValues(t *testing.T) {
 		listStmt := &sql.Stmt{}
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listIndexValuesStmt, indexName).Return(nil, fmt.Errorf("error"))
+		store.EXPECT().QueryForRows(context.Background(), indexer.listIndexValuesStmt, indexName).Return(nil, fmt.Errorf("error"))
 		assert.Panics(t, func() { indexer.ListIndexFuncValues(indexName) })
 	}})
 	tests = append(tests, testCase{description: "ListIndexFuncvalues() with ReadStrings() error returned from store, should panic", test: func(t *testing.T) {
@@ -570,10 +587,11 @@ func TestListIndexFuncValues(t *testing.T) {
 		listStmt := &sql.Stmt{}
 		indexName := "someindexname"
 		indexer := &Indexer{
+			ctx:             context.Background(),
 			Store:           store,
 			listByIndexStmt: listStmt,
 		}
-		store.EXPECT().QueryForRows(context.TODO(), indexer.listIndexValuesStmt, indexName).Return(rows, nil)
+		store.EXPECT().QueryForRows(context.Background(), indexer.listIndexValuesStmt, indexName).Return(rows, nil)
 		store.EXPECT().ReadStrings(rows).Return([]string{"somestrings"}, fmt.Errorf("error"))
 		assert.Panics(t, func() { indexer.ListIndexFuncValues(indexName) })
 	}})
@@ -599,6 +617,7 @@ func TestGetIndexers(t *testing.T) {
 			},
 		}
 		indexer := &Indexer{
+			ctx:      context.Background(),
 			indexers: expectedIndexers,
 		}
 		indexers := indexer.GetIndexers()
