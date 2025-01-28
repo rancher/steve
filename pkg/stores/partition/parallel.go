@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"sync"
 
 	"github.com/rancher/apiserver/pkg/types"
 
@@ -126,9 +127,10 @@ type listState struct {
 // request.
 func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, limit int, result chan []unstructured.Unstructured) {
 	var (
-		sem      = semaphore.NewWeighted(p.Concurrency)
-		capacity = limit
-		last     chan struct{}
+		sem          = semaphore.NewWeighted(p.Concurrency)
+		capacity     = limit
+		last         chan struct{}
+		capacityLock sync.RWMutex
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -141,7 +143,10 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 	}()
 
 	for i := indexOrZero(p.Partitions, state.PartitionName); i < len(p.Partitions); i++ {
-		if (limit > 0 && capacity <= 0) || isDone(ctx) {
+		capacityLock.RLock()
+		capacityIsNonPositive := capacity <= 0
+		capacityLock.RUnlock()
+		if (limit > 0 && capacityIsNonPositive) || isDone(ctx) {
 			break
 		}
 
@@ -211,11 +216,15 @@ func (p *ParallelPartitionLister) feeder(ctx context.Context, state listState, l
 						Offset:        capacity,
 						Limit:         limit,
 					}
+					capacityLock.Lock()
 					capacity = 0
+					capacityLock.Unlock()
 					return nil
 				}
 				result <- list.Items
+				capacityLock.Lock()
 				capacity -= len(list.Items)
+				capacityLock.Unlock()
 				// Case 2: all objects have been returned, we are done.
 				if list.GetContinue() == "" {
 					return nil
