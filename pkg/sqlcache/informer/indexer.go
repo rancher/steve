@@ -61,7 +61,7 @@ type Indexer struct {
 var _ cache.Indexer = (*Indexer)(nil)
 
 type Store interface {
-	db.DBClient
+	db.Client
 	cache.Store
 
 	GetByKey(key string) (item any, exists bool, err error)

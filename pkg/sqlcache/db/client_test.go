@@ -630,7 +630,7 @@ func SetupMockRows(t *testing.T) *MockRows {
 	return MockR
 }
 
-func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) DBClient {
+func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) Client {
 	c, _ := NewClient(connection, encryptor, decryptor)
 	return c
 }

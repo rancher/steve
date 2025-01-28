@@ -30,7 +30,7 @@ func TestNewInformer(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "NewInformer() with no errors returned, should return no error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		txClient := NewMockTXClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
@@ -69,7 +69,7 @@ func TestNewInformer(t *testing.T) {
 		assert.NotNil(t, informer.SharedIndexInformer)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewStore(), should return an error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		txClient := NewMockTXClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
@@ -86,7 +86,7 @@ func TestNewInformer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewIndexer(), should return an error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		txClient := NewMockTXClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
@@ -111,7 +111,7 @@ func TestNewInformer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewListOptionIndexer(), should return an error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		txClient := NewMockTXClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
@@ -148,7 +148,7 @@ func TestNewInformer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with transform func", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		txClient := NewMockTXClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		mockInformer := mockInformer{}
@@ -209,7 +209,7 @@ func TestNewInformer(t *testing.T) {
 		newInformer = cache.NewSharedIndexInformer
 	}})
 	tests = append(tests, testCase{description: "NewInformer() unable to set transform func", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		mockInformer := mockInformer{
 			setTranformErr: fmt.Errorf("some error"),

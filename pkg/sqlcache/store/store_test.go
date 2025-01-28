@@ -7,8 +7,7 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./store_mocks_test.go github.com/rancher/steve/pkg/sqlcache/store DBClient
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient,Rows
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient,Rows,Client
 //go:generate mockgen --build_flags=--mod=mod -package store -destination ./tx_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt
 
 import (
@@ -620,8 +619,8 @@ func TestResync(t *testing.T) {
 	}
 }
 
-func SetupMockDB(t *testing.T) (*MockDBClient, *MockTXClient) {
-	dbC := NewMockDBClient(gomock.NewController(t)) // add functionality once store expectation are known
+func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
+	dbC := NewMockClient(gomock.NewController(t)) // add functionality once store expectation are known
 	txC := NewMockTXClient(gomock.NewController(t))
 	// stmt := NewMockStmt(gomock.NewController())
 	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil)
@@ -637,7 +636,7 @@ func SetupMockDB(t *testing.T) (*MockDBClient, *MockTXClient) {
 
 	return dbC, txC
 }
-func SetupStore(t *testing.T, client *MockDBClient, shouldEncrypt bool) *Store {
+func SetupStore(t *testing.T, client *MockClient, shouldEncrypt bool) *Store {
 	store, err := NewStore(testStoreObject{}, testStoreKeyFunc, client, shouldEncrypt, "testStoreObject")
 	if err != nil {
 		t.Error(err)

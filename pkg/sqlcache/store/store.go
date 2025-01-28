@@ -33,7 +33,7 @@ const (
 
 // Store is a SQLite-backed cache.Store
 type Store struct {
-	db.DBClient
+	db.Client
 
 	name          string
 	typ           reflect.Type
@@ -60,11 +60,11 @@ type Store struct {
 var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(example any, keyFunc cache.KeyFunc, c db.DBClient, shouldEncrypt bool, name string) (*Store, error) {
+func NewStore(example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, name string) (*Store, error) {
 	s := &Store{
 		name:          name,
 		typ:           reflect.TypeOf(example),
-		DBClient:      c,
+		Client:        c,
 		keyFunc:       keyFunc,
 		shouldEncrypt: shouldEncrypt,
 		afterUpsert:   []func(key string, obj any, tx db.TXClient) error{},

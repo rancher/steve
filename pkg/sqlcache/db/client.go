@@ -29,7 +29,8 @@ const (
 	informerObjectCachePerms fs.FileMode = 0o600
 )
 
-type DBClient interface {
+// Client is a database client that provides encrypting, decrypting, and database resetting
+type Client interface {
 	BeginTx(ctx context.Context, forWriting bool) (TXClient, error)
 	Prepare(stmt string) *sql.Stmt
 	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
@@ -41,7 +42,7 @@ type DBClient interface {
 	NewConnection() error
 }
 
-// client is a database client that provides encrypting, decrypting, and database resetting.
+// client is the main implementation of Client. Other implementations exist for test purposes
 type client struct {
 	conn      Connection
 	connLock  sync.RWMutex
@@ -108,7 +109,7 @@ type Decryptor interface {
 }
 
 // NewClient returns a client. If the given connection is nil then a default one will be created.
-func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor) (DBClient, error) {
+func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor) (Client, error) {
 	client := &client{
 		encryptor: encryptor,
 		decryptor: decryptor,
