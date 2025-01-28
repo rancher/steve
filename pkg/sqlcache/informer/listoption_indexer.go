@@ -114,7 +114,7 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	qmarks := make([]string, len(indexedFields))
 	setStatements := make([]string, len(indexedFields))
 
-	err = l.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+	err = l.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		_, err = tx.Exec(fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", ")))
 		if err != nil {
 			return err
