@@ -12,7 +12,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Client provides a way to interact with the underlying sql transaction.
+// TXClient represents a sql transaction. The TXClient must manage rollbacks as rollback functionality is not exposed.
+type TXClient interface {
+	StmtExec(stmt Stmt, args ...any) error
+	Exec(stmt string, args ...any) error
+	Commit() error
+	Stmt(stmt *sql.Stmt) Stmt
+	Cancel() error
+}
+
+// Client is the main implementation of TXClient. Other implementations exist for test purposes
 type Client struct {
 	sqlTx SQLTx
 }

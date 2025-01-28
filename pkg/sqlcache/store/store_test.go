@@ -7,8 +7,8 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient,Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./tx_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,TXClient
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -63,7 +63,7 @@ func TestAdd(t *testing.T) {
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx db.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx transaction.TXClient) error {
 			count++
 			return nil
 		})
@@ -78,7 +78,7 @@ func TestAdd(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC db.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.TXClient) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Add(testObject)
@@ -164,7 +164,7 @@ func TestUpdate(t *testing.T) {
 		txC.EXPECT().Commit().Return(nil)
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC db.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.TXClient) error {
 			count++
 			return nil
 		})
@@ -180,7 +180,7 @@ func TestUpdate(t *testing.T) {
 		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
 
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC db.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.TXClient) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Update(testObject)

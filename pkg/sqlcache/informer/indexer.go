@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -66,8 +67,8 @@ type Store interface {
 
 	GetByKey(key string) (item any, exists bool, err error)
 	GetName() string
-	RegisterAfterUpsert(f func(key string, obj any, tx db.TXClient) error)
-	RegisterAfterDelete(f func(key string, tx db.TXClient) error)
+	RegisterAfterUpsert(f func(key string, obj any, tx transaction.TXClient) error)
+	RegisterAfterDelete(f func(key string, tx transaction.TXClient) error)
 	GetShouldEncrypt() bool
 	GetType() reflect.Type
 }
@@ -118,7 +119,7 @@ func NewIndexer(indexers cache.Indexers, s Store) (*Indexer, error) {
 /* Core methods */
 
 // AfterUpsert updates indices of an object
-func (i *Indexer) AfterUpsert(key string, obj any, tx db.TXClient) error {
+func (i *Indexer) AfterUpsert(key string, obj any, tx transaction.TXClient) error {
 	// delete all
 	err := tx.StmtExec(tx.Stmt(i.deleteIndicesStmt), key)
 	if err != nil {

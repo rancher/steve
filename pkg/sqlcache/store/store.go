@@ -11,6 +11,7 @@ import (
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"
 
 	// needed for drivers
@@ -52,8 +53,8 @@ type Store struct {
 	listStmt     *sql.Stmt
 	listKeysStmt *sql.Stmt
 
-	afterUpsert []func(key string, obj any, tx db.TXClient) error
-	afterDelete []func(key string, tx db.TXClient) error
+	afterUpsert []func(key string, obj any, tx transaction.TXClient) error
+	afterDelete []func(key string, tx transaction.TXClient) error
 }
 
 // Test that Store implements cache.Indexer
@@ -67,8 +68,8 @@ func NewStore(example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt boo
 		Client:        c,
 		keyFunc:       keyFunc,
 		shouldEncrypt: shouldEncrypt,
-		afterUpsert:   []func(key string, obj any, tx db.TXClient) error{},
-		afterDelete:   []func(key string, tx db.TXClient) error{},
+		afterUpsert:   []func(key string, obj any, tx transaction.TXClient) error{},
+		afterDelete:   []func(key string, tx transaction.TXClient) error{},
 	}
 
 	// once multiple informerfactories are needed, this can accept the case where table already exists error is received
@@ -304,7 +305,7 @@ func (s *Store) Resync() error {
 /* Utilities */
 
 // RegisterAfterUpsert registers a func to be called after each upsert
-func (s *Store) RegisterAfterUpsert(f func(key string, obj any, txC db.TXClient) error) {
+func (s *Store) RegisterAfterUpsert(f func(key string, obj any, txC transaction.TXClient) error) {
 	s.afterUpsert = append(s.afterUpsert, f)
 }
 
@@ -322,7 +323,7 @@ func (s *Store) GetType() reflect.Type {
 
 // keep
 // runAfterUpsert executes functions registered to run after upsert
-func (s *Store) runAfterUpsert(key string, obj any, txC db.TXClient) error {
+func (s *Store) runAfterUpsert(key string, obj any, txC transaction.TXClient) error {
 	for _, f := range s.afterUpsert {
 		err := f(key, obj, txC)
 		if err != nil {
@@ -333,13 +334,13 @@ func (s *Store) runAfterUpsert(key string, obj any, txC db.TXClient) error {
 }
 
 // RegisterAfterDelete registers a func to be called after each deletion
-func (s *Store) RegisterAfterDelete(f func(key string, txC db.TXClient) error) {
+func (s *Store) RegisterAfterDelete(f func(key string, txC transaction.TXClient) error) {
 	s.afterDelete = append(s.afterDelete, f)
 }
 
 // keep
 // runAfterDelete executes functions registered to run after upsert
-func (s *Store) runAfterDelete(key string, txC db.TXClient) error {
+func (s *Store) runAfterDelete(key string, txC transaction.TXClient) error {
 	for _, f := range s.afterDelete {
 		err := f(key, txC)
 		if err != nil {

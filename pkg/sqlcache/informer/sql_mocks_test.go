@@ -57,10 +57,10 @@ func (mr *MockStoreMockRecorder) Add(arg0 any) *gomock.Call {
 }
 
 // BeginTx mocks base method.
-func (m *MockStore) BeginTx(arg0 context.Context, arg1 bool) (db.TXClient, error) {
+func (m *MockStore) BeginTx(arg0 context.Context, arg1 bool) (transaction.TXClient, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BeginTx", arg0, arg1)
-	ret0, _ := ret[0].(db.TXClient)
+	ret0, _ := ret[0].(transaction.TXClient)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -295,7 +295,7 @@ func (mr *MockStoreMockRecorder) ReadStrings(arg0 any) *gomock.Call {
 }
 
 // RegisterAfterDelete mocks base method.
-func (m *MockStore) RegisterAfterDelete(arg0 func(string, db.TXClient) error) {
+func (m *MockStore) RegisterAfterDelete(arg0 func(string, transaction.TXClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDelete", arg0)
 }
@@ -307,7 +307,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterDelete(arg0 any) *gomock.Call {
 }
 
 // RegisterAfterUpsert mocks base method.
-func (m *MockStore) RegisterAfterUpsert(arg0 func(string, any, db.TXClient) error) {
+func (m *MockStore) RegisterAfterUpsert(arg0 func(string, any, transaction.TXClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterUpsert", arg0)
 }
@@ -361,7 +361,7 @@ func (mr *MockStoreMockRecorder) Update(arg0 any) *gomock.Call {
 }
 
 // Upsert mocks base method.
-func (m *MockStore) Upsert(arg0 db.TXClient, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
+func (m *MockStore) Upsert(arg0 transaction.TXClient, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Upsert", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)

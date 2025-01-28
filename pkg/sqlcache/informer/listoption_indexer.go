@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
@@ -180,7 +181,7 @@ func NewListOptionIndexer(fields [][]string, s Store, namespaced bool) (*ListOpt
 /* Core methods */
 
 // addIndexFields saves sortable/filterable fields into tables
-func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TXClient) error {
+func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.TXClient) error {
 	args := []any{key}
 	for _, field := range l.indexedFields {
 		value, err := getField(obj, field)
@@ -217,7 +218,7 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TXClient) 
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK
-func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TXClient) error {
+func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.TXClient) error {
 	k8sObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("addLabels: unexpected object type, expected unstructured.Unstructured: %v", obj)
@@ -232,7 +233,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TXClient) error
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteIndexFields(key string, tx db.TXClient) error {
+func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.TXClient) error {
 	args := []any{key}
 
 	err := tx.StmtExec(tx.Stmt(l.deleteFieldStmt), args...)
@@ -242,7 +243,7 @@ func (l *ListOptionIndexer) deleteIndexFields(key string, tx db.TXClient) error 
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabels(key string, tx db.TXClient) error {
+func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.TXClient) error {
 	err := tx.StmtExec(tx.Stmt(l.deleteLabelsStmt), key)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
