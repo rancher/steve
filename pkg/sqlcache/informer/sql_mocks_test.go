@@ -201,6 +201,20 @@ func (mr *MockStoreMockRecorder) ListKeys() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListKeys", reflect.TypeOf((*MockStore)(nil).ListKeys))
 }
 
+// NewConnection mocks base method.
+func (m *MockStore) NewConnection() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewConnection")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewConnection indicates an expected call of NewConnection.
+func (mr *MockStoreMockRecorder) NewConnection() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockStore)(nil).NewConnection))
+}
+
 // Prepare mocks base method.
 func (m *MockStore) Prepare(arg0 string) *sql.Stmt {
 	m.ctrl.T.Helper()
@@ -344,4 +358,18 @@ func (m *MockStore) Update(arg0 any) error {
 func (mr *MockStoreMockRecorder) Update(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockStore)(nil).Update), arg0)
+}
+
+// Upsert mocks base method.
+func (m *MockStore) Upsert(arg0 db.TXClient, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockStoreMockRecorder) Upsert(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockStore)(nil).Upsert), arg0, arg1, arg2, arg3, arg4)
 }

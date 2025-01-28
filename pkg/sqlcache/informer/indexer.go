@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -62,7 +61,7 @@ type Indexer struct {
 var _ cache.Indexer = (*Indexer)(nil)
 
 type Store interface {
-	DBClient
+	db.DBClient
 	cache.Store
 
 	GetByKey(key string) (item any, exists bool, err error)
@@ -71,16 +70,6 @@ type Store interface {
 	RegisterAfterDelete(f func(key string, tx db.TXClient) error)
 	GetShouldEncrypt() bool
 	GetType() reflect.Type
-}
-
-type DBClient interface {
-	BeginTx(ctx context.Context, forWriting bool) (db.TXClient, error)
-	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
-	ReadObjects(rows db.Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
-	ReadStrings(rows db.Rows) ([]string, error)
-	ReadInt(rows db.Rows) (int, error)
-	Prepare(stmt string) *sql.Stmt
-	CloseStmt(stmt db.Closable) error
 }
 
 // NewIndexer returns a cache.Indexer backed by SQLite for objects of the given example type
