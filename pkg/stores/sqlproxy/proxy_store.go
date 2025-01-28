@@ -221,6 +221,7 @@ type TransformBuilder interface {
 }
 
 type Store struct {
+	ctx              context.Context
 	clientGetter     ClientGetter
 	notifier         RelationshipNotifier
 	cacheFactory     CacheFactory
@@ -234,13 +235,14 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
+	CacheFor(ctx context.Context, fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
 	Reset() error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, factory CacheFactory) (*Store, error) {
+func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, factory CacheFactory) (*Store, error) {
 	store := &Store{
+		ctx:              ctx,
 		clientGetter:     clientGetter,
 		notifier:         notifier,
 		columnSetter:     c,
@@ -314,7 +316,7 @@ func (s *Store) initializeNamespaceCache() error {
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	attrs := attributes.GVK(&nsSchema)
-	nsInformer, err := s.cacheFactory.CacheFor(fields, transformFunc, tableClient, attrs, false, true)
+	nsInformer, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, false, true)
 	if err != nil {
 		return err
 	}
@@ -756,7 +758,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	attrs := attributes.GVK(schema)
 	ns := attributes.Namespaced(schema)
-	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(schema))
+	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(schema))
 	if err != nil {
 		return nil, 0, "", err
 	}
