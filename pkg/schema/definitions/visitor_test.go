@@ -78,6 +78,12 @@ var (
 		},
 		SubType: &protoKind,
 	}
+	protoEmpty = proto.Kind{
+		BaseSchema: proto.BaseSchema{
+			Description: "emptySchema",
+			Path:        proto.NewPath("io.cattle.empty"),
+		},
+	}
 )
 
 func TestSchemaFieldVisitor(t *testing.T) {
@@ -275,6 +281,21 @@ func TestSchemaFieldVisitor(t *testing.T) {
 			wantField: definitionField{
 				Type:        "map[string]array[map[string]string]",
 				Description: "multi-level nested structure",
+			},
+		},
+		{
+			name:        "empty schema",
+			inputSchema: &protoEmpty,
+			wantDefinitions: map[string]definition{
+				"io.cattle.empty": {
+					ResourceFields: map[string]definitionField{},
+					Type:           "io.cattle.empty",
+					Description:    protoEmpty.Description,
+				},
+			},
+			wantField: definitionField{
+				Type:        "io.cattle.empty",
+				Description: protoEmpty.Description,
 			},
 		},
 	}
