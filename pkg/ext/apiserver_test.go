@@ -55,13 +55,12 @@ func TestStore(t *testing.T) {
 	store := newDefaultTestStore()
 	store.items = make(map[string]*TestType)
 
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, nil)
 	require.NoError(t, err)
-	defer cleanup()
 
 	ts := httptest.NewServer(extensionAPIServer)
 	defer ts.Close()
@@ -297,7 +296,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 	require.NoError(t, err)
 
 	store := newDefaultTestStore()
-	extensionAPIServer, cleanup, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
@@ -345,7 +344,6 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	defer cleanup()
 
 	tests := []struct {
 		path               string
@@ -674,7 +672,7 @@ func setupExtensionAPIServer(
 	store regrest.Storage,
 	optionSetter func(*ExtensionAPIServerOptions),
 	extensionAPIServerSetter func(*ExtensionAPIServer) error,
-) (*ExtensionAPIServer, func(), error) {
+) (*ExtensionAPIServer, error) {
 	fn := func(e *ExtensionAPIServer) error {
 		err := e.Install("testtypes", testTypeGV.WithKind("TestType"), store)
 		if err != nil {
@@ -693,7 +691,7 @@ func setupExtensionAPIServerNoStore(
 	scheme *runtime.Scheme,
 	optionSetter func(*ExtensionAPIServerOptions),
 	extensionAPIServerSetter func(*ExtensionAPIServer) error,
-) (*ExtensionAPIServer, func(), error) {
+) (*ExtensionAPIServer, error) {
 
 	addToSchemeTest(scheme)
 	codecs := serializer.NewCodecFactory(scheme)
@@ -709,26 +707,27 @@ func setupExtensionAPIServerNoStore(
 	}
 	extensionAPIServer, err := NewExtensionAPIServer(scheme, codecs, opts)
 	if err != nil {
-		return nil, func() {}, err
+		return nil, err
 	}
 
 	if extensionAPIServerSetter != nil {
 		err = extensionAPIServerSetter(extensionAPIServer)
 		if err != nil {
-			return nil, func() {}, fmt.Errorf("extensionAPIServerSetter: %w", err)
+			return nil, fmt.Errorf("extensionAPIServerSetter: %w", err)
 		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+	})
 
 	err = extensionAPIServer.Run(ctx)
-	require.NoError(t, err)
-
-	cleanup := func() {
-		cancel()
+	if err != nil {
+		return nil, err
 	}
 
-	return extensionAPIServer, cleanup, nil
+	return extensionAPIServer, nil
 }
 
 type recordingWatcher struct {
@@ -818,7 +817,7 @@ func TestCustomColumns(t *testing.T) {
 		testStore: newDefaultTestStore(),
 	}
 
-	extensionAPIServer, cleanup, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {
+	extensionAPIServer, err := setupExtensionAPIServerNoStore(t, scheme, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
@@ -831,7 +830,6 @@ func TestCustomColumns(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	defer cleanup()
 
 	ts := httptest.NewServer(extensionAPIServer)
 	defer ts.Close()

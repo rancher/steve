@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilversion "k8s.io/apiserver/pkg/util/version"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
@@ -43,6 +45,15 @@ type ExtensionAPIServerOptions struct {
 
 	// Authenticator will be used to authenticate requests coming to the
 	// extension API server. Required.
+	//
+	// If the authenticator implements [dynamiccertificates.CAContentProvider], the
+	// ClientCA will be set on the underlying SecureServing struct. If the authenticator
+	// implements [dynamiccertificates.ControllerRunner] too, then Run() will be called so
+	// that the authenticators can run in the background. (See DefaultAuthenticator for
+	// example).
+	//
+	// Use a UnionAuthenticator to have multiple ways of authenticating requests. See
+	// [NewUnionAuthenticator] for an example.
 	Authenticator authenticator.Request
 
 	// Authorizer will be used to authorize requests based on the user,
@@ -64,6 +75,8 @@ type ExtensionAPIServerOptions struct {
 	// If nil, the default version is the version of the Kubernetes Go library
 	// compiled in the final binary.
 	EffectiveVersion utilversion.EffectiveVersion
+
+	SNICerts []dynamiccertificates.SNICertKeyContentProvider
 }
 
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
@@ -157,8 +170,12 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	if err := recommendedOpts.SecureServing.ApplyTo(&config.SecureServing, &config.LoopbackClientConfig); err != nil {
 		return nil, fmt.Errorf("applyto secureserving: %w", err)
 	}
+	config.SecureServing.SNICerts = append(config.SecureServing.SNICerts, opts.SNICerts...)
 
 	config.Authentication.Authenticator = opts.Authenticator
+	if caContentProvider, ok := opts.Authenticator.(dynamiccertificates.CAContentProvider); ok {
+		config.SecureServing.ClientCA = caContentProvider
+	}
 
 	completedConfig := config.Complete()
 	genericServer, err := completedConfig.New("imperative-api", genericapiserver.NewEmptyDelegate())
@@ -187,6 +204,11 @@ func (s *ExtensionAPIServer) Run(ctx context.Context) error {
 		}
 	}
 	prepared := s.genericAPIServer.PrepareRun()
+
+	if _, _, err := prepared.NonBlockingRunWithContext(ctx, time.Second*5); err != nil {
+		return err
+	}
+
 	s.handlerMu.Lock()
 	s.handler = prepared.Handler
 	s.handlerMu.Unlock()
