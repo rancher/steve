@@ -41,8 +41,8 @@ type DBClient interface {
 	NewConnection() error
 }
 
-// Client is a database client that provides encrypting, decrypting, and database resetting.
-type Client struct {
+// client is a database client that provides encrypting, decrypting, and database resetting.
+type client struct {
 	conn      Connection
 	connLock  sync.RWMutex
 	encryptor Encryptor
@@ -107,9 +107,9 @@ type Decryptor interface {
 	Decrypt([]byte, []byte, uint32) ([]byte, error)
 }
 
-// NewClient returns a Client. If the given connection is nil then a default one will be created.
-func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor) (*Client, error) {
-	client := &Client{
+// NewClient returns a client. If the given connection is nil then a default one will be created.
+func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor) (DBClient, error) {
+	client := &client{
 		encryptor: encryptor,
 		decryptor: decryptor,
 	}
@@ -126,7 +126,7 @@ func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor) (*Client,
 }
 
 // Prepare prepares the given string into a sql statement on the client's connection.
-func (c *Client) Prepare(stmt string) *sql.Stmt {
+func (c *client) Prepare(stmt string) *sql.Stmt {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 	prepared, err := c.conn.Prepare(stmt)
@@ -138,7 +138,7 @@ func (c *Client) Prepare(stmt string) *sql.Stmt {
 
 // QueryForRows queries the given stmt with the given params and returns the resulting rows. The query wil be retried
 // given a sqlite busy error.
-func (c *Client) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
+func (c *client) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
@@ -147,13 +147,13 @@ func (c *Client) QueryForRows(ctx context.Context, stmt transaction.Stmt, params
 
 // CloseStmt will call close on the given Closable. It is intended to be used with a sql statement. This function is meant
 // to replace stmt.Close which can cause panics when callers unit-test since there usually is no real underlying connection.
-func (c *Client) CloseStmt(closable Closable) error {
+func (c *client) CloseStmt(closable Closable) error {
 	return closable.Close()
 }
 
 // ReadObjects Scans the given rows, performs any necessary decryption, converts the data to objects of the given type,
 // and returns a slice of those objects.
-func (c *Client) ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error) {
+func (c *client) ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
@@ -183,7 +183,7 @@ func (c *Client) ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([
 }
 
 // ReadStrings scans the given rows into strings, and then returns the strings as a slice.
-func (c *Client) ReadStrings(rows Rows) ([]string, error) {
+func (c *client) ReadStrings(rows Rows) ([]string, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
@@ -211,7 +211,7 @@ func (c *Client) ReadStrings(rows Rows) ([]string, error) {
 }
 
 // ReadInt scans the first of the given rows into a single int (eg. for COUNT() queries)
-func (c *Client) ReadInt(rows Rows) (int, error) {
+func (c *client) ReadInt(rows Rows) (int, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
@@ -246,7 +246,7 @@ func (c *Client) ReadInt(rows Rows) (int, error) {
 // Not respecting the above rule might result in transactions failing with unexpected
 // SQLITE_BUSY (5) errors (aka "Runtime error: database is locked").
 // See discussion in https://github.com/rancher/lasso/pull/98 for details
-func (c *Client) BeginTx(ctx context.Context, forWriting bool) (TXClient, error) {
+func (c *client) BeginTx(ctx context.Context, forWriting bool) (TXClient, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 	// note: this assumes _txlock=immediate in the connection string, see NewConnection
@@ -259,7 +259,7 @@ func (c *Client) BeginTx(ctx context.Context, forWriting bool) (TXClient, error)
 	return transaction.NewClient(sqlTx), nil
 }
 
-func (c *Client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
+func (c *client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
 	var data, dataNonce sql.RawBytes
 	var kid uint32
 	err := rows.Scan(&data, &dataNonce, &kid)
@@ -277,7 +277,7 @@ func (c *Client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
 }
 
 // Upsert used to be called upsertEncrypted in store package before move
-func (c *Client) Upsert(tx TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (c *client) Upsert(tx TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
 	objBytes := toBytes(obj)
 	var dataNonce []byte
 	var err error
@@ -324,7 +324,7 @@ func closeRowsOnError(rows Rows, err error) error {
 
 // NewConnection checks for currently existing connection, closes one if it exists, removes any relevant db files, and opens a new connection which subsequently
 // creates new files.
-func (c *Client) NewConnection() error {
+func (c *client) NewConnection() error {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 	if c.conn != nil {
