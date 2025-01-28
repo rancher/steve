@@ -293,7 +293,7 @@ func (s *Store) initializeNamespaceCache() error {
 	nsSchema := baseNSSchema
 
 	// make sure any relevant columns are set to the ns schema
-	if err := s.columnSetter.SetColumns(context.Background(), &nsSchema); err != nil {
+	if err := s.columnSetter.SetColumns(s.ctx, &nsSchema); err != nil {
 		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
 	}
 

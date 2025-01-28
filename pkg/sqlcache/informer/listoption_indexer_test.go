@@ -72,7 +72,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		loi, err := NewListOptionIndexer(fields, store, true)
+		loi, err := NewListOptionIndexer(context.Background(), fields, store, true)
 		assert.Nil(t, err)
 		assert.NotNil(t, loi)
 	}})
@@ -93,7 +93,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(fields, store, false)
+		_, err := NewListOptionIndexer(context.Background(), fields, store, false)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error returned from Begin(), should return an error", test: func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 
-		_, err := NewListOptionIndexer(fields, store, false)
+		_, err := NewListOptionIndexer(context.Background(), fields, store, false)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Exec() when creating fields table, should return an error", test: func(t *testing.T) {
@@ -159,7 +159,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(fields, store, true)
+		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from create-labels, should return an error", test: func(t *testing.T) {
@@ -200,7 +200,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(fields, store, true)
+		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Commit(), should return an error", test: func(t *testing.T) {
@@ -242,7 +242,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(fields, store, true)
+		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
 		assert.NotNil(t, err)
 	}})
 
