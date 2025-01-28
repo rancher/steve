@@ -21,8 +21,8 @@ type TXClient interface {
 	Cancel() error
 }
 
-// Client is the main implementation of TXClient. Other implementations exist for test purposes
-type Client struct {
+// client is the main implementation of TXClient. Other implementations exist for test purposes
+type client struct {
 	sqlTx SQLTx
 }
 
@@ -42,19 +42,19 @@ type Stmt interface {
 	QueryContext(ctx context.Context, args ...any) (*sql.Rows, error)
 }
 
-// NewClient returns a Client with the given transaction assigned.
-func NewClient(tx SQLTx) *Client {
-	return &Client{sqlTx: tx}
+// NewClient returns a TXClient with the given transaction assigned.
+func NewClient(tx SQLTx) TXClient {
+	return &client{sqlTx: tx}
 }
 
 // Commit commits the transaction and then unlocks the database.
-func (c *Client) Commit() error {
+func (c *client) Commit() error {
 	return c.sqlTx.Commit()
 }
 
 // Exec uses the sqlTX Exec() with the given stmt and args. The transaction will be automatically rolled back if Exec()
 // returns an error.
-func (c *Client) Exec(stmt string, args ...any) error {
+func (c *client) Exec(stmt string, args ...any) error {
 	_, err := c.sqlTx.Exec(stmt, args...)
 	if err != nil {
 		return c.rollback(c.sqlTx, err)
@@ -64,14 +64,14 @@ func (c *Client) Exec(stmt string, args ...any) error {
 
 // Stmt adds the given sql.Stmt to the client's transaction and then returns a Stmt. An interface is being returned
 // here to aid in testing callers by providing a way to configure the statement's behavior.
-func (c *Client) Stmt(stmt *sql.Stmt) Stmt {
+func (c *client) Stmt(stmt *sql.Stmt) Stmt {
 	s := c.sqlTx.Stmt(stmt)
 	return s
 }
 
 // StmtExec Execs the given statement with the given args. It assumes the stmt has been added to the transaction. The
 // transaction is rolled back if Stmt.Exec() returns an error.
-func (c *Client) StmtExec(stmt Stmt, args ...any) error {
+func (c *client) StmtExec(stmt Stmt, args ...any) error {
 	_, err := stmt.Exec(args...)
 	if err != nil {
 		logrus.Debugf("StmtExec failed: query %s, args: %s, err: %s", stmt, args, err)
@@ -81,7 +81,7 @@ func (c *Client) StmtExec(stmt Stmt, args ...any) error {
 }
 
 // rollback handles rollbacks and wraps errors if needed
-func (c *Client) rollback(tx SQLTx, err error) error {
+func (c *client) rollback(tx SQLTx, err error) error {
 	rerr := tx.Rollback()
 	if rerr != nil {
 		return errors.Wrapf(err, "Encountered error, then encountered another error while rolling back: %v", rerr)
@@ -89,10 +89,10 @@ func (c *Client) rollback(tx SQLTx, err error) error {
 	return errors.Wrapf(err, "Encountered error, successfully rolled back")
 }
 
-// Cancel rollbacks the transaction without wrapping an error. This only needs to be called if Client has not returned
+// Cancel rollbacks the transaction without wrapping an error. This only needs to be called if client has not returned
 // an error yet or has not committed. Otherwise, transaction has already rolled back, or in the case of Commit() it is too
 // late.
-func (c *Client) Cancel() error {
+func (c *client) Cancel() error {
 	rerr := c.sqlTx.Rollback()
 	if rerr != sql.ErrTxDone {
 		return rerr

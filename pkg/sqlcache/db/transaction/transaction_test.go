@@ -11,12 +11,6 @@ import (
 
 //go:generate mockgen --build_flags=--mod=mod -package transaction -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,SQLTx
 
-func TestNewClient(t *testing.T) {
-	tx := NewMockSQLTx(gomock.NewController(t))
-	c := NewClient(tx)
-	assert.Equal(t, tx, c.sqlTx)
-}
-
 func TestCommit(t *testing.T) {
 	type testCase struct {
 		description string
@@ -28,7 +22,7 @@ func TestCommit(t *testing.T) {
 	tests = append(tests, testCase{description: "Commit() with no errors returned from sql TX should return no error", test: func(t *testing.T) {
 		tx := NewMockSQLTx(gomock.NewController(t))
 		tx.EXPECT().Commit().Return(nil)
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.Commit()
@@ -37,7 +31,7 @@ func TestCommit(t *testing.T) {
 	tests = append(tests, testCase{description: "Commit() with error from sql TX commit() should return error", test: func(t *testing.T) {
 		tx := NewMockSQLTx(gomock.NewController(t))
 		tx.EXPECT().Commit().Return(fmt.Errorf("error"))
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.Commit()
@@ -63,7 +57,7 @@ func TestExec(t *testing.T) {
 		arg := 5
 		// should be passed same statement and arg that was passed to parent function
 		tx.EXPECT().Exec(stmtStr, arg).Return(nil, nil)
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.Exec(stmtStr, arg)
@@ -76,7 +70,7 @@ func TestExec(t *testing.T) {
 		// should be passed same statement and arg that was passed to parent function
 		tx.EXPECT().Exec(stmtStr, arg).Return(nil, fmt.Errorf("error"))
 		tx.EXPECT().Rollback().Return(nil)
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.Exec(stmtStr, arg)
@@ -89,7 +83,7 @@ func TestExec(t *testing.T) {
 		// should be passed same statement and arg that was passed to parent function
 		tx.EXPECT().Exec(stmtStr, arg).Return(nil, fmt.Errorf("error"))
 		tx.EXPECT().Rollback().Return(fmt.Errorf("error"))
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.Exec(stmtStr, arg)
@@ -115,7 +109,7 @@ func TestStmt(t *testing.T) {
 		var returnedTXStmt *sql.Stmt
 		// should be passed same statement and arg that was passed to parent function
 		tx.EXPECT().Stmt(stmt).Return(returnedTXStmt)
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		returnedStmt := c.Stmt(stmt)
@@ -143,7 +137,7 @@ func TestStmtExec(t *testing.T) {
 		arg := "something"
 		// should be passed same arg that was passed to parent function
 		stmt.EXPECT().Exec(arg).Return(nil, nil)
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.StmtExec(stmt, arg)
@@ -156,7 +150,7 @@ func TestStmtExec(t *testing.T) {
 		// should be passed same arg that was passed to parent function
 		stmt.EXPECT().Exec(arg).Return(nil, fmt.Errorf("error"))
 		tx.EXPECT().Rollback().Return(nil)
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.StmtExec(stmt, arg)
@@ -169,7 +163,7 @@ func TestStmtExec(t *testing.T) {
 		// should be passed same arg that was passed to parent function
 		stmt.EXPECT().Exec(arg).Return(nil, fmt.Errorf("error"))
 		tx.EXPECT().Rollback().Return(fmt.Errorf("error2"))
-		c := &Client{
+		c := &client{
 			sqlTx: tx,
 		}
 		err := c.StmtExec(stmt, arg)
