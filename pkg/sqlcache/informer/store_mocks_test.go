@@ -71,6 +71,20 @@ func (mr *MockDBClientMockRecorder) CloseStmt(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockDBClient)(nil).CloseStmt), arg0)
 }
 
+// NewConnection mocks base method.
+func (m *MockDBClient) NewConnection() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewConnection")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewConnection indicates an expected call of NewConnection.
+func (mr *MockDBClientMockRecorder) NewConnection() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockDBClient)(nil).NewConnection))
+}
+
 // Prepare mocks base method.
 func (m *MockDBClient) Prepare(arg0 string) *sql.Stmt {
 	m.ctrl.T.Helper()

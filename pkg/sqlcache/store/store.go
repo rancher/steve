@@ -69,6 +69,7 @@ type DBClient interface {
 	ReadInt(rows db.Rows) (int, error)
 	Upsert(tx db.TXClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable db.Closable) error
+	NewConnection() error
 }
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type

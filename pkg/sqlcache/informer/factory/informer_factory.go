@@ -28,7 +28,7 @@ const EncryptAllEnvVar = "CATTLE_ENCRYPT_CACHE_ALL"
 // CacheFactory builds Informer instances and keeps a cache of instances it created
 type CacheFactory struct {
 	wg         wait.Group
-	dbClient   DBClient
+	dbClient   sqlStore.DBClient
 	stopCh     chan struct{}
 	mutex      sync.RWMutex
 	encryptAll bool
@@ -46,18 +46,8 @@ type guardedInformer struct {
 
 type newInformer func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt bool, namespace bool) (*informer.Informer, error)
 
-type DBClient interface {
-	informer.DBClient
-	sqlStore.DBClient
-	connector
-}
-
 type Cache struct {
 	informer.ByOptionsLister
-}
-
-type connector interface {
-	NewConnection() error
 }
 
 var defaultEncryptedResourceTypes = map[schema.GroupVersionKind]struct{}{
