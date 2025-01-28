@@ -253,6 +253,30 @@ func TestSchemaFieldVisitor(t *testing.T) {
 				Description: protoNestedMap.Description,
 			},
 		},
+		{
+			name: "multi-level nested maps and arrays",
+			inputSchema: &proto.Map{
+				BaseSchema: proto.BaseSchema{
+					Description: "multi-level nested structure",
+				},
+				SubType: &proto.Array{
+					BaseSchema: proto.BaseSchema{
+						Description: "nested array",
+					},
+					SubType: &proto.Map{
+						BaseSchema: proto.BaseSchema{
+							Description: "deeply nested map",
+						},
+						SubType: &protoPrimitive,
+					},
+				},
+			},
+			wantDefinitions: map[string]definition{},
+			wantField: definitionField{
+				Type:        "map[string]array[map[string]string]",
+				Description: "multi-level nested structure",
+			},
+		},
 	}
 
 	for _, test := range tests {
