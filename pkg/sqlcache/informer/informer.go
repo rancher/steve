@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+var defaultRefreshTime = 5 * time.Second
+
 // Informer is a SQLite-backed cache.SharedIndexInformer that can execute queries on listprocessor structs
 type Informer struct {
 	cache.SharedIndexInformer
@@ -41,7 +43,7 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	}
 	if !watchable {
 		watchFunc = func(options metav1.ListOptions) (watch.Interface, error) {
-			return newSyntheticWatcher().watch(ctx, client, options, 5*time.Second)
+			return newSyntheticWatcher().watch(ctx, client, options, defaultRefreshTime)
 		}
 	}
 	listWatcher := &cache.ListWatch{
@@ -101,6 +103,11 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 //   - an error instead of all of the above if anything went wrong
 func (i *Informer) ListByOptions(ctx context.Context, lo ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	return i.ByOptionsLister.ListByOptions(ctx, lo, partitions, namespace)
+}
+
+// SetSyntheticWatchableInterval - call this function to override the default interval time of 5 seconds
+func SetSyntheticWatchableInterval(interval time.Duration) {
+	defaultRefreshTime = interval
 }
 
 func informerNameFromGVK(gvk schema.GroupVersionKind) string {
