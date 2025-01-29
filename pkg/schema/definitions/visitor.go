@@ -2,6 +2,7 @@ package definitions
 
 import (
 	"fmt"
+
 	"k8s.io/kube-openapi/pkg/util/proto"
 )
 
