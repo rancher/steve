@@ -5,6 +5,7 @@ Copyright 2024 SUSE LLC
 package informer
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -82,7 +83,8 @@ func TestSyntheticWatcher(t *testing.T) {
 	assert.Nil(t, err)
 	dynamicClient.EXPECT().List(gomock.Any(), gomock.Any()).AnyTimes().Return(list2, nil)
 
-	sw := newSyntheticWatcher()
+	ctx, cancel := context.WithCancel(context.Background())
+	sw := newSyntheticWatcher(ctx, cancel)
 	pollingInterval := 10 * time.Millisecond
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
 		return sw.watch(dynamicClient, options, pollingInterval)
@@ -100,7 +102,7 @@ func TestSyntheticWatcher(t *testing.T) {
 	}()
 
 	go func() {
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(40 * time.Millisecond)
 		sw.stopChan <- struct{}{}
 		wg.Done()
 	}()

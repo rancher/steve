@@ -18,13 +18,17 @@ type SyntheticWatcher struct {
 	stopChan     chan struct{}
 	doneChan     chan struct{}
 	stopChanLock sync.Mutex
+	context      context.Context
+	cancelFunc   context.CancelFunc
 }
 
-func newSyntheticWatcher() *SyntheticWatcher {
+func newSyntheticWatcher(context context.Context, cancel context.CancelFunc) *SyntheticWatcher {
 	return &SyntheticWatcher{
 		stopChan:   make(chan struct{}),
 		doneChan:   make(chan struct{}),
 		resultChan: make(chan watch.Event, 0),
+		context:    context,
+		cancelFunc: cancel,
 	}
 }
 
@@ -43,15 +47,14 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 	go func() {
 		defer close(rw.doneChan)
 		defer close(rw.resultChan)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		defer rw.cancelFunc()
 		previousState := make(map[string]objectHolder)
 		ticker := time.NewTicker(interval)
 
 		for {
 			select {
 			case <-ticker.C:
-				list, err := client.List(ctx, options)
+				list, err := client.List(rw.context, options)
 				if err != nil {
 					logrus.Errorf("synthetic watcher: client.List => error: %s", err)
 					continue
@@ -94,7 +97,6 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 				for _, item := range previousState {
 					w, err := createWatchEvent(watch.Deleted, item.unstructuredObject)
 					if err != nil {
-						logrus.Errorf("can't convert unstructured obj into runtime: %s", err)
 						continue
 					}
 					rw.resultChan <- w
@@ -102,10 +104,10 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 				previousState = currentState
 
 			case <-rw.stopChan:
-				cancel()
+				rw.cancelFunc()
 				return
 
-			case <-ctx.Done():
+			case <-rw.context.Done():
 				return
 			}
 		}
