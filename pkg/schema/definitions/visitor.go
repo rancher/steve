@@ -1,6 +1,7 @@
 package definitions
 
 import (
+	"fmt"
 	"k8s.io/kube-openapi/pkg/util/proto"
 )
 
@@ -21,7 +22,7 @@ func (s *schemaFieldVisitor) VisitArray(array *proto.Array) {
 	array.SubType.Accept(subVisitor)
 	subField := subVisitor.field
 	// Represent the map as "array[<value_type>]"
-	field.Type = "array[" + subField.Type + "]"
+	field.Type = fmt.Sprintf("array[%s]", subField.Type)
 	s.field = field
 }
 
@@ -35,8 +36,8 @@ func (s *schemaFieldVisitor) VisitMap(protoMap *proto.Map) {
 	subVisitor := &schemaFieldVisitor{definitions: s.definitions}
 	protoMap.SubType.Accept(subVisitor)
 	subField := subVisitor.field
-	// Represent the map as "map[string]<value_type>"
-	field.Type = "map[string]" + subField.Type
+	// Represent the map as "map[<value_type>]"
+	field.Type = fmt.Sprintf("map[%s]", subField.Type)
 	s.field = field
 }
 

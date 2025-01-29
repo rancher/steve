@@ -108,7 +108,7 @@ func TestSchemaFieldVisitor(t *testing.T) {
 			inputSchema:     &protoMap,
 			wantDefinitions: map[string]definition{},
 			wantField: definitionField{
-				Type:        "map[string]string",
+				Type:        "map[string]",
 				Description: protoMap.Description,
 			},
 		},
@@ -151,7 +151,7 @@ func TestSchemaFieldVisitor(t *testing.T) {
 							Required:    true,
 						},
 						"protoMap": {
-							Type:        "map[" + protoPrimitive.Type + "]string",
+							Type:        "map[" + protoPrimitive.Type + "]",
 							Description: protoMap.Description,
 						},
 						"protoPrimitive": {
@@ -194,7 +194,7 @@ func TestSchemaFieldVisitor(t *testing.T) {
 							Required:    true,
 						},
 						"protoMap": {
-							Type:        "map[string]string",
+							Type:        "map[string]",
 							Description: protoMap.Description,
 						},
 						"protoPrimitive": {
@@ -237,7 +237,7 @@ func TestSchemaFieldVisitor(t *testing.T) {
 							Required:    true,
 						},
 						"protoMap": {
-							Type:        "map[string]string",
+							Type:        "map[string]",
 							Description: protoMap.Description,
 						},
 						"protoPrimitive": {
@@ -255,7 +255,7 @@ func TestSchemaFieldVisitor(t *testing.T) {
 				},
 			},
 			wantField: definitionField{
-				Type:        "map[string]io.cattle.test",
+				Type:        "map[io.cattle.test]",
 				Description: protoNestedMap.Description,
 			},
 		},
@@ -279,7 +279,7 @@ func TestSchemaFieldVisitor(t *testing.T) {
 			},
 			wantDefinitions: map[string]definition{},
 			wantField: definitionField{
-				Type:        "map[string]array[map[string]string]",
+				Type:        "map[array[map[string]]]",
 				Description: "multi-level nested structure",
 			},
 		},
