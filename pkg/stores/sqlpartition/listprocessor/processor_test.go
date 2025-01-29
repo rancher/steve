@@ -833,15 +833,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 	})
-	//tests = append(tests, testCase{
-	//	description: "ParseQuery: filter starting with a comma should return an error.",
-	//	req: &types.APIRequest{
-	//		Request: &http.Request{
-	//			URL: &url.URL{RawQuery: "filter=,"},
-	//		},
-	//	},
-	//	errExpected: true,
-	//})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {

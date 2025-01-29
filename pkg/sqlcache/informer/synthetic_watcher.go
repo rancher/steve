@@ -39,7 +39,7 @@ type objectHolder struct {
 }
 
 // receive periodically calls client.List(), and converts the returned items into Watch Events
-func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options metav1.ListOptions, interval time.Duration) { //
+func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options metav1.ListOptions, interval time.Duration) {
 	go func() {
 		defer close(rw.doneChan)
 		defer close(rw.resultChan)
