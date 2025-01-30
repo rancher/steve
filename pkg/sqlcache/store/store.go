@@ -72,19 +72,18 @@ func NewStore(example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt boo
 		afterDelete:   []func(key string, tx transaction.Client) error{},
 	}
 
-	// once multiple informerfactories are needed, this can accept the case where table already exists error is received
-	txC, err := s.BeginTx(context.Background(), true)
-	if err != nil {
-		return nil, err
-	}
 	dbName := db.Sanitize(s.name)
-	createTableQuery := fmt.Sprintf(createTableFmt, dbName)
-	err = txC.Exec(createTableQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createTableQuery, Err: err}
-	}
 
-	err = txC.Commit()
+	// once multiple informerfactories are needed, this can accept the case where table already exists error is received
+	err := s.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
+		_, err := tx.Exec(createTableQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createTableQuery, Err: err}
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -107,42 +106,36 @@ func NewStore(example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt boo
 /* Core methods */
 // upsert saves an obj with its key, or updates key with obj if it exists in this Store
 func (s *Store) upsert(key string, obj any) error {
-	tx, err := s.BeginTx(context.Background(), true)
-	if err != nil {
-		return err
-	}
+	return s.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
+		if err != nil {
+			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
+		}
 
-	err = s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
-	if err != nil {
-		return &db.QueryError{QueryString: s.upsertQuery, Err: err}
-	}
+		err = s.runAfterUpsert(key, obj, tx)
+		if err != nil {
+			return err
+		}
 
-	err = s.runAfterUpsert(key, obj, tx)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
 func (s *Store) deleteByKey(key string) error {
-	tx, err := s.BeginTx(context.Background(), true)
-	if err != nil {
-		return err
-	}
+	return s.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+		_, err := tx.Stmt(s.deleteStmt).Exec(key)
+		if err != nil {
+			return &db.QueryError{QueryString: s.deleteQuery, Err: err}
+		}
 
-	err = tx.StmtExec(tx.Stmt(s.deleteStmt), key)
-	if err != nil {
-		return &db.QueryError{QueryString: s.deleteQuery, Err: err}
-	}
+		err = s.runAfterDelete(key, tx)
+		if err != nil {
+			return err
+		}
 
-	err = s.runAfterDelete(key, tx)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 // GetByKey returns the object associated with the given object's key
@@ -256,45 +249,42 @@ func (s *Store) Replace(objects []any, _ string) error {
 
 // replaceByKey will delete the contents of the Store, using instead the given key to obj map
 func (s *Store) replaceByKey(objects map[string]any) error {
-	txC, err := s.BeginTx(context.Background(), true)
-	if err != nil {
-		return err
-	}
+	return s.WithTransaction(context.Background(), true, func(txC transaction.Client) error {
+		txCListKeys := txC.Stmt(s.listKeysStmt)
 
-	txCListKeys := txC.Stmt(s.listKeysStmt)
-
-	rows, err := s.QueryForRows(context.TODO(), txCListKeys)
-	if err != nil {
-		return err
-	}
-	keys, err := s.ReadStrings(rows)
-	if err != nil {
-		return err
-	}
-
-	for _, key := range keys {
-		err = txC.StmtExec(txC.Stmt(s.deleteStmt), key)
+		rows, err := s.QueryForRows(context.TODO(), txCListKeys)
 		if err != nil {
 			return err
 		}
-		err = s.runAfterDelete(key, txC)
+		keys, err := s.ReadStrings(rows)
 		if err != nil {
 			return err
 		}
-	}
 
-	for key, obj := range objects {
-		err = s.Upsert(txC, s.upsertStmt, key, obj, s.shouldEncrypt)
-		if err != nil {
-			return err
+		for _, key := range keys {
+			_, err = txC.Stmt(s.deleteStmt).Exec(key)
+			if err != nil {
+				return err
+			}
+			err = s.runAfterDelete(key, txC)
+			if err != nil {
+				return err
+			}
 		}
-		err = s.runAfterUpsert(key, obj, txC)
-		if err != nil {
-			return err
-		}
-	}
 
-	return txC.Commit()
+		for key, obj := range objects {
+			err = s.Upsert(txC, s.upsertStmt, key, obj, s.shouldEncrypt)
+			if err != nil {
+				return err
+			}
+			err = s.runAfterUpsert(key, obj, txC)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // Resync is a no-op and is deprecated

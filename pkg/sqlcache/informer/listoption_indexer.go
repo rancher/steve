@@ -109,51 +109,49 @@ func NewListOptionIndexer(fields [][]string, s Store, namespaced bool) (*ListOpt
 		columnDefs[index] = column
 	}
 
-	tx, err := l.BeginTx(context.Background(), true)
-	if err != nil {
-		return nil, err
-	}
 	dbName := db.Sanitize(i.GetName())
-	err = tx.Exec(fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", ")))
-	if err != nil {
-		return nil, err
-	}
-
 	columns := make([]string, len(indexedFields))
 	qmarks := make([]string, len(indexedFields))
 	setStatements := make([]string, len(indexedFields))
 
-	for index, field := range indexedFields {
-		// create index for field
-		err = tx.Exec(fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field))
+	err = l.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+		_, err = tx.Exec(fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", ")))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		// format field into column for prepared statement
-		column := fmt.Sprintf(`"%s"`, field)
-		columns[index] = column
+		for index, field := range indexedFields {
+			// create index for field
+			_, err = tx.Exec(fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field))
+			if err != nil {
+				return err
+			}
 
-		// add placeholder for column's value in prepared statement
-		qmarks[index] = "?"
+			// format field into column for prepared statement
+			column := fmt.Sprintf(`"%s"`, field)
+			columns[index] = column
 
-		// add formatted set statement for prepared statement
-		setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
-		setStatements[index] = setStatement
-	}
-	createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
-	err = tx.Exec(createLabelsTableQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createLabelsTableQuery, Err: err}
-	}
+			// add placeholder for column's value in prepared statement
+			qmarks[index] = "?"
 
-	createLabelsTableIndexQuery := fmt.Sprintf(createLabelsTableIndexFmt, dbName, dbName)
-	err = tx.Exec(createLabelsTableIndexQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createLabelsTableIndexQuery, Err: err}
-	}
+			// add formatted set statement for prepared statement
+			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
+			setStatements[index] = setStatement
+		}
+		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
+		_, err = tx.Exec(createLabelsTableQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createLabelsTableQuery, Err: err}
+		}
 
-	err = tx.Commit()
+		createLabelsTableIndexQuery := fmt.Sprintf(createLabelsTableIndexFmt, dbName, dbName)
+		_, err = tx.Exec(createLabelsTableIndexQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createLabelsTableIndexQuery, Err: err}
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -187,10 +185,6 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.C
 		value, err := getField(obj, field)
 		if err != nil {
 			logrus.Errorf("cannot index object of type [%s] with key [%s] for indexer [%s]: %v", l.GetType().String(), key, l.GetName(), err)
-			cErr := tx.Cancel()
-			if cErr != nil {
-				return fmt.Errorf("could not cancel transaction: %s while recovering from error: %w", cErr, err)
-			}
 			return err
 		}
 		switch typedValue := value.(type) {
@@ -202,15 +196,11 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.C
 			args = append(args, strings.Join(typedValue, "|"))
 		default:
 			err2 := fmt.Errorf("field %v has a non-supported type value: %v", field, value)
-			cErr := tx.Cancel()
-			if cErr != nil {
-				return fmt.Errorf("could not cancel transaction: %s while recovering from error: %w", cErr, err2)
-			}
 			return err2
 		}
 	}
 
-	err := tx.StmtExec(tx.Stmt(l.addFieldStmt), args...)
+	_, err := tx.Stmt(l.addFieldStmt).Exec(args...)
 	if err != nil {
 		return &db.QueryError{QueryString: l.addFieldQuery, Err: err}
 	}
@@ -225,7 +215,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client
 	}
 	incomingLabels := k8sObj.GetLabels()
 	for k, v := range incomingLabels {
-		err := tx.StmtExec(tx.Stmt(l.upsertLabelsStmt), key, k, v)
+		_, err := tx.Stmt(l.upsertLabelsStmt).Exec(key, k, v)
 		if err != nil {
 			return &db.QueryError{QueryString: l.upsertLabelsQuery, Err: err}
 		}
@@ -236,7 +226,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client
 func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.Client) error {
 	args := []any{key}
 
-	err := tx.StmtExec(tx.Stmt(l.deleteFieldStmt), args...)
+	_, err := tx.Stmt(l.deleteFieldStmt).Exec(args...)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteFieldQuery, Err: err}
 	}
@@ -244,7 +234,7 @@ func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.Client)
 }
 
 func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) error {
-	err := tx.StmtExec(tx.Stmt(l.deleteLabelsStmt), key)
+	_, err := tx.Stmt(l.deleteLabelsStmt).Exec(key)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
 	}
@@ -468,48 +458,37 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 	stmt := l.Prepare(queryInfo.query)
 	defer l.CloseStmt(stmt)
 
-	tx, err := l.BeginTx(ctx, false)
-	if err != nil {
-		return nil, 0, "", err
-	}
-
-	txStmt := tx.Stmt(stmt)
-	rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
-	if err != nil {
-		if cerr := tx.Cancel(); cerr != nil {
-			return nil, 0, "", fmt.Errorf("failed to cancel transaction (%v) after error: %w", cerr, err)
-		}
-		return nil, 0, "", &db.QueryError{QueryString: queryInfo.query, Err: err}
-	}
-	items, err := l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
-	if err != nil {
-		if cerr := tx.Cancel(); cerr != nil {
-			return nil, 0, "", fmt.Errorf("failed to cancel transaction (%v) after error: %w", cerr, err)
-		}
-		return nil, 0, "", err
-	}
-
-	total := len(items)
-	if queryInfo.countQuery != "" {
-		countStmt := l.Prepare(queryInfo.countQuery)
-		defer l.CloseStmt(countStmt)
-		txStmt := tx.Stmt(countStmt)
-		rows, err := txStmt.QueryContext(ctx, queryInfo.countParams...)
+	var items []any
+	var total int
+	err := l.WithTransaction(ctx, false, func(tx transaction.Client) error {
+		txStmt := tx.Stmt(stmt)
+		rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
 		if err != nil {
-			if cerr := tx.Cancel(); cerr != nil {
-				return nil, 0, "", fmt.Errorf("failed to cancel transaction (%v) after error: %w", cerr, err)
-			}
-			return nil, 0, "", &db.QueryError{QueryString: queryInfo.countQuery, Err: err}
+			return &db.QueryError{QueryString: queryInfo.query, Err: err}
 		}
-		total, err = l.ReadInt(rows)
+		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
 		if err != nil {
-			if cerr := tx.Cancel(); cerr != nil {
-				return nil, 0, "", fmt.Errorf("failed to cancel transaction (%v) after error: %w", cerr, err)
-			}
-			return nil, 0, "", fmt.Errorf("error reading query results: %w", err)
+			return err
 		}
-	}
-	if err := tx.Commit(); err != nil {
+
+		total = len(items)
+		if queryInfo.countQuery != "" {
+			countStmt := l.Prepare(queryInfo.countQuery)
+			defer l.CloseStmt(countStmt)
+			txStmt := tx.Stmt(countStmt)
+			rows, err := txStmt.QueryContext(ctx, queryInfo.countParams...)
+			if err != nil {
+				return &db.QueryError{QueryString: queryInfo.countQuery, Err: err}
+			}
+			total, err = l.ReadInt(rows)
+			if err != nil {
+				return fmt.Errorf("error reading query results: %w", err)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
 		return nil, 0, "", err
 	}
 

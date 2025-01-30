@@ -75,22 +75,21 @@ type Store interface {
 
 // NewIndexer returns a cache.Indexer backed by SQLite for objects of the given example type
 func NewIndexer(indexers cache.Indexers, s Store) (*Indexer, error) {
-	tx, err := s.BeginTx(context.Background(), true)
-	if err != nil {
-		return nil, err
-	}
 	dbName := db.Sanitize(s.GetName())
-	createTableQuery := fmt.Sprintf(createTableFmt, dbName)
-	err = tx.Exec(createTableQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createTableQuery, Err: err}
-	}
-	createIndexQuery := fmt.Sprintf(createIndexFmt, dbName)
-	err = tx.Exec(createIndexQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createIndexQuery, Err: err}
-	}
-	err = tx.Commit()
+
+	err := s.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
+		_, err := tx.Exec(createTableQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createTableQuery, Err: err}
+		}
+		createIndexQuery := fmt.Sprintf(createIndexFmt, dbName)
+		_, err = tx.Exec(createIndexQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createIndexQuery, Err: err}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +120,7 @@ func NewIndexer(indexers cache.Indexers, s Store) (*Indexer, error) {
 // AfterUpsert updates indices of an object
 func (i *Indexer) AfterUpsert(key string, obj any, tx transaction.Client) error {
 	// delete all
-	err := tx.StmtExec(tx.Stmt(i.deleteIndicesStmt), key)
+	_, err := tx.Stmt(i.deleteIndicesStmt).Exec(key)
 	if err != nil {
 		return &db.QueryError{QueryString: i.deleteIndicesQuery, Err: err}
 	}
@@ -136,7 +135,7 @@ func (i *Indexer) AfterUpsert(key string, obj any, tx transaction.Client) error 
 		}
 
 		for _, value := range values {
-			err = tx.StmtExec(tx.Stmt(i.addIndexStmt), indexName, value, key)
+			_, err = tx.Stmt(i.addIndexStmt).Exec(indexName, value, key)
 			if err != nil {
 				return &db.QueryError{QueryString: i.addIndexQuery, Err: err}
 			}
