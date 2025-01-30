@@ -42,21 +42,6 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
-// BeginTx mocks base method.
-func (m *MockClient) BeginTx(arg0 context.Context, arg1 bool) (transaction.Client, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTx", arg0, arg1)
-	ret0, _ := ret[0].(transaction.Client)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// BeginTx indicates an expected call of BeginTx.
-func (mr *MockClientMockRecorder) BeginTx(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockClient)(nil).BeginTx), arg0, arg1)
-}
-
 // CloseStmt mocks base method.
 func (m *MockClient) CloseStmt(arg0 db.Closable) error {
 	m.ctrl.T.Helper()
@@ -176,4 +161,18 @@ func (m *MockClient) Upsert(arg0 transaction.Client, arg1 *sql.Stmt, arg2 string
 func (mr *MockClientMockRecorder) Upsert(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockClient)(nil).Upsert), arg0, arg1, arg2, arg3, arg4)
+}
+
+// WithTransaction mocks base method.
+func (m *MockClient) WithTransaction(arg0 context.Context, arg1 bool, arg2 db.WithTransactionFunction) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTransaction", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTransaction indicates an expected call of WithTransaction.
+func (mr *MockClientMockRecorder) WithTransaction(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockClient)(nil).WithTransaction), arg0, arg1, arg2)
 }

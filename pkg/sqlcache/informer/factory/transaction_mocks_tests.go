@@ -40,44 +40,17 @@ func (m *MockTXClient) EXPECT() *MockTXClientMockRecorder {
 	return m.recorder
 }
 
-// Cancel mocks base method.
-func (m *MockTXClient) Cancel() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Cancel")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Cancel indicates an expected call of Cancel.
-func (mr *MockTXClientMockRecorder) Cancel() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockTXClient)(nil).Cancel))
-}
-
-// Commit mocks base method.
-func (m *MockTXClient) Commit() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Commit")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Commit indicates an expected call of Commit.
-func (mr *MockTXClientMockRecorder) Commit() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockTXClient)(nil).Commit))
-}
-
 // Exec mocks base method.
-func (m *MockTXClient) Exec(arg0 string, arg1 ...any) error {
+func (m *MockTXClient) Exec(arg0 string, arg1 ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0}
 	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(sql.Result)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Exec indicates an expected call of Exec.
@@ -99,23 +72,4 @@ func (m *MockTXClient) Stmt(arg0 *sql.Stmt) transaction.Stmt {
 func (mr *MockTXClientMockRecorder) Stmt(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stmt", reflect.TypeOf((*MockTXClient)(nil).Stmt), arg0)
-}
-
-// StmtExec mocks base method.
-func (m *MockTXClient) StmtExec(arg0 transaction.Stmt, arg1 ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "StmtExec", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// StmtExec indicates an expected call of StmtExec.
-func (mr *MockTXClientMockRecorder) StmtExec(arg0 any, arg1 ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StmtExec", reflect.TypeOf((*MockTXClient)(nil).StmtExec), varargs...)
 }
