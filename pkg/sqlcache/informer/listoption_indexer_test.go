@@ -15,12 +15,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	//"k8s.io/apimachinery/pkg/runtime"
+	//"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestNewListOptionIndexer(t *testing.T) {
@@ -37,11 +41,16 @@ func TestNewListOptionIndexer(t *testing.T) {
 		id := "somename"
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		store.EXPECT().GetName().Return(id).AnyTimes()
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Commit().Return(nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		store.EXPECT().RegisterAfterUpsert(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
@@ -49,17 +58,22 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		// create field table
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		// create field table indexes
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableIndexFmt, id, id)).Return(nil)
-		txClient.EXPECT().Commit().Return(nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableIndexFmt, id, id)).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 
 		loi, err := NewListOptionIndexer(fields, store, true)
 		assert.Nil(t, err)
@@ -71,11 +85,16 @@ func TestNewListOptionIndexer(t *testing.T) {
 		fields := [][]string{{"something"}}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		store.EXPECT().GetName().Return(id).AnyTimes()
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Commit().Return(fmt.Errorf("error"))
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 
 		_, err := NewListOptionIndexer(fields, store, false)
 		assert.NotNil(t, err)
@@ -87,11 +106,16 @@ func TestNewListOptionIndexer(t *testing.T) {
 		id := "somename"
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		store.EXPECT().GetName().Return(id).AnyTimes()
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Commit().Return(nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		store.EXPECT().RegisterAfterUpsert(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
@@ -99,7 +123,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, fmt.Errorf("error"))
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 
 		_, err := NewListOptionIndexer(fields, store, false)
 		assert.NotNil(t, err)
@@ -111,11 +135,16 @@ func TestNewListOptionIndexer(t *testing.T) {
 		id := "somename"
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		store.EXPECT().GetName().Return(id).AnyTimes()
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Commit().Return(nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		store.EXPECT().RegisterAfterUpsert(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
@@ -123,9 +152,15 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(fmt.Errorf("error"))
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, fmt.Errorf("error"))
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err == nil {
+					t.Fail()
+				}
+			})
 
 		_, err := NewListOptionIndexer(fields, store, true)
 		assert.NotNil(t, err)
@@ -137,11 +172,16 @@ func TestNewListOptionIndexer(t *testing.T) {
 		id := "somename"
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		store.EXPECT().GetName().Return(id).AnyTimes()
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Commit().Return(nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		store.EXPECT().RegisterAfterUpsert(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
@@ -149,13 +189,19 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(fmt.Errorf("error"))
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, fmt.Errorf("error"))
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err == nil {
+					t.Fail()
+				}
+			})
 
 		_, err := NewListOptionIndexer(fields, store, true)
 		assert.NotNil(t, err)
@@ -167,11 +213,16 @@ func TestNewListOptionIndexer(t *testing.T) {
 		id := "somename"
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
 		store.EXPECT().GetName().Return(id).AnyTimes()
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil)
-		txClient.EXPECT().Commit().Return(nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		store.EXPECT().RegisterAfterUpsert(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
@@ -179,15 +230,20 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(txClient, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableIndexFmt, id, id)).Return(nil)
-		txClient.EXPECT().Commit().Return(fmt.Errorf("error"))
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableIndexFmt, id, id)).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txClient)
+				if err != nil {
+					t.Fail()
+				}
+			})
 
 		_, err := NewListOptionIndexer(fields, store, true)
 		assert.NotNil(t, err)
@@ -876,7 +932,6 @@ func TestListByOptions(t *testing.T) {
 			stmt := &sql.Stmt{}
 			rows := &sql.Rows{}
 			objType := reflect.TypeOf(testObject)
-			store.EXPECT().BeginTx(gomock.Any(), false).Return(txClient, nil)
 			txClient.EXPECT().Stmt(gomock.Any()).Return(stmts).AnyTimes()
 			store.EXPECT().Prepare(test.expectedStmt).Do(func(a ...any) {
 				fmt.Println(a)
@@ -895,13 +950,21 @@ func TestListByOptions(t *testing.T) {
 			store.EXPECT().ReadObjects(rows, objType, false).Return(test.returnList, nil)
 			store.EXPECT().CloseStmt(stmt).Return(nil)
 
+			store.EXPECT().WithTransaction(gomock.Any(), false, gomock.Any()).Return(nil).Do(
+				func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+					err := f(txClient)
+					if test.expectedErr == nil {
+						assert.Nil(t, err)
+					} else {
+						assert.Equal(t, test.expectedErr, err)
+					}
+				})
+
 			if test.expectedCountStmt != "" {
 				store.EXPECT().Prepare(test.expectedCountStmt).Return(stmt)
-				//store.EXPECT().QueryForRows(context.TODO(), stmt, test.expectedCountStmtArgs...).Return(rows, nil)
 				store.EXPECT().ReadInt(rows).Return(len(test.expectedList.Items), nil)
 				store.EXPECT().CloseStmt(stmt).Return(nil)
 			}
-			txClient.EXPECT().Commit()
 			list, total, contToken, err := lii.executeQuery(context.TODO(), queryInfo)
 			if test.expectedErr == nil {
 				assert.Nil(t, err)
