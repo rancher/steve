@@ -57,8 +57,9 @@ const (
 )
 
 var (
-	paramScheme               = runtime.NewScheme()
-	paramCodec                = runtime.NewParameterCodec(paramScheme)
+	paramScheme = runtime.NewScheme()
+	paramCodec  = runtime.NewParameterCodec(paramScheme)
+	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
 	typeSpecificIndexedFields = map[string][][]string{
 		gvkKey("", "v1", "ConfigMap"): {
 			{"metadata", "labels[harvesterhci.io/cloud-init-template]"}},
@@ -307,11 +308,13 @@ func (s *Store) initializeNamespaceCache() error {
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
 
-	// get the type-specifc transform func
+	// get the type-specific transform func
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
 
 	// get the ns informer
-	nsInformer, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(&nsSchema), false, true)
+	tableClient := &tablelistconvert.Client{ResourceInterface: client}
+	attrs := attributes.GVK(&nsSchema)
+	nsInformer, err := s.cacheFactory.CacheFor(fields, transformFunc, tableClient, attrs, false, true)
 	if err != nil {
 		return err
 	}
@@ -750,8 +753,10 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
-
-	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, &tablelistconvert.Client{ResourceInterface: client}, attributes.GVK(schema), attributes.Namespaced(schema), controllerschema.IsListWatchable(schema))
+	tableClient := &tablelistconvert.Client{ResourceInterface: client}
+	attrs := attributes.GVK(schema)
+	ns := attributes.Namespaced(schema)
+	inf, err := s.cacheFactory.CacheFor(fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(schema))
 	if err != nil {
 		return nil, 0, "", err
 	}

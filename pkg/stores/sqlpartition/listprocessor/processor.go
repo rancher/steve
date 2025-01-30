@@ -13,6 +13,8 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -33,7 +35,20 @@ const (
 	notOp = "!"
 )
 
-var opReg = regexp.MustCompile(`[!]?=`)
+var labelsRegex = regexp.MustCompile(`^(metadata)\.(labels)\[(.+)\]$`)
+var mapK8sOpToRancherOp = map[selection.Operator]informer.Op{
+	selection.Equals:           informer.Eq,
+	selection.DoubleEquals:     informer.Eq,
+	selection.PartialEquals:    informer.Eq,
+	selection.NotEquals:        informer.NotEq,
+	selection.NotPartialEquals: informer.NotEq,
+	selection.In:               informer.In,
+	selection.NotIn:            informer.NotIn,
+	selection.Exists:           informer.Exists,
+	selection.DoesNotExist:     informer.NotExists,
+	selection.LessThan:         informer.Lt,
+	selection.GreaterThan:      informer.Gt,
+}
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
@@ -54,6 +69,26 @@ type Cache interface {
 	ListByOptions(ctx context.Context, lo informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
+func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, bool, error) {
+	v, ok := mapK8sOpToRancherOp[k8sOp]
+	if ok {
+		return v, k8sOp == selection.PartialEquals || k8sOp == selection.NotPartialEquals, nil
+	}
+	return "", false, fmt.Errorf("unknown k8sOp: %s", k8sOp)
+}
+
+func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Filter, error) {
+	values := requirement.Values()
+	queryFields := splitQuery(requirement.Key())
+	op, usePartialMatch, err := k8sOpToRancherOp(requirement.Operator())
+	return informer.Filter{
+		Field:   queryFields,
+		Matches: values,
+		Op:      op,
+		Partial: usePartialMatch,
+	}, err
+}
+
 // ParseQuery parses the query params of a request and returns a ListOptions.
 func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOptions, error) {
 	opts := informer.ListOptions{}
@@ -67,20 +102,17 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	filterParams := q[filterParam]
 	filterOpts := []informer.OrFilter{}
 	for _, filters := range filterParams {
-		orFilters := strings.Split(filters, orOp)
+		requirements, err := queryparser.ParseToRequirements(filters)
+		if err != nil {
+			return informer.ListOptions{}, err
+		}
 		orFilter := informer.OrFilter{}
-		for _, filter := range orFilters {
-			var op informer.Op
-			if strings.Contains(filter, "!=") {
-				op = "!="
+		for _, requirement := range requirements {
+			filter, err := k8sRequirementToOrFilter(requirement)
+			if err != nil {
+				return opts, err
 			}
-			filter := opReg.Split(filter, -1)
-			if len(filter) != 2 {
-				continue
-			}
-			usePartialMatch := !(strings.HasPrefix(filter[1], `'`) && strings.HasSuffix(filter[1], `'`))
-			value := strings.TrimSuffix(strings.TrimPrefix(filter[1], "'"), "'")
-			orFilter.Filters = append(orFilter.Filters, informer.Filter{Field: strings.Split(filter[0], "."), Matches: []string{value}, Op: op, Partial: usePartialMatch})
+			orFilter.Filters = append(orFilter.Filters, filter)
 		}
 		filterOpts = append(filterOpts, orFilter)
 	}
@@ -119,7 +151,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	}
 	opts.Pagination = pagination
 
-	var op informer.Op
+	op := informer.Eq
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
@@ -133,7 +165,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 			return opts, err
 		}
 		if projOrNSFilters == nil {
-			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespacess named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
+			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
 		}
 		if op == informer.NotEq {
 			for _, filter := range projOrNSFilters {
@@ -157,6 +189,21 @@ func getLimit(apiOp *types.APIRequest) int {
 		limit = defaultLimit
 	}
 	return limit
+}
+
+// splitQuery takes a single-string metadata-labels filter and converts it into an array of 3 accessor strings,
+// where the first two strings are always "metadata" and "labels", and the third is the label name.
+// This is more complex than doing something like `strings.Split(".", "metadata.labels.fieldName")
+// because the fieldName can be more complex - in particular it can contain "."s) and needs to be
+// bracketed, as in `metadata.labels[rancher.io/cattle.and.beef]".
+// The `labelsRegex` looks for the bracketed form.
+func splitQuery(query string) []string {
+	m := labelsRegex.FindStringSubmatch(query)
+	if m != nil && len(m) == 4 {
+		// m[0] contains the entire string, so just return all but that first item in `m`
+		return m[1:]
+	}
+	return strings.Split(query, ".")
 }
 
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Cache) ([]informer.Filter, error) {
