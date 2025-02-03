@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"

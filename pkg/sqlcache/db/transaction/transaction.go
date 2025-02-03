@@ -9,7 +9,6 @@ import (
 	"database/sql"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Client provides a way to interact with the underlying sql transaction.
