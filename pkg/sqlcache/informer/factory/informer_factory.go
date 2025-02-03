@@ -65,6 +65,11 @@ var defaultEncryptedResourceTypes = map[schema.GroupVersionKind]struct{}{
 		Version: "v1",
 		Kind:    "Secret",
 	}: {},
+	{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Token",
+	}: {},
 }
 
 // NewCacheFactory returns an informer factory instance

@@ -63,7 +63,7 @@ Meaning and behavior are the same unless otherwise specified.
 
 Note that, if SQLite caching of resources is enabled, some of the data
 can be stored in disk, in either encrypted or plain text forms based on:
- - by default, Secrets are always encrypted
+ - by default, Secrets and Rancher Tokens (`management.cattle.io/v3, Kind=Token`) are always encrypted
  - if the environment variable `CATTLE_ENCRYPT_CACHE_ALL` is set to "true",
 all resources are encrypted
  - regardless of the setting's value, any filterable/sortable columns are stored
@@ -842,4 +842,3 @@ export KUBEBUILDER_ASSETS=$(setup-envtest use -p path)
 # Versioning
 
 See [VERSION.md](VERSION.md).
-

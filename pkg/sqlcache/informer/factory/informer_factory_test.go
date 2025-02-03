@@ -226,6 +226,102 @@ func TestCacheFor(t *testing.T) {
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
 	}})
+
+	tests = append(tests, testCase{description: "CacheFor() should encrypt v1 Secrets", test: func(t *testing.T) {
+		dbClient := NewMockDBClient(gomock.NewController(t))
+		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
+		fields := [][]string{{"something"}}
+		expectedGVK := schema.GroupVersionKind{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Secret",
+		}
+		sii := NewMockSharedIndexInformer(gomock.NewController(t))
+		sii.EXPECT().HasSynced().Return(true)
+		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
+		sii.EXPECT().SetWatchErrorHandler(gomock.Any())
+		i := &informer.Informer{
+			// need to set this so Run function is not nil
+			SharedIndexInformer: sii,
+		}
+		expectedC := Cache{
+			ByOptionsLister: i,
+		}
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+			assert.Equal(t, client, dynamicClient)
+			assert.Equal(t, fields, fields)
+			assert.Equal(t, expectedGVK, gvk)
+			assert.Equal(t, db, dbClient)
+			assert.Equal(t, true, shouldEncrypt)
+			return i, nil
+		}
+		f := &CacheFactory{
+			dbClient:    dbClient,
+			stopCh:      make(chan struct{}),
+			newInformer: testNewInformer,
+			encryptAll:  false,
+			informers:   map[schema.GroupVersionKind]*guardedInformer{},
+		}
+
+		go func() {
+			time.Sleep(10 * time.Second)
+			close(f.stopCh)
+		}()
+		var c Cache
+		var err error
+		c, err = f.CacheFor(fields, nil, dynamicClient, expectedGVK, false, true)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedC, c)
+		time.Sleep(1 * time.Second)
+	}})
+	tests = append(tests, testCase{description: "CacheFor() should encrypt management.cattle.io tokens", test: func(t *testing.T) {
+		dbClient := NewMockDBClient(gomock.NewController(t))
+		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
+		fields := [][]string{{"something"}}
+		expectedGVK := schema.GroupVersionKind{
+			Group:   "management.cattle.io",
+			Version: "v3",
+			Kind:    "Token",
+		}
+		sii := NewMockSharedIndexInformer(gomock.NewController(t))
+		sii.EXPECT().HasSynced().Return(true)
+		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
+		sii.EXPECT().SetWatchErrorHandler(gomock.Any())
+		i := &informer.Informer{
+			// need to set this so Run function is not nil
+			SharedIndexInformer: sii,
+		}
+		expectedC := Cache{
+			ByOptionsLister: i,
+		}
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+			assert.Equal(t, client, dynamicClient)
+			assert.Equal(t, fields, fields)
+			assert.Equal(t, expectedGVK, gvk)
+			assert.Equal(t, db, dbClient)
+			assert.Equal(t, true, shouldEncrypt)
+			return i, nil
+		}
+		f := &CacheFactory{
+			dbClient:    dbClient,
+			stopCh:      make(chan struct{}),
+			newInformer: testNewInformer,
+			encryptAll:  false,
+			informers:   map[schema.GroupVersionKind]*guardedInformer{},
+		}
+
+		go func() {
+			time.Sleep(10 * time.Second)
+			close(f.stopCh)
+		}()
+		var c Cache
+		var err error
+		c, err = f.CacheFor(fields, nil, dynamicClient, expectedGVK, false, true)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedC, c)
+		time.Sleep(1 * time.Second)
+	}})
+
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, stopCh not closed, and transform func should return no error", test: func(t *testing.T) {
 		dbClient := NewMockDBClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
