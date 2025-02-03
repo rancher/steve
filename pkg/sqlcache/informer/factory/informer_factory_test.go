@@ -228,7 +228,7 @@ func TestCacheFor(t *testing.T) {
 	}})
 
 	tests = append(tests, testCase{description: "CacheFor() should encrypt v1 Secrets", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{
@@ -247,7 +247,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -275,7 +275,7 @@ func TestCacheFor(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() should encrypt management.cattle.io tokens", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{
@@ -294,7 +294,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
