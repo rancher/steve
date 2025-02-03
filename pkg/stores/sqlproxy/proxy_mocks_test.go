@@ -272,7 +272,7 @@ func (m *MockCacheFactory) CacheFor(arg0 [][]string, arg1 cache.TransformFunc, a
 }
 
 // CacheFor indicates an expected call of CacheFor.
-func (mr *MockCacheFactoryMockRecorder) CacheFor(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockCacheFactoryMockRecorder) CacheFor(arg0, arg1, arg2, arg3, arg4, arg5 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), arg0, arg1, arg2, arg3, arg4, arg5)
 }
