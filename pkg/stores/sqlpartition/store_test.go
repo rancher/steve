@@ -15,7 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/lasso/pkg/cache/sql/partition"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/wrangler/v3/pkg/generic"
