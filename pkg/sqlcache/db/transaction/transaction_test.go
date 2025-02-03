@@ -9,7 +9,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package transaction -destination ./transaction_mocks_test.go github.com/rancher/lasso/pkg/cache/sql/db/transaction Stmt,SQLTx
+//go:generate mockgen --build_flags=--mod=mod -package transaction -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,SQLTx
 
 func TestNewClient(t *testing.T) {
 	tx := NewMockSQLTx(gomock.NewController(t))

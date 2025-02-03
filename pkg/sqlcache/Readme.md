@@ -58,8 +58,8 @@ intended to be used as a way of enforcing RBAC.
     package main
     import(
 		"k8s.io/client-go/dynamic"
-        "github.com/rancher/lasso/pkg/cache/sql/informer"
-		"github.com/rancher/lasso/pkg/cache/sql/informer/factory"
+        "github.com/rancher/steve/pkg/sqlcache/informer"
+		"github.com/rancher/steve/pkg/sqlcache/informer/factory"
     )
 
     func main() {

@@ -14,9 +14,9 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
-	informer "github.com/rancher/lasso/pkg/cache/sql/informer"
-	factory "github.com/rancher/lasso/pkg/cache/sql/informer/factory"
-	partition "github.com/rancher/lasso/pkg/cache/sql/partition"
+	informer "github.com/rancher/steve/pkg/sqlcache/informer"
+	factory "github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	summary "github.com/rancher/wrangler/v3/pkg/summary"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

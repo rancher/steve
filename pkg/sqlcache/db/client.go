@@ -16,7 +16,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/lasso/pkg/cache/sql/db/transaction"
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	_ "modernc.org/sqlite"
 )
 
