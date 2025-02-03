@@ -181,7 +181,7 @@ func (i *Indexer) Index(indexName string, obj any) ([]any, error) {
 
 	// atypical case - more than one value to lookup
 	// HACK: sql.Statement.Query does not allow to pass slices in as of go 1.19 - create an ad-hoc statement
-	query := fmt.Sprintf(fmt.Sprintf(selectQueryFmt, db.Sanitize(i.GetName()), strings.Repeat(", ?", len(values)-1)))
+	query := fmt.Sprintf(selectQueryFmt, db.Sanitize(i.GetName()), strings.Repeat(", ?", len(values)-1))
 	stmt := i.Prepare(query)
 	defer i.CloseStmt(stmt)
 	// HACK: Query will accept []any but not []string

@@ -29,7 +29,7 @@ type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
-// this is set to a var so that it can be overriden by test code for mocking purposes
+// this is set to a var so that it can be overridden by test code for mocking purposes
 var newInformer = cache.NewSharedIndexInformer
 
 // NewInformer returns a new SQLite-backed Informer for the type specified by schema in unstructured.Unstructured form
