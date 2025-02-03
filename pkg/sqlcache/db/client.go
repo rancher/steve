@@ -30,7 +30,7 @@ const (
 	informerObjectCachePerms fs.FileMode = 0o600
 )
 
-// Client is a database client that provides encrypting, decrypting, and database resetting
+// Client defines a database client that provides encrypting, decrypting, and database resetting
 type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
 	Prepare(stmt string) *sql.Stmt
