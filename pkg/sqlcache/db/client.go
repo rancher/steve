@@ -162,7 +162,7 @@ func (c *client) Prepare(stmt string) *sql.Stmt {
 	defer c.connLock.RUnlock()
 	prepared, err := c.conn.Prepare(stmt)
 	if err != nil {
-		panic(fmt.Errorf("Error preparing statement: %s\n%v", stmt, err))
+		panic(fmt.Errorf("Error preparing statement: %s\n%w", stmt, err))
 	}
 	return prepared
 }
