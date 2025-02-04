@@ -742,9 +742,33 @@ func formatMatchTargetWithFormatter(match string, format string) string {
 	return fmt.Sprintf(format, match)
 }
 
+// There are three kinds of string arrays to turn into a string, based on the last value in the array
+// simple: ["a", "b", "c"] => "a.b.c"
+// already bracketed: ["a", "b", "labels[foo.io]"] => "a.b.labels[foo.io]"
+// complex but not bracketed: ["a", "b", "foo.io/stuff"] => "a.b[foo.io/stuff]"
+
+func smartJoin(s []string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	if len(s) == 1 {
+		return s[0]
+	}
+	lastBit := s[len(s)-1]
+	simpleName := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	if simpleName.MatchString(lastBit) {
+		return strings.Join(s, ".")
+	}
+	alreadyBracketed := regexp.MustCompile(`.\[.+\]$`)
+	if alreadyBracketed.MatchString(lastBit) {
+		return strings.Join(s, ".")
+	}
+	return fmt.Sprintf("%s[%s]", strings.Join(s[0:len(s)-1], "."), lastBit)
+}
+
 // toColumnName returns the column name corresponding to a field expressed as string slice
 func toColumnName(s []string) string {
-	return db.Sanitize(strings.Join(s, "."))
+	return db.Sanitize(smartJoin(s))
 }
 
 // getField extracts the value of a field expressed as a string path from an unstructured object

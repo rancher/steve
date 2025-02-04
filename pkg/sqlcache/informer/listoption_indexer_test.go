@@ -262,6 +262,7 @@ func TestListByOptions(t *testing.T) {
 		expectedCountStmtArgs []any
 		expectedStmt          string
 		expectedStmtArgs      []any
+		extraIndexedFields    []string
 		expectedList          *unstructured.UnstructuredList
 		returnList            []any
 		expectedContToken     string
@@ -689,6 +690,27 @@ func TestListByOptions(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
+		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
+		listOptions: ListOptions{
+			Sort: Sort{
+				Fields: [][]string{{"metadata", "fields", "3"}, {"metadata", "labels", "stub.io/candy"}},
+				Orders: []SortOrder{ASC, ASC},
+			},
+		},
+		extraIndexedFields: []string{"metadata.fields[3]", "metadata.labels[stub.io/candy]"},
+		partitions:         []partition.Partition{},
+		ns:                 "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (FALSE)
+  ORDER BY f."metadata.fields[3]" ASC, f."metadata.labels[stub.io/candy]" ASC`,
+		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
+		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: ListOptions{
 			Sort: Sort{
@@ -909,8 +931,8 @@ func TestListByOptions(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.somefield", "status.someotherfield"},
 			}
-			if test.description == "ListByOptions with multiple OrFilters set should select where all OrFilters contain one filter that is true in prepared sql.Stmt" {
-				fmt.Printf("stop here")
+			if len(test.extraIndexedFields) > 0 {
+				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
 			}
 			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
@@ -1533,6 +1555,68 @@ func TestConstructQuery(t *testing.T) {
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestSmartJoin(t *testing.T) {
+	type testCase struct {
+		description       string
+		fieldArray        []string
+		expectedFieldName string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description:       "single-letter names should be dotted",
+		fieldArray:        []string{"metadata", "labels", "a"},
+		expectedFieldName: "metadata.labels.a",
+	})
+	tests = append(tests, testCase{
+		description:       "underscore should be dotted",
+		fieldArray:        []string{"metadata", "labels", "_"},
+		expectedFieldName: "metadata.labels._",
+	})
+	tests = append(tests, testCase{
+		description:       "simple names should be dotted",
+		fieldArray:        []string{"metadata", "labels", "queryField2"},
+		expectedFieldName: "metadata.labels.queryField2",
+	})
+	tests = append(tests, testCase{
+		description:       "a numeric field should be bracketed",
+		fieldArray:        []string{"metadata", "fields", "43"},
+		expectedFieldName: "metadata.fields[43]",
+	})
+	tests = append(tests, testCase{
+		description:       "a field starting with a number should be bracketed",
+		fieldArray:        []string{"metadata", "fields", "46days"},
+		expectedFieldName: "metadata.fields[46days]",
+	})
+	tests = append(tests, testCase{
+		description:       "compound names should be bracketed",
+		fieldArray:        []string{"metadata", "labels", "rancher.cattle.io/moo"},
+		expectedFieldName: "metadata.labels[rancher.cattle.io/moo]",
+	})
+	tests = append(tests, testCase{
+		description:       "space-separated names should be bracketed",
+		fieldArray:        []string{"metadata", "labels", "space here"},
+		expectedFieldName: "metadata.labels[space here]",
+	})
+	tests = append(tests, testCase{
+		description:       "already bracketed terms shouldn't be rebracketed",
+		fieldArray:        []string{"metadata", "labels[k8s.io/deepcode]"},
+		expectedFieldName: "metadata.labels[k8s.io/deepcode]",
+	})
+	tests = append(tests, testCase{
+		description:       "an empty array should be an empty string",
+		fieldArray:        []string{},
+		expectedFieldName: "",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			gotFieldName := smartJoin(test.fieldArray)
+			assert.Equal(t, test.expectedFieldName, gotFieldName)
 		})
 	}
 }
