@@ -13,8 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	informer "github.com/rancher/lasso/pkg/cache/sql/informer"
-	partition "github.com/rancher/lasso/pkg/cache/sql/partition"
+	informer "github.com/rancher/steve/pkg/sqlcache/informer"
+	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )

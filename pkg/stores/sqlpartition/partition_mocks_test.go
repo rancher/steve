@@ -13,7 +13,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
-	partition "github.com/rancher/lasso/pkg/cache/sql/partition"
+	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	watch "k8s.io/apimachinery/pkg/watch"
