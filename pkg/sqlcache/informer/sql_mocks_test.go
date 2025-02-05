@@ -56,21 +56,6 @@ func (mr *MockStoreMockRecorder) Add(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockStore)(nil).Add), arg0)
 }
 
-// BeginTx mocks base method.
-func (m *MockStore) BeginTx(arg0 context.Context, arg1 bool) (db.TXClient, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTx", arg0, arg1)
-	ret0, _ := ret[0].(db.TXClient)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// BeginTx indicates an expected call of BeginTx.
-func (mr *MockStoreMockRecorder) BeginTx(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockStore)(nil).BeginTx), arg0, arg1)
-}
-
 // CloseStmt mocks base method.
 func (m *MockStore) CloseStmt(arg0 db.Closable) error {
 	m.ctrl.T.Helper()
@@ -201,6 +186,20 @@ func (mr *MockStoreMockRecorder) ListKeys() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListKeys", reflect.TypeOf((*MockStore)(nil).ListKeys))
 }
 
+// NewConnection mocks base method.
+func (m *MockStore) NewConnection() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewConnection")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewConnection indicates an expected call of NewConnection.
+func (mr *MockStoreMockRecorder) NewConnection() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockStore)(nil).NewConnection))
+}
+
 // Prepare mocks base method.
 func (m *MockStore) Prepare(arg0 string) *sql.Stmt {
 	m.ctrl.T.Helper()
@@ -281,7 +280,7 @@ func (mr *MockStoreMockRecorder) ReadStrings(arg0 any) *gomock.Call {
 }
 
 // RegisterAfterDelete mocks base method.
-func (m *MockStore) RegisterAfterDelete(arg0 func(string, db.TXClient) error) {
+func (m *MockStore) RegisterAfterDelete(arg0 func(string, transaction.Client) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDelete", arg0)
 }
@@ -293,7 +292,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterDelete(arg0 any) *gomock.Call {
 }
 
 // RegisterAfterUpsert mocks base method.
-func (m *MockStore) RegisterAfterUpsert(arg0 func(string, any, db.TXClient) error) {
+func (m *MockStore) RegisterAfterUpsert(arg0 func(string, any, transaction.Client) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterUpsert", arg0)
 }
@@ -344,4 +343,32 @@ func (m *MockStore) Update(arg0 any) error {
 func (mr *MockStoreMockRecorder) Update(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockStore)(nil).Update), arg0)
+}
+
+// Upsert mocks base method.
+func (m *MockStore) Upsert(arg0 transaction.Client, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockStoreMockRecorder) Upsert(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockStore)(nil).Upsert), arg0, arg1, arg2, arg3, arg4)
+}
+
+// WithTransaction mocks base method.
+func (m *MockStore) WithTransaction(arg0 context.Context, arg1 bool, arg2 db.WithTransactionFunction) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTransaction", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTransaction indicates an expected call of WithTransaction.
+func (mr *MockStoreMockRecorder) WithTransaction(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockStore)(nil).WithTransaction), arg0, arg1, arg2)
 }

@@ -13,13 +13,15 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/client-go/tools/cache"
 )
 
 //go:generate mockgen --build_flags=--mod=mod -package informer -destination ./sql_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer Store
-//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient,Rows
+//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
+//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
 
 type testStoreObject struct {
 	Id  string
@@ -34,7 +36,7 @@ func TestNewIndexer(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "NewIndexer() with no errors returned from Store or TXClient, should return no error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with no errors returned from Store or Client, should return no error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -45,11 +47,17 @@ func TestNewIndexer(t *testing.T) {
 			},
 		}
 		storeName := "someStoreName"
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(client, nil)
+
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
-		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil)
-		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil)
-		client.EXPECT().Commit().Return(nil)
+		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(client)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		store.EXPECT().RegisterAfterUpsert(gomock.Any())
 		store.EXPECT().Prepare(fmt.Sprintf(deleteIndicesFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, storeName))
@@ -60,7 +68,7 @@ func TestNewIndexer(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, cache.Indexers(indexers), indexer.indexers)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with Store Begin() error, should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with WithTransaction() error, should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 
 		objKey := "objKey"
@@ -69,11 +77,12 @@ func TestNewIndexer(t *testing.T) {
 				return []string{objKey}, nil
 			},
 		}
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(nil, fmt.Errorf("error"))
+		store.EXPECT().GetName().AnyTimes().Return("someStoreName")
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with TXClient Exec() error on first call to Exec(), should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on first call to Exec(), should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -84,13 +93,20 @@ func TestNewIndexer(t *testing.T) {
 			},
 		}
 		storeName := "someStoreName"
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(client, nil)
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
-		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(fmt.Errorf("error"))
+		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, fmt.Errorf("error"))
+
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(client)
+				if err == nil {
+					t.Fail()
+				}
+			})
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with TXClient Exec() error on second call to Exec(), should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on second call to Exec(), should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -101,14 +117,22 @@ func TestNewIndexer(t *testing.T) {
 			},
 		}
 		storeName := "someStoreName"
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(client, nil)
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
-		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil)
-		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(fmt.Errorf("error"))
+		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil, fmt.Errorf("error"))
+
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(client)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "NewIndexer() with TXClient Commit() error, should return error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "NewIndexer() with Client Commit() error, should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
 
@@ -119,11 +143,16 @@ func TestNewIndexer(t *testing.T) {
 			},
 		}
 		storeName := "someStoreName"
-		store.EXPECT().BeginTx(gomock.Any(), true).Return(client, nil)
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
-		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil)
-		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil)
-		client.EXPECT().Commit().Return(fmt.Errorf("error"))
+		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil, nil)
+		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(client)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		_, err := NewIndexer(indexers, store)
 		assert.NotNil(t, err)
 	}})
@@ -141,16 +170,14 @@ func TestAfterUpsert(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "AfterUpsert() with no errors returned from TXClient should return no error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "AfterUpsert() with no errors returned from Client should return no error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
-		deleteStmt := &sql.Stmt{}
-		addStmt := &sql.Stmt{}
 		objKey := "key"
+		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
+		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
-			Store:             store,
-			deleteIndicesStmt: deleteStmt,
-			addIndexStmt:      addStmt,
+			Store: store,
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
 					return []string{objKey}, nil
@@ -158,24 +185,22 @@ func TestAfterUpsert(t *testing.T) {
 			},
 		}
 		key := "somekey"
-		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(indexer.deleteIndicesStmt)
-		client.EXPECT().StmtExec(indexer.deleteIndicesStmt, key).Return(nil)
-		client.EXPECT().Stmt(indexer.addIndexStmt).Return(indexer.addIndexStmt)
-		client.EXPECT().StmtExec(indexer.addIndexStmt, "a", objKey, key).Return(nil)
+		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
+		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
+		client.EXPECT().Stmt(indexer.addIndexStmt).Return(addIndexStmt)
+		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, nil)
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.Nil(t, err)
 	}})
-	tests = append(tests, testCase{description: "AfterUpsert() with error returned from TXClient StmtExec() should return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client StmtExec() should return an error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
-		deleteStmt := &sql.Stmt{}
-		addStmt := &sql.Stmt{}
 		objKey := "key"
+		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
-			Store:             store,
-			deleteIndicesStmt: deleteStmt,
-			addIndexStmt:      addStmt,
+			Store: store,
+
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
 					return []string{objKey}, nil
@@ -183,22 +208,20 @@ func TestAfterUpsert(t *testing.T) {
 			},
 		}
 		key := "somekey"
-		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(indexer.deleteIndicesStmt)
-		client.EXPECT().StmtExec(indexer.deleteIndicesStmt, key).Return(fmt.Errorf("error"))
+		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
+		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, fmt.Errorf("error"))
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.NotNil(t, err)
 	}})
-	tests = append(tests, testCase{description: "AfterUpsert() with error returned from TXClient second StmtExec() call should return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client second StmtExec() call should return an error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
 		client := NewMockTXClient(gomock.NewController(t))
-		deleteStmt := &sql.Stmt{}
-		addStmt := &sql.Stmt{}
+		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
+		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		objKey := "key"
 		indexer := &Indexer{
-			Store:             store,
-			deleteIndicesStmt: deleteStmt,
-			addIndexStmt:      addStmt,
+			Store: store,
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
 					return []string{objKey}, nil
@@ -206,10 +229,10 @@ func TestAfterUpsert(t *testing.T) {
 			},
 		}
 		key := "somekey"
-		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(indexer.deleteIndicesStmt)
-		client.EXPECT().StmtExec(indexer.deleteIndicesStmt, key).Return(nil)
-		client.EXPECT().Stmt(indexer.addIndexStmt).Return(indexer.addIndexStmt)
-		client.EXPECT().StmtExec(indexer.addIndexStmt, "a", objKey, key).Return(fmt.Errorf("error"))
+		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
+		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
+		client.EXPECT().Stmt(indexer.addIndexStmt).Return(addIndexStmt)
+		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, fmt.Errorf("error"))
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.NotNil(t, err)

@@ -7,9 +7,8 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./store_mocks_test.go github.com/rancher/steve/pkg/sqlcache/store DBClient
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient,Rows
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./tx_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
 
 import (
 	"context"
@@ -19,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -44,27 +44,39 @@ func TestAdd(t *testing.T) {
 	var tests []testCase
 
 	// Tests with shouldEncryptSet to false
-	tests = append(tests, testCase{description: "Add with no DB Client errors", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with no DB client errors", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		txC.EXPECT().Commit().Return(nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Add(testObject)
 		assert.Nil(t, err)
-		// dbclient beginerr
 	},
 	})
 
-	tests = append(tests, testCase{description: "Add with no DB Client errors and an afterUpsert function", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with no DB client errors and an afterUpsert function", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		txC.EXPECT().Commit().Return(nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx db.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx transaction.Client) error {
 			count++
 			return nil
 		})
@@ -74,53 +86,63 @@ func TestAdd(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Add with no DB Client errors and an afterUpsert function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with no DB client errors and an afterUpsert function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC db.TXClient) error {
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Add(testObject)
 		assert.NotNil(t, err)
-		// dbclient beginerr
 	},
 	})
 
-	tests = append(tests, testCase{description: "Add with DB Client BeginTx(gomock.Any(), true) error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with DB client WithTransaction error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(nil, fmt.Errorf("failed"))
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("failed"))
 
 		store := SetupStore(t, c, shouldEncrypt)
 		err := store.Add(testObject)
 		assert.NotNil(t, err)
 	}})
 
-	tests = append(tests, testCase{description: "Add with DB Client Upsert() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with DB client Upsert() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(fmt.Errorf("failed"))
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("failed")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
 		err := store.Add(testObject)
 		assert.NotNil(t, err)
 	}})
 
-	tests = append(tests, testCase{description: "Add with DB Client Upsert() error with following Rollback() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with DB client Commit() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(fmt.Errorf("failed"))
-		err := store.Add(testObject)
-		assert.NotNil(t, err)
-	}})
 
-	tests = append(tests, testCase{description: "Add with DB Client Commit() error", test: func(t *testing.T, shouldEncrypt bool) {
-		c, txC := SetupMockDB(t)
-		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		txC.EXPECT().Commit().Return(fmt.Errorf("failed"))
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("failed")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
 
 		err := store.Add(testObject)
 		assert.NotNil(t, err)
@@ -145,27 +167,38 @@ func TestUpdate(t *testing.T) {
 	var tests []testCase
 
 	// Tests with shouldEncryptSet to false
-	tests = append(tests, testCase{description: "Update with no DB Client errors", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with no DB client errors", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		txC.EXPECT().Commit().Return(nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
 		err := store.Update(testObject)
 		assert.Nil(t, err)
-		// dbclient beginerr
 	},
 	})
 
-	tests = append(tests, testCase{description: "Update with no DB Client errors and an afterUpsert function", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with no DB client errors and an afterUpsert function", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		txC.EXPECT().Commit().Return(nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC db.TXClient) error {
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
 			count++
 			return nil
 		})
@@ -175,13 +208,21 @@ func TestUpdate(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Update with no DB Client errors and an afterUpsert function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with no DB client errors and an afterUpsert function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
 
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC db.TXClient) error {
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
+		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Update(testObject)
@@ -189,40 +230,28 @@ func TestUpdate(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Update with DB Client BeginTx(gomock.Any(), true) error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with DB client WithTransaction returning error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(nil, fmt.Errorf("failed"))
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 
 		store := SetupStore(t, c, shouldEncrypt)
 		err := store.Update(testObject)
 		assert.NotNil(t, err)
 	}})
 
-	tests = append(tests, testCase{description: "Update with DB Client Upsert() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with DB client Upsert() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(fmt.Errorf("failed"))
-		err := store.Update(testObject)
-		assert.NotNil(t, err)
-	}})
-
-	tests = append(tests, testCase{description: "Update with DB Client Upsert() error with following Rollback() error", test: func(t *testing.T, shouldEncrypt bool) {
-		c, txC := SetupMockDB(t)
-		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(fmt.Errorf("failed"))
-		err := store.Update(testObject)
-		assert.NotNil(t, err)
-	}})
-
-	tests = append(tests, testCase{description: "Update with DB Client Commit() error", test: func(t *testing.T, shouldEncrypt bool) {
-		c, txC := SetupMockDB(t)
-		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		c.EXPECT().Upsert(txC, store.upsertStmt, "something", testObject, store.shouldEncrypt).Return(nil)
-		txC.EXPECT().Commit().Return(fmt.Errorf("failed"))
-
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
 		err := store.Update(testObject)
 		assert.NotNil(t, err)
 	}})
@@ -246,47 +275,67 @@ func TestDelete(t *testing.T) {
 	var tests []testCase
 
 	// Tests with shouldEncryptSet to false
-	tests = append(tests, testCase{description: "Delete with no DB Client errors", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Delete with no DB client errors", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		// deleteStmt here will be an empty string since Prepare mock returns an empty *sql.Stmt
-		txC.EXPECT().Stmt(store.deleteStmt).Return(store.deleteStmt)
-		txC.EXPECT().StmtExec(store.deleteStmt, testObject.Id).Return(nil)
-		txC.EXPECT().Commit().Return(nil)
+		stmt := NewMockStmt(gomock.NewController(t))
+		txC.EXPECT().Stmt(store.deleteStmt).Return(stmt)
+		stmt.EXPECT().Exec(testObject.Id).Return(nil, nil)
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Delete(testObject)
 		assert.Nil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Delete with DB Client BeginTx(gomock.Any(), true) error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Delete with DB client WithTransaction returning error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(nil, fmt.Errorf("error"))
-		// deleteStmt here will be an empty string since Prepare mock returns an empty *sql.Stmt
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 		err := store.Delete(testObject)
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Delete with TX Client StmtExec() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Delete with TX client Exec() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		txC.EXPECT().Stmt(store.deleteStmt).Return(store.deleteStmt)
-		txC.EXPECT().StmtExec(store.deleteStmt, testObject.Id).Return(fmt.Errorf("error"))
-		// deleteStmt here will be an empty string since Prepare mock returns an empty *sql.Stmt
+		stmt := NewMockStmt(gomock.NewController(t))
+		txC.EXPECT().Stmt(store.deleteStmt).Return(stmt)
+		stmt.EXPECT().Exec(testObject.Id).Return(nil, fmt.Errorf("error"))
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Delete(testObject)
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Delete with DB Client Commit() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Delete with DB client Commit() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		// deleteStmt here will be an empty string since Prepare mock returns an empty *sql.Stmt
-		txC.EXPECT().Stmt(store.deleteStmt).Return(store.deleteStmt)
-		// tx.EXPECT().
-		txC.EXPECT().StmtExec(store.deleteStmt, testObject.Id).Return(nil)
-		txC.EXPECT().Commit().Return(fmt.Errorf("error"))
+		stmt := NewMockStmt(gomock.NewController(t))
+		txC.EXPECT().Stmt(store.deleteStmt).Return(stmt)
+		stmt.EXPECT().Exec(testObject.Id).Return(nil, nil)
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Delete(testObject)
 		assert.NotNil(t, err)
 	},
@@ -309,7 +358,7 @@ func TestList(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "List with no DB Client errors and no items", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "List with no DB client errors and no items", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -319,7 +368,7 @@ func TestList(t *testing.T) {
 		assert.Len(t, items, 0)
 	},
 	})
-	tests = append(tests, testCase{description: "List with no DB Client errors and some items", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "List with no DB client errors and some items", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		fakeItemsToReturn := []any{"something1", 2, false}
@@ -330,7 +379,7 @@ func TestList(t *testing.T) {
 		assert.Equal(t, fakeItemsToReturn, items)
 	},
 	})
-	tests = append(tests, testCase{description: "List with DB Client ReadObjects() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "List with DB client ReadObjects() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -359,7 +408,7 @@ func TestListKeys(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "ListKeys with no DB Client errors and some items", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "ListKeys with no DB client errors and some items", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -370,7 +419,7 @@ func TestListKeys(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "ListKeys with DB Client ReadStrings() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "ListKeys with DB client ReadStrings() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -396,7 +445,7 @@ func TestGet(t *testing.T) {
 
 	var tests []testCase
 	testObject := testStoreObject{Id: "something", Val: "a"}
-	tests = append(tests, testCase{description: "Get with no DB Client errors and object exists", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Get with no DB client errors and object exists", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -408,7 +457,7 @@ func TestGet(t *testing.T) {
 		assert.True(t, exists)
 	},
 	})
-	tests = append(tests, testCase{description: "Get with no DB Client errors and object does not exist", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Get with no DB client errors and object does not exist", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -420,7 +469,7 @@ func TestGet(t *testing.T) {
 		assert.False(t, exists)
 	},
 	})
-	tests = append(tests, testCase{description: "Get with DB Client ReadObjects() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Get with DB client ReadObjects() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -446,7 +495,7 @@ func TestGetByKey(t *testing.T) {
 
 	var tests []testCase
 	testObject := testStoreObject{Id: "something", Val: "a"}
-	tests = append(tests, testCase{description: "GetByKey with no DB Client errors and item exists", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "GetByKey with no DB client errors and item exists", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -458,7 +507,7 @@ func TestGetByKey(t *testing.T) {
 		assert.True(t, exists)
 	},
 	})
-	tests = append(tests, testCase{description: "GetByKey with no DB Client errors and item does not exist", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "GetByKey with no DB client errors and item does not exist", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -470,7 +519,7 @@ func TestGetByKey(t *testing.T) {
 		assert.False(t, exists)
 	},
 	})
-	tests = append(tests, testCase{description: "GetByKey with DB Client ReadObjects() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "GetByKey with DB client ReadObjects() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
@@ -498,93 +547,128 @@ func TestReplace(t *testing.T) {
 
 	var tests []testCase
 	testObject := testStoreObject{Id: "something", Val: "a"}
-	tests = append(tests, testCase{description: "Replace with no DB Client errors and some items", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Replace with no DB client errors and some items", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		txC.EXPECT().Stmt(store.listKeysStmt).Return(store.listKeysStmt)
-		c.EXPECT().QueryForRows(context.TODO(), store.listKeysStmt).Return(r, nil)
+		stmt := NewMockStmt(gomock.NewController(t))
+
+		txC.EXPECT().Stmt(store.listKeysStmt).Return(stmt)
+		c.EXPECT().QueryForRows(context.TODO(), stmt).Return(r, nil)
 		c.EXPECT().ReadStrings(r).Return([]string{testObject.Id}, nil)
-		txC.EXPECT().Stmt(store.deleteStmt).Return(store.deleteStmt)
-		txC.EXPECT().StmtExec(store.deleteStmt, testObject.Id)
+		txC.EXPECT().Stmt(store.deleteStmt).Return(stmt)
+		stmt.EXPECT().Exec(testObject.Id)
 		c.EXPECT().Upsert(txC, store.upsertStmt, testObject.Id, testObject, store.shouldEncrypt)
-		txC.EXPECT().Commit()
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Replace([]any{testObject}, testObject.Id)
 		assert.Nil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Replace with no DB Client errors and no items", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Replace with no DB client errors and no items", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		txC.EXPECT().Stmt(store.listKeysStmt).Return(store.listKeysStmt)
 		c.EXPECT().QueryForRows(context.TODO(), store.listKeysStmt).Return(r, nil)
 		c.EXPECT().ReadStrings(r).Return([]string{}, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, testObject.Id, testObject, store.shouldEncrypt)
-		txC.EXPECT().Commit()
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Replace([]any{testObject}, testObject.Id)
 		assert.Nil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Replace with DB Client BeginTx(gomock.Any(), true) error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Replace with DB client WithTransaction returning error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, _ := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(nil, fmt.Errorf("error"))
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 		err := store.Replace([]any{testObject}, testObject.Id)
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Replace with no DB Client ReadStrings() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Replace with DB client ReadStrings() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+
 		txC.EXPECT().Stmt(store.listKeysStmt).Return(store.listKeysStmt)
 		c.EXPECT().QueryForRows(context.TODO(), store.listKeysStmt).Return(r, nil)
 		c.EXPECT().ReadStrings(r).Return(nil, fmt.Errorf("error"))
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Replace([]any{testObject}, testObject.Id)
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Replace with ReadStrings() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Replace with TX client StmtExec() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		txC.EXPECT().Stmt(store.listKeysStmt).Return(store.listKeysStmt)
-		c.EXPECT().QueryForRows(context.TODO(), store.listKeysStmt).Return(r, nil)
-		c.EXPECT().ReadStrings(r).Return(nil, fmt.Errorf("error"))
-		err := store.Replace([]any{testObject}, testObject.Id)
-		assert.NotNil(t, err)
-	},
-	})
-	tests = append(tests, testCase{description: "Replace with TX Client StmtExec() error", test: func(t *testing.T, shouldEncrypt bool) {
-		c, txC := SetupMockDB(t)
-		store := SetupStore(t, c, shouldEncrypt)
-		r := &sql.Rows{}
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		txC.EXPECT().Stmt(store.listKeysStmt).Return(store.listKeysStmt)
-		c.EXPECT().QueryForRows(context.TODO(), store.listKeysStmt).Return(r, nil)
+		listKeysStmt := NewMockStmt(gomock.NewController(t))
+		deleteStmt := NewMockStmt(gomock.NewController(t))
+
+		txC.EXPECT().Stmt(store.listKeysStmt).Return(listKeysStmt)
+		c.EXPECT().QueryForRows(context.TODO(), listKeysStmt).Return(r, nil)
 		c.EXPECT().ReadStrings(r).Return([]string{testObject.Id}, nil)
-		txC.EXPECT().Stmt(store.deleteStmt).Return(store.deleteStmt)
-		txC.EXPECT().StmtExec(store.deleteStmt, testObject.Id).Return(fmt.Errorf("error"))
+		txC.EXPECT().Stmt(store.deleteStmt).Return(deleteStmt)
+		deleteStmt.EXPECT().Exec(testObject.Id).Return(nil, fmt.Errorf("error"))
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Replace([]any{testObject}, testObject.Id)
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "Replace with DB Client Upsert() error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Replace with DB client Upsert() error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
-		c.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
-		txC.EXPECT().Stmt(store.listKeysStmt).Return(store.listKeysStmt)
-		c.EXPECT().QueryForRows(context.TODO(), store.listKeysStmt).Return(r, nil)
+		listKeysStmt := NewMockStmt(gomock.NewController(t))
+		deleteStmt := NewMockStmt(gomock.NewController(t))
+
+		txC.EXPECT().Stmt(store.listKeysStmt).Return(listKeysStmt)
+		c.EXPECT().QueryForRows(context.TODO(), listKeysStmt).Return(r, nil)
 		c.EXPECT().ReadStrings(r).Return([]string{testObject.Id}, nil)
-		txC.EXPECT().Stmt(store.deleteStmt).Return(store.deleteStmt)
-		txC.EXPECT().StmtExec(store.deleteStmt, testObject.Id).Return(nil)
+		txC.EXPECT().Stmt(store.deleteStmt).Return(deleteStmt)
+		deleteStmt.EXPECT().Exec(testObject.Id).Return(nil, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, testObject.Id, testObject, store.shouldEncrypt).Return(fmt.Errorf("error"))
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err == nil {
+					t.Fail()
+				}
+			})
+
 		err := store.Replace([]any{testObject}, testObject.Id)
 		assert.NotNil(t, err)
 	},
@@ -620,13 +704,17 @@ func TestResync(t *testing.T) {
 	}
 }
 
-func SetupMockDB(t *testing.T) (*MockDBClient, *MockTXClient) {
-	dbC := NewMockDBClient(gomock.NewController(t)) // add functionality once store expectation are known
+func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
+	dbC := NewMockClient(gomock.NewController(t)) // add functionality once store expectation are known
 	txC := NewMockTXClient(gomock.NewController(t))
-	// stmt := NewMockStmt(gomock.NewController())
-	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil)
-	txC.EXPECT().Commit().Return(nil)
-	dbC.EXPECT().BeginTx(gomock.Any(), true).Return(txC, nil)
+	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil, nil)
+	dbC.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+		func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+			err := f(txC)
+			if err != nil {
+				t.Fail()
+			}
+		})
 
 	// use stmt mock here
 	dbC.EXPECT().Prepare(fmt.Sprintf(upsertStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
@@ -637,7 +725,7 @@ func SetupMockDB(t *testing.T) (*MockDBClient, *MockTXClient) {
 
 	return dbC, txC
 }
-func SetupStore(t *testing.T, client *MockDBClient, shouldEncrypt bool) *Store {
+func SetupStore(t *testing.T, client *MockClient, shouldEncrypt bool) *Store {
 	store, err := NewStore(testStoreObject{}, testStoreKeyFunc, client, shouldEncrypt, "testStoreObject")
 	if err != nil {
 		t.Error(err)

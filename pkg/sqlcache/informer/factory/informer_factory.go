@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
-	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -28,7 +27,7 @@ const EncryptAllEnvVar = "CATTLE_ENCRYPT_CACHE_ALL"
 // CacheFactory builds Informer instances and keeps a cache of instances it created
 type CacheFactory struct {
 	wg         wait.Group
-	dbClient   DBClient
+	dbClient   db.Client
 	stopCh     chan struct{}
 	mutex      sync.RWMutex
 	encryptAll bool
@@ -44,20 +43,10 @@ type guardedInformer struct {
 	mutex    *sync.Mutex
 }
 
-type newInformer func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt bool, namespace bool) (*informer.Informer, error)
-
-type DBClient interface {
-	informer.DBClient
-	sqlStore.DBClient
-	connector
-}
+type newInformer func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool) (*informer.Informer, error)
 
 type Cache struct {
 	informer.ByOptionsLister
-}
-
-type connector interface {
-	NewConnection() error
 }
 
 var defaultEncryptedResourceTypes = map[schema.GroupVersionKind]struct{}{

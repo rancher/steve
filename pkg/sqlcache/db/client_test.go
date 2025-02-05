@@ -11,13 +11,14 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package db -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Connection,Encryptor,Decryptor,TXClient
-//go:generate mockgen --build_flags=--mod=mod -package db -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,SQLTx
+//go:generate mockgen --build_flags=--mod=mod -package db -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Connection,Encryptor,Decryptor
+//go:generate mockgen --build_flags=--mod=mod -package db -destination ./transaction_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db/transaction Client,Stmt
 
 type testStoreObject struct {
 	Id  string
@@ -37,7 +38,7 @@ func TestNewClient(t *testing.T) {
 		c := SetupMockConnection(t)
 		e := SetupMockEncryptor(t)
 		d := SetupMockDecryptor(t)
-		expectedClient := &Client{
+		expectedClient := &client{
 			conn:      c,
 			encryptor: e,
 			decryptor: d,
@@ -389,58 +390,6 @@ func TestReadInt(t *testing.T) {
 	}
 }
 
-func TestBegin(t *testing.T) {
-	type testCase struct {
-		description string
-		test        func(t *testing.T)
-	}
-
-	var tests []testCase
-
-	// Tests with shouldEncryptSet to false
-	tests = append(tests, testCase{description: "BeginTx(), with no errors", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-
-		sqlTx := &sql.Tx{}
-		c.EXPECT().BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true}).Return(sqlTx, nil)
-		client := SetupClient(t, c, e, d)
-		txC, err := client.BeginTx(context.Background(), false)
-		assert.Nil(t, err)
-		assert.NotNil(t, txC)
-	},
-	})
-	tests = append(tests, testCase{description: "BeginTx(), with forWriting option set", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-
-		sqlTx := &sql.Tx{}
-		c.EXPECT().BeginTx(context.Background(), &sql.TxOptions{ReadOnly: false}).Return(sqlTx, nil)
-		client := SetupClient(t, c, e, d)
-		txC, err := client.BeginTx(context.Background(), true)
-		assert.Nil(t, err)
-		assert.NotNil(t, txC)
-	},
-	})
-	tests = append(tests, testCase{description: "BeginTx(), with connection Begin() error", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-
-		c.EXPECT().BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true}).Return(nil, fmt.Errorf("error"))
-		client := SetupClient(t, c, e, d)
-		_, err := client.BeginTx(context.Background(), false)
-		assert.NotNil(t, err)
-	},
-	})
-	t.Parallel()
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) { test.test(t) })
-	}
-}
-
 func TestUpsert(t *testing.T) {
 	type testCase struct {
 		description string
@@ -459,14 +408,14 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		stmt := NewMockStmt(gomock.NewController(t))
 		testObjBytes := toBytes(testObject)
 		testByteValue := []byte("something")
 		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
 		txC.EXPECT().Stmt(sqlStmt).Return(stmt)
-		txC.EXPECT().StmtExec(stmt, "somekey", testByteValue, testByteValue, keyID).Return(nil)
+		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, nil)
 		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
 		assert.Nil(t, err)
 	},
@@ -477,7 +426,7 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		testObjBytes := toBytes(testObject)
 		e.EXPECT().Encrypt(testObjBytes).Return(nil, nil, uint32(0), fmt.Errorf("error"))
@@ -491,14 +440,14 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		stmt := NewMockStmt(gomock.NewController(t))
 		testObjBytes := toBytes(testObject)
 		testByteValue := []byte("something")
 		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
 		txC.EXPECT().Stmt(sqlStmt).Return(stmt)
-		txC.EXPECT().StmtExec(stmt, "somekey", testByteValue, testByteValue, keyID).Return(fmt.Errorf("error"))
+		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, fmt.Errorf("error"))
 		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
 		assert.NotNil(t, err)
 	},
@@ -509,13 +458,13 @@ func TestUpsert(t *testing.T) {
 		e := SetupMockEncryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockTXClient(gomock.NewController(t))
+		txC := NewMockClient(gomock.NewController(t))
 		sqlStmt := &sql.Stmt{}
 		stmt := NewMockStmt(gomock.NewController(t))
 		var testByteValue []byte
 		testObjBytes := toBytes(testObject)
 		txC.EXPECT().Stmt(sqlStmt).Return(stmt)
-		txC.EXPECT().StmtExec(stmt, "somekey", testObjBytes, testByteValue, uint32(0)).Return(nil)
+		stmt.EXPECT().Exec("somekey", testObjBytes, testByteValue, uint32(0)).Return(nil, nil)
 		err := client.Upsert(txC, sqlStmt, "somekey", testObject, false)
 		assert.Nil(t, err)
 	},
@@ -582,9 +531,10 @@ func TestNewConnection(t *testing.T) {
 		assert.Nil(t, err)
 
 		// Create a transaction to ensure that the file is written to disk.
-		txC, err := client.BeginTx(context.Background(), false)
+		err = client.WithTransaction(context.Background(), false, func(tx transaction.Client) error {
+			return nil
+		})
 		assert.NoError(t, err)
-		assert.NoError(t, txC.Commit())
 
 		assert.FileExists(t, InformerObjectCacheDBPath)
 		assertFileHasPermissions(t, InformerObjectCacheDBPath, 0600)
@@ -630,7 +580,7 @@ func SetupMockRows(t *testing.T) *MockRows {
 	return MockR
 }
 
-func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) *Client {
+func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) Client {
 	c, _ := NewClient(connection, encryptor, decryptor)
 	return c
 }

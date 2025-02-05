@@ -62,45 +62,34 @@ type Indexer struct {
 var _ cache.Indexer = (*Indexer)(nil)
 
 type Store interface {
-	DBClient
+	db.Client
 	cache.Store
 
 	GetByKey(key string) (item any, exists bool, err error)
 	GetName() string
-	RegisterAfterUpsert(f func(key string, obj any, tx db.TXClient) error)
-	RegisterAfterDelete(f func(key string, tx db.TXClient) error)
+	RegisterAfterUpsert(f func(key string, obj any, tx transaction.Client) error)
+	RegisterAfterDelete(f func(key string, tx transaction.Client) error)
 	GetShouldEncrypt() bool
 	GetType() reflect.Type
 }
 
-type DBClient interface {
-	BeginTx(ctx context.Context, forWriting bool) (db.TXClient, error)
-	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
-	ReadObjects(rows db.Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
-	ReadStrings(rows db.Rows) ([]string, error)
-	ReadInt(rows db.Rows) (int, error)
-	Prepare(stmt string) *sql.Stmt
-	CloseStmt(stmt db.Closable) error
-}
-
 // NewIndexer returns a cache.Indexer backed by SQLite for objects of the given example type
 func NewIndexer(indexers cache.Indexers, s Store) (*Indexer, error) {
-	tx, err := s.BeginTx(context.Background(), true)
-	if err != nil {
-		return nil, err
-	}
 	dbName := db.Sanitize(s.GetName())
-	createTableQuery := fmt.Sprintf(createTableFmt, dbName)
-	err = tx.Exec(createTableQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createTableQuery, Err: err}
-	}
-	createIndexQuery := fmt.Sprintf(createIndexFmt, dbName)
-	err = tx.Exec(createIndexQuery)
-	if err != nil {
-		return nil, &db.QueryError{QueryString: createIndexQuery, Err: err}
-	}
-	err = tx.Commit()
+
+	err := s.WithTransaction(context.Background(), true, func(tx transaction.Client) error {
+		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
+		_, err := tx.Exec(createTableQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createTableQuery, Err: err}
+		}
+		createIndexQuery := fmt.Sprintf(createIndexFmt, dbName)
+		_, err = tx.Exec(createIndexQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: createIndexQuery, Err: err}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +118,9 @@ func NewIndexer(indexers cache.Indexers, s Store) (*Indexer, error) {
 /* Core methods */
 
 // AfterUpsert updates indices of an object
-func (i *Indexer) AfterUpsert(key string, obj any, tx db.TXClient) error {
+func (i *Indexer) AfterUpsert(key string, obj any, tx transaction.Client) error {
 	// delete all
-	err := tx.StmtExec(tx.Stmt(i.deleteIndicesStmt), key)
+	_, err := tx.Stmt(i.deleteIndicesStmt).Exec(key)
 	if err != nil {
 		return &db.QueryError{QueryString: i.deleteIndicesQuery, Err: err}
 	}
@@ -146,7 +135,7 @@ func (i *Indexer) AfterUpsert(key string, obj any, tx db.TXClient) error {
 		}
 
 		for _, value := range values {
-			err = tx.StmtExec(tx.Stmt(i.addIndexStmt), indexName, value, key)
+			_, err = tx.Stmt(i.addIndexStmt).Exec(indexName, value, key)
 			if err != nil {
 				return &db.QueryError{QueryString: i.addIndexQuery, Err: err}
 			}

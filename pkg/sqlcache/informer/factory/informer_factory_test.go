@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 
-	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./factory_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer/factory DBClient
-//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db TXClient
+//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Client
+//go:generate mockgen --build_flags=--mod=mod -package factory -destination ./transaction_mocks_tests.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Client
 //go:generate mockgen --build_flags=--mod=mod -package factory -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 //go:generate mockgen --build_flags=--mod=mod -package factory -destination ./k8s_cache_mocks_test.go k8s.io/client-go/tools/cache SharedIndexInformer
 
@@ -58,7 +58,7 @@ func TestCacheFor(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and stopCh not closed, should return no error and should call Informer.Run(). A subsequent call to CacheFor() should return same informer", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{}
@@ -73,7 +73,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt bool, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -105,7 +105,7 @@ func TestCacheFor(t *testing.T) {
 		assert.Equal(t, c, c2)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning false, and stopCh not closed, should call Run() and return an error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{}
@@ -118,7 +118,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -143,7 +143,7 @@ func TestCacheFor(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and stopCh closed, should not call Run() more than once and not return an error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{}
@@ -160,7 +160,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -184,7 +184,7 @@ func TestCacheFor(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned and encryptAll set to true, should return no error and pass shouldEncrypt as true to newInformer func", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{}
@@ -199,7 +199,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -228,7 +228,7 @@ func TestCacheFor(t *testing.T) {
 	}})
 
 	tests = append(tests, testCase{description: "CacheFor() should encrypt v1 Secrets", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{
@@ -247,7 +247,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -275,7 +275,7 @@ func TestCacheFor(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() should encrypt management.cattle.io tokens", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{
@@ -294,7 +294,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
@@ -323,7 +323,7 @@ func TestCacheFor(t *testing.T) {
 	}})
 
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, stopCh not closed, and transform func should return no error", test: func(t *testing.T) {
-		dbClient := NewMockDBClient(gomock.NewController(t))
+		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		expectedGVK := schema.GroupVersionKind{}
@@ -341,7 +341,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db sqlStore.DBClient, shouldEncrypt bool, namespaced bool) (*informer.Informer, error) {
+		testNewInformer := func(client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool) (*informer.Informer, error) {
 			// we can't test func == func, so instead we check if the output was as expected
 			input := "someinput"
 			ouput, err := transform(input)
