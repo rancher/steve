@@ -62,7 +62,7 @@ var (
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
 	typeSpecificIndexedFields = map[string][][]string{
 		gvkKey("", "v1", "ConfigMap"): {
-			{"metadata", "labels[harvesterhci.io/cloud-init-template]"}},
+			{"metadata", "labels", "harvesterhci.io/cloud-init-template"}},
 		gvkKey("", "v1", "Event"): {
 			{"_type"},
 			{"involvedObject", "kind"},
@@ -71,7 +71,7 @@ var (
 			{"reason"},
 		},
 		gvkKey("", "v1", "Namespace"): {
-			{"metadata", "labels[field.cattle.io/projectId]"}},
+			{"metadata", "labels", "field.cattle.io/projectId"}},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
 			{"status", "nodeInfo", "operatingSystem"}},
@@ -89,13 +89,13 @@ var (
 			{"spec", "type"},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
-			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
 		},
 		gvkKey("apps", "v1", "Deployment"): {
-			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
 		},
 		gvkKey("apps", "v1", "StatefulSet"): {
-			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
 		},
 		gvkKey("autoscaling", "v2", "HorizontalPodAutoscaler"): {
 			{"spec", "scaleTargetRef", "name"},
@@ -104,16 +104,16 @@ var (
 			{"status", "currentReplicas"},
 		},
 		gvkKey("batch", "v1", "CronJob"): {
-			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
 		},
 		gvkKey("batch", "v1", "Job"): {
-			{"metadata", "annotations[field.cattle.io/publicEndpoints]"},
+			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
 		},
 		gvkKey("catalog.cattle.io", "v1", "App"): {
 			{"spec", "chart", "metadata", "name"},
 		},
 		gvkKey("catalog.cattle.io", "v1", "ClusterRepo"): {
-			{"metadata", "annotations[clusterrepo.cattle.io/hidden]"},
+			{"metadata", "annotations", "clusterrepo.cattle.io/hidden"},
 			{"spec", "gitBranch"},
 			{"spec", "gitRepo"},
 		},
@@ -125,7 +125,7 @@ var (
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
-			{"metadata", "labels[provider.cattle.io]"},
+			{"metadata", "labels", "provider.cattle.io"},
 			{"spec", "internal"},
 			{"spec", "displayName"},
 			{"status", "connected"},
@@ -142,13 +142,13 @@ var (
 			{"spec", "ingressClassName"},
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
-			{"metadata", "labels[provider.cattle.io]"},
+			{"metadata", "labels", "provider.cattle.io"},
 			{"status", "clusterName"},
 			{"status", "provider"},
 		},
 		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
 			{"provisioner"},
-			{"metadata", "annotations[storageclass.kubernetes.io/is-default-class]"},
+			{"metadata", "annotations", "storageclass.kubernetes.io/is-default-class"},
 		},
 	}
 	commonIndexFields = [][]string{
