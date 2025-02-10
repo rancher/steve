@@ -92,7 +92,7 @@ func TestParseQuery(t *testing.T) {
 								Op:      informer.Eq,
 							},
 							{
-								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 								Matches: []string{"somethin"},
 								Op:      informer.Eq,
 							},
@@ -142,7 +142,7 @@ func TestParseQuery(t *testing.T) {
 								Op:      informer.Eq,
 							},
 							{
-								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 								Matches: []string{"somethin"},
 								Op:      informer.Eq,
 							},
@@ -195,7 +195,7 @@ func TestParseQuery(t *testing.T) {
 								Op:      informer.Eq,
 							},
 							{
-								Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 								Matches: []string{"somethin"},
 								Op:      informer.Eq,
 							},

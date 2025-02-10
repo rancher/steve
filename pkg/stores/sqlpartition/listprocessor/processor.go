@@ -219,7 +219,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op inf
 							Op:      informer.Eq,
 						},
 						{
-							Field:   []string{"metadata", "labels[field.cattle.io/projectId]"},
+							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 							Matches: []string{pn},
 							Op:      informer.Eq,
 						},
