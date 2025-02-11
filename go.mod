@@ -28,7 +28,7 @@ require (
 	github.com/rancher/remotedialer v0.3.2
 	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
 	github.com/urfave/cli/v2 v2.27.4
 	go.uber.org/mock v0.5.0
