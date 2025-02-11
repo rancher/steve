@@ -1929,3 +1929,158 @@ func TestWatchMany(t *testing.T) {
 	err = waitStopWatcher(errCh3)
 	assert.NoError(t, err)
 }
+
+func TestWatchFilter(t *testing.T) {
+	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, filter WatchFilter) (chan watch.Event, chan error) {
+		errCh := make(chan error, 1)
+		eventsCh := make(chan watch.Event, 100)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{Filter: filter}, eventsCh)
+			errCh <- watchErr
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	waitStopWatcher := func(errCh chan error) error {
+		select {
+		case <-time.After(time.Second * 5):
+			return fmt.Errorf("not finished in time")
+		case err := <-errCh:
+			return err
+		}
+	}
+
+	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
+		timer := time.NewTimer(time.Millisecond * 50)
+		var events []watch.Event
+		for {
+			select {
+			case <-timer.C:
+				return events
+			case ev := <-eventsCh:
+				events = append(events, ev)
+			}
+		}
+	}
+
+	foo := &unstructured.Unstructured{}
+	foo.SetName("foo")
+	foo.SetNamespace("foo")
+	foo.SetLabels(map[string]string{
+		"app": "foo",
+	})
+
+	fooUpdated := foo.DeepCopy()
+	fooUpdated.SetLabels(map[string]string{
+		"app": "changed",
+	})
+
+	bar := &unstructured.Unstructured{}
+	bar.SetName("bar")
+	bar.SetNamespace("bar")
+	bar.SetLabels(map[string]string{
+		"app": "bar",
+	})
+
+	tests := []struct {
+		name           string
+		filter         WatchFilter
+		setupStore     func(store cache.Store) error
+		expectedEvents []watch.Event
+	}{
+		{
+			name:   "namespace filter",
+			filter: WatchFilter{Namespace: "foo"},
+			setupStore: func(store cache.Store) error {
+				err := store.Add(foo)
+				if err != nil {
+					return err
+				}
+				err = store.Add(bar)
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			expectedEvents: []watch.Event{{Type: watch.Added, Object: foo}},
+		},
+		{
+			name:   "selector filter",
+			filter: WatchFilter{Selector: "app=foo"},
+			setupStore: func(store cache.Store) error {
+				err := store.Add(foo)
+				if err != nil {
+					return err
+				}
+				err = store.Add(bar)
+				if err != nil {
+					return err
+				}
+				err = store.Update(fooUpdated)
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			expectedEvents: []watch.Event{
+				{Type: watch.Added, Object: foo},
+				{Type: watch.Modified, Object: fooUpdated},
+			},
+		},
+		{
+			name:   "id filter",
+			filter: WatchFilter{ID: "foo"},
+			setupStore: func(store cache.Store) error {
+				err := store.Add(foo)
+				if err != nil {
+					return err
+				}
+				err = store.Add(bar)
+				if err != nil {
+					return err
+				}
+				err = store.Update(fooUpdated)
+				if err != nil {
+					return err
+				}
+				err = store.Update(foo)
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			expectedEvents: []watch.Event{
+				{Type: watch.Added, Object: foo},
+				{Type: watch.Modified, Object: fooUpdated},
+				{Type: watch.Modified, Object: foo},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+
+			loi, err := makeListOptionIndexer(ctx, [][]string{{"metadata", "somefield"}})
+			assert.NoError(t, err)
+
+			wCh, errCh := startWatcher(ctx, loi, WatchFilter{
+				Namespace: "foo",
+			})
+
+			if test.setupStore != nil {
+				err = test.setupStore(loi)
+				assert.NoError(t, err)
+			}
+
+			events := receiveEvents(wCh)
+			assert.Equal(t, test.expectedEvents, events)
+
+			cancel()
+			err = waitStopWatcher(errCh)
+			assert.NoError(t, err)
+
+		})
+	}
+
+}

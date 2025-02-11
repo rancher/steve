@@ -36,6 +36,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/wrangler/v3/pkg/data"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"github.com/rancher/wrangler/v3/pkg/summary"
@@ -550,10 +551,22 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		return nil, err
 	}
 
-	result := make(chan watch.Event, 1000)
+	result := make(chan watch.Event)
 	go func() {
 		ctx := apiOp.Context()
-		err := inf.ByOptionsLister.Watch(ctx, informer.WatchOptions{}, result)
+		idNamespace, _ := kv.RSplit(w.ID, "/")
+		if idNamespace == "" {
+			idNamespace = apiOp.Namespace
+		}
+
+		opts := informer.WatchOptions{
+			Filter: informer.WatchFilter{
+				ID:        w.ID,
+				Namespace: idNamespace,
+				Selector:  w.Selector,
+			},
+		}
+		err := inf.ByOptionsLister.Watch(ctx, opts, result)
 		if err != nil {
 			logrus.Error(err)
 		}

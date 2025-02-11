@@ -15,7 +15,9 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -32,7 +34,7 @@ type ListOptionIndexer struct {
 	indexedFields []string
 
 	watchersLock sync.RWMutex
-	watchers     map[*watchKey]chan<- watch.Event
+	watchers     map[*watchKey]*watcher
 
 	addFieldsQuery         string
 	deleteFieldsByKeyQuery string
@@ -111,7 +113,7 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 		Indexer:       i,
 		namespaced:    namespaced,
 		indexedFields: indexedFields,
-		watchers:      make(map[*watchKey]chan<- watch.Event),
+		watchers:      make(map[*watchKey]*watcher),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
 	l.RegisterAfterAdd(l.notifyEventAdded)
@@ -202,7 +204,7 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 }
 
 func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error {
-	key := l.addWatcher(eventsCh)
+	key := l.addWatcher(eventsCh, opts.Filter)
 	<-ctx.Done()
 	l.removeWatcher(key)
 	return nil
@@ -212,10 +214,18 @@ type watchKey struct {
 	_ bool // ensure watchKey is NOT zero-sized to get unique pointers
 }
 
-func (l *ListOptionIndexer) addWatcher(eventCh chan<- watch.Event) *watchKey {
+type watcher struct {
+	ch     chan<- watch.Event
+	filter WatchFilter
+}
+
+func (l *ListOptionIndexer) addWatcher(eventCh chan<- watch.Event, filter WatchFilter) *watchKey {
 	key := new(watchKey)
 	l.watchersLock.Lock()
-	l.watchers[key] = eventCh
+	l.watchers[key] = &watcher{
+		ch:     eventCh,
+		filter: filter,
+	}
 	l.watchersLock.Unlock()
 	return key
 }
@@ -229,21 +239,42 @@ func (l *ListOptionIndexer) removeWatcher(key *watchKey) {
 /* Core methods */
 
 func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, tx transaction.Client) error {
-	return l.notifyEvent(watch.Added, obj, tx)
+	return l.notifyEvent(watch.Added, nil, obj, tx)
 }
 
 func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx transaction.Client) error {
-	return l.notifyEvent(watch.Modified, obj, tx)
+	oldObj, exists, err := l.GetByKey(key)
+	if err != nil {
+		return fmt.Errorf("error getting old object: %w", err)
+	}
+
+	if !exists {
+		return fmt.Errorf("old object %q should be in store but was not", key)
+	}
+
+	return l.notifyEvent(watch.Modified, oldObj, obj, tx)
 }
 
 func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx transaction.Client) error {
-	return l.notifyEvent(watch.Deleted, obj, tx)
+	oldObj, exists, err := l.GetByKey(key)
+	if err != nil {
+		return fmt.Errorf("error getting old object: %w", err)
+	}
+
+	if !exists {
+		return fmt.Errorf("old object %q should be in store but was not", key)
+	}
+	return l.notifyEvent(watch.Deleted, oldObj, obj, tx)
 }
 
-func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, obj any, tx transaction.Client) error {
 	l.watchersLock.RLock()
 	for _, watcher := range l.watchers {
-		watcher <- watch.Event{
+		if !matchWatch(watcher.filter.ID, watcher.filter.Namespace, watcher.filter.Selector, oldObj, obj) {
+			continue
+		}
+
+		watcher.ch <- watch.Event{
 			Type:   eventType,
 			Object: obj.(runtime.Object),
 		}
@@ -1043,4 +1074,39 @@ func toUnstructuredList(items []any) *unstructured.UnstructuredList {
 		objectItems[i] = item.(*unstructured.Unstructured).Object
 	}
 	return result
+}
+
+func matchWatch(filterName string, filterNamespace string, filterSelector string, oldObj any, obj any) bool {
+	matchOld := false
+	if oldObj != nil {
+		matchOld = matchFilter(filterName, filterNamespace, filterSelector, oldObj)
+	}
+	return matchOld || matchFilter(filterName, filterNamespace, filterSelector, obj)
+}
+
+func matchFilter(filterName string, filterNamespace string, filterSelector string, obj any) bool {
+	if obj == nil {
+		return false
+	}
+	metadata, err := meta.Accessor(obj)
+	if err != nil {
+		return false
+	}
+	if filterName != "" && filterName != metadata.GetName() {
+		return false
+	}
+	if filterNamespace != "" && filterNamespace != metadata.GetNamespace() {
+		return false
+	}
+	if filterSelector != "" {
+		selector, err := labels.Parse(filterSelector)
+		if err != nil {
+			fmt.Println("error parsing selector", err)
+			return false
+		}
+		if !selector.Matches(labels.Set(metadata.GetLabels())) {
+			return false
+		}
+	}
+	return true
 }

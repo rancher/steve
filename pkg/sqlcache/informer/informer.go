@@ -30,11 +30,18 @@ type Informer struct {
 }
 
 type WatchOptions struct {
+	Filter WatchFilter
+}
+
+type WatchFilter struct {
+	ID        string
+	Selector  string
+	Namespace string
 }
 
 type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
-	Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error
+	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
