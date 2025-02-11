@@ -294,6 +294,83 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() with an annotations filter param should split it correctly.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.annotations[chumley.example.com/fish]=seals"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "annotations", "chumley.example.com/fish"},
+							Matches: []string{"seals"},
+							Op:      informer.Eq,
+							Partial: false,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with a numeric filter index should split it correctly.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.fields[3]<5"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "fields", "3"},
+							Matches: []string{"5"},
+							Op:      informer.Lt,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]~heads"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
+							Matches: []string{"heads"},
+							Op:      informer.Eq,
+							Partial: true,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
