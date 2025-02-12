@@ -124,7 +124,6 @@ Example, filtering by object name:
 ```
 /v1/{type}?filter=metadata.name='match-this-exactly'
 ```
-```
 
 A target value can be delimited by double-quotes, but this will succeed on a partial match:
 
