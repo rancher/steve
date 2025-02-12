@@ -11,7 +11,7 @@ replace (
 )
 
 require (
-	github.com/adrg/xdg v0.5.0
+	github.com/adrg/xdg v0.5.3
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic-models v0.6.9
 	github.com/gorilla/mux v1.8.1
@@ -123,7 +123,7 @@ require (
 	golang.org/x/exp v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.21.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.24.0 // indirect
 	golang.org/x/text v0.18.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
