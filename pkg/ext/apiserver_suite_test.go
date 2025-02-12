@@ -196,6 +196,7 @@ func (s *ExtensionAPIServerSuite) SetupSuite() {
 	apiServer.Configure().Append("requestheader-extra-headers-prefix", "X-Remote-Extra-")
 	apiServer.Configure().Append("requestheader-group-headers", "X-Remote-Group")
 	apiServer.Configure().Append("requestheader-username-headers", "X-Remote-User")
+	apiServer.Configure().Append("requestheader-uid-headers", "X-Remote-Uid")
 	apiServer.Configure().Append("requestheader-client-ca-file", caFilepath)
 	apiServer.Configure().Append("proxy-client-cert-file", certFilepath)
 	apiServer.Configure().Append("proxy-client-key-file", keyFilepath)

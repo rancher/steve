@@ -246,6 +246,7 @@ func newDynamicRequestHeaderController(client kubernetes.Interface) (*options.Dy
 		authenticationConfigMapNamespace,
 		client,
 		"requestheader-username-headers",
+		"requestheader-uid-headers",
 		"requestheader-group-headers",
 		"requestheader-extra-headers-prefix",
 		"requestheader-allowed-names",
