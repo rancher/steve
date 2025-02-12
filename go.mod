@@ -18,7 +18,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.19.1
+	github.com/prometheus/client_golang v1.20.5
 	github.com/rancher/apiserver v0.0.0-20241009200134-5a4ecca7b988
 	github.com/rancher/dynamiclistener v0.6.1-rc.2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
@@ -87,6 +87,8 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
