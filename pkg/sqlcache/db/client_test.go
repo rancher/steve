@@ -67,7 +67,7 @@ func TestQueryForRows(t *testing.T) {
 		c := SetupMockConnection(t)
 		client := SetupClient(t, c, nil, nil)
 		s := NewMockStmt(gomock.NewController(t))
-		ctx := context.TODO()
+		ctx := context.Background()
 		r := &sql.Rows{}
 		s.EXPECT().QueryContext(ctx).Return(r, nil)
 		rows, err := client.QueryForRows(ctx, s)
@@ -79,7 +79,7 @@ func TestQueryForRows(t *testing.T) {
 		c := SetupMockConnection(t)
 		client := SetupClient(t, c, nil, nil)
 		s := NewMockStmt(gomock.NewController(t))
-		ctx := context.TODO()
+		ctx := context.Background()
 		s.EXPECT().QueryContext(ctx).Return(nil, fmt.Errorf("error"))
 		_, err := client.QueryForRows(ctx, s)
 		assert.NotNil(t, err)
