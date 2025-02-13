@@ -43,7 +43,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.31.1
 	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	modernc.org/sqlite v1.34.5
 	sigs.k8s.io/controller-runtime v0.19.0
 )
