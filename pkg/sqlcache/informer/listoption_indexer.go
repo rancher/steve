@@ -802,6 +802,7 @@ func getField(a any, field string) (any, error) {
 				}
 				obj = fmt.Sprintf("%v", t[key])
 			} else if i == len(subFields)-1 {
+				// If the last layer is an array, return array.map(a => a[subfield])
 				result := make([]string, len(t))
 				for index, v := range t {
 					itemVal, ok := v.(map[string]interface{})
