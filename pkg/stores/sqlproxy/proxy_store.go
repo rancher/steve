@@ -160,7 +160,7 @@ var (
 			{"status", "clusterName"},
 			{"status", "provider"},
 		},
-		gvkKey("rke.cattle.io", "v1", "EtcdSnapshot"): {
+		gvkKey("rke.cattle.io", "v1", "ETCDSnapshot"): {
 			{"snapshotFile", "createdAt"},
 			{"spec", "clusterName"},
 		},
