@@ -464,7 +464,7 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 
 		watcher.ch <- watch.Event{
 			Type:   eventType,
-			Object: obj.(runtime.Object),
+			Object: obj.(runtime.Object).DeepCopyObject(),
 		}
 	}
 	l.watchersLock.RUnlock()
