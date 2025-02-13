@@ -113,7 +113,7 @@ var (
 		},
 		gvkKey("batch", "v1", "CronJob"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
-			{"spec", "template", "spec", "containers", "image"},
+			{"spec", "jobTemplate", "spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("batch", "v1", "Job"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
