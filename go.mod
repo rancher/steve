@@ -50,7 +50,7 @@ replace (
 )
 
 require (
-	github.com/adrg/xdg v0.4.0
+	github.com/adrg/xdg v0.5.3
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic-models v0.6.8
 	github.com/gorilla/mux v1.8.1
