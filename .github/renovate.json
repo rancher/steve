@@ -17,11 +17,12 @@
       "enabled": false
     },
     {
-      "matchPackageNames": [
-        "github.com/rancher/remotedailer",
-        "github.com/rancher/norman",
-        "github.com/rancher/apiserver",
-        "github.com/rancher/dynamiclistener"
+      "matchPackagePatterns": [
+        "github.com/rancher/remotedialer/*",
+        "github.com/rancher/norman/*",
+        "github.com/rancher/wrangler/*",
+        "github.com/rancher/apiserver/*",
+        "github.com/rancher/dynamiclistener/*"
       ],
       "matchUpdateTypes": ["major", "minor"],
       "enabled": false
