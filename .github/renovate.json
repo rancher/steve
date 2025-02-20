@@ -15,6 +15,16 @@
         "github.com/prometheus/*"
       ],
       "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "github.com/rancher/remotedailer",
+        "github.com/rancher/norman",
+        "github.com/rancher/apiserver",
+        "github.com/rancher/dynamiclistener"
+      ],
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
     }
-  ]
+  ] 
 }
