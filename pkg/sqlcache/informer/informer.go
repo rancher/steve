@@ -39,11 +39,11 @@ var newInformer = cache.NewSharedIndexInformer
 // using the specified client
 func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool) (*Informer, error) {
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
-		return client.Watch(ctx, context.Background(), options)
+		return client.Watch(ctx, options)
 	}
 	if !watchable {
 		watchFunc = func(options metav1.ListOptions) (watch.Interface, error) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(ctx)
 			return newSyntheticWatcher(ctx, cancel).watch(client, options, defaultRefreshTime)
 		}
 	}
