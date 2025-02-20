@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+var defaultRefreshTime = 5 * time.Second
+
 // Informer is a SQLite-backed cache.SharedIndexInformer that can execute queries on listprocessor structs
 type Informer struct {
 	cache.SharedIndexInformer
@@ -35,15 +37,22 @@ var newInformer = cache.NewSharedIndexInformer
 
 // NewInformer returns a new SQLite-backed Informer for the type specified by schema in unstructured.Unstructured form
 // using the specified client
-func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool) (*Informer, error) {
+func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool) (*Informer, error) {
+	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
+		return client.Watch(ctx, options)
+	}
+	if !watchable {
+		watchFunc = func(options metav1.ListOptions) (watch.Interface, error) {
+			ctx, cancel := context.WithCancel(ctx)
+			return newSyntheticWatcher(ctx, cancel).watch(client, options, defaultRefreshTime)
+		}
+	}
 	listWatcher := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			a, err := client.List(ctx, options)
 			return a, err
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			return client.Watch(ctx, options)
-		},
+		WatchFunc: watchFunc,
 	}
 
 	example := &unstructured.Unstructured{}
@@ -95,6 +104,11 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 //   - an error instead of all of the above if anything went wrong
 func (i *Informer) ListByOptions(ctx context.Context, lo ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	return i.ByOptionsLister.ListByOptions(ctx, lo, partitions, namespace)
+}
+
+// SetSyntheticWatchableInterval - call this function to override the default interval time of 5 seconds
+func SetSyntheticWatchableInterval(interval time.Duration) {
+	defaultRefreshTime = interval
 }
 
 func informerNameFromGVK(gvk schema.GroupVersionKind) string {
