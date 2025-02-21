@@ -744,8 +744,10 @@ func formatMatchTargetWithFormatter(match string, format string) string {
 
 // There are three kinds of string arrays to turn into a string, based on the last value in the array
 // simple: ["a", "b", "c"] => "a.b.c"
-// already bracketed: ["a", "b", "labels[foo.io]"] => "a.b.labels[foo.io]"
 // complex but not bracketed: ["a", "b", "foo.io/stuff"] => "a.b[foo.io/stuff]"
+// already bracketed: ["a", "b", "labels[foo.io]"] => "a.b.labels[foo.io]"
+// **IMPORTANT** - pre-bracketed components should never be used (they were initially, but not 
+// always handled correctly. 
 
 func smartJoin(s []string) string {
 	if len(s) == 0 {
@@ -757,10 +759,6 @@ func smartJoin(s []string) string {
 	lastBit := s[len(s)-1]
 	simpleName := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 	if simpleName.MatchString(lastBit) {
-		return strings.Join(s, ".")
-	}
-	alreadyBracketed := regexp.MustCompile(`.\[.+\]$`)
-	if alreadyBracketed.MatchString(lastBit) {
 		return strings.Join(s, ".")
 	}
 	return fmt.Sprintf("%s[%s]", strings.Join(s[0:len(s)-1], "."), lastBit)

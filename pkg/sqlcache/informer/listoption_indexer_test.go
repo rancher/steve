@@ -1603,9 +1603,9 @@ func TestSmartJoin(t *testing.T) {
 		expectedFieldName: "metadata.labels[space here]",
 	})
 	tests = append(tests, testCase{
-		description:       "already bracketed terms shouldn't be rebracketed",
+		description:       "already-bracketed terms cause double-bracketing and should never be used",
 		fieldArray:        []string{"metadata", "labels[k8s.io/deepcode]"},
-		expectedFieldName: "metadata.labels[k8s.io/deepcode]",
+		expectedFieldName: "metadata[labels[k8s.io/deepcode]]",
 	})
 	tests = append(tests, testCase{
 		description:       "an empty array should be an empty string",
