@@ -9,7 +9,7 @@ import (
 	"github.com/rancher/steve/pkg/ui"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/ratelimit"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 type Config struct {
@@ -57,26 +57,26 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 
 func Flags(config *Config) []cli.Flag {
 	flags := []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:        "kubeconfig",
-			EnvVar:      "KUBECONFIG",
+			EnvVars:     []string{"KUBECONFIG"},
 			Destination: &config.KubeConfig,
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:        "context",
-			EnvVar:      "CONTEXT",
+			EnvVars:     []string{"CONTEXT"},
 			Destination: &config.Context,
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:        "ui-path",
 			Destination: &config.UIPath,
 		},
-		cli.IntFlag{
+		&cli.IntFlag{
 			Name:        "https-listen-port",
 			Value:       9443,
 			Destination: &config.HTTPSListenPort,
 		},
-		cli.IntFlag{
+		&cli.IntFlag{
 			Name:        "http-listen-port",
 			Value:       9080,
 			Destination: &config.HTTPListenPort,
