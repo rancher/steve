@@ -742,12 +742,9 @@ func formatMatchTargetWithFormatter(match string, format string) string {
 	return fmt.Sprintf(format, match)
 }
 
-// There are three kinds of string arrays to turn into a string, based on the last value in the array
-// simple: ["a", "b", "c"] => "a.b.c"
-// complex but not bracketed: ["a", "b", "foo.io/stuff"] => "a.b[foo.io/stuff]"
-// already bracketed: ["a", "b", "labels[foo.io]"] => "a.b.labels[foo.io]"
-// **IMPORTANT** - pre-bracketed components should never be used (they were initially, but not
-// always handled correctly.
+// There are two kinds of string arrays to turn into a string, based on the last value in the array
+// simple: ["a", "b", "conformsToIdentifier"] => "a.b.conformsToIdentifier"
+// complex: ["a", "b", "foo.io/stuff"] => "a.b[foo.io/stuff]"
 
 func smartJoin(s []string) string {
 	if len(s) == 0 {
