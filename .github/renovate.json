@@ -3,7 +3,29 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "main", "release/v0.4", "release/v0.3", "release/v0.2", "release/v0.1"
+    "main", "release/v0.4", "release/v0.3", "release/v0.2"
   ],
-  "prHourlyLimit": 2
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {
+      "matchPackagePatterns": [
+        "k8s.io/*",
+        "sigs.k8s.io/*",
+        "go.opentelemetry.io/*",
+        "github.com/prometheus/*"
+      ],
+      "enabled": false
+    },
+    {
+      "matchPackagePatterns": [
+        "github.com/rancher/remotedialer/*",
+        "github.com/rancher/norman/*",
+        "github.com/rancher/wrangler/*",
+        "github.com/rancher/apiserver/*",
+        "github.com/rancher/dynamiclistener/*"
+      ],
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
+    }
+  ] 
 }
