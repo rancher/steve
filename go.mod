@@ -30,15 +30,15 @@ require (
 	github.com/urfave/cli/v2 v2.25.7
 	golang.org/x/sync v0.5.0
 	helm.sh/helm/v3 v3.11.0
-	k8s.io/api v0.28.6
-	k8s.io/apiextensions-apiserver v0.28.6
-	k8s.io/apimachinery v0.28.6
-	k8s.io/apiserver v0.28.6
+	k8s.io/api v0.31.6
+	k8s.io/apiextensions-apiserver v0.31.6
+	k8s.io/apimachinery v0.31.6
+	k8s.io/apiserver v0.31.6
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/klog v1.0.0
-	k8s.io/kube-aggregator v0.28.6
-	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
+	k8s.io/kube-aggregator v0.31.6
+	k8s.io/kube-openapi 2c72e554b1e7
 )
 
 require (
