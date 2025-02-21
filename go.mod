@@ -29,7 +29,7 @@ require (
 	github.com/rancher/wrangler/v3 v3.2.0-rc.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	github.com/urfave/cli v1.22.16
+	github.com/urfave/cli/v2 v2.27.5
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/mock v0.5.0
 	golang.org/x/sync v0.11.0
