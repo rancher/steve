@@ -746,8 +746,8 @@ func formatMatchTargetWithFormatter(match string, format string) string {
 // simple: ["a", "b", "c"] => "a.b.c"
 // complex but not bracketed: ["a", "b", "foo.io/stuff"] => "a.b[foo.io/stuff]"
 // already bracketed: ["a", "b", "labels[foo.io]"] => "a.b.labels[foo.io]"
-// **IMPORTANT** - pre-bracketed components should never be used (they were initially, but not 
-// always handled correctly. 
+// **IMPORTANT** - pre-bracketed components should never be used (they were initially, but not
+// always handled correctly.
 
 func smartJoin(s []string) string {
 	if len(s) == 0 {
