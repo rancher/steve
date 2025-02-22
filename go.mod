@@ -14,7 +14,7 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic-models v0.6.9
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/pborman/uuid v1.2.1
