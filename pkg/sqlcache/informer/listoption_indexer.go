@@ -268,7 +268,8 @@ type QueryInfo struct {
 
 func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
 	queryInfo := &QueryInfo{}
-	queryHasLabelFilter := hasLabelFilter(lo.Filters)
+	queryUsesLabels := hasLabelFilter(lo.Filters) || hasLabelSort(lo.Sort)
+	joinTableIndices := make([]int, 0)
 
 	// First, what kind of filtering will we be doing?
 	// 1- Intro: SELECT and JOIN clauses
@@ -276,18 +277,31 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	// but it's possible that a key has no associated labels, so if we're doing a
 	// non-existence test on labels we need to do a LEFT OUTER JOIN
 	distinctModifier := ""
-	if queryHasLabelFilter {
+	if queryUsesLabels {
 		distinctModifier = " DISTINCT"
 	}
 	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid FROM "%s" o`, distinctModifier, dbName)
 	query += "\n  "
 	query += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)
-	if queryHasLabelFilter {
+	if queryUsesLabels {
 		for i, orFilters := range lo.Filters {
 			if hasLabelFilter([]OrFilter{orFilters}) {
+				joinTableIndices = append(joinTableIndices, i+1)
 				query += "\n  "
 				// Make the lt index 1-based for readability
 				query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, i+1, i+1)
+			}
+		}
+		if hasLabelSort(lo.Sort) {
+			offset := 1 + len(lo.Filters)
+			fieldsArrays := lo.Sort.Fields
+			for i, fields := range fieldsArrays {
+				if len(fields) == 3 && fields[0] == "metadata" && fields[1] == "labels" {
+					joinTableIndices = append(joinTableIndices, i+offset)
+					query += "\n  "
+					query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, i+offset, i+offset)
+
+				}
 			}
 		}
 	}
@@ -384,16 +398,23 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	if len(lo.Sort.Fields) > 0 {
 		orderByClauses := []string{}
 		for i, field := range lo.Sort.Fields {
-			columnName := toColumnName(field)
-			if err := l.validateColumn(columnName); err != nil {
-				return queryInfo, err
+			if isLabelsFieldList(field) {
+				clause, err := buildSortLabelsClause(field[2], joinTableIndices, lo.Sort.Orders[i] == ASC)
+				if err != nil {
+					return nil, err
+				}
+				orderByClauses = append(orderByClauses, clause)
+			} else {
+				columnName := toColumnName(field)
+				if err := l.validateColumn(columnName); err != nil {
+					return queryInfo, err
+				}
+				direction := "ASC"
+				if lo.Sort.Orders[i] == DESC {
+					direction = "DESC"
+				}
+				orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
 			}
-
-			direction := "ASC"
-			if lo.Sort.Orders[i] == DESC {
-				direction = "DESC"
-			}
-			orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
 		}
 		query += "\n  ORDER BY "
 		query += strings.Join(orderByClauses, ", ")
@@ -547,6 +568,33 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(index int, orFilters OrFilt
 		return clauses[0], params, nil
 	}
 	return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
+}
+
+// When sorting on a particular label, look for non-null instances of that label on
+// each known join-table. Otherwise give the sort-result a low score.
+// See the unit tests for this function for concrete examples of the code
+// this function generates.
+
+func buildSortLabelsClause(labelName string, joinTableIndices []int, isAsc bool) (string, error) {
+	if len(joinTableIndices) == 0 {
+		return "", fmt.Errorf(`No indices given for labelName "%s"`, labelName)
+	}
+	stmt := buildSortLabelsClauseAux(labelName, joinTableIndices)
+	dir := "ASC"
+	nullsPosition := "LAST"
+	if !isAsc {
+		dir = "DESC"
+		nullsPosition = "FIRST"
+	}
+	return fmt.Sprintf("(%s) %s NULLS %s", stmt, dir, nullsPosition), nil
+}
+
+func buildSortLabelsClauseAux(labelName string, joinTableIndices []int) string {
+	idx := joinTableIndices[0]
+	if len(joinTableIndices) == 1 {
+		return fmt.Sprintf(`CASE lt%d.label WHEN "%s" THEN lt%d.value ELSE NULL END`, idx, labelName, idx)
+	}
+	return fmt.Sprintf(`CASE lt%d.label WHEN "%s" THEN lt%d.value ELSE (%s) END`, idx, labelName, idx, buildSortLabelsClauseAux(labelName, joinTableIndices[1:]))
 }
 
 // Possible ops from the k8s parser:
@@ -844,6 +892,19 @@ func hasLabelFilter(filters []OrFilter) bool {
 		}
 	}
 	return false
+}
+
+func hasLabelSort(sortDirective Sort) bool {
+	for _, fields := range sortDirective.Fields {
+		if isLabelsFieldList(fields) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLabelsFieldList(fields []string) bool {
+	return len(fields) == 3 && fields[0] == "metadata" && fields[1] == "labels"
 }
 
 // toUnstructuredList turns a slice of unstructured objects into an unstructured.UnstructuredList
