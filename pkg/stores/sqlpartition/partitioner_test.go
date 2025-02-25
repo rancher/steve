@@ -6,8 +6,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
