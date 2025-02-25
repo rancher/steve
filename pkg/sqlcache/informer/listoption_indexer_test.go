@@ -690,6 +690,31 @@ func TestListByOptions(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
+		description: "sort one unbound label descending",
+		listOptions: ListOptions{
+			Sort: Sort{
+				Fields: [][]string{{"metadata", "labels", "flip"}},
+				Orders: []SortOrder{DESC},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "test5a",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  WHERE
+    (lt1.label = ?) AND
+    (f."metadata.namespace" = ?) AND
+    (FALSE)
+  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) DESC NULLS FIRST`,
+		expectedStmtArgs:  []any{"flip", "test5a", "flip"},
+		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
+		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+
+	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
 		listOptions: ListOptions{
 			Sort: Sort{
@@ -702,11 +727,12 @@ func TestListByOptions(t *testing.T) {
 		ns:                 "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
+  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
+    (lt1.label = ?) AND
     (FALSE)
-  ORDER BY f."metadata.fields[3]" ASC, (CASE lt2.label WHEN "stub.io/candy" THEN lt2.value ELSE NULL END) ASC NULLS LAST`,
-		expectedStmtArgs:  []any{},
+  ORDER BY f."metadata.fields[3]" ASC, (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
+		expectedStmtArgs:  []any{"stub.io/candy", "stub.io/candy"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
 		expectedContToken: "",
@@ -935,6 +961,9 @@ func TestListByOptions(t *testing.T) {
 			}
 			if len(test.extraIndexedFields) > 0 {
 				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
+			}
+			if test.description == "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt" {
+				fmt.Printf("stop here")
 			}
 			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
@@ -1568,9 +1597,10 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
+    (lt1.label = ?) AND
     (FALSE)
-  ORDER BY (CASE lt1.label WHEN "this" THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
-		expectedStmtArgs: []any{},
+  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
+		expectedStmtArgs: []any{"this", "this"},
 		expectedErr:      nil,
 	})
 
@@ -1602,13 +1632,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
+  LEFT OUTER JOIN "something_labels" lt3 ON o.key = lt3.key
   WHERE
-    ((f."metadata.queryField1" = ?) OR (lt1.label = ? AND lt1.value = ?)) AND
+    ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?) OR (lt3.label = ?)) AND
     (FALSE)
-  ORDER BY (CASE lt1.label WHEN "this" THEN lt1.value ELSE (CASE lt2.label WHEN "this" THEN lt2.value ELSE NULL END) END) ASC NULLS LAST, f."status.queryField2" DESC`,
-		expectedStmtArgs: []any{"toys", "jamb", "juice"},
+  ORDER BY (CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
+		expectedStmtArgs: []any{"toys", "jamb", "juice", "this", "this"},
 		expectedErr:      nil,
 	})
 
@@ -1637,6 +1667,9 @@ func TestConstructQuery(t *testing.T) {
 			lii := &ListOptionIndexer{
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
+				fmt.Printf("stop here")
 			}
 			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
@@ -1716,57 +1749,47 @@ func TestSmartJoin(t *testing.T) {
 
 func TestBuildSortLabelsClause(t *testing.T) {
 	type testCase struct {
-		description      string
-		labelName        string
-		joinTableIndices []int
-		direction        bool
-		expectedStmt     string
-		expectedErr      string
+		description               string
+		labelName                 string
+		joinTableIndexByLabelName map[string]int
+		direction                 bool
+		expectedStmt              string
+        expectedParam             string
+		expectedErr               string
 	}
 
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "TestBuildSortClause: empty index list errors",
 		labelName:   "emptyListError",
-		expectedErr: `No indices given for labelName "emptyListError"`,
+		expectedErr: `internal error: no join-table index given for labelName "emptyListError"`,
 	})
 	tests = append(tests, testCase{
-		description:      "TestBuildSortClause: single index list ascending",
-		labelName:        "listSize1",
-		joinTableIndices: []int{3},
-		direction:        true,
-		expectedStmt:     `(CASE lt3.label WHEN "listSize1" THEN lt3.value ELSE NULL END) ASC NULLS LAST`,
+		description:               "TestBuildSortClause: hit ascending",
+		labelName:                 "testBSL1",
+		joinTableIndexByLabelName: map[string]int{"testBSL1": 3},
+		direction:                 true,
+		expectedStmt:              `(CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST`,
+		expectedParam:             "testBSL1",
 	})
 	tests = append(tests, testCase{
-		description:      "TestBuildSortClause: single index list descending",
-		labelName:        "listSize1b",
-		joinTableIndices: []int{4},
-		direction:        false,
-		expectedStmt:     `(CASE lt4.label WHEN "listSize1b" THEN lt4.value ELSE NULL END) DESC NULLS FIRST`,
-	})
-	tests = append(tests, testCase{
-		description:      "TestBuildSortClause: 2-item list ascending",
-		labelName:        "listSize2",
-		joinTableIndices: []int{5, 8},
-		direction:        true,
-		expectedStmt:     `(CASE lt5.label WHEN "listSize2" THEN lt5.value ELSE (CASE lt8.label WHEN "listSize2" THEN lt8.value ELSE NULL END) END) ASC NULLS LAST`,
-	})
-	tests = append(tests, testCase{
-		description:      "TestBuildSortClause: 3-item list descending",
-		labelName:        "listSize3",
-		joinTableIndices: []int{13, 21, 34},
-		direction:        true,
-		expectedStmt:     `(CASE lt13.label WHEN "listSize3" THEN lt13.value ELSE (CASE lt21.label WHEN "listSize3" THEN lt21.value ELSE (CASE lt34.label WHEN "listSize3" THEN lt34.value ELSE NULL END) END) END) ASC NULLS LAST`,
+		description:               "TestBuildSortClause: hit descending",
+		labelName:                 "testBSL2",
+		joinTableIndexByLabelName: map[string]int{"testBSL2": 4},
+		direction:                 false,
+		expectedStmt:              `(CASE lt4.label WHEN ? THEN lt4.value ELSE NULL END) DESC NULLS FIRST`,
+		expectedParam:             "testBSL2",
 	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			stmt, err := buildSortLabelsClause(test.labelName, test.joinTableIndices, test.direction)
+			stmt, param, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
 			if test.expectedErr != "" {
 				assert.Equal(t, test.expectedErr, err.Error())
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, test.expectedStmt, stmt)
+				assert.Equal(t, test.expectedParam, param)
 			}
 		})
 	}
