@@ -84,18 +84,26 @@ var (
 		gvkKey("", "v1", "Pod"): {
 			{"spec", "containers", "image"},
 			{"spec", "nodeName"}},
+		gvkKey("", "v1", "ReplicationController"): {
+			{"spec", "template", "spec", "containers", "image"}},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
 			{"spec", "type"},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			{"spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("apps", "v1", "Deployment"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			{"spec", "template", "spec", "containers", "image"},
+		},
+		gvkKey("apps", "v1", "ReplicaSet"): {
+			{"spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("apps", "v1", "StatefulSet"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			{"spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("autoscaling", "v2", "HorizontalPodAutoscaler"): {
 			{"spec", "scaleTargetRef", "name"},
@@ -105,9 +113,11 @@ var (
 		},
 		gvkKey("batch", "v1", "CronJob"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			{"spec", "jobTemplate", "spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("batch", "v1", "Job"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			{"spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("catalog.cattle.io", "v1", "App"): {
 			{"spec", "chart", "metadata", "name"},
@@ -124,6 +134,8 @@ var (
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			{"spec", "clusterName"}},
+		gvkKey("cluster.x-k8s.io", "v1beta1", "MachineDeployment"): {
+			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			{"metadata", "labels", "provider.cattle.io"},
 			{"spec", "internal"},
@@ -137,6 +149,8 @@ var (
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
 			{"spec", "clusterName"}},
+		gvkKey("management.cattle.io", "v3", "Project"): {
+			{"spec", "clusterName"}},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
 			{"spec", "rules", "host"},
 			{"spec", "ingressClassName"},
@@ -145,6 +159,10 @@ var (
 			{"metadata", "labels", "provider.cattle.io"},
 			{"status", "clusterName"},
 			{"status", "provider"},
+		},
+		gvkKey("rke.cattle.io", "v1", "ETCDSnapshot"): {
+			{"snapshotFile", "createdAt"},
+			{"spec", "clusterName"},
 		},
 		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
 			{"provisioner"},
