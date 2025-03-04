@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -353,7 +354,7 @@ func getFieldsFromSchema(schema *types.APISchema) [][]string {
 	}
 	for _, colDef := range colDefs {
 		field := strings.TrimPrefix(colDef.Field, "$.")
-		fields = append(fields, strings.Split(field, "."))
+		fields = append(fields, queryhelper.SafeSplit(field))
 	}
 	return fields
 }
