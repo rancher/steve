@@ -177,7 +177,7 @@ func TestAfterUpsert(t *testing.T) {
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
-			ctx:               context.Background(),
+			ctx:   context.Background(),
 			Store: store,
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
@@ -200,7 +200,7 @@ func TestAfterUpsert(t *testing.T) {
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
-			ctx:               context.Background(),
+			ctx:   context.Background(),
 			Store: store,
 
 			indexers: map[string]cache.IndexFunc{
@@ -223,7 +223,7 @@ func TestAfterUpsert(t *testing.T) {
 		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		objKey := "key"
 		indexer := &Indexer{
-			ctx:               context.Background(),
+			ctx:   context.Background(),
 			Store: store,
 			indexers: map[string]cache.IndexFunc{
 				"a": func(obj interface{}) ([]string, error) {
