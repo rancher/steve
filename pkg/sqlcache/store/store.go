@@ -76,7 +76,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 
 	dbName := db.Sanitize(s.name)
 
-	// once multiple informerfactories are needed, this can accept the case where table already exists error is received
+	// once multiple informer-factories are needed, this can accept the case where table already exists error is received
 	err := s.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
 		_, err := tx.Exec(createTableQuery)

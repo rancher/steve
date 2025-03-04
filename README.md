@@ -171,6 +171,9 @@ displayed by `kubectl get $TYPE`. For example `secrets` have `"metadata.fields[0
 corresponding to `"name"`, `"type"`, `"data"`, and `"age"`. For CRDs, these come from
 [Additional printer columns](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns)
 
+When matching on array-type fields, the array's values are stored in the database as a single field separated by or-bars (`|`s).=
+So searching for those fields needs to do a partial match when a field contains more than one value.
+
 #### `projectsornamespaces`
 
 Resources can also be filtered by the Rancher projects their namespaces belong
