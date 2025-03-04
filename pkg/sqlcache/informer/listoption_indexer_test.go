@@ -962,9 +962,6 @@ func TestListByOptions(t *testing.T) {
 			if len(test.extraIndexedFields) > 0 {
 				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
 			}
-			if test.description == "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt" {
-				fmt.Printf("stop here")
-			}
 			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
@@ -1667,9 +1664,6 @@ func TestConstructQuery(t *testing.T) {
 			lii := &ListOptionIndexer{
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
-			}
-			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
-				fmt.Printf("stop here")
 			}
 			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
