@@ -157,6 +157,7 @@ var (
 			{"spec", "ingressClassName"},
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
+			{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"},
 			{"metadata", "labels", "provider.cattle.io"},
 			{"status", "clusterName"},
 			{"status", "provider"},
