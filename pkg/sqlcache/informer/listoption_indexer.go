@@ -41,7 +41,7 @@ type ListOptionIndexer struct {
 var (
 	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
 	defaultIndexNamespaced = "metadata.namespace"
-	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[a-zA-Z./]+])|(\[[0-9]+])`)
+	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 
 	ErrInvalidColumn = errors.New("supplied column is invalid")
 )
