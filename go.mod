@@ -26,7 +26,7 @@ require (
 	github.com/rancher/wrangler/v2 v2.1.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
-	github.com/urfave/cli v1.22.14
+	github.com/urfave/cli/v2 v2.27.6
 	github.com/urfave/cli/v2 v2.25.7
 	golang.org/x/sync v0.11.0
 	helm.sh/helm/v3 v3.11.0
