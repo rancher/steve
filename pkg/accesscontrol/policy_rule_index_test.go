@@ -56,7 +56,7 @@ func Test_policyRuleIndex_roleBindingBySubject(t *testing.T) {
 					Namespace: "testns",
 				},
 			}),
-			want: []string{"system:serviceaccount:testns:mysvcaccount"},
+			want: []string{"serviceaccount:testns:mysvcaccount"},
 		},
 		{
 			name: "ignores svcaccounts in group mode",
@@ -166,7 +166,7 @@ func Test_policyRuleIndex_clusterRoleBindingBySubject(t *testing.T) {
 					Namespace: "testns",
 				},
 			}),
-			want: []string{"system:serviceaccount:testns:mysvcaccount"},
+			want: []string{"serviceaccount:testns:mysvcaccount"},
 		},
 		{
 			name: "ignores svcaccounts in group mode",
