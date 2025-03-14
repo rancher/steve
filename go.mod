@@ -29,7 +29,7 @@ require (
 	github.com/urfave/cli v1.22.16
 	github.com/urfave/cli/v2 v2.27.6
 	golang.org/x/sync v0.11.0
-	helm.sh/helm/v3 v3.11.0
+	helm.sh/helm/v3 v3.17.2
 	k8s.io/api v0.28.6
 	k8s.io/apiextensions-apiserver v0.28.6
 	k8s.io/apimachinery v0.28.6
