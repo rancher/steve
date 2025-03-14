@@ -1,12 +1,12 @@
 package accesscontrol
 
 import (
-	"fmt"
 	"sort"
 
 	rbacv1controllers "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 )
 
 const (
@@ -72,7 +72,7 @@ func indexSubjects(kind string, subjects []rbacv1.Subject) []string {
 			result = append(result, subject.Name)
 		} else if kind == userKind && subjectIsServiceAccount(subject) {
 			// Index is for Users and this references a service account
-			result = append(result, fmt.Sprintf("serviceaccount:%s:%s", subject.Namespace, subject.Name))
+			result = append(result, serviceaccount.MakeUsername(subject.Namespace, subject.Name))
 		}
 	}
 	return result
