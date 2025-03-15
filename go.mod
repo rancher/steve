@@ -83,7 +83,7 @@ require (
 	k8s.io/kube-aggregator v0.30.1
 	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
-	modernc.org/sqlite v1.36.0
+	modernc.org/sqlite v1.36.1
 	sigs.k8s.io/controller-runtime v0.19.0
 )
 
