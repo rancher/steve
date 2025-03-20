@@ -5,8 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
-	cliv2 "github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2"
 	"k8s.io/klog"
 )
 
@@ -46,34 +45,16 @@ func (c *Config) SetupDebug() error {
 
 func Flags(config *Config) []cli.Flag {
 	return []cli.Flag{
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:        "debug",
 			Destination: &config.Debug,
 		},
-		cli.IntFlag{
+		&cli.IntFlag{
 			Name:        "debug-level",
 			Value:       7,
 			Destination: &config.DebugLevel,
 		},
-		cli.BoolFlag{
-			Name:        "sql-cache",
-			Destination: &config.SQLCache,
-		},
-	}
-}
-
-func FlagsV2(config *Config) []cliv2.Flag {
-	return []cliv2.Flag{
-		&cliv2.BoolFlag{
-			Name:        "debug",
-			Destination: &config.Debug,
-		},
-		&cliv2.IntFlag{
-			Name:        "debug-level",
-			Value:       7,
-			Destination: &config.DebugLevel,
-		},
-		&cliv2.BoolFlag{
+		&cli.BoolFlag{
 			Name:        "sql-cache",
 			Destination: &config.SQLCache,
 		},
