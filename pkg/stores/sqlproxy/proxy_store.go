@@ -96,6 +96,7 @@ var (
 			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
 			{"spec", "clusterName"},
 			{"spec", "displayName"},
+			{"_type"},
 		},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
