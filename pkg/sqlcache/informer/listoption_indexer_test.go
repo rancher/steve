@@ -1027,6 +1027,7 @@ func TestListByOptions(t *testing.T) {
 
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
+		dbname                string
 		description           string
 		listOptions           ListOptions
 		partitions            []partition.Partition
@@ -1653,6 +1654,23 @@ func TestConstructQuery(t *testing.T) {
 		expectedStmtArgs: []any{},
 		expectedErr:      fmt.Errorf("sort fields length 4 != sort orders length 3"),
 	})
+	tests = append(tests, testCase{
+		dbname:      "_v1_Namespace",
+		description: "ConstructQuery: unsorted namespaces should be sorted by project name",
+		listOptions: ListOptions{},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+  JOIN "_v1_Namespace_fields" f ON o.key = f.key
+  LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key 
+  JOIN "management.cattle.io_v3_Project_fields" proj ON nslb.value = proj."metadata.name"
+  WHERE
+    (nslb.label = "field.cattle.io/projectId") AND
+    (FALSE)
+  ORDER BY proj."spec.displayName" ASC, ns.key ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
 
 	t.Parallel()
 	for _, test := range tests {
@@ -1665,7 +1683,11 @@ func TestConstructQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			dbname := "something"
+			if test.dbname != "" {
+				dbname = test.dbname
+			}
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1748,7 +1770,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		joinTableIndexByLabelName map[string]int
 		direction                 bool
 		expectedStmt              string
-        expectedParam             string
+		expectedParam             string
 		expectedErr               string
 	}
 

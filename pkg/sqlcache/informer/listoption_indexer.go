@@ -266,7 +266,32 @@ type QueryInfo struct {
 	offset      int
 }
 
+func (l *ListOptionIndexer) checkSpecialCases(lo ListOptions, dbName string) string {
+	if dbName != "_v1_Namespace" {
+		return ""
+	}
+	if len(lo.Filters) > 0 || len(lo.Sort.Fields) > 0 {
+		return ""
+	}
+	distinctModifier := ""
+	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid FROM "%s" o`, distinctModifier, dbName)
+	query += "\n  "
+	query += fmt.Sprintf(`  JOIN "%s_fields" f ON o.key = f.key`, dbName)
+	query += fmt.Sprintf(`  LEFT OUTER JOIN "%s_labels" nslb ON o.key = nslb.key`, dbName)
+	query += fmt.Sprintf(`  JOIN "management.cattle.io_v3_Project_fields" proj ON nslb.value = proj."metadata.name"`)
+	query += fmt.Sprintf(`  WHERE nslb.label = "field.cattle.io/projectId"`)
+	query += fmt.Sprintf(`  ORDER BY proj."spec.displayName" ASC, o.key ASC`)
+	return query
+}
+
+func (l *ListOptionIndexer) constructRegularQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (string, error) {
+}
+
 func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
+	query := l.checkSpecialCases(lo, partitions, namespace, dbName)
+	if query == "" {
+		query = l.constructRegularQuery(lo, partitions, namespace, dbName)
+	}
 	ensureSortLabelsAreSelected(&lo)
 	queryInfo := &QueryInfo{}
 	queryUsesLabels := hasLabelFilter(lo.Filters)
