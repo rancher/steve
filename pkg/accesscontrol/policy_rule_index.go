@@ -98,14 +98,20 @@ func addResourceAccess(accessSet *AccessSet, namespace string, rule rbacv1.Polic
 			}
 			for _, resourceName := range names {
 				for _, verb := range rule.Verbs {
+					access := Access{
+						Namespace:    namespace,
+						ResourceName: resourceName,
+					}
+
+					if resource == "namespaces" && group == "" {
+						access.Namespace = "*"
+					}
+
 					accessSet.Add(verb,
 						schema.GroupResource{
 							Group:    group,
 							Resource: resource,
-						}, Access{
-							Namespace:    namespace,
-							ResourceName: resourceName,
-						})
+						}, access)
 				}
 			}
 		}
