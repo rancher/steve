@@ -1660,14 +1660,27 @@ func TestConstructQuery(t *testing.T) {
 		listOptions: ListOptions{},
 		partitions:  []partition.Partition{},
 		ns:          "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
-  JOIN "_v1_Namespace_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key 
-  JOIN "management.cattle.io_v3_Project_fields" proj ON nslb.value = proj."metadata.name"
+		expectedStmt: `SELECT object, objectnonce, dekid FROM
+(
+  SELECT o.object as object, o.objectnonce as objectnonce, o.dekid as dekid, o.key as key, proj."spec.displayName" as humanName FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key 
+    JOIN "management.cattle.io_v3_Project_fields" proj ON nslb.value = proj."metadata.name"
+    WHERE nslb.label = "field.cattle.io/projectId"
+
+  UNION ALL
+
+    SELECT o.object as object, o.objectnonce as objectnonce, o.dekid as dekid, o.key as key, NULL as humanName FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key
+    WHERE (o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+           JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
+           LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
+           WHERE lt1i1.label = "field.cattle.io/projectId"))
+ )
   WHERE
-    (nslb.label = "field.cattle.io/projectId") AND
     (FALSE)
-  ORDER BY proj."spec.displayName" ASC, ns.key ASC`,
+  ORDER BY humanName ASC, key ASC`,
 		expectedStmtArgs: []any{},
 		expectedErr:      nil,
 	})
