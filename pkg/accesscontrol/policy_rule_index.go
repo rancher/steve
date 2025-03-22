@@ -98,14 +98,31 @@ func addResourceAccess(accessSet *AccessSet, namespace string, rule rbacv1.Polic
 			}
 			for _, resourceName := range names {
 				for _, verb := range rule.Verbs {
+					access := Access{
+						Namespace:    namespace,
+						ResourceName: resourceName,
+					}
+
+					// The first condition namespace != All is to determine if it is a RoleBinding.
+					// The second and third conditions are to check if the resource is for "namespaces" in core group.
+					// In kubernetes, rule are valid if they satisfy the following
+					// 	- Should be `namespaces` GR
+					//  - From RoleBindings in `namespace`
+					//  - From Rule with  ResourceName `*`` or the `namespace` itself.
+					// Ref: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/endpoints/request/requestinfo.go#L194
+					// If the ResourceName is `All` || namespace itself then only the current namespace is considered as Resourcename
+					// In the case of Rolebinding for the resource "namespaces" in core group, access.Namespace
+					// is set to All since namespace on the resource "namespaces" is not valid.
+					if namespace != All && resource == "namespaces" && group == "" && (resourceName == All || resourceName == namespace) {
+						access.Namespace = All
+						access.ResourceName = namespace
+					}
+
 					accessSet.Add(verb,
 						schema.GroupResource{
 							Group:    group,
 							Resource: resource,
-						}, Access{
-							Namespace:    namespace,
-							ResourceName: resourceName,
-						})
+						}, access)
 				}
 			}
 		}
