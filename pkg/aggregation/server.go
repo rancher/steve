@@ -85,6 +85,7 @@ func serve(ctx context.Context, dialer websocket.Dialer, url string, headers htt
 			return ctx
 		},
 	}
+	server.SetKeepAlivesEnabled(false) // avoid reusing connections, not supported by the in-memory listener
 	go server.Serve(listener)
 	defer server.Shutdown(context.Background())
 
