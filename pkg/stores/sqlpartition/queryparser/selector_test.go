@@ -54,6 +54,7 @@ func TestSelectorParse(t *testing.T) {
 		"metadata.labels[im.here]",
 		"!metadata.labels[im.not.here]",
 		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
+		"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -77,15 +78,24 @@ func TestSelectorParse(t *testing.T) {
 		"!metadata.labels(im.not.here)",
 		`x="no double quotes allowed"`,
 		`x='no single quotes allowed'`,
+		"name => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"metadata.annotations[blah] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"metadata.labels[k8s.io/meta-stuff] => not-bracketed = active",
+		"metadata.labels[k8s.io/meta-stuff] => [not][enough][accessors] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [too][many][accessors][by][1] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][an][operator][end-of-string]",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][an][operator][no-following-operator] no-operator",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][a][post-operator][value] >",
+		"metadata.labels[not/followed/by/accessor] => = active",
 	}
 	for _, test := range testGoodStrings {
-		_, err := Parse(test)
+		_, err := Parse(test, "filter")
 		if err != nil {
 			t.Errorf("%v: error %v (%#v)\n", test, err, err)
 		}
 	}
 	for _, test := range testBadStrings {
-		_, err := Parse(test)
+		_, err := Parse(test, "filter")
 		if err == nil {
 			t.Errorf("%v: did not get expected error\n", test)
 		}
@@ -115,6 +125,7 @@ func TestLexer(t *testing.T) {
 		{"~", PartialEqualsToken},
 		{"!~", NotPartialEqualsToken},
 		{"||", ErrorToken},
+		{"=>", IndirectAccessToken},
 	}
 	for _, v := range testcases {
 		l := &Lexer{s: v.s, pos: 0}
@@ -163,6 +174,9 @@ func TestLexerSequence(t *testing.T) {
 		{"key!~ value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key !~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key!~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+			[]Token{IdentifierToken, IndirectAccessToken, IdentifierToken, EqualsToken, IdentifierToken},
+		},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -203,6 +217,10 @@ func TestParserLookahead(t *testing.T) {
 		{"key gt 3", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key lt 4", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
 		{`key = multi-word-string`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
+
+		{"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+			[]Token{IdentifierToken, IndirectAccessToken, IdentifierToken, EqualsToken, IdentifierToken, EndOfStringToken},
+		},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
@@ -240,6 +258,7 @@ func TestParseOperator(t *testing.T) {
 		{"notin", nil},
 		{"!=", nil},
 		{"!~", nil},
+		{"=>", nil},
 		{"!", fmt.Errorf("found '%s', expected: %v", selection.DoesNotExist, strings.Join(binaryOperators, ", "))},
 		{"exists", fmt.Errorf("found '%s', expected: %v", selection.Exists, strings.Join(binaryOperators, ", "))},
 		{"(", fmt.Errorf("found '%s', expected: %v", "(", strings.Join(binaryOperators, ", "))},
@@ -414,6 +433,10 @@ func TestRequirementConstructor(t *testing.T) {
 		_, err := NewRequirement(rc.Key, rc.Op, rc.Vals.List())
 		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
 			t.Errorf("NewRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
+		}
+		_, err = NewIndirectRequirement(rc.Key, []string{"herb", "job", "nice", "reading"}, &rc.Op, rc.Vals.List())
+		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
+			t.Errorf("NewIndirectRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
 		}
 	}
 }

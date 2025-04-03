@@ -12,12 +12,14 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -283,7 +285,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		returnList:        []any{},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
 		expectedContToken: "",
@@ -300,7 +302,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -314,7 +316,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC 
+  ORDER BY f."metadata.name" ASC
   LIMIT ?`,
 		expectedStmtArgs: []interface{}{2},
 		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
@@ -336,7 +338,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC 
+  ORDER BY f."metadata.name" ASC
   OFFSET ?`,
 		expectedStmtArgs: []interface{}{4},
 		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
@@ -371,7 +373,7 @@ func TestListByOptions(t *testing.T) {
   WHERE
     (f."metadata.somefield" LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"%somevalue%"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -400,7 +402,7 @@ func TestListByOptions(t *testing.T) {
   WHERE
     (f."metadata.somefield" NOT LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"%somevalue%"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -429,7 +431,7 @@ func TestListByOptions(t *testing.T) {
   WHERE
     (f."metadata.somefield" LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"%somevalue%"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -470,7 +472,7 @@ func TestListByOptions(t *testing.T) {
   WHERE
     ((f."metadata.somefield" LIKE ? ESCAPE '\') OR (f."metadata.somefield" LIKE ? ESCAPE '\') OR (f."metadata.somefield" NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"%somevalue%", "%someothervalue%", "%somethirdvalue%"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -517,7 +519,7 @@ func TestListByOptions(t *testing.T) {
     (f."metadata.somefield" = ?) AND
     (f."metadata.namespace" = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"value1", "value2", "value3", "test4"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -548,7 +550,7 @@ func TestListByOptions(t *testing.T) {
     (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
     (f."metadata.namespace" = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`, //'
 		expectedStmtArgs:  []any{"guard.cattle.io", "%lodgepole%", "test41"},
 		returnList:        []any{},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
@@ -592,7 +594,7 @@ func TestListByOptions(t *testing.T) {
     (lt2.label = ? AND lt2.value = ?) AND
     (f."metadata.namespace" = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"cows", "milk", "horses", "saddles", "test42"},
 		returnList:        []any{},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
@@ -635,7 +637,7 @@ func TestListByOptions(t *testing.T) {
     (f."metadata.somefield" = ?) AND
     (f."metadata.namespace" = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"cows", "butter", "wheat", "test43"},
 		returnList:        []any{},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
@@ -646,9 +648,13 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}},
-				Orders: []SortOrder{ASC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -669,9 +675,13 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "sort one field descending",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}},
-				Orders: []SortOrder{DESC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  DESC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -692,9 +702,13 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "sort one unbound label descending",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "labels", "flip"}},
-				Orders: []SortOrder{DESC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "labels", "flip"},
+						Order:  DESC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -717,9 +731,17 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "fields", "3"}, {"metadata", "labels", "stub.io/candy"}},
-				Orders: []SortOrder{ASC, ASC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "fields", "3"},
+						Order:  ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "stub.io/candy"},
+						Order:  ASC,
+					},
+				},
 			},
 		},
 		extraIndexedFields: []string{"metadata.fields[3]", "metadata.labels[stub.io/candy]"},
@@ -741,9 +763,17 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []SortOrder{ASC, ASC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  ASC,
+					},
+					{
+						Fields: []string{"status", "someotherfield"},
+						Order:  ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -762,9 +792,17 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []SortOrder{DESC, ASC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  DESC,
+					},
+					{
+						Fields: []string{"status", "someotherfield"},
+						Order:  ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -781,27 +819,6 @@ func TestListByOptions(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting when # fields != # sort orders should return an error",
-		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []SortOrder{DESC, ASC, ASC},
-			},
-		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.somefield" DESC, f."status.someotherfield" ASC`,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken: "",
-		expectedErr:       fmt.Errorf("sort fields length 2 != sort orders length 3"),
-	})
-
-	tests = append(tests, testCase{
 		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
 		listOptions: ListOptions{
 			Pagination: Pagination{
@@ -814,7 +831,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC 
+  ORDER BY f."metadata.name" ASC
   LIMIT ?`,
 		expectedStmtArgs: []any{10},
 		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
@@ -840,7 +857,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
 		expectedContToken: "",
@@ -860,7 +877,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
-  ORDER BY f."metadata.name" ASC 
+  ORDER BY f."metadata.name" ASC
   LIMIT ?
   OFFSET ?`,
 		expectedStmtArgs: []any{10, 10},
@@ -888,7 +905,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (f."metadata.namespace" = ? AND FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"somens"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -905,7 +922,7 @@ func TestListByOptions(t *testing.T) {
 		ns: "",
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
 		expectedContToken: "",
@@ -921,7 +938,7 @@ func TestListByOptions(t *testing.T) {
 		ns: "",
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
 		expectedContToken: "",
@@ -939,7 +956,7 @@ func TestListByOptions(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (f."metadata.name" IN (?, ?))
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs:  []any{"someid", "someotherid"},
 		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
@@ -962,7 +979,10 @@ func TestListByOptions(t *testing.T) {
 			if len(test.extraIndexedFields) > 0 {
 				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			if test.description == "ListByOptions with labels filter should select the label in the prepared sql.Stmt" {
+				fmt.Printf("stop here")
+			}
+			queryInfo, err := lii.constructQuery2(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1060,7 +1080,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (f."metadata.queryField1" IN (?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"somevalue"},
 		expectedErr:      nil,
 	})
@@ -1085,7 +1105,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (f."metadata.queryField1" NOT IN (?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"somevalue"},
 		expectedErr:      nil,
 	})
@@ -1146,7 +1166,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelEqualFull", "somevalue"},
 		expectedErr:      nil,
 	})
@@ -1173,7 +1193,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`, //'
 		expectedStmtArgs: []any{"labelEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -1203,7 +1223,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNotEqualFull", "labelNotEqualFull", "somevalue"},
 		expectedErr:      nil,
 	})
@@ -1234,7 +1254,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`, //'
 		expectedStmtArgs: []any{"labelNotEqualPartial", "labelNotEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -1280,7 +1300,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt2i1 ON o1.key = lt2i1.key
 		WHERE lt2i1.label = ?)) OR (lt2.label = ? AND lt2.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"notEqual1", "notEqual1", "value1", "notEqual2", "notEqual2", "value2"},
 		expectedErr:      nil,
 	})
@@ -1306,7 +1326,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value IN (?, ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelIN", "somevalue1", "someValue2"},
 		expectedErr:      nil,
 	})
@@ -1336,7 +1356,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT IN (?, ?))) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNOTIN", "labelNOTIN", "somevalue1", "someValue2"},
 		expectedErr:      nil,
 	})
@@ -1363,7 +1383,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelEXISTS"},
 		expectedErr:      nil,
 	})
@@ -1393,7 +1413,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNOTEXISTS"},
 		expectedErr:      nil,
 	})
@@ -1419,7 +1439,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value < ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"numericThing", float64(5)},
 		expectedErr:      nil,
 	})
@@ -1445,7 +1465,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value > ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"numericThing", float64(35)},
 		expectedErr:      nil,
 	})
@@ -1468,6 +1488,16 @@ func TestConstructQuery(t *testing.T) {
 					},
 				},
 			},
+			{
+				Filters: []Filter{
+					{
+						Field:   []string{"status", "queryField2"},
+						Matches: []string{"gold"},
+						Op:      Eq,
+						Partial: false,
+					},
+				},
+			},
 		},
 		},
 		partitions: []partition.Partition{},
@@ -1477,9 +1507,10 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
     ((lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') OR (f."metadata.queryField1" NOT LIKE ? ESCAPE '\')) AND
+    (f."status.queryField2" = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"junta", "%esther%", "%golgi%"},
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"junta", "%esther%", "%golgi%", "gold"},
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
@@ -1527,7 +1558,7 @@ func TestConstructQuery(t *testing.T) {
     ((lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') OR (f."metadata.queryField1" != ?)) AND
     ((lt2.label = ? AND lt2.value IN (?, ?)) OR (f."metadata.queryField1" > ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`, //'
 		expectedStmtArgs: []any{"nectar", "%stash%", "landlady", "lawn", "reba", "coil", float64(2)},
 		expectedErr:      nil,
 	})
@@ -1547,9 +1578,13 @@ func TestConstructQuery(t *testing.T) {
 					},
 				},
 			},
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "queryField1"}},
-				Orders: []SortOrder{ASC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "queryField1"},
+						Order:  ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -1566,26 +1601,15 @@ func TestConstructQuery(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
-		description: "ConstructQuery: sorting when # fields < # sort orders should return an error",
-		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []SortOrder{DESC, ASC, ASC},
-			},
-		},
-		partitions:       []partition.Partition{},
-		ns:               "",
-		expectedStmt:     "",
-		expectedStmtArgs: []any{},
-		expectedErr:      fmt.Errorf("sort fields length 2 != sort orders length 3"),
-	})
-
-	tests = append(tests, testCase{
 		description: "TestConstructQuery: sort on label statements with no query",
 		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "labels", "this"}},
-				Orders: []SortOrder{ASC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "labels", "this"},
+						Order:  ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -1596,7 +1620,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ?) AND
     (FALSE)
-  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
+  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`, //'
 		expectedStmtArgs: []any{"this", "this"},
 		expectedErr:      nil,
 	})
@@ -1620,38 +1644,31 @@ func TestConstructQuery(t *testing.T) {
 					},
 				},
 			},
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "labels", "this"}, {"status", "queryField2"}},
-				Orders: []SortOrder{ASC, DESC},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields: []string{"metadata", "labels", "this"},
+						Order:  ASC,
+					},
+					{
+						Fields: []string{"status", "queryField2"},
+						Order:  DESC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
-  LEFT OUTER JOIN "something_labels" lt3 ON o.key = lt3.key
   WHERE
-    ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?) OR (lt3.label = ?)) AND
+    ((f."metadata.queryField1" = ?) OR (lt1.label = ? AND lt1.value = ?) OR (lt2.label = ?)) AND
     (FALSE)
-  ORDER BY (CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
+  ORDER BY (CASE lt2.label WHEN ? THEN lt2.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
 		expectedStmtArgs: []any{"toys", "jamb", "juice", "this", "this"},
 		expectedErr:      nil,
-	})
-
-	tests = append(tests, testCase{
-		description: "ConstructQuery: sorting when # fields > # sort orders should return an error",
-		listOptions: ListOptions{
-			Sort: Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}, {"metadata", "labels", "a1"}, {"metadata", "labels", "a2"}},
-				Orders: []SortOrder{DESC, ASC, ASC},
-			},
-		},
-		partitions:       []partition.Partition{},
-		ns:               "",
-		expectedStmt:     "",
-		expectedStmtArgs: []any{},
-		expectedErr:      fmt.Errorf("sort fields length 4 != sort orders length 3"),
 	})
 
 	t.Parallel()
@@ -1665,7 +1682,10 @@ func TestConstructQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
+				fmt.Printf("stop here")
+			}
+			queryInfo, err := lii.constructQuery2(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1748,7 +1768,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		joinTableIndexByLabelName map[string]int
 		direction                 bool
 		expectedStmt              string
-        expectedParam             string
+		expectedParam             string
 		expectedErr               string
 	}
 
@@ -1761,7 +1781,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit ascending",
 		labelName:                 "testBSL1",
-		joinTableIndexByLabelName: map[string]int{"testBSL1": 3},
+		joinTableIndexByLabelName: map[string]int{"db:testBSL1": 3},
 		direction:                 true,
 		expectedStmt:              `(CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST`,
 		expectedParam:             "testBSL1",
@@ -1769,7 +1789,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit descending",
 		labelName:                 "testBSL2",
-		joinTableIndexByLabelName: map[string]int{"testBSL2": 4},
+		joinTableIndexByLabelName: map[string]int{"db:testBSL2": 4},
 		direction:                 false,
 		expectedStmt:              `(CASE lt4.label WHEN ? THEN lt4.value ELSE NULL END) DESC NULLS FIRST`,
 		expectedParam:             "testBSL2",
@@ -1777,7 +1797,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			stmt, param, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
+			stmt, param, err := buildSortLabelsClause(test.labelName, "db", test.joinTableIndexByLabelName, test.direction)
 			if test.expectedErr != "" {
 				assert.Equal(t, test.expectedErr, err.Error())
 			} else {
@@ -1787,4 +1807,309 @@ func TestBuildSortLabelsClause(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConstructIndirectFilterQuery(t *testing.T) {
+	type testCase struct {
+		description           string
+		dbname                string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect Eq",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"System"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+  WHERE (lt1.label = ? AND ext2."spec.displayName" = ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId", "System"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect NotEq",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"System"},
+						Op:             NotEq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+  WHERE (lt1.label = ? AND ext2."spec.displayName" != ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId", "System"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect Lt",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"10"},
+						Op:             Lt,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+  WHERE (lt1.label = ? AND ext2."spec.displayName" < ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId", float64(10)},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect Gt",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"11"},
+						Op:             Gt,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+  WHERE (lt1.label = ? AND ext2."spec.displayName" > ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId", float64(11)},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect Exists",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Op:             Exists,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+    WHERE (lt1.label = ? AND ext2."spec.displayName" != NULL) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect Not-Exists",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Op:             NotExists,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+		WHERE (lt1.label = ? AND ext2."spec.displayName" == NULL) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect In-Set",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"fish", "cows", "ships"},
+						Op:             In,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+		WHERE (lt1.label = ? AND ext2."spec.displayName" IN (?, ?, ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+	    expectedStmtArgs: []any{"field.cattle.io/projectId", "fish", "cows", "ships"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: simple redirect NotIn",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"balloons", "clubs", "cheese"},
+						Op:             NotIn,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
+	WHERE (lt1.label = ? AND ext2."spec.displayName" NOT IN (?, ?, ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId", "balloons", "clubs", "cheese"},
+		expectedErr:      "",
+	})
+	// There's no easy way to safely parameterize column names, as opposed to values,
+	// so verify that the code generator checked them for whitelisted characters.
+	// Allow only [-a-zA-Z0-9$_\[\].]+
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery: verify the injected field name is safe",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches:        []string{"System"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "projects", "name ; drop database marks ; select * from _v1_Namespace", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'name ; drop database marks ; select * from _v1_Namespace'",
+	})
+
+	t.Parallel()
+	ptn := regexp.MustCompile(`\s+`)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			dbname := test.dbname
+			if dbname == "" {
+				dbname = "sometable"
+			}
+			queryInfo, err := lii.constructQuery2(test.listOptions, test.partitions, test.ns, dbname)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			assert.Nil(t, err)
+			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
+			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
+			assert.Equal(t, expectedStmt, receivedStmt)
+			//assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+
 }

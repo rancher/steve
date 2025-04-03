@@ -42,6 +42,7 @@ var (
 	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
 	defaultIndexNamespaced = "metadata.namespace"
 	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
+	badTableNameChars      = regexp.MustCompile(`[^-a-zA-Z0-9._]+`)
 
 	ErrInvalidColumn = errors.New("supplied column is invalid")
 )
@@ -266,6 +267,207 @@ type QueryInfo struct {
 	offset      int
 }
 
+type joinClauseDetails struct {
+	tableName    string
+	lhsTableName string
+	lhsFieldName string
+	rhsTableName string
+	rhsFieldName string
+}
+
+type whereClauseDetails struct {
+	lhsTableName string
+	lhsFieldName string
+	opAndRHS     string
+}
+
+func (l *ListOptionIndexer) constructQuery2(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
+	ensureSortLabelsAreSelected(&lo)
+	queryInfo := &QueryInfo{}
+	joinTableIndexByLabelName := make(map[string]int)
+	joinParts := []string{fmt.Sprintf(`"%s" o`, dbName), fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)}
+	whereClauses := []string{}
+	params := []any{}
+	distinctModifier := ""
+	// 1- Figure out what we'll be joining and testing
+	for _, orFilters := range lo.Filters {
+		newWhereClause, newJoinParts, newParams, needDistinct, err := l.buildORClauseFromFilters2(orFilters, dbName, joinTableIndexByLabelName)
+
+		if err != nil {
+			return queryInfo, err
+		}
+		joinParts = append(joinParts, newJoinParts...)
+		if len(newWhereClause) > 0 {
+			whereClauses = append(whereClauses, newWhereClause)
+		}
+		params = append(params, newParams...)
+		if needDistinct {
+			distinctModifier = " DISTINCT"
+		}
+	}
+
+	// WHERE clauses (from namespace)
+	if namespace != "" && namespace != "*" {
+		whereClauses = append(whereClauses, fmt.Sprintf(`f."metadata.namespace" = ?`))
+		params = append(params, namespace)
+	}
+
+	// WHERE clauses (from partitions and their corresponding parameters)
+	partitionClauses := []string{}
+	for _, thisPartition := range partitions {
+		if thisPartition.Passthrough {
+			// nothing to do, no extra filtering to apply by definition
+		} else {
+			singlePartitionClauses := []string{}
+
+			// filter by namespace
+			if thisPartition.Namespace != "" && thisPartition.Namespace != "*" {
+				singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`f."metadata.namespace" = ?`))
+				params = append(params, thisPartition.Namespace)
+			}
+
+			// optionally filter by names
+			if !thisPartition.All {
+				names := thisPartition.Names
+
+				if len(names) == 0 {
+					// degenerate case, there will be no results
+					singlePartitionClauses = append(singlePartitionClauses, "FALSE")
+				} else {
+					singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`f."metadata.name" IN (?%s)`, strings.Repeat(", ?", len(thisPartition.Names)-1)))
+					// sort for reproducibility
+					sortedNames := thisPartition.Names.UnsortedList()
+					sort.Strings(sortedNames)
+					for _, name := range sortedNames {
+						params = append(params, name)
+					}
+				}
+			}
+
+			if len(singlePartitionClauses) > 0 {
+				partitionClauses = append(partitionClauses, strings.Join(singlePartitionClauses, " AND "))
+			}
+		}
+	}
+	if len(partitions) == 0 {
+		// degenerate case, there will be no results
+		whereClauses = append(whereClauses, "FALSE")
+	}
+	if len(partitionClauses) == 1 {
+		whereClauses = append(whereClauses, partitionClauses[0])
+	}
+	if len(partitionClauses) > 1 {
+		whereClauses = append(whereClauses, "(\n      ("+strings.Join(partitionClauses, ") OR\n      (")+")\n)")
+	}
+
+	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid FROM `, distinctModifier)
+	query += strings.Join(joinParts, "\n  ")
+
+	if len(whereClauses) > 0 {
+		indent := "    "
+		separator := fmt.Sprintf(") AND\n%s(", indent)
+		query += fmt.Sprintf("\n  WHERE\n%s(%s)", indent, strings.Join(whereClauses, separator))
+	}
+
+	// before proceeding, save a copy of the query and params without LIMIT/OFFSET/ORDER info
+	// for COUNTing all results later
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", query)
+	countParams := params[:]
+
+	orderByClauses, newParams, err := l.getSortDirectives(&lo, dbName, joinTableIndexByLabelName)
+	if err != nil {
+		return queryInfo, err
+	}
+	if len(orderByClauses) > 0 {
+		query += "\n  ORDER BY "
+		query += strings.Join(orderByClauses, ", ")
+		params = append(params, newParams...)
+	}
+
+	// 4- Pagination: LIMIT clause (from lo.Pagination and/or lo.ChunkSize/lo.Resume)
+
+	limitClause := ""
+	// take the smallest limit between lo.Pagination and lo.ChunkSize
+	limit := lo.Pagination.PageSize
+	if limit == 0 || (lo.ChunkSize > 0 && lo.ChunkSize < limit) {
+		limit = lo.ChunkSize
+	}
+	if limit > 0 {
+		limitClause = "\n  LIMIT ?"
+		params = append(params, limit)
+	}
+
+	// OFFSET clause (from lo.Pagination and/or lo.Resume)
+	offsetClause := ""
+	offset := 0
+	if lo.Resume != "" {
+		offsetInt, err := strconv.Atoi(lo.Resume)
+		if err != nil {
+			return queryInfo, err
+		}
+		offset = offsetInt
+	}
+	if lo.Pagination.Page >= 1 {
+		offset += lo.Pagination.PageSize * (lo.Pagination.Page - 1)
+	}
+	if offset > 0 {
+		offsetClause = "\n  OFFSET ?"
+		params = append(params, offset)
+	}
+	if limit > 0 || offset > 0 {
+		query += limitClause
+		query += offsetClause
+		queryInfo.countQuery = countQuery
+		queryInfo.countParams = countParams
+		queryInfo.limit = limit
+		queryInfo.offset = offset
+	}
+	// Otherwise leave these as default values and the executor won't do pagination work
+
+	logrus.Debugf("ListOptionIndexer prepared statement: %v", query)
+	logrus.Debugf("Params: %v", params)
+	queryInfo.query = query
+	queryInfo.params = params
+
+	return queryInfo, nil
+
+}
+
+func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, joinTableIndexByLabelName map[string]int) ([]string, []any, error) {
+	params := make([]any, 0)
+	if len(lo.SortList.SortDirectives) == 0 {
+		// make sure one default order is always picked
+		if l.namespaced {
+			return []string{`f."metadata.namespace" ASC`, `f."metadata.name" ASC`}, params, nil
+		} else {
+			return []string{`f."metadata.name" ASC`}, params, nil
+		}
+	}
+	orderByClauses := []string{}
+	for _, sortDirective := range lo.SortList.SortDirectives {
+		fields := sortDirective.Fields
+		if isLabelsFieldList(fields) {
+			clause, sortParam, err := buildSortLabelsClause(fields[2], dbName, joinTableIndexByLabelName, sortDirective.Order == ASC)
+			if err != nil {
+				return nil, nil, err
+			}
+			orderByClauses = append(orderByClauses, clause)
+			params = append(params, sortParam)
+		} else {
+			columnName := toColumnName(fields)
+			if err := l.validateColumn(columnName); err != nil {
+				return nil, nil, err
+			}
+			direction := "ASC"
+			if sortDirective.Order == DESC {
+				direction = "DESC"
+			}
+			orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
+		}
+	}
+	return orderByClauses, params, nil
+}
+
 func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
 	ensureSortLabelsAreSelected(&lo)
 	queryInfo := &QueryInfo{}
@@ -388,26 +590,24 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	countParams := params[:]
 
 	// 3- Sorting: ORDER BY clauses (from lo.Sort)
-	if len(lo.Sort.Fields) != len(lo.Sort.Orders) {
-		return nil, fmt.Errorf("sort fields length %d != sort orders length %d", len(lo.Sort.Fields), len(lo.Sort.Orders))
-	}
-	if len(lo.Sort.Fields) > 0 {
+	if len(lo.SortList.SortDirectives) > 0 {
 		orderByClauses := []string{}
-		for i, field := range lo.Sort.Fields {
-			if isLabelsFieldList(field) {
-				clause, sortParam, err := buildSortLabelsClause(field[2], joinTableIndexByLabelName, lo.Sort.Orders[i] == ASC)
+		for _, sortDirective := range lo.SortList.SortDirectives {
+			fields := sortDirective.Fields
+			if isLabelsFieldList(fields) {
+				clause, sortParam, err := buildSortLabelsClause(fields[2], dbName, joinTableIndexByLabelName, sortDirective.Order == ASC)
 				if err != nil {
 					return nil, err
 				}
 				orderByClauses = append(orderByClauses, clause)
 				params = append(params, sortParam)
 			} else {
-				columnName := toColumnName(field)
+				columnName := toColumnName(fields)
 				if err := l.validateColumn(columnName); err != nil {
 					return queryInfo, err
 				}
 				direction := "ASC"
-				if lo.Sort.Orders[i] == DESC {
+				if sortDirective.Order == DESC {
 					direction = "DESC"
 				}
 				orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
@@ -538,6 +738,65 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
 }
 
+func isIndirectFilter(filter *Filter) bool {
+	return filter.IsIndirect
+}
+
+// buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
+func (l *ListOptionIndexer) buildORClauseFromFilters2(orFilters OrFilter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, bool, error) {
+	params := make([]any, 0)
+	whereClauses := make([]string, 0, len(orFilters.Filters))
+	joinClauses := make([]string, 0)
+	needDistinct := false
+
+	for _, filter := range orFilters.Filters {
+		if isLabelFilter(&filter) {
+			fullName := fmt.Sprintf("%s:%s", dbName, filter.Field[2])
+			labelIndex, ok := joinTableIndexByLabelName[fullName]
+			if !ok {
+				labelIndex = len(joinTableIndexByLabelName) + 1
+				joinTableIndexByLabelName[fullName] = labelIndex
+			}
+			joinClauses = append(joinClauses, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, labelIndex, labelIndex))
+			needDistinct = true
+			labelFunc := l.getLabelFilter2
+			if isIndirectFilter(&filter) {
+				labelFunc = l.getIndirectLabelFilter
+			}
+			newWhereClause, newJoins, newParams, err := labelFunc(filter, dbName, joinTableIndexByLabelName)
+			if err != nil {
+				return "", nil, nil, needDistinct, err
+			}
+			joinClauses = append(joinClauses, newJoins...)
+			if newWhereClause != "" {
+				whereClauses = append(whereClauses, newWhereClause)
+			}
+			params = append(params, newParams...)
+		} else if isIndirectFilter(&filter) {
+			return "", nil, nil, needDistinct, fmt.Errorf("QQQ: Not ready for an indirect non-label query")
+		} else {
+			newWhereClause, newParams, err := l.getFieldFilter(filter)
+			if err != nil {
+				return "", nil, nil, needDistinct, err
+			}
+			if newWhereClause != "" {
+				whereClauses = append(whereClauses, newWhereClause)
+			}
+			params = append(params, newParams...)
+		}
+	}
+	finalWhereClause := ""
+	switch len(whereClauses) {
+	case 0:
+		finalWhereClause = "" // no change
+	case 1:
+		finalWhereClause = whereClauses[0]
+	default:
+		finalWhereClause = fmt.Sprintf("(%s)", strings.Join(whereClauses, ") OR ("))
+	}
+	return finalWhereClause, joinClauses, params, needDistinct, nil
+}
+
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
 func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters OrFilter, dbName string, joinTableIndexByLabelName map[string]int) (string, []any, error) {
 	var params []any
@@ -548,11 +807,10 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters OrFilter, dbName 
 
 	for _, filter := range orFilters.Filters {
 		if isLabelFilter(&filter) {
-			index, ok := joinTableIndexByLabelName[filter.Field[2]]
+			_, ok := joinTableIndexByLabelName[filter.Field[2]]
 			if !ok {
 				return "", nil, fmt.Errorf("internal error: no index for label name %s", filter.Field[2])
 			}
-			newClause, newParams, err = l.getLabelFilter(index, filter, dbName)
 		} else {
 			newClause, newParams, err = l.getFieldFilter(filter)
 		}
@@ -571,12 +829,13 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters OrFilter, dbName 
 	return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
 }
 
-func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, string, error) {
-	ltIndex, ok := joinTableIndexByLabelName[labelName]
+func buildSortLabelsClause(labelName string, dbName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, string, error) {
+	fullName := fmt.Sprintf("%s:%s", dbName, labelName)
+	labelIndex, ok := joinTableIndexByLabelName[fullName]
 	if !ok {
 		return "", "", fmt.Errorf(`internal error: no join-table index given for labelName "%s"`, labelName)
 	}
-	stmt := fmt.Sprintf(`CASE lt%d.label WHEN ? THEN lt%d.value ELSE NULL END`, ltIndex, ltIndex)
+	stmt := fmt.Sprintf(`CASE lt%d.label WHEN ? THEN lt%d.value ELSE NULL END`, labelIndex, labelIndex)
 	dir := "ASC"
 	nullsPosition := "LAST"
 	if !isAsc {
@@ -595,13 +854,14 @@ func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[strin
 // created in Store.ListByPartitions, and that ends up calling ListOptionIndexer.ConstructQuery.
 // No other goroutines access this object.
 func ensureSortLabelsAreSelected(lo *ListOptions) {
-	if len(lo.Sort.Fields) == 0 {
+	if len(lo.SortList.SortDirectives) == 0 {
 		return
 	}
 	unboundSortLabels := make(map[string]bool)
-	for _, fieldList := range lo.Sort.Fields {
-		if isLabelsFieldList(fieldList) {
-			unboundSortLabels[fieldList[2]] = true
+	for _, sortDirective := range lo.SortList.SortDirectives {
+		fields := sortDirective.Fields
+		if isLabelsFieldList(fields) {
+			unboundSortLabels[fields[2]] = true
 		}
 	}
 	if len(unboundSortLabels) == 0 {
@@ -805,6 +1065,214 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter Filter, dbName stri
 		return clause, matches, nil
 	}
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
+}
+
+func (l *ListOptionIndexer) getLabelFilter2(filter Filter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, error) {
+	opString := ""
+	escapeString := ""
+	matchFmtToUse := strictMatchFmt
+	labelName := filter.Field[2]
+	fullName := fmt.Sprintf("%s:%s", dbName, labelName)
+	labelIndex, ok := joinTableIndexByLabelName[fullName]
+	if !ok {
+		return "", nil, nil, fmt.Errorf("internal error: can't find an entry for table %s", fullName)
+	}
+
+	joinClauses := make([]string, 0)
+	switch filter.Op {
+	case Eq:
+		if filter.Partial {
+			opString = "LIKE"
+			escapeString = escapeBackslashDirective
+			matchFmtToUse = matchFmt
+		} else {
+			opString = "="
+		}
+		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s ?%s`, labelIndex, labelIndex, opString, escapeString)
+		return clause, joinClauses, []any{labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse)}, nil
+
+	case NotEq:
+		if filter.Partial {
+			opString = "NOT LIKE"
+			escapeString = escapeBackslashDirective
+			matchFmtToUse = matchFmt
+		} else {
+			opString = "!="
+		}
+		subFilter := Filter{
+			Field: filter.Field,
+			Op:    NotExists,
+		}
+		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND lt%d.value %s ?%s)`, existenceClause, labelIndex, labelIndex, opString, escapeString)
+		params := append(subParams, labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
+		return clause, joinClauses, params, nil
+
+	case Lt, Gt:
+		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
+		if err != nil {
+			return "", nil, nil, err
+		}
+		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s ?`, labelIndex, labelIndex, sym)
+		return clause, joinClauses, []any{labelName, target}, nil
+
+	case Exists:
+		clause := fmt.Sprintf(`lt%d.label = ?`, labelIndex)
+		return clause, joinClauses, []any{labelName}, nil
+
+	case NotExists:
+		clause := fmt.Sprintf(`o.key NOT IN (SELECT o1.key FROM "%s" o1
+		JOIN "%s_fields" f1 ON o1.key = f1.key
+		LEFT OUTER JOIN "%s_labels" lt%di1 ON o1.key = lt%di1.key
+		WHERE lt%di1.label = ?)`, dbName, dbName, dbName, labelIndex, labelIndex, labelIndex)
+		return clause, joinClauses, []any{labelName}, nil
+
+	case In:
+		target := "(?"
+		if len(filter.Matches) > 0 {
+			target += strings.Repeat(", ?", len(filter.Matches)-1)
+		}
+		target += ")"
+		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value IN %s`, labelIndex, labelIndex, target)
+		matches := make([]any, len(filter.Matches)+1)
+		matches[0] = labelName
+		for i, match := range filter.Matches {
+			matches[i+1] = match
+		}
+		return clause, joinClauses, matches, nil
+
+	case NotIn:
+		target := "(?"
+		if len(filter.Matches) > 0 {
+			target += strings.Repeat(", ?", len(filter.Matches)-1)
+		}
+		target += ")"
+		subFilter := Filter{
+			Field: filter.Field,
+			Op:    NotExists,
+		}
+		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND lt%d.value NOT IN %s)`, existenceClause, labelIndex, labelIndex, target)
+		matches := append(subParams, labelName)
+		for _, match := range filter.Matches {
+			matches = append(matches, match)
+		}
+		return clause, joinClauses, matches, nil
+	}
+	return "", nil, nil, fmt.Errorf("unrecognized operator: %s", opString)
+}
+
+func (l *ListOptionIndexer) getIndirectLabelFilter(filter Filter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, error) {
+	if len(filter.IndirectFields) != 4 {
+		s := "<empty>"
+		if len(filter.IndirectFields) > 0 {
+			s = strings.Join(filter.IndirectFields, " ")
+		}
+		return "", nil, nil, fmt.Errorf("expected exactly 4 indirect field parts, got %s (%d)", s, len(filter.IndirectFields))
+	}
+	labelName := filter.Field[2]
+	fullName := fmt.Sprintf("%s:%s", dbName, labelName)
+	labelIndex, ok := joinTableIndexByLabelName[fullName]
+	if !ok {
+		return "", nil, nil, fmt.Errorf("internal error: can't find an entry for table %s", fullName)
+	}
+
+	joinClauses := make([]string, 0)
+
+	extDBName := (fmt.Sprintf("%s_%s", filter.IndirectFields[0], filter.IndirectFields[1]))
+	extDBName = badTableNameChars.ReplaceAllString(extDBName, "_")
+	extIndex, ok := joinTableIndexByLabelName[extDBName]
+	if !ok {
+		extIndex = len(joinTableIndexByLabelName) + 1
+		joinTableIndexByLabelName[extDBName] = extIndex
+	}
+
+	externalFieldName := filter.IndirectFields[2]
+	if badTableNameChars.MatchString(externalFieldName) {
+		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", externalFieldName)
+	}
+	joinClauses = append(joinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, extDBName, extIndex, labelIndex, extIndex, externalFieldName))
+	targetFieldName := filter.IndirectFields[3]
+	// XXX: Add this check
+	// err := checkTargetFieldName(targetFieldName, extDBName, externalFieldName)
+	// if err != nil {
+	// }
+	labelWhereSubClause := fmt.Sprintf("lt%d.label = ?", labelIndex)
+	targetFieldReference := fmt.Sprintf(`ext%d."%s"`, extIndex, targetFieldName)
+	var clause string
+	var op string
+	params := []any{labelName}
+
+	opString := ""
+	escapeString := ""
+	matchFmtToUse := strictMatchFmt
+	switch filter.Op {
+	case Eq:
+		if filter.Partial {
+			opString = "LIKE"
+			escapeString = escapeBackslashDirective
+			matchFmtToUse = matchFmt
+		} else {
+			opString = "="
+		}
+		clause = fmt.Sprintf(`%s AND %s %s ?%s`, labelWhereSubClause, targetFieldReference, opString, escapeString)
+		params = append(params, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
+		return clause, joinClauses, params, nil
+
+	case NotEq:
+		if filter.Partial {
+			opString = "NOT LIKE"
+			escapeString = escapeBackslashDirective
+			matchFmtToUse = matchFmt
+		} else {
+			opString = "!="
+		}
+		clause = fmt.Sprintf(`%s AND %s %s ?%s`, labelWhereSubClause, targetFieldReference, opString, escapeString)
+		params = append(params, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
+		return clause, joinClauses, params, nil
+
+	case Lt, Gt:
+		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
+		if err != nil {
+			return "", nil, nil, err
+		}
+		clause := fmt.Sprintf(`%s AND %s %s ?`, labelWhereSubClause, targetFieldReference, sym)
+		params = append(params, target)
+		return clause, joinClauses, params, nil
+
+	case Exists:
+		clause := fmt.Sprintf(`%s AND %s != NULL`, labelWhereSubClause, targetFieldReference)
+		return clause, joinClauses, params, nil
+
+	case NotExists:
+		clause := fmt.Sprintf(`%s AND %s == NULL`, labelWhereSubClause, targetFieldReference)
+		return clause, joinClauses, params, nil
+
+	case In, NotIn:
+		target := "(?"
+		if len(filter.Matches) > 0 {
+			target += strings.Repeat(", ?", len(filter.Matches)-1)
+		}
+		target += ")"
+	    op = "IN"
+		if filter.Op == NotIn {
+			op = "NOT IN"
+		}
+		clause := fmt.Sprintf(`%s AND %s %s %s`, labelWhereSubClause, targetFieldReference, op, target)
+		for _, match := range filter.Matches {
+			params = append(params, match)
+		}
+		return clause, joinClauses, params, nil
+
+		// See getLabelFilter for rest of operators
+	}
+	return "", nil, nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
 func prepareComparisonParameters(op Op, target string) (string, float64, error) {

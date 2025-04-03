@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -744,10 +745,13 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
-				Fields: [][]string{
-					{"metadata", "name"}},
-				Orders: []informer.SortOrder{informer.ASC},
+			SortList: informer.SortList{
+				SortDirectives: []informer.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  informer.ASC,
+					},
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -765,9 +769,13 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
-				Fields: [][]string{{"metadata", "name"}},
-				Orders: []informer.SortOrder{informer.DESC},
+			SortList: informer.SortList{
+				SortDirectives: []informer.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  informer.DESC,
+					},
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -785,14 +793,16 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
-				Fields: [][]string{
-					{"metadata", "name"},
-					{"spec", "something"},
-				},
-				Orders: []informer.SortOrder{
-					informer.DESC,
-					informer.ASC,
+			SortList: informer.SortList{
+				SortDirectives: []informer.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  informer.DESC,
+					},
+					{
+						Fields: []string{"spec", "something"},
+						Order:  informer.ASC,
+					},
 				},
 			},
 			Filters: make([]informer.OrFilter, 0),
@@ -811,12 +821,25 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: informer.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
-				Fields: [][]string{{"metadata", "labels", "beef.cattle.io/snort"},
-					{"metadata", "labels", "steer"},
-					{"metadata", "labels", "bossie.cattle.io/moo"},
-					{"spec", "something"}},
-				Orders: []informer.SortOrder{informer.DESC, informer.ASC, informer.ASC, informer.ASC},
+			SortList: informer.SortList{
+				SortDirectives: []informer.Sort{
+					{
+						Fields: []string{"metadata", "labels", "beef.cattle.io/snort"},
+						Order:  informer.DESC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "steer"},
+						Order:  informer.ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "bossie.cattle.io/moo"},
+						Order:  informer.ASC,
+					},
+					{
+						Fields: []string{"spec", "something"},
+						Order:  informer.ASC,
+					},
+				},
 			},
 			Filters: make([]informer.OrFilter, 0),
 			Pagination: informer.Pagination{
@@ -920,7 +943,253 @@ func TestParseQuery(t *testing.T) {
 			}
 			lo, err := ParseQuery(test.req, test.nsc)
 			if test.errExpected {
-				assert.NotNil(t, err)
+				require.NotNil(t, err)
+				if test.errorText != "" {
+					assert.Contains(t, test.errorText, err.Error())
+				}
+				return
+			} else {
+				assert.Nil(t, err)
+			}
+			assert.Equal(t, test.expectedLO, lo)
+		})
+	}
+}
+
+// Focus on the indirect accessors
+func TestParseIndirectQuery(t *testing.T) {
+	type testCase struct {
+		description  string
+		setupNSCache func() Cache
+		nsc          Cache
+		req          *types.APIRequest
+		expectedLO   informer.ListOptions
+		errExpected  bool
+		errorText    string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "ParseQuery() with no errors returned should returned no errors. Should have proper defaults set.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: ""},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters:   make([]informer.OrFilter, 0),
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with an indirect accessor should create an indirect object.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish] => [things.cattle.io][boils][metadata.name][spec.carousel] ~heads"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:          []string{"metadata", "labels", "grover.example.com/fish"},
+							Matches:        []string{"heads"},
+							Op:             informer.Eq,
+							Partial:        true,
+							IsIndirect:     true,
+							IndirectFields: []string{"things.cattle.io", "boils", "metadata.name", "spec.carousel"},
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with an indirect accessor and other things should create an indirect object.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.fields[3]<5,metadata.labels[grover.example.com/fish] => [things.cattle.io][boils][metadata.name][spec.carousel] ~heads&sort=-metadata.name&filter=b>2"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"metadata", "fields", "3"},
+							Matches: []string{"5"},
+							Op:      informer.Lt,
+						},
+						{
+							Field:          []string{"metadata", "labels", "grover.example.com/fish"},
+							Matches:        []string{"heads"},
+							Op:             informer.Eq,
+							Partial:        true,
+							IsIndirect:     true,
+							IndirectFields: []string{"things.cattle.io", "boils", "metadata.name", "spec.carousel"},
+						},
+					},
+				},
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"b"},
+							Matches: []string{"2"},
+							Op:      informer.Gt,
+						},
+					},
+				},
+			},
+			SortList: informer.SortList{
+				SortDirectives: []informer.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  informer.DESC,
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if test.setupNSCache == nil {
+				test.nsc = nil
+			} else {
+				test.nsc = test.setupNSCache()
+			}
+			lo, err := ParseQuery(test.req, test.nsc)
+			if test.errExpected {
+				require.NotNil(t, err)
+				if test.errorText != "" {
+					assert.Contains(t, test.errorText, err.Error())
+				}
+				return
+			} else {
+				assert.Nil(t, err)
+			}
+			assert.Equal(t, test.expectedLO, lo)
+		})
+	}
+}
+
+func TestParseSortDirective(t *testing.T) {
+	type testCase struct {
+		description  string
+		setupNSCache func() Cache
+		nsc          Cache
+		req          *types.APIRequest
+		expectedLO   informer.ListOptions
+		errExpected  bool
+		errorText    string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
+			" sort option should be set",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=metadata.name"},
+			},
+		},
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			SortList: informer.SortList{
+				SortDirectives: []informer.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  informer.ASC,
+					},
+				},
+			},
+			Filters: make([]informer.OrFilter, 0),
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "A sort parameter shouldn't have a not-exist operator",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=!metadata.name"},
+			},
+		},
+		errExpected: true,
+		errorText:   "sort directive !metadata.name can't contain operator (!)",
+	})
+	tests = append(tests, testCase{
+		description: "A sort parameter shouldn't have a binary operator",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=metadata.name=fish"},
+			},
+		},
+		errExpected: true,
+		errorText:   "sort directive metadata.name=fish can't contain operator (=)",
+	})
+	tests = append(tests, testCase{
+		description: "A sort parameter shouldn't have a binary operator (not =)",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=metadata.name=> 4"},
+			},
+		},
+		errExpected: true,
+		errorText:   "found '4', expected: a sequence of bracketed identifiers",
+	})
+	tests = append(tests, testCase{
+		description: "A sort parameter shouldn't have a binary operator with other sort params",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=metadata.fish,metadata.name=> 4,metadata.cows"},
+			},
+		},
+		errExpected: true,
+		errorText:   "found '4', expected: a sequence of bracketed identifiers",
+	})
+	tests = append(tests, testCase{
+		description: "Handle a missing sort parameter - empty string",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort="},
+			},
+		},
+		errExpected: true,
+		errorText:   "invalid sort key: <empty string>",
+	})
+	tests = append(tests, testCase{
+		description: "Handle a missing sort parameter - no lh arg for an operator",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=in (a, b, c)"},
+			},
+		},
+		errExpected: true,
+		errorText:   "found unexpected token '(' in sort parameter",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if test.setupNSCache == nil {
+				test.nsc = nil
+			} else {
+				test.nsc = test.setupNSCache()
+			}
+			lo, err := ParseQuery(test.req, test.nsc)
+			if test.errExpected {
+				require.NotNil(t, err)
 				if test.errorText != "" {
 					assert.Contains(t, test.errorText, err.Error())
 				}

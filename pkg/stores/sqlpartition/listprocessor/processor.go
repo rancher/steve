@@ -3,6 +3,7 @@ package listprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -81,11 +82,14 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Fil
 	values := requirement.Values()
 	queryFields := splitQuery(requirement.Key())
 	op, usePartialMatch, err := k8sOpToRancherOp(requirement.Operator())
+	isIndirect, indirectFields := requirement.IndirectInfo()
 	return informer.Filter{
-		Field:   queryFields,
-		Matches: values,
-		Op:      op,
-		Partial: usePartialMatch,
+		Field:          queryFields,
+		Matches:        values,
+		Op:             op,
+		Partial:        usePartialMatch,
+		IsIndirect:     isIndirect,
+		IndirectFields: indirectFields,
 	}, err
 }
 
@@ -102,7 +106,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	filterParams := q[filterParam]
 	filterOpts := []informer.OrFilter{}
 	for _, filters := range filterParams {
-		requirements, err := queryparser.ParseToRequirements(filters)
+		requirements, err := queryparser.ParseToRequirements(filters, filterParam)
 		if err != nil {
 			return informer.ListOptions{}, err
 		}
@@ -118,26 +122,40 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	}
 	opts.Filters = filterOpts
 
-	sortOpts := informer.Sort{}
-	sortKeys := q.Get(sortParam)
-	if sortKeys != "" {
-		sortParts := strings.Split(sortKeys, ",")
-		for _, sortPart := range sortParts {
-			field := sortPart
-			if len(field) > 0 {
-				sortOrder := informer.ASC
-				if field[0] == '-' {
-					sortOrder = informer.DESC
-					field = field[1:]
-				}
-				if len(field) > 0 {
-					sortOpts.Fields = append(sortOpts.Fields, queryhelper.SafeSplit(field))
-					sortOpts.Orders = append(sortOpts.Orders, sortOrder)
-				}
-			}
+	if q.Has(sortParam) {
+		sortKeys := q.Get(sortParam)
+		filterRequirements, err := queryparser.ParseToRequirements(sortKeys, sortParam)
+		if err != nil {
+			return opts, err
 		}
+		if len(filterRequirements) == 0 {
+			if len(sortKeys) == 0 {
+				return opts, errors.New("invalid sort key: <empty string>")
+			}
+			return opts, fmt.Errorf("invalid sort key: '%s'", sortKeys)
+		}
+		sortList := *informer.NewSortList()
+		for _, requirement := range filterRequirements {
+			if requirement.Operator() != selection.Exists {
+				return opts, fmt.Errorf("sort directive %s can't contain operator (%s)", sortKeys, requirement.Operator())
+			}
+			key := requirement.Key()
+			order := informer.ASC
+			if key[0] == '-' {
+				order = informer.DESC
+				key = key[1:]
+			}
+			isIndirect, indirectFields := requirement.IndirectInfo()
+			sortDirective := informer.Sort{
+				Fields:         queryhelper.SafeSplit(key),
+				Order:          order,
+				IsIndirect:     isIndirect,
+				IndirectFields: indirectFields,
+			}
+			sortList.SortDirectives = append(sortList.SortDirectives, sortDirective)
+		}
+		opts.SortList = sortList
 	}
-	opts.Sort = sortOpts
 
 	var err error
 	pagination := informer.Pagination{}

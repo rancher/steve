@@ -39,6 +39,9 @@ the array into a sql statement. So the set gives us no benefit apart from removi
 6.  We allow `lt` and `gt` as aliases for `<` and `>`.
 
 7. We added the '~' and '!~' operators to indicate partial match and non-match
+
+8. We added indirect field selection so we can base a filter or sort off a related value
+  (could be in a different table)
 */
 
 package queryparser
@@ -70,6 +73,7 @@ var (
 		string(selection.Equals), string(selection.DoubleEquals), string(selection.NotEquals),
 		string(selection.PartialEquals), string(selection.NotPartialEquals),
 		string(selection.GreaterThan), string(selection.LessThan),
+		string(selection.IndirectSelector),
 	}
 	validRequirementOperators = append(binaryOperators, unaryOperators...)
 	labelSelectorRegex        = regexp.MustCompile(`^metadata.labels(?:\.\w[-a-zA-Z0-9_./]*|\[.*])$`)
@@ -135,7 +139,9 @@ type Requirement struct {
 	// In huge majority of cases we have at most one value here.
 	// It is generally faster to operate on a single-element slice
 	// than on a single-element map, so we have a slice here.
-	strValues []string
+	strValues      []string
+	isIndirect     bool
+	indirectFields []string
 }
 
 // NewRequirement is the constructor for a Requirement.
@@ -186,6 +192,16 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 	return &Requirement{key: key, operator: op, strValues: vals}, allErrs.ToAggregate()
 }
 
+func NewIndirectRequirement(key string, indirectFields []string, newOperator *selection.Operator, targetValues []string, opts ...field.PathOption) (*Requirement, error) {
+	r, err := NewRequirement(key, *newOperator, targetValues)
+	if err != nil {
+		return nil, err
+	}
+	r.isIndirect = true
+	r.indirectFields = indirectFields
+	return r, nil
+}
+
 func (r *Requirement) hasValue(value string) bool {
 	for i := range r.strValues {
 		if r.strValues[i] == value {
@@ -212,6 +228,10 @@ func (r *Requirement) Values() []string {
 		ret.Insert(r.strValues[i])
 	}
 	return ret.List()
+}
+
+func (r *Requirement) IndirectInfo() (bool, []string) {
+	return r.isIndirect, r.indirectFields
 }
 
 // Equal checks the equality of requirement.
@@ -377,6 +397,8 @@ const (
 	NotPartialEqualsToken
 	// OpenParToken represents open parenthesis
 	OpenParToken
+	// IndirectAccessToken is =>, used to associate one table with a related one, and grab a different field
+	IndirectAccessToken
 )
 
 // string2token contains the mapping between lexer Token and token literal
@@ -395,6 +417,7 @@ var string2token = map[string]Token{
 	"!~":    NotPartialEqualsToken,
 	"notin": NotInToken,
 	"(":     OpenParToken,
+	"=>":    IndirectAccessToken,
 }
 
 // ScannedItem contains the Token and the literal produced by the lexer.
@@ -405,7 +428,7 @@ type ScannedItem struct {
 
 func isIdentifierStartChar(ch byte) bool {
 	r := rune(ch)
-	return unicode.IsLetter(r) || unicode.IsDigit(r) || ch == '_'
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || ch == '_' || ch == '[' || ch == '-'
 }
 
 // isWhitespace returns true if the rune is a space, tab, or newline.
@@ -531,6 +554,7 @@ type Parser struct {
 	l            *Lexer
 	scannedItems []ScannedItem
 	position     int
+	parseType    string
 	path         *field.Path
 }
 
@@ -624,13 +648,18 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	if err != nil {
 		return nil, err
 	}
+	fieldPath := field.WithPath(p.path)
 	if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
-		if !labelSelectorRegex.MatchString(key) {
+		if p.parseType == "filter" && !labelSelectorRegex.MatchString(key) {
 			return nil, fmt.Errorf("existence tests are valid only for labels; not valid for field '%s'", key)
 		}
-		return NewRequirement(key, operator, []string{}, field.WithPath(p.path))
+		return NewRequirement(key, operator, []string{}, fieldPath)
 	}
-	operator, err = p.parseOperator()
+	return p.parseOperatorAndValues(key, fieldPath, true)
+}
+
+func (p *Parser) parseOperatorAndValues(key string, fieldPath field.PathOption, allowIndirectSelector bool) (*Requirement, error) {
+	operator, err := p.parseOperator()
 	if err != nil {
 		return nil, err
 	}
@@ -640,12 +669,30 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 		values, err = p.parseValues()
 	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.PartialEquals, selection.NotPartialEquals:
 		values, err = p.parseSingleValue()
+	case selection.IndirectSelector:
+		if !allowIndirectSelector {
+			return nil, fmt.Errorf("found a subsequent indirect selector (->)")
+		}
+		indirectFields, newOperator, targetValues, err := p.parseIndirectAccessorPart(key, fieldPath)
+		if err != nil {
+			return nil, err
+		}
+		if !p.isValidIndirectKey(key) {
+			return nil, fmt.Errorf("an indirect key must be a label, but got a search on %s", key)
+		}
+		return NewIndirectRequirement(key, indirectFields, newOperator, targetValues.List(), fieldPath)
 	}
 	if err != nil {
 		return nil, err
 	}
 	return NewRequirement(key, operator, values.List(), field.WithPath(p.path))
+}
 
+func (p *Parser) isValidIndirectKey(key string) bool {
+	if p.parseType == "sort" && strings.HasPrefix(key, "-") {
+		key = key[1:]
+	}
+	return strings.HasPrefix(key, "metadata.labels")
 }
 
 // parseKeyAndInferOperator parses literals.
@@ -694,11 +741,15 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 		op = selection.NotEquals
 	case NotPartialEqualsToken:
 		op = selection.NotPartialEquals
+	case IndirectAccessToken:
+		op = selection.IndirectSelector
 	default:
 		if lit == "lt" {
 			op = selection.LessThan
 		} else if lit == "gt" {
 			op = selection.GreaterThan
+		} else if p.parseType == "sort" {
+			return "", fmt.Errorf("found unexpected token '%s' in sort parameter", lit)
 		} else {
 			return "", fmt.Errorf("found '%s', expected: %v", lit, strings.Join(binaryOperators, ", "))
 		}
@@ -727,8 +778,36 @@ func (p *Parser) parseValues() (sets.String, error) {
 		p.consume(Values)
 		return sets.NewString(""), nil
 	default:
-		return nil, fmt.Errorf("found '%s', expected: ',', ')' or identifier", lit)
+		return sets.NewString(""), fmt.Errorf("found '%s', expected: ',', ')' or identifier", lit)
 	}
+}
+
+func (p *Parser) parseIndirectAccessorPart(key string, fieldPath field.PathOption) ([]string, *selection.Operator, sets.String, error) {
+	//key string, indirectFields []string, newOperator selection.Operator, targetValues []string
+	values := sets.String{}
+	tok, lit := p.consume(Values)
+	if tok != IdentifierToken {
+		return nil, nil, values, fmt.Errorf("found '%s', expected: an indirect field specifier", lit)
+	}
+	matched, err := regexp.MatchString(`^(?:\[.*?\])+$`, lit)
+	if err != nil {
+		return nil, nil, values, err
+	} else if !matched {
+		return nil, nil, values, fmt.Errorf("found '%s', expected: a sequence of bracketed identifiers", lit)
+	}
+
+	indirectFields := strings.Split(lit[1:len(lit)-1], "][")
+	if len(indirectFields) != 4 {
+		return nil, nil, values, fmt.Errorf("found '%s', expected: a sequence of three bracketed identifiers", lit)
+	}
+	if p.parseType == "sort" {
+		return indirectFields, nil, sets.NewString(), nil
+	}
+	r, err := p.parseOperatorAndValues(key, fieldPath, false)
+	if err != nil {
+		return nil, nil, values, err
+	}
+	return indirectFields, &r.operator, sets.NewString(r.strValues...), nil
 }
 
 // parseIdentifiersList parses a (possibly empty) list of
@@ -814,9 +893,9 @@ func (p *Parser) parseSingleValue() (sets.String, error) {
 //  4. A requirement with just a KEY - as in "y" above - denotes that
 //     the KEY exists and can be any VALUE.
 //  5. A requirement with just !KEY requires that the KEY not exist.
-func Parse(selector string, opts ...field.PathOption) (Selector, error) {
+func Parse(selector string, parseType string, opts ...field.PathOption) (Selector, error) {
 	pathThing := field.ToPath(opts...)
-	parsedSelector, err := parse(selector, pathThing)
+	parsedSelector, err := parse(selector, parseType, pathThing)
 	if err == nil {
 		return parsedSelector, nil
 	}
@@ -827,8 +906,8 @@ func Parse(selector string, opts ...field.PathOption) (Selector, error) {
 // The callers of this method can then decide how to return the internalSelector struct to their
 // callers. This function has two callers now, one returns a Selector interface and the other
 // returns a list of requirements.
-func parse(selector string, path *field.Path) (internalSelector, error) {
-	p := &Parser{l: &Lexer{s: selector, pos: 0}, path: path}
+func parse(selector string, parseType string, path *field.Path) (internalSelector, error) {
+	p := &Parser{l: &Lexer{s: selector, pos: 0}, parseType: parseType, path: path}
 	items, err := p.parse()
 	if err != nil {
 		return nil, err
@@ -883,8 +962,8 @@ func SelectorFromValidatedSet(ls Set) Selector {
 // processing on selector requirements.
 // See the documentation for Parse() function for more details.
 // TODO: Consider exporting the internalSelector type instead.
-func ParseToRequirements(selector string, opts ...field.PathOption) ([]Requirement, error) {
-	return parse(selector, field.ToPath(opts...))
+func ParseToRequirements(selector string, parseType string, opts ...field.PathOption) ([]Requirement, error) {
+	return parse(selector, parseType, field.ToPath(opts...))
 }
 
 // ValidatedSetSelector wraps a Set, allowing it to implement the Selector interface. Unlike
