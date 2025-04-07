@@ -2,7 +2,10 @@ package client
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -49,8 +52,7 @@ func (a *addQuery) WrappedRoundTripper() http.RoundTripper {
 
 func NewFactory(cfg *rest.Config, impersonate bool) (*Factory, error) {
 	clientCfg := rest.CopyConfig(cfg)
-	clientCfg.QPS = 10000
-	clientCfg.Burst = 100
+	updateConfigFromEnvironment(clientCfg)
 
 	watchClientCfg := rest.CopyConfig(clientCfg)
 	watchClientCfg.Timeout = 30 * time.Minute
@@ -198,4 +200,28 @@ func newClient(ctx *types.APIRequest, cfg *rest.Config, s *types.APISchema, name
 
 	gvr := attributes.GVR(s)
 	return client.Resource(gvr).Namespace(namespace), nil
+}
+
+func updateConfigFromEnvironment(cfg *rest.Config) {
+	cfg.QPS = 10000
+	if v := os.Getenv("RANCHER_CLIENT_QPS"); v != "" {
+		qps, err := strconv.ParseFloat(v, 32)
+		if err != nil {
+			log.Printf("steve: configuring client failed to parse RANCHER_CLIENT_QPS: %s", err)
+		} else {
+			log.Printf("steve: configuring client.QPS = %v", qps)
+			cfg.QPS = float32(qps)
+		}
+	}
+
+	cfg.Burst = 100
+	if v := os.Getenv("RANCHER_CLIENT_BURST"); v != "" {
+		burst, err := strconv.Atoi(v)
+		if err != nil {
+			log.Printf("steve: configuring client failed to parse RANCHER_CLIENT_BURST: %s", err)
+		} else {
+			log.Printf("steve: configuring client.Burst = %v", burst)
+			cfg.Burst = burst
+		}
+	}
 }
