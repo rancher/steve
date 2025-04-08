@@ -146,6 +146,27 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 			excludeValues(request, unstr)
 		}
 
+		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
+			id := resource.APIObject.ID
+			ns := getNamespaceFromResource(id)
+			gvr := attributes.GVR(resource.Schema)
+			permissions := map[string]map[string]bool{}
+			for _, res := range strings.Split(permsQuery, ",") {
+				perms := map[string]bool{}
+				for _, verb := range []string{"create", "update", "delete", "list", "get", "watch", "patch"} {
+					allowed := asl.AccessFor(userInfo).Grants(verb, schema2.GroupResource{Group: gvr.Group, Resource: res}, ns, "")
+					// TODO maybe add links rather than true/false
+					perms[verb] = allowed
+				}
+				permissions[res] = perms
+			}
+
+			if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
+				data.PutValue(unstr.Object, permissions, "resourcePermissions")
+			}
+
+		}
+
 	}
 }
 
@@ -183,4 +204,12 @@ func excludeValues(request *types.APIRequest, unstr *unstructured.Unstructured) 
 			}
 		}
 	}
+}
+
+func getNamespaceFromResource(resourceId string) string {
+	parts := strings.SplitN(resourceId, "/", 2)
+	if len(parts) == 2 {
+		return parts[1]
+	}
+	return resourceId
 }
