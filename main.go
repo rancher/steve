@@ -9,7 +9,7 @@ import (
 	"github.com/rancher/steve/pkg/version"
 	"github.com/rancher/wrangler/v3/pkg/signals"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 var (
