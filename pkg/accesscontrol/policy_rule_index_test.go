@@ -1,11 +1,13 @@
 package accesscontrol
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func Test_policyRuleIndex_roleBindingBySubject(t *testing.T) {
@@ -234,5 +236,153 @@ func makeCRB(name string, roleRef rbacv1.RoleRef, subjects []rbacv1.Subject) *rb
 		},
 		RoleRef:  roleRef,
 		Subjects: subjects,
+	}
+}
+
+func Test_addResourceAccess(t *testing.T) {
+	tests := []struct {
+		name      string
+		namespace string
+		rule      rbacv1.PolicyRule
+		want      AccessSet
+	}{
+		{
+			name:      "RoleBinding namespaces resource with empty names",
+			namespace: "test-ns",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{""},
+				Resources:     []string{"namespaces", "deployments"},
+				ResourceNames: []string{},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{
+						verb: "get", gr: schema.GroupResource{Group: "", Resource: "namespaces"}}: {
+						Access{Namespace: "*", ResourceName: "test-ns"}: true,
+					},
+					{
+						verb: "get", gr: schema.GroupResource{Group: "", Resource: "deployments"}}: {
+						Access{Namespace: "test-ns", ResourceName: "*"}: true,
+					},
+				},
+			},
+		},
+		{
+			name:      "ClusterRoleBinding namespaces resource with empty names",
+			namespace: "*",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{""},
+				Resources:     []string{"namespaces", "deployments"},
+				ResourceNames: []string{},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{verb: "get", gr: schema.GroupResource{Group: "", Resource: "namespaces"}}: {
+						Access{Namespace: "*", ResourceName: "*"}: true,
+					},
+					{
+						verb: "get", gr: schema.GroupResource{Group: "", Resource: "deployments"}}: {
+						Access{Namespace: "*", ResourceName: "*"}: true,
+					},
+				},
+			},
+		},
+		{
+			name:      "RoleBinding namespaces resource with specific names",
+			namespace: "test-ns",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{""},
+				Resources:     []string{"namespaces"},
+				ResourceNames: []string{"specific-ns"},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{verb: "get", gr: schema.GroupResource{Group: "", Resource: "namespaces"}}: {
+						Access{Namespace: "test-ns", ResourceName: "specific-ns"}: true,
+					},
+				},
+			},
+		},
+		{
+			name:      "RoleBinding namespaces resource with its own namespace",
+			namespace: "test-ns",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{""},
+				Resources:     []string{"namespaces"},
+				ResourceNames: []string{"test-ns"},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{verb: "get", gr: schema.GroupResource{Group: "", Resource: "namespaces"}}: {
+						Access{Namespace: "*", ResourceName: "test-ns"}: true,
+					},
+				},
+			},
+		},
+		{
+			name:      "RoleBinding other resource with empty names",
+			namespace: "test-ns",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{"apps"},
+				Resources:     []string{"deployments"},
+				ResourceNames: []string{},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{verb: "get", gr: schema.GroupResource{Group: "apps", Resource: "deployments"}}: {
+						Access{Namespace: "test-ns", ResourceName: "*"}: true,
+					},
+				},
+			},
+		},
+		{
+			name:      "ClusterRoleBinding other resource with empty names",
+			namespace: "*",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{"apps"},
+				Resources:     []string{"deployments"},
+				ResourceNames: []string{},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{verb: "get", gr: schema.GroupResource{Group: "apps", Resource: "deployments"}}: {
+						Access{Namespace: "*", ResourceName: "*"}: true,
+					},
+				},
+			},
+		},
+		{
+			name:      "RoleBinding other resource with specific names",
+			namespace: "test-ns",
+			rule: rbacv1.PolicyRule{
+				APIGroups:     []string{"apps"},
+				Resources:     []string{"deployments"},
+				ResourceNames: []string{"my-deploy"},
+				Verbs:         []string{"get"},
+			},
+			want: AccessSet{
+				set: map[key]resourceAccessSet{
+					{verb: "get", gr: schema.GroupResource{Group: "apps", Resource: "deployments"}}: {
+						Access{Namespace: "test-ns", ResourceName: "my-deploy"}: true,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			accessSet := &AccessSet{}
+			addResourceAccess(accessSet, tt.namespace, tt.rule)
+			if !reflect.DeepEqual(*accessSet, tt.want) {
+				t.Errorf("addResourceAccess() got = %v, want %v", *accessSet, tt.want)
+			}
+		})
 	}
 }
