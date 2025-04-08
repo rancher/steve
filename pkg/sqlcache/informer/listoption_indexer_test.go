@@ -982,7 +982,7 @@ func TestListByOptions(t *testing.T) {
 			if test.description == "ListByOptions with labels filter should select the label in the prepared sql.Stmt" {
 				fmt.Printf("stop here")
 			}
-			queryInfo, err := lii.constructQuery2(test.listOptions, test.partitions, test.ns, "something")
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1685,7 +1685,7 @@ func TestConstructQuery(t *testing.T) {
 			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
 				fmt.Printf("stop here")
 			}
-			queryInfo, err := lii.constructQuery2(test.listOptions, test.partitions, test.ns, "something")
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1809,7 +1809,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 	}
 }
 
-func TestConstructIndirectFilterQuery(t *testing.T) {
+func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
@@ -1845,9 +1845,9 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
-  WHERE (lt1.label = ? AND ext2."spec.displayName" = ?) AND
+		WHERE (lt1.label = ? AND ext2."spec.displayName" = ?) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"field.cattle.io/projectId", "System"},
@@ -1873,10 +1873,10 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		ns:         "",
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
-    JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+	JOIN "_v1_Namespace_fields" f ON o.key = f.key
+	LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
-  WHERE (lt1.label = ? AND ext2."spec.displayName" != ?) AND
+		WHERE (lt1.label = ? AND ext2."spec.displayName" != ?) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"field.cattle.io/projectId", "System"},
@@ -1903,7 +1903,7 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
   WHERE (lt1.label = ? AND ext2."spec.displayName" < ?) AND
     (FALSE)
@@ -1932,7 +1932,7 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
   WHERE (lt1.label = ? AND ext2."spec.displayName" > ?) AND
     (FALSE)
@@ -1960,7 +1960,7 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
     WHERE (lt1.label = ? AND ext2."spec.displayName" != NULL) AND
     (FALSE)
@@ -1988,7 +1988,7 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
 		WHERE (lt1.label = ? AND ext2."spec.displayName" == NULL) AND
     (FALSE)
@@ -2017,12 +2017,12 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
 		WHERE (lt1.label = ? AND ext2."spec.displayName" IN (?, ?, ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC`,
-	    expectedStmtArgs: []any{"field.cattle.io/projectId", "fish", "cows", "ships"},
+		expectedStmtArgs: []any{"field.cattle.io/projectId", "fish", "cows", "ships"},
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
@@ -2046,7 +2046,7 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
     JOIN "_v1_Namespace_fields" f ON o.key = f.key
-    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key 
     JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
 	WHERE (lt1.label = ? AND ext2."spec.displayName" NOT IN (?, ?, ?)) AND
     (FALSE)
@@ -2095,7 +2095,7 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 			if dbname == "" {
 				dbname = "sometable"
 			}
-			queryInfo, err := lii.constructQuery2(test.listOptions, test.partitions, test.ns, dbname)
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != "" {
 				require.NotNil(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())
@@ -2112,4 +2112,509 @@ func TestConstructIndirectFilterQuery(t *testing.T) {
 		})
 	}
 
+}
+
+func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
+	type testCase struct {
+		description           string
+		dbname                string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect Eq",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"System"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key 
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+  WHERE (ext1."spec.displayName" = ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"System"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect NotEq",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"System"},
+						Op:             NotEq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+  WHERE (ext1."spec.displayName" != ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"System"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect Lt",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"10"},
+						Op:             Lt,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+  WHERE (ext1."spec.displayName" < ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{float64(10)},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect Gt",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"11"},
+						Op:             Gt,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+  WHERE (ext1."spec.displayName" > ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{float64(11)},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect Exists",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Op:             Exists,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+    WHERE (ext1."spec.displayName" != NULL) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect Not-Exists",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Op:             NotExists,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+		WHERE (ext1."spec.displayName" == NULL) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect In-Set",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"fish", "cows", "ships"},
+						Op:             In,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+		WHERE (ext1."spec.displayName" IN (?, ?, ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"fish", "cows", "ships"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect NotIn",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"balloons", "clubs", "cheese"},
+						Op:             NotIn,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+	WHERE (ext1."spec.displayName" NOT IN (?, ?, ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"balloons", "clubs", "cheese"},
+		expectedErr:      "",
+	})
+	// There's no easy way to safely parameterize column names, as opposed to values,
+	// so verify that the code generator checked them for whitelisted characters.
+	// Allow only [-a-zA-Z0-9$_\[\].]+
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: verify the injected external field name is safe",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"System"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "projects", "name ; drop database marks ; select * from _v1_Namespace", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'name ; drop database marks ; select * from _v1_Namespace'",
+	})
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: verify the injected selecting field name is safe",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:          []string{"metadata", "queryField1 ; drop database thought-this-is=-checked"},
+						Matches:        []string{"System"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "projects", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "column is invalid [metadata[queryField1 ; drop database thought-this-is=-checked]]: supplied column is invalid",
+	})
+
+	t.Parallel()
+	ptn := regexp.MustCompile(`\s+`)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			dbname := test.dbname
+			if dbname == "" {
+				dbname = "sometable"
+			}
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
+			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
+			assert.Equal(t, expectedStmt, receivedStmt)
+			//assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructMixedLabelIndirect(t *testing.T) {
+	type testCase struct {
+		description           string
+		dbname                string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - one label, one redirect Eq",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				[]Filter{
+					{
+						Field:   []string{"metadata", "labels", "radio"},
+						Matches: []string{"fish"},
+						Op:      Eq,
+					},
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"System"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON f."metadata.queryField1" = ext2."metadata.name"
+		WHERE ((lt1.label = ? AND lt1.value = ?) OR (ext2."spec.displayName" = ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"radio", "fish", "System"},
+		expectedErr:      "",
+	})
+
+	t.Parallel()
+	ptn := regexp.MustCompile(`\s+`)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			dbname := test.dbname
+			if dbname == "" {
+				dbname = "sometable"
+			}
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
+			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
+			assert.Equal(t, expectedStmt, receivedStmt)
+			//assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructMixedMultiTypes(t *testing.T) {
+	type testCase struct {
+		description           string
+		dbname                string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - mix of label,non-label x direct,indirect Eq",
+		listOptions: ListOptions{Filters: []OrFilter{
+			{
+				Filters: []Filter{
+					{
+						Field:   []string{"metadata", "labels", "suitcase"},
+						Matches: []string{"valid"},
+						Op:      Eq,
+					},
+					{
+						Field:          []string{"metadata", "queryField1"},
+						Matches:        []string{"sprint"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
+					},
+					{
+						Field:   []string{"status", "queryField2"},
+						Matches: []string{"moisture"},
+						Op:      Eq,
+					},
+				},
+			},
+			{
+				Filters: []Filter{
+					{
+						Field:          []string{"metadata", "labels", "green"},
+						Matches:        []string{"squalor"},
+						Op:             Eq,
+						IsIndirect:     true,
+						IndirectFields: []string{"tournaments.cattle.io/v3", "Diary", "metadata.name", "spocks.brain"},
+					},
+				},
+			},
+		}},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    JOIN "management.cattle.io_v3_Project_fields" ext2 ON f."metadata.queryField1" = ext2."metadata.name"
+    LEFT OUTER JOIN "_v1_Namespace_labels" lt3 ON o.key = lt3.key
+    JOIN "tournaments.cattle.io_v3_Diary_fields" ext4 ON lt3.value = ext4."metadata.name"
+		WHERE ((lt1.label = ? AND lt1.value = ?)
+			    OR (ext2."spec.displayName" = ?)
+			    OR (f."status.queryField2" = ?))
+		AND (lt3.label = ? AND ext4."spocks.brain" = ?)
+		AND (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"suitcase", "valid", "sprint", "moisture", "green", "squalor"},
+		expectedErr:      "",
+	})
+
+	t.Parallel()
+	ptn := regexp.MustCompile(`\s+`)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			dbname := test.dbname
+			if dbname == "" {
+				dbname = "sometable"
+			}
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
+			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
+			assert.Equal(t, expectedStmt, receivedStmt)
+			//assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
 }
