@@ -982,7 +982,7 @@ func TestListByOptions(t *testing.T) {
 			if test.description == "ListByOptions with labels filter should select the label in the prepared sql.Stmt" {
 				fmt.Printf("stop here")
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1685,7 +1685,7 @@ func TestConstructQuery(t *testing.T) {
 			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
 				fmt.Printf("stop here")
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -2095,7 +2095,7 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 			if dbname == "" {
 				dbname = "sometable"
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != "" {
 				require.NotNil(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())
@@ -2413,7 +2413,7 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 			if dbname == "" {
 				dbname = "sometable"
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != "" {
 				require.NotNil(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())
@@ -2497,7 +2497,7 @@ func TestConstructMixedLabelIndirect(t *testing.T) {
 			if dbname == "" {
 				dbname = "sometable"
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != "" {
 				require.NotNil(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())

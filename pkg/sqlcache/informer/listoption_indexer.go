@@ -248,7 +248,7 @@ func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) erro
 //   - the total number of resources (returned list might be a subset depending on pagination options in lo)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo *ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	queryInfo, err := l.constructQuery(lo, partitions, namespace, db.Sanitize(l.GetName()))
 	if err != nil {
 		return nil, 0, "", err
@@ -374,7 +374,7 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", query)
 	countParams := params[:]
 
-	orderByClauses, newParams, err := l.getSortDirectives(&lo, dbName, joinTableIndexByLabelName)
+	orderByClauses, newParams, err := l.getSortDirectives(lo, dbName, joinTableIndexByLabelName)
 	if err != nil {
 		return queryInfo, err
 	}

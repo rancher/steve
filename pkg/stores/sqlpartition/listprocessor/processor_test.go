@@ -83,7 +83,7 @@ func TestParseQuery(t *testing.T) {
 				},
 			}
 			nsc := NewMockCache(gomock.NewController(t))
-			nsc.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
+			nsc.EXPECT().ListByOptions(context.Background(), &informer.ListOptions{
 				Filters: []informer.OrFilter{
 					{
 						Filters: []informer.Filter{
@@ -133,7 +133,7 @@ func TestParseQuery(t *testing.T) {
 		errExpected: true,
 		setupNSCache: func() Cache {
 			nsi := NewMockCache(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
+			nsi.EXPECT().ListByOptions(context.Background(), &informer.ListOptions{
 				Filters: []informer.OrFilter{
 					{
 						Filters: []informer.Filter{
@@ -186,7 +186,7 @@ func TestParseQuery(t *testing.T) {
 				Items: []unstructured.Unstructured{},
 			}
 			nsi := NewMockCache(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
+			nsi.EXPECT().ListByOptions(context.Background(), &informer.ListOptions{
 				Filters: []informer.OrFilter{
 					{
 						Filters: []informer.Filter{

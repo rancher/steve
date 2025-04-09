@@ -42,7 +42,7 @@ func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockByOptionsLister) ListByOptions(arg0 context.Context, arg1 ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockByOptionsLister) ListByOptions(arg0 context.Context, arg1 *ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByOptions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
