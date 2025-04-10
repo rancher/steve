@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -43,6 +44,7 @@ var (
 	defaultIndexNamespaced = "metadata.namespace"
 	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	badTableNameChars      = regexp.MustCompile(`[^-a-zA-Z0-9._]+`)
+	nonIdentifierChars     = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
 
 	ErrInvalidColumn = errors.New("supplied column is invalid")
 )
@@ -267,34 +269,30 @@ type QueryInfo struct {
 	offset      int
 }
 
-type joinClauseDetails struct {
-	tableName    string
-	lhsTableName string
-	lhsFieldName string
-	rhsTableName string
-	rhsFieldName string
-}
-
-type whereClauseDetails struct {
-	lhsTableName string
-	lhsFieldName string
-	opAndRHS     string
-}
-
-func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
-	ensureSortLabelsAreSelected(&lo)
-	queryInfo := &QueryInfo{}
+func (l *ListOptionIndexer) constructQuery(lo *ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
+	ensureSortLabelsAreSelected(lo)
+	haveIndirectSortDirective, err := checkForIndirectSortDirective(lo)
+	if err != nil {
+		return nil, err
+	}
 	joinTableIndexByLabelName := make(map[string]int)
+	if haveIndirectSortDirective {
+		return l.constructIndirectSortQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
+	}
+	return l.finishConstructQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
+}
+
+func (l *ListOptionIndexer) getQueryParts(lo *ListOptions, partitions []partition.Partition, namespace string, dbName string, joinTableIndexByLabelName map[string]int) ([]string, []string, []any, bool, []string, []any, string, error) {
 	joinParts := []string{fmt.Sprintf(`"%s" o`, dbName), fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)}
 	whereClauses := []string{}
 	params := []any{}
-	distinctModifier := ""
+	needDistinctFinal := false
 	// 1- Figure out what we'll be joining and testing
 	for _, orFilters := range lo.Filters {
 		newWhereClause, newJoinParts, newParams, needDistinct, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName)
 
 		if err != nil {
-			return queryInfo, err
+			return joinParts, whereClauses, params, needDistinctFinal, nil, nil, "", err
 		}
 		joinParts = append(joinParts, newJoinParts...)
 		if len(newWhereClause) > 0 {
@@ -302,7 +300,7 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 		}
 		params = append(params, newParams...)
 		if needDistinct {
-			distinctModifier = " DISTINCT"
+			needDistinctFinal = true
 		}
 	}
 
@@ -359,8 +357,26 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	if len(partitionClauses) > 1 {
 		whereClauses = append(whereClauses, "(\n      ("+strings.Join(partitionClauses, ") OR\n      (")+")\n)")
 	}
+	sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, err := l.getSortDirectives(lo, dbName, joinTableIndexByLabelName)
+	joinParts = append(joinParts, sortJoinClauses...)
+	whereClauses = append(whereClauses, sortWhereClauses...)
 
-	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid FROM `, distinctModifier)
+	return joinParts, whereClauses, params, needDistinctFinal, orderByClauses, orderByParams, sortSelectField, err
+}
+
+func (l *ListOptionIndexer) finishConstructQuery(lo *ListOptions, partitions []partition.Partition, namespace string, dbName string, joinTableIndexByLabelName map[string]int) (*QueryInfo, error) {
+
+	joinParts, whereClauses, params, needsDistinctModifier, orderByClauses, orderByParams, sortSelectField, err := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
+	if err != nil {
+		return nil, err
+	}
+	distinctModifier := ""
+	if needsDistinctModifier {
+		distinctModifier = " DISTINCT"
+	}
+	queryInfo := &QueryInfo{}
+
+	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid %s FROM `, distinctModifier, sortSelectField)
 	query += strings.Join(joinParts, "\n  ")
 
 	if len(whereClauses) > 0 {
@@ -373,15 +389,10 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	// for COUNTing all results later
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", query)
 	countParams := params[:]
-
-	orderByClauses, newParams, err := l.getSortDirectives(lo, dbName, joinTableIndexByLabelName)
-	if err != nil {
-		return queryInfo, err
-	}
 	if len(orderByClauses) > 0 {
 		query += "\n  ORDER BY "
 		query += strings.Join(orderByClauses, ", ")
-		params = append(params, newParams...)
+		params = append(params, orderByParams...)
 	}
 
 	// 4- Pagination: LIMIT clause (from lo.Pagination and/or lo.ChunkSize/lo.Resume)
@@ -430,33 +441,246 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	queryInfo.params = params
 
 	return queryInfo, nil
-
 }
 
-func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, joinTableIndexByLabelName map[string]int) ([]string, []any, error) {
-	params := make([]any, 0)
-	if len(lo.SortList.SortDirectives) == 0 {
-		// make sure one default order is always picked
-		if l.namespaced {
-			return []string{`f."metadata.namespace" ASC`, `f."metadata.name" ASC`}, params, nil
+/** constructIndirectSortQuery - process indirect-sorting
+ * Here we create two queries:
+ * one that has an existence test for the sorter,
+ * and one with a non-existence test.
+ * Then do a `UNION ALL` on the two different queries.
+ * The clever part: have the original options-list do only the one indirect sort.
+ * Have the copy process any other sort options.
+ *
+ * Two limitations:
+ * 1. Only at most one indirect sort per query
+ * 2. The indirect sort will go before the other ones (todo: fix this)
+ */
+
+func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitions []partition.Partition, namespace string, dbName string, joinTableIndexByLabelName map[string]int) (*QueryInfo, error) {
+	var loNoLabel ListOptions
+	// We want to make sure that the want-sort-label options test for the label's existence,
+	// but we want the non-label to have a not-exists test on it.  So first ensure it exists,
+	// then ensure a non-exists test exists on the non-label filter.
+	// The other thing is we put all the non-indirect sort directives on the copy of the list options
+	var indirectSortDirective Sort
+	newSortList1 := make([]Sort, 1)
+	newSortList2 := make([]Sort, 0, len(lo.SortList.SortDirectives)-1)
+	foundIt := false
+	for i, sd := range lo.SortList.SortDirectives {
+		if sd.IsIndirect {
+			indirectSortDirective = lo.SortList.SortDirectives[i]
+			newSortList1[0] = indirectSortDirective
+			foundIt = true
 		} else {
-			return []string{`f."metadata.name" ASC`}, params, nil
+			newSortList2 = append(newSortList2, sd)
 		}
 	}
-	orderByClauses := []string{}
+	if !foundIt {
+		return nil, fmt.Errorf("expected an indirect sort directive, didn't find one")
+	}
+	bytes, err := json.Marshal(*lo)
+	if err != nil {
+		return nil, fmt.Errorf("can't json-encode list options: %w", err)
+	}
+	err = json.Unmarshal(bytes, &loNoLabel)
+	if err != nil {
+		return nil, fmt.Errorf("can't json-decode list options: %w", err)
+	}
+	err = removeIndirectLabel(&loNoLabel, &indirectSortDirective)
+	if err != nil {
+		return nil, err
+	}
+	lo.SortList.SortDirectives = newSortList1
+	loNoLabel.SortList.SortDirectives = newSortList2
+	joinParts1, whereClauses1, params1, needsDistinctModifier1, orderByClauses1, orderByParams1, sortSelectField1, err1 := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
+	if err1 != nil {
+		return nil, err1
+	}
+	// Now add clauses for the indirectSortDirective
+	joinParts2, whereClauses2, params2, needsDistinctModifier2, orderByClauses2, orderByParams2, sortSelectField2, err2 := l.getQueryParts(&loNoLabel, partitions, namespace, dbName, joinTableIndexByLabelName)
+	if err2 != nil {
+		return nil, err2
+	}
+	addFalseTest := false
+	if whereClauses1[len(whereClauses1)-1] == "FALSE" {
+		whereClauses1 = whereClauses1[:len(whereClauses1)-1]
+		addFalseTest = true
+	}
+	if whereClauses2[len(whereClauses2)-1] == "FALSE" {
+		whereClauses2 = whereClauses2[:len(whereClauses2)-1]
+		addFalseTest = true
+	}
+	if needsDistinctModifier1 || needsDistinctModifier2 {
+		fmt.Printf("%d", len(joinParts1)+len(whereClauses1)+len(params1)+len(joinParts2)+len(whereClauses2)+len(params2)+len(orderByClauses1)+len(orderByParams1)+len(orderByClauses2)+len(orderByParams2))
+		fmt.Printf(sortSelectField1 + sortSelectField2)
+	}
+
+	externalTableName := getExternalTableName(&indirectSortDirective)
+	extIndex, ok := joinTableIndexByLabelName[externalTableName]
+	if !ok {
+		return nil, fmt.Errorf("internal error: unable to find an entry for external table %s", externalTableName)
+	}
+	sortParts, importWithParts, importAsNullParts := processOrderByFields(&indirectSortDirective, extIndex, orderByClauses2)
+	selectLine := "SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid"
+	indent1 := "  "
+	indent2 := indent1 + indent1
+	indent3 := indent2 + indent1
+
+	parts := []string{
+		"SELECT __ix_object, __ix_objectnonce, __ix_dekid FROM (",
+		fmt.Sprintf(`%s%s, %s FROM`, indent1, selectLine, strings.Join(importWithParts, ", ")),
+		fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses1, " AND \n"+indent3)),
+		"UNION ALL",
+		fmt.Sprintf(`%s%s, %s FROM`, indent1, selectLine, strings.Join(importAsNullParts, ", ")),
+		fmt.Sprintf("%s%s", indent2, strings.Join(joinParts2, "\n"+indent3)),
+		fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses2, " AND \n"+indent3)),
+		")",
+	}
+	if addFalseTest {
+		parts = append(parts, "WHERE FALSE")
+	}
+	// Ignore the indirect sort params
+	orderByClauses1 = []string{}
+	orderByParams1 = []any{}
+	params := make([]any, 0, len(params1)+len(params2)+len(orderByParams1)+len(orderByParams2))
+	params = append(params, params1...)
+	params = append(params, params2...)
+	fullQuery := strings.Join(parts, "\n")
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", fullQuery)
+	countParams := params[:]
+
+	fullQuery += fmt.Sprintf("\n%sORDER BY %s", indent1, strings.Join(sortParts, ", "))
+	queryInfo := &QueryInfo{
+		query:       fullQuery,
+		params:      params,
+		countQuery:  countQuery,
+		countParams: countParams,
+	}
+	return queryInfo, nil
+}
+
+func processOrderByFields(sd *Sort, extIndex int, orderByClauses []string) ([]string, []string, []string) {
+	sortFieldMap := make(map[string]string)
+	externalFieldName := sd.IndirectFields[3]
+	newName := fmt.Sprintf("__ix_ext%d_%s", extIndex, nonIdentifierChars.ReplaceAllString(externalFieldName, "_"))
+	sortFieldMap[externalFieldName] = newName
+	sortParts := make([]string, 1+len(orderByClauses))
+	direction := "ASC"
+	nullPosition := "LAST"
+	if sd.Order == DESC {
+		direction = "DESC"
+		nullPosition = "FIRST"
+	}
+	sortParts[0] = fmt.Sprintf("%s %s NULLS %s", newName, direction, nullPosition)
+	importWithParts := make([]string, 1+len(orderByClauses))
+	importWithParts[0] = fmt.Sprintf(`ext%d."%s" AS %s`, extIndex, externalFieldName, newName)
+	importAsNullParts := make([]string, 1+len(orderByClauses))
+	importAsNullParts[0] = fmt.Sprintf("NULL AS %s", newName)
+	for i, clause := range orderByClauses {
+		orderParts := strings.SplitN(clause, " ", 2)
+		fieldName := orderParts[0]
+		_, ok := sortFieldMap[fieldName]
+		if ok {
+			continue
+		}
+		fieldParts := strings.SplitN(fieldName, ".", 2)
+		prefix := fieldParts[0]
+		baseName := fieldParts[1]
+		if baseName[0] == '"' {
+			baseName = baseName[1 : len(baseName)-1]
+		}
+		newBaseName := nonIdentifierChars.ReplaceAllString(baseName, "_")
+		newName := fmt.Sprintf("__ix_%s_%s", prefix, newBaseName)
+		sortFieldMap[fieldName] = newName
+		importWithParts[i+1] = fmt.Sprintf("%s AS %s", fieldName, newName)
+		importAsNullParts[i+1] = fmt.Sprintf("NULL AS %s", newName)
+		sortParts[i+1] = fmt.Sprintf("%s %s", newName, orderParts[1])
+	}
+	return sortParts, importWithParts, importAsNullParts
+}
+
+func getExternalTableName(sd *Sort) string {
+	s := strings.Join(sd.IndirectFields[0:2], "_")
+	return strings.ReplaceAll(s, "/", "_")
+}
+
+func removeIndirectLabel(lo *ListOptions, indirectSortDirective *Sort) error {
+	targetLabel := indirectSortDirective.Fields[2]
+	for _, orFilter := range lo.Filters {
+		for j, filter := range orFilter.Filters {
+			if isLabelsFieldList(filter.Field) && filter.Field[2] == targetLabel {
+				orFilter.Filters[j].Op = NotExists
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("failed to find a filter test on label %s", targetLabel)
+}
+
+func checkForIndirectSortDirective(lo *ListOptions) (bool, error) {
+	indirectSortDirectives := make([]string, 0)
+	for _, sd := range lo.SortList.SortDirectives {
+		if sd.IsIndirect {
+			indirectSortDirectives = append(indirectSortDirectives, fmt.Sprintf("[%s]", strings.Join(sd.IndirectFields, "][")))
+		}
+	}
+	if len(indirectSortDirectives) > 1 {
+		return false, fmt.Errorf("can have at most one indirect sort directive, have %d: %s", len(indirectSortDirectives), indirectSortDirectives)
+	}
+	return len(indirectSortDirectives) == 1, nil
+}
+
+func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []string, []string, []any, error) {
+	sortSelectField := ""
+	sortJoinClauses := make([]string, 0)
+	sortWhereClauses := make([]string, 0)
+	orderByClauses := make([]string, 0)
+	orderByParams := make([]any, 0)
+	if len(lo.SortList.SortDirectives) == 0 {
+		// make sure at least one default order is always picked
+		orderByClauses = append(orderByClauses, `f."metadata.name" ASC`)
+		if l.namespaced {
+			orderByClauses = append(orderByClauses, `f."metadata.namespace" ASC`)
+		}
+		return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, nil
+	}
 	for _, sortDirective := range lo.SortList.SortDirectives {
 		fields := sortDirective.Fields
 		if isLabelsFieldList(fields) {
+			if sortDirective.IsIndirect {
+				labelName := sortDirective.Fields[2]
+				fullName := fmt.Sprintf("%s:%s", dbName, labelName)
+				labelIndex, ok := joinTableIndexByLabelName[fullName]
+				if !ok {
+					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf(`internal error: no join-table index given for labelName "%s"`, labelName)
+				}
+
+				externalTableName := getExternalTableName(&sortDirective)
+				extIndex, ok := joinTableIndexByLabelName[externalTableName]
+				if !ok {
+					extIndex = len(joinTableIndexByLabelName) + 1
+					joinTableIndexByLabelName[externalTableName] = extIndex
+					joinTableIndexByLabelName[externalTableName] = extIndex
+				}
+				externalFieldName := sortDirective.IndirectFields[3]
+				if badTableNameChars.MatchString(externalFieldName) {
+					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf("invalid database column name '%s'", externalFieldName)
+				}
+				sortJoinClauses = append(sortJoinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, externalTableName, extIndex, labelIndex, extIndex, externalFieldName))
+				//TODO: Verify the field name
+				sortSelectField = fmt.Sprintf(`ext%d."%s" as ext%d_target`, extIndex, sortDirective.IndirectFields[3], extIndex)
+
+			}
 			clause, sortParam, err := buildSortLabelsClause(fields[2], dbName, joinTableIndexByLabelName, sortDirective.Order == ASC)
 			if err != nil {
-				return nil, nil, err
+				return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, err
 			}
 			orderByClauses = append(orderByClauses, clause)
-			params = append(params, sortParam)
+			orderByParams = append(orderByParams, sortParam)
 		} else {
 			columnName := toColumnName(fields)
 			if err := l.validateColumn(columnName); err != nil {
-				return nil, nil, err
+				return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, err
 			}
 			direction := "ASC"
 			if sortDirective.Order == DESC {
@@ -465,7 +689,7 @@ func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, jo
 			orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
 		}
 	}
-	return orderByClauses, params, nil
+	return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, nil
 }
 
 func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryInfo) (result *unstructured.UnstructuredList, total int, token string, err error) {
@@ -956,7 +1180,6 @@ func (l *ListOptionIndexer) getIndirectNonLabelFilter(filter Filter, dbName stri
 	if err := l.validateColumn(columnName); err != nil {
 		return "", nil, nil, err
 	}
-	// joinClauses := make([]string, 0)
 	extDBName := (fmt.Sprintf("%s_%s", filter.IndirectFields[0], filter.IndirectFields[1]))
 	extDBName = badTableNameChars.ReplaceAllString(extDBName, "_")
 	extIndex, ok := joinTableIndexByLabelName[extDBName]
@@ -1056,13 +1279,14 @@ func (l *ListOptionIndexer) getIndirectLabelFilter(filter Filter, dbName string,
 
 	extDBName := (fmt.Sprintf("%s_%s", filter.IndirectFields[0], filter.IndirectFields[1]))
 	extDBName = badTableNameChars.ReplaceAllString(extDBName, "_")
+	extDBName = strings.ReplaceAll(extDBName, "/", "_")
 	extIndex, ok := joinTableIndexByLabelName[extDBName]
 	if !ok {
 		extIndex = len(joinTableIndexByLabelName) + 1
 		joinTableIndexByLabelName[extDBName] = extIndex
 	}
 
-	externalFieldName := filter.IndirectFields[2]
+	externalFieldName := filter.IndirectFields[3]
 	if badTableNameChars.MatchString(externalFieldName) {
 		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", externalFieldName)
 	}
@@ -1129,7 +1353,7 @@ func (l *ListOptionIndexer) getIndirectLabelFilter(filter Filter, dbName string,
 			target += strings.Repeat(", ?", len(filter.Matches)-1)
 		}
 		target += ")"
-	    op = "IN"
+		op = "IN"
 		if filter.Op == NotIn {
 			op = "NOT IN"
 		}

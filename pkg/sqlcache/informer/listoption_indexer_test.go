@@ -2105,7 +2105,6 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
 			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
 			assert.Equal(t, expectedStmt, receivedStmt)
-			//assert.Equal(t, test.expectedStmt, queryInfo.query)
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
@@ -2423,7 +2422,6 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
 			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
 			assert.Equal(t, expectedStmt, receivedStmt)
-			//assert.Equal(t, test.expectedStmt, queryInfo.query)
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
@@ -2507,7 +2505,6 @@ func TestConstructMixedLabelIndirect(t *testing.T) {
 			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
 			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
 			assert.Equal(t, expectedStmt, receivedStmt)
-			//assert.Equal(t, test.expectedStmt, queryInfo.query)
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
@@ -2601,7 +2598,7 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 			if dbname == "" {
 				dbname = "sometable"
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, dbname)
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != "" {
 				require.NotNil(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())
@@ -2611,10 +2608,94 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
 			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
 			assert.Equal(t, expectedStmt, receivedStmt)
-			//assert.Equal(t, test.expectedStmt, queryInfo.query)
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructSimpleIndirectSort(t *testing.T) {
+	type testCase struct {
+		description           string
+		dbname                string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "IndirectFilterQuery - no label: simple redirect Eq",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterName"},
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT __ix_object, __ix_objectnonce, __ix_dekid FROM (
+  SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, ext2."spec.clusterName" AS __ix_ext2_spec_clusterName, f."metadata.name" AS __ix_f_metadata_name FROM
+    "_v1_Namespace" o
+      JOIN "_v1_Namespace_fields" f ON o.key = f.key
+      LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+      JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."spec.clusterName"
+    WHERE (lt1.label = ?)
+UNION ALL
+  SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, NULL AS __ix_f_metadata_name FROM
+    "_v1_Namespace" o
+      JOIN "_v1_Namespace_fields" f ON o.key = f.key
+      LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+    WHERE (o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+		JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
+		WHERE lt1i1.label = ?))
+)
+WHERE FALSE
+  ORDER BY __ix_ext2_spec_clusterName ASC NULLS LAST, __ix_f_metadata_name ASC`,
+		expectedStmtArgs: []any{"field.cattle.io/projectId", "field.cattle.io/projectId"},
+		expectedErr:      "",
+	})
+	t.Parallel()
+	ptn := regexp.MustCompile(`\s+`)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			dbname := test.dbname
+			if dbname == "" {
+				dbname = "sometable"
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
+			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
+			assert.Equal(t, expectedStmt, receivedStmt)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 		})
 	}
 }
