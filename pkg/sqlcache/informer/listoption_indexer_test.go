@@ -2631,7 +2631,7 @@ func TestConstructSimpleIndirectSort(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect Eq",
+		description: "SimpleIndirectSort - one sort, no filters, happy path",
 		listOptions: ListOptions{
 			SortList: SortList{
 				SortDirectives: []Sort{
@@ -2652,7 +2652,7 @@ func TestConstructSimpleIndirectSort(t *testing.T) {
     "_v1_Namespace" o
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
-      JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."spec.clusterName"
+      JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
     WHERE (lt1.label = ?)
 UNION ALL
   SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, NULL AS __ix_f_metadata_name FROM
@@ -2668,6 +2668,82 @@ WHERE FALSE
   ORDER BY __ix_ext2_spec_clusterName ASC NULLS LAST, __ix_f_metadata_name ASC`,
 		expectedStmtArgs: []any{"field.cattle.io/projectId", "field.cattle.io/projectId"},
 		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one sort, invalid external selector-column",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "foo; drop database bobby1", "spec.clusterName"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'foo; drop database bobby1'",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one sort, invalid external selector-column",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "bar; drop database bobby2"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'bar; drop database bobby2'",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one sort, not enough indirect fields",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "expected indirect sort directive to have 4 indirect fields, got 3",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one sort, too many indirect fields",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "little", "bobby-tables"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "expected indirect sort directive to have 4 indirect fields, got 5",
 	})
 	t.Parallel()
 	ptn := regexp.MustCompile(`\s+`)

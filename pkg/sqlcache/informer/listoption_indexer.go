@@ -483,6 +483,9 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	if !foundIt {
 		return nil, fmt.Errorf("expected an indirect sort directive, didn't find one")
 	}
+	if len(indirectSortDirective.IndirectFields) != 4 {
+		return nil, fmt.Errorf("expected indirect sort directive to have 4 indirect fields, got %d", len(indirectSortDirective.IndirectFields))
+	}
 	bytes, err := json.Marshal(*lo)
 	if err != nil {
 		return nil, fmt.Errorf("can't json-encode list options: %w", err)
@@ -666,21 +669,24 @@ func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, jo
 				if !ok {
 					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf(`internal error: no join-table index given for labelName "%s"`, labelName)
 				}
-
+				//TODO: check the external table name.
 				externalTableName := getExternalTableName(&sortDirective)
 				extIndex, ok := joinTableIndexByLabelName[externalTableName]
 				if !ok {
 					extIndex = len(joinTableIndexByLabelName) + 1
 					joinTableIndexByLabelName[externalTableName] = extIndex
-					joinTableIndexByLabelName[externalTableName] = extIndex
+				}
+				selectorFieldName := sortDirective.IndirectFields[2]
+				if badTableNameChars.MatchString(selectorFieldName) {
+					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf("invalid database column name '%s'", selectorFieldName)
 				}
 				externalFieldName := sortDirective.IndirectFields[3]
 				if badTableNameChars.MatchString(externalFieldName) {
 					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf("invalid database column name '%s'", externalFieldName)
 				}
-				sortJoinClauses = append(sortJoinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, externalTableName, extIndex, labelIndex, extIndex, externalFieldName))
+				sortJoinClauses = append(sortJoinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, externalTableName, extIndex, labelIndex, extIndex, selectorFieldName))
 				//TODO: Verify the field name
-				sortSelectField = fmt.Sprintf(`ext%d."%s" as ext%d_target`, extIndex, sortDirective.IndirectFields[3], extIndex)
+				sortSelectField = fmt.Sprintf(`ext%d."%s" as ext%d_target`, extIndex, externalFieldName, extIndex)
 
 			}
 			clause, sortParam, err := buildSortLabelsClause(fields[2], dbName, joinTableIndexByLabelName, sortDirective.Order == ASC)
