@@ -2615,7 +2615,7 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 	}
 }
 
-func TestConstructSimpleIndirectSort(t *testing.T) {
+func TestConstructSimpleLabelIndirectSort(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
@@ -2733,6 +2733,155 @@ WHERE FALSE
 				SortDirectives: []Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "little", "bobby-tables"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "expected indirect sort directive to have 4 indirect fields, got 5",
+	})
+	t.Parallel()
+	ptn := regexp.MustCompile(`\s+`)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			dbname := test.dbname
+			if dbname == "" {
+				dbname = "sometable"
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			expectedStmt := ptn.ReplaceAllString(strings.TrimSpace(test.expectedStmt), " ")
+			receivedStmt := ptn.ReplaceAllString(strings.TrimSpace(queryInfo.query), " ")
+			assert.Equal(t, expectedStmt, receivedStmt)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+		})
+	}
+}
+
+func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
+	type testCase struct {
+		description           string
+		dbname                string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one sort, no filters, no labels",
+		// Find all mcio.Projects that have the same metadata.name as the namespace, and sort by associated spec.clusterName
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterName"},
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM
+    "_v1_Namespace" o
+      JOIN "_v1_Namespace_fields" f ON o.key = f.key
+      JOIN "management.cattle.io_v3_Project_fields" ext1 ON f."metadata.queryField1" = ext1."metadata.name"
+      WHERE (FALSE)
+  ORDER BY ext1."spec.clusterName" ASC NULLS LAST`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one non-label sort, invalid external selector-column",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "foo; drop database bobby1", "spec.clusterName"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'foo; drop database bobby1'",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one non-label sort, invalid external selector-column",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "bar; drop database bobby2"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'bar; drop database bobby2'",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one non-label sort, not enough indirect fields",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "expected indirect sort directive to have 4 indirect fields, got 3",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one non-label sort, too many indirect fields",
+		listOptions: ListOptions{
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
 						Order:          ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "little", "bobby-tables"},

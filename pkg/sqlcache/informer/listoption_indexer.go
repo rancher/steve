@@ -271,12 +271,12 @@ type QueryInfo struct {
 
 func (l *ListOptionIndexer) constructQuery(lo *ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
 	ensureSortLabelsAreSelected(lo)
-	haveIndirectSortDirective, err := checkForIndirectSortDirective(lo)
+	indirectSortDirective, err := checkForIndirectSortDirective(lo)
 	if err != nil {
 		return nil, err
 	}
 	joinTableIndexByLabelName := make(map[string]int)
-	if haveIndirectSortDirective {
+	if indirectSortDirective != nil && isLabelsFieldList(indirectSortDirective.Fields) {
 		return l.constructIndirectSortQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
 	}
 	return l.finishConstructQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
@@ -620,29 +620,44 @@ func getExternalTableName(sd *Sort) string {
 }
 
 func removeIndirectLabel(lo *ListOptions, indirectSortDirective *Sort) error {
-	targetLabel := indirectSortDirective.Fields[2]
-	for _, orFilter := range lo.Filters {
-		for j, filter := range orFilter.Filters {
-			if isLabelsFieldList(filter.Field) && filter.Field[2] == targetLabel {
-				orFilter.Filters[j].Op = NotExists
-				return nil
+	if isLabelsFieldList(indirectSortDirective.Fields) {
+		targetLabel := indirectSortDirective.Fields[2]
+		for _, orFilter := range lo.Filters {
+			for j, filter := range orFilter.Filters {
+				if isLabelsFieldList(filter.Field) && filter.Field[2] == targetLabel {
+					orFilter.Filters[j].Op = NotExists
+					return nil
+				}
 			}
 		}
+		return fmt.Errorf("failed to find a filter test on label %s", targetLabel)
+	} else {
+		// Add a test that it isn't nil
+		for _, orFilter := range lo.Filters {
+			orFilter.Filters = append(orFilter.Filters,
+				Filter{
+					Field:   indirectSortDirective.Fields[:],
+					Matches: []string{},
+					Op:      NotEq,
+				})
+		}
 	}
-	return fmt.Errorf("failed to find a filter test on label %s", targetLabel)
+	return nil
 }
 
-func checkForIndirectSortDirective(lo *ListOptions) (bool, error) {
+func checkForIndirectSortDirective(lo *ListOptions) (*Sort, error) {
 	indirectSortDirectives := make([]string, 0)
+	var id *Sort
 	for _, sd := range lo.SortList.SortDirectives {
 		if sd.IsIndirect {
+			id = &sd
 			indirectSortDirectives = append(indirectSortDirectives, fmt.Sprintf("[%s]", strings.Join(sd.IndirectFields, "][")))
 		}
 	}
 	if len(indirectSortDirectives) > 1 {
-		return false, fmt.Errorf("can have at most one indirect sort directive, have %d: %s", len(indirectSortDirectives), indirectSortDirectives)
+		return nil, fmt.Errorf("can have at most one indirect sort directive, have %d: %s", len(indirectSortDirectives), indirectSortDirectives)
 	}
-	return len(indirectSortDirectives) == 1, nil
+	return id, nil
 }
 
 func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []string, []string, []any, error) {
@@ -695,6 +710,36 @@ func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, jo
 			}
 			orderByClauses = append(orderByClauses, clause)
 			orderByParams = append(orderByParams, sortParam)
+		} else if sortDirective.IsIndirect {
+			if len(sortDirective.IndirectFields) != 4 {
+				return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf("expected indirect sort directive to have 4 indirect fields, got %d", len(sortDirective.IndirectFields))
+			}
+			externalTableName := getExternalTableName(&sortDirective)
+			extIndex, ok := joinTableIndexByLabelName[externalTableName]
+			if !ok {
+				extIndex = len(joinTableIndexByLabelName) + 1
+				joinTableIndexByLabelName[externalTableName] = extIndex
+			}
+			selectorFieldName := sortDirective.IndirectFields[2]
+			if badTableNameChars.MatchString(selectorFieldName) {
+				return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf("invalid database column name '%s'", selectorFieldName)
+			}
+			externalFieldName := sortDirective.IndirectFields[3]
+			if badTableNameChars.MatchString(externalFieldName) {
+				return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf("invalid database column name '%s'", externalFieldName)
+			}
+			columnName := toColumnName(fields)
+			if err := l.validateColumn(columnName); err != nil {
+				return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, err
+			}
+			sortJoinClauses = append(sortJoinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON f."%s" = ext%d."%s"`, externalTableName, extIndex, columnName, extIndex, selectorFieldName))
+			direction := "ASC"
+			nullsPlace := "LAST"
+			if sortDirective.Order == DESC {
+				direction = "DESC"
+				nullsPlace = "FIRST"
+			}
+			orderByClauses = append(orderByClauses, fmt.Sprintf(`ext%d."%s" %s NULLS %s`, extIndex, externalFieldName, direction, nullsPlace))
 		} else {
 			columnName := toColumnName(fields)
 			if err := l.validateColumn(columnName); err != nil {
