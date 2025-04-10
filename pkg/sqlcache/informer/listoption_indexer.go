@@ -525,15 +525,22 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	indent1 := "  "
 	indent2 := indent1 + indent1
 	indent3 := indent2 + indent1
+	where1 := ""
+	if len(whereClauses1) > 0 {
+		where1 = fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses1, " AND \n"+indent3))
+	}
+	where2 := ""
+	if len(whereClauses2) > 0 {
+		where2 = fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses2, " AND \n"+indent3))
+	}
 
 	parts := []string{
 		"SELECT __ix_object, __ix_objectnonce, __ix_dekid FROM (",
-		fmt.Sprintf(`%s%s, %s FROM`, indent1, selectLine, strings.Join(importWithParts, ", ")),
-		fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses1, " AND \n"+indent3)),
+		fmt.Sprintf(`%s%s, %s FROM %s`, indent1, selectLine, strings.Join(importWithParts, ", "), strings.Join(joinParts1, "\n"+indent2)),
+		where1,
 		"UNION ALL",
-		fmt.Sprintf(`%s%s, %s FROM`, indent1, selectLine, strings.Join(importAsNullParts, ", ")),
-		fmt.Sprintf("%s%s", indent2, strings.Join(joinParts2, "\n"+indent3)),
-		fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses2, " AND \n"+indent3)),
+		fmt.Sprintf(`%s%s, %s FROM %s`, indent1, selectLine, strings.Join(importAsNullParts, ", "), strings.Join(joinParts2, "\n"+indent2)),
+		where2,
 		")",
 	}
 	if addFalseTest {
