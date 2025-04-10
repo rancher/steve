@@ -154,7 +154,7 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 			for _, res := range strings.Split(permsQuery, ",") {
 				perms := map[string]bool{}
 				for _, verb := range []string{"create", "update", "delete", "list", "get", "watch", "patch"} {
-					allowed := asl.AccessFor(userInfo).Grants(verb, schema2.GroupResource{Group: gvr.Group, Resource: res}, ns, "")
+					allowed := accessSet.Grants(verb, schema2.GroupResource{Group: gvr.Group, Resource: res}, ns, "")
 					// TODO maybe add links rather than true/false
 					perms[verb] = allowed
 				}
@@ -164,9 +164,7 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 			if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
 				data.PutValue(unstr.Object, permissions, "resourcePermissions")
 			}
-
 		}
-
 	}
 }
 
@@ -206,10 +204,10 @@ func excludeValues(request *types.APIRequest, unstr *unstructured.Unstructured) 
 	}
 }
 
-func getNamespaceFromResource(resourceId string) string {
-	parts := strings.SplitN(resourceId, "/", 2)
+func getNamespaceFromResource(resourceID string) string {
+	parts := strings.SplitN(resourceID, "/", 2)
 	if len(parts) == 2 {
 		return parts[1]
 	}
-	return resourceId
+	return resourceID
 }
