@@ -376,7 +376,12 @@ func (l *ListOptionIndexer) finishConstructQuery(lo *ListOptions, partitions []p
 	}
 	queryInfo := &QueryInfo{}
 
-	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid %s FROM `, distinctModifier, sortSelectField)
+	if len(sortSelectField) > 0 {
+		if sortSelectField[0] != ' ' {
+			sortSelectField = " " + sortSelectField
+		}
+	}
+	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid%s FROM `, distinctModifier, sortSelectField)
 	query += strings.Join(joinParts, "\n  ")
 
 	if len(whereClauses) > 0 {
@@ -1293,16 +1298,15 @@ func (l *ListOptionIndexer) getIndirectLabelFilter(filter Filter, dbName string,
 		joinTableIndexByLabelName[extDBName] = extIndex
 	}
 
-	externalFieldName := filter.IndirectFields[3]
-	if badTableNameChars.MatchString(externalFieldName) {
-		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", externalFieldName)
+	selectorFieldName := filter.IndirectFields[2]
+	if badTableNameChars.MatchString(selectorFieldName) {
+		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", selectorFieldName)
 	}
-	joinClauses = append(joinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, extDBName, extIndex, labelIndex, extIndex, externalFieldName))
 	targetFieldName := filter.IndirectFields[3]
-	// XXX: Add this check
-	// err := checkTargetFieldName(targetFieldName, extDBName, externalFieldName)
-	// if err != nil {
-	// }
+	if badTableNameChars.MatchString(targetFieldName) {
+		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", targetFieldName)
+	}
+	joinClauses = append(joinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, extDBName, extIndex, labelIndex, extIndex, selectorFieldName))
 	labelWhereSubClause := fmt.Sprintf("lt%d.label = ?", labelIndex)
 	targetFieldReference := fmt.Sprintf(`ext%d."%s"`, extIndex, targetFieldName)
 	var clause string
