@@ -255,6 +255,8 @@ func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo *ListOptions, 
 	if err != nil {
 		return nil, 0, "", err
 	}
+	logrus.Debugf("ListOptionIndexer prepared statement: %v", queryInfo.query)
+	logrus.Debugf("Params: %v", queryInfo.params)
 	return l.executeQuery(ctx, queryInfo)
 }
 
@@ -440,8 +442,6 @@ func (l *ListOptionIndexer) finishConstructQuery(lo *ListOptions, partitions []p
 	}
 	// Otherwise leave these as default values and the executor won't do pagination work
 
-	logrus.Debugf("ListOptionIndexer prepared statement: %v", query)
-	logrus.Debugf("Params: %v", params)
 	queryInfo.query = query
 	queryInfo.params = params
 
@@ -529,7 +529,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 		return nil, fmt.Errorf("internal error: unable to find an entry for external table %s", externalTableName)
 	}
 	sortParts, importWithParts, importAsNullParts := processOrderByFields(&indirectSortDirective, extIndex, orderByClauses2)
-	selectLine := "SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid"
+	selectLine := fmt.Sprintf("SELECT%s o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid", distinctModifier)
 	indent1 := "  "
 	indent2 := indent1 + indent1
 	indent3 := indent2 + indent1
