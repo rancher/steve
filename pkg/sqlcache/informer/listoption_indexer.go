@@ -557,7 +557,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	// Ignore the indirect sort params
 	orderByClauses1 = []string{}
 	orderByParams1 = []any{}
-	params := make([]any, 0, len(params1)+len(params2)+len(orderByParams1)+len(orderByParams2))
+	params := make([]any, 0, len(params1)+len(params2)+len(orderByParams1)+len(orderByParams2)+len(orderByClauses1))
 	params = append(params, params1...)
 	params = append(params, params2...)
 	fullQuery := strings.Join(parts, "\n")
