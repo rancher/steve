@@ -500,7 +500,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	}
 	lo.SortList.SortDirectives = newSortList1
 	loNoLabel.SortList.SortDirectives = newSortList2
-	joinParts1, whereClauses1, params1, needsDistinctModifier1, orderByClauses1, orderByParams1, _, err1 := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
+	joinParts1, whereClauses1, params1, needsDistinctModifier1, _, _, _, err1 := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
 	if err1 != nil {
 		return nil, err1
 	}
@@ -529,7 +529,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 		return nil, fmt.Errorf("internal error: unable to find an entry for external table %s", externalTableName)
 	}
 	sortParts, importWithParts, importAsNullParts := processOrderByFields(&indirectSortDirective, extIndex, orderByClauses2)
-    selectLine := fmt.Sprintf("SELECT%s o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid", distinctModifier)
+	selectLine := fmt.Sprintf("SELECT%s o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid", distinctModifier)
 	indent1 := "  "
 	indent2 := indent1 + indent1
 	indent3 := indent2 + indent1
@@ -554,15 +554,13 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	if addFalseTest {
 		parts = append(parts, "WHERE FALSE")
 	}
-	// Ignore the indirect sort params
-	orderByClauses1 = []string{}
-	orderByParams1 = []any{}
-	params := make([]any, 0, len(params1)+len(params2)+len(orderByParams1)+len(orderByParams2)+len(orderByClauses1))
+	params := make([]any, 0, len(params1)+len(params2)+len(orderByParams2))
 	params = append(params, params1...)
 	params = append(params, params2...)
 	fullQuery := strings.Join(parts, "\n")
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", fullQuery)
 	countParams := params[:]
+	params = append(params, orderByParams2...)
 
 	fullQuery += fmt.Sprintf("\n%sORDER BY %s", indent1, strings.Join(sortParts, ", "))
 	queryInfo := &QueryInfo{
@@ -631,16 +629,15 @@ func removeIndirectLabel(lo *ListOptions, indirectSortDirective *Sort) error {
 			}
 		}
 		return fmt.Errorf("failed to find a filter test on label %s", targetLabel)
-	} else {
-		// Add a test that it isn't nil
-		for _, orFilter := range lo.Filters {
-			orFilter.Filters = append(orFilter.Filters,
-				Filter{
-					Field:   indirectSortDirective.Fields[:],
-					Matches: []string{},
-					Op:      NotEq,
-				})
-		}
+	}
+	//TODO: Add a test that it isn't nil
+	for _, orFilter := range lo.Filters {
+		orFilter.Filters = append(orFilter.Filters,
+			Filter{
+				Field:   indirectSortDirective.Fields[:],
+				Matches: []string{},
+				Op:      NotEq,
+			})
 	}
 	return nil
 }
@@ -1037,7 +1034,6 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter Filter, dbName stri
 	escapeString := ""
 	matchFmtToUse := strictMatchFmt
 	labelName := filter.Field[2]
-	params := make([]any, 0)
 
 	switch filter.Op {
 	case Eq:
@@ -1068,7 +1064,7 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter Filter, dbName stri
 			return "", nil, err
 		}
 		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND lt%d.value %s ?%s)`, existenceClause, index, index, opString, escapeString)
-		params = append(subParams, labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
+		params := append(subParams, labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
 		return clause, params, nil
 
 	case Lt, Gt:
@@ -1140,7 +1136,6 @@ func (l *ListOptionIndexer) getLabelFilter2(filter Filter, dbName string, joinTa
 	}
 
 	joinClauses := make([]string, 0)
-	params := make([]any, 0)
 
 	switch filter.Op {
 	case Eq:
@@ -1171,7 +1166,7 @@ func (l *ListOptionIndexer) getLabelFilter2(filter Filter, dbName string, joinTa
 			return "", nil, nil, err
 		}
 		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND lt%d.value %s ?%s)`, existenceClause, labelIndex, labelIndex, opString, escapeString)
-		params = append(subParams, labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
+		params := append(subParams, labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
 		return clause, joinClauses, params, nil
 
 	case Lt, Gt:

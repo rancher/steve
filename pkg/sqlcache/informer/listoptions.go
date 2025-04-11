@@ -25,11 +25,11 @@ const (
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
-	ChunkSize  int  `json:"chunkSize"`
-	Resume     string  `json:"resume"`
-	Filters    []OrFilter  `json:"orFilters"`
-	SortList   SortList  `json:"sortList"`
-	Pagination Pagination  `json:"pagination"`
+	ChunkSize  int        `json:"chunkSize"`
+	Resume     string     `json:"resume"`
+	Filters    []OrFilter `json:"orFilters"`
+	SortList   SortList   `json:"sortList"`
+	Pagination Pagination `json:"pagination"`
 }
 
 // Filter represents a field to filter by.
@@ -40,12 +40,12 @@ type ListOptions struct {
 //
 // If more than one value is given for the `Match` field, we do an "IN (<values>)" test
 type Filter struct {
-	Field          []string  `json:"fields"`
-	Matches        []string  `json:"matches"`
-	Op             Op        `json:"op"`
-	Partial        bool            `json:"partial"`
-	IsIndirect     bool      `json:"isIndirect"`
-	IndirectFields []string  `json:"indirectFields"`
+	Field          []string `json:"fields"`
+	Matches        []string `json:"matches"`
+	Op             Op       `json:"op"`
+	Partial        bool     `json:"partial"`
+	IsIndirect     bool     `json:"isIndirect"`
+	IndirectFields []string `json:"indirectFields"`
 }
 
 // OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
@@ -60,19 +60,19 @@ type OrFilter struct {
 // e.g. To sort internal clusters first followed by clusters in alpha order: sort=-spec.internal,spec.displayName
 type Sort struct {
 	Fields         []string  `json:"fields"`
-	Order          SortOrder  `json:"order"`
-	IsIndirect     bool  `json:"isIndirect"`
+	Order          SortOrder `json:"order"`
+	IsIndirect     bool      `json:"isIndirect"`
 	IndirectFields []string  `json:"indirectFields"`
 }
 
 type SortList struct {
-	SortDirectives []Sort  `json:"sortDirectives"`
+	SortDirectives []Sort `json:"sortDirectives"`
 }
 
 // Pagination represents how to return paginated results.
 type Pagination struct {
-	PageSize int  `json:"pageSize"`
-	Page     int  `json:"page"`
+	PageSize int `json:"pageSize"`
+	Page     int `json:"page"`
 }
 
 func NewSortList() *SortList {
