@@ -518,9 +518,9 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 		whereClauses2 = whereClauses2[:len(whereClauses2)-1]
 		addFalseTest = true
 	}
+	distinctModifier := ""
 	if needsDistinctModifier1 || needsDistinctModifier2 {
-		fmt.Printf("%d", len(joinParts1)+len(whereClauses1)+len(params1)+len(joinParts2)+len(whereClauses2)+len(params2)+len(orderByClauses1)+len(orderByParams1)+len(orderByClauses2)+len(orderByParams2))
-		fmt.Printf(sortSelectField1 + sortSelectField2)
+		distinctModifier = " DISTINCT"
 	}
 
 	externalTableName := getExternalTableName(&indirectSortDirective)
@@ -529,7 +529,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 		return nil, fmt.Errorf("internal error: unable to find an entry for external table %s", externalTableName)
 	}
 	sortParts, importWithParts, importAsNullParts := processOrderByFields(&indirectSortDirective, extIndex, orderByClauses2)
-	selectLine := fmt.Sprintf("SELECT%s o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid", distinctModifier)
+    selectLine := fmt.Sprintf("SELECT%s o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid", distinctModifier)
 	indent1 := "  "
 	indent2 := indent1 + indent1
 	indent3 := indent2 + indent1

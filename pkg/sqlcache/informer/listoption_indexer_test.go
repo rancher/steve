@@ -2648,14 +2648,14 @@ func TestConstructSimpleLabelIndirectSort(t *testing.T) {
 		ns:         "",
 		dbname:     "_v1_Namespace",
 		expectedStmt: `SELECT __ix_object, __ix_objectnonce, __ix_dekid FROM (
-  SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, ext2."spec.clusterName" AS __ix_ext2_spec_clusterName, f."metadata.name" AS __ix_f_metadata_name FROM
+  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, ext2."spec.clusterName" AS __ix_ext2_spec_clusterName, f."metadata.name" AS __ix_f_metadata_name FROM
     "_v1_Namespace" o
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
       JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
     WHERE (lt1.label = ?)
 UNION ALL
-  SELECT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, NULL AS __ix_f_metadata_name FROM
+  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, NULL AS __ix_f_metadata_name FROM
     "_v1_Namespace" o
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
