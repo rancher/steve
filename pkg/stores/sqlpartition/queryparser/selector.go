@@ -193,6 +193,10 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 }
 
 func NewIndirectRequirement(key string, indirectFields []string, newOperator *selection.Operator, targetValues []string, opts ...field.PathOption) (*Requirement, error) {
+	if newOperator == nil {
+		operator := selection.Exists
+		newOperator = &operator
+	}
 	r, err := NewRequirement(key, *newOperator, targetValues)
 	if err != nil {
 		return nil, err
@@ -676,6 +680,8 @@ func (p *Parser) parseOperatorAndValues(key string, fieldPath field.PathOption, 
 		indirectFields, newOperator, targetValues, err := p.parseIndirectAccessorPart(key, fieldPath)
 		if err != nil {
 			return nil, err
+		} else if newOperator != nil && p.parseType == "sort" {
+			return nil, fmt.Errorf("found an operator (%s) in a sort expression )", *newOperator)
 		}
 		if !p.isValidIndirectKey(key) {
 			return nil, fmt.Errorf("an indirect key must be a label, but got a search on %s", key)
