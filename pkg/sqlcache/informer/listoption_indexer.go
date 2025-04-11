@@ -500,12 +500,12 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	}
 	lo.SortList.SortDirectives = newSortList1
 	loNoLabel.SortList.SortDirectives = newSortList2
-	joinParts1, whereClauses1, params1, needsDistinctModifier1, orderByClauses1, orderByParams1, sortSelectField1, err1 := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
+	joinParts1, whereClauses1, params1, needsDistinctModifier1, orderByClauses1, orderByParams1, _, err1 := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
 	if err1 != nil {
 		return nil, err1
 	}
 	// Now add clauses for the indirectSortDirective
-	joinParts2, whereClauses2, params2, needsDistinctModifier2, orderByClauses2, orderByParams2, sortSelectField2, err2 := l.getQueryParts(&loNoLabel, partitions, namespace, dbName, joinTableIndexByLabelName)
+	joinParts2, whereClauses2, params2, needsDistinctModifier2, orderByClauses2, orderByParams2, _, err2 := l.getQueryParts(&loNoLabel, partitions, namespace, dbName, joinTableIndexByLabelName)
 	if err2 != nil {
 		return nil, err2
 	}
