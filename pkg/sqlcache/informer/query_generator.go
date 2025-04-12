@@ -87,7 +87,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	if err != nil {
 		return nil, fmt.Errorf("can't json-decode list options: %w", err)
 	}
-	err = removeIndirectLabel(&loNoLabel, &indirectSortDirective)
+	err = removeIndirectLabel(lo, &loNoLabel, &indirectSortDirective)
 	if err != nil {
 		return nil, err
 	}
@@ -1102,10 +1102,10 @@ func prepareComparisonParameters(op Op, target string) (string, float64, error) 
 	return "", 0, fmt.Errorf("unrecognized operator when expecting '<' or '>': '%s'", op)
 }
 
-func removeIndirectLabel(lo *ListOptions, indirectSortDirective *Sort) error {
+func removeIndirectLabel(loWithLabel *ListOptions, loWithoutLabel *ListOptions, indirectSortDirective *Sort) error {
 	if isLabelsFieldList(indirectSortDirective.Fields) {
 		targetLabel := indirectSortDirective.Fields[2]
-		for _, orFilter := range lo.Filters {
+		for _, orFilter := range loWithoutLabel.Filters {
 			for j, filter := range orFilter.Filters {
 				if isLabelsFieldList(filter.Field) && filter.Field[2] == targetLabel {
 					orFilter.Filters[j].Op = NotExists
@@ -1115,15 +1115,17 @@ func removeIndirectLabel(lo *ListOptions, indirectSortDirective *Sort) error {
 		}
 		return fmt.Errorf("failed to find a filter test on label %s", targetLabel)
 	}
-	//TODO: Add a test that it isn't nil
-	for _, orFilter := range lo.Filters {
-		orFilter.Filters = append(orFilter.Filters,
-			Filter{
-				Field:   indirectSortDirective.Fields[:],
-				Matches: make([]string, 0),
-				Op:      NotEq,
-			})
-	}
+	//TODO: Add an AND-test that it isn't nil
+	loWithoutLabel.Filters = append(loWithoutLabel.Filters, OrFilter{Filters: []Filter{{
+		Field:   indirectSortDirective.Fields[:],
+		Matches: make([]string, 0),
+		Op:      NotEq,
+	}}})
+	loWithLabel.Filters = append(loWithoutLabel.Filters, OrFilter{Filters: []Filter{{
+		Field:   indirectSortDirective.Fields[:],
+		Matches: make([]string, 0),
+		Op:      Eq,
+	}}})
 	return nil
 }
 

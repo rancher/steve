@@ -2385,7 +2385,7 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 	}
 }
 
-func TestConstructSimpleLabelIndirectSort(t *testing.T) {
+func TestConstructLabelIndirectSort(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
@@ -2437,6 +2437,67 @@ UNION ALL
 WHERE FALSE
   ORDER BY __ix_ext2_spec_clusterName ASC NULLS LAST, __ix_f_metadata_name ASC`,
 		expectedStmtArgs: []any{"field.cattle.io/projectId", "field.cattle.io/projectId"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one sort, two filters, happy path",
+		listOptions: ListOptions{
+			Filters: []OrFilter{
+				{
+					[]Filter{
+						{
+							Field:   []string{"metadata", "labels", "radio"},
+							Matches: []string{"camels"},
+							Op:      Eq,
+						},
+						{
+							Field:          []string{"metadata", "queryField1"},
+							Matches:        []string{"System"},
+							Op:             Eq,
+							IsIndirect:     true,
+							IndirectFields: []string{"tournaments.cattle.io/v3", "Capsule", "metadata.namespace", "spec.heights"},
+						},
+					},
+				},
+			},
+			SortList: SortList{
+				SortDirectives: []Sort{
+					{
+						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Order:          ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterName"},
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		dbname:     "_v1_Namespace",
+		expectedStmt: `SELECT __ix_object, __ix_objectnonce, __ix_dekid FROM (
+  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, ext4."spec.clusterName" AS __ix_ext4_spec_clusterName, f."metadata.name" AS __ix_f_metadata_name FROM
+    "_v1_Namespace" o
+      JOIN "_v1_Namespace_fields" f ON o.key = f.key
+      LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+      JOIN "tournaments.cattle.io_v3_Capsule_fields" ext2 ON f."metadata.queryField1" = ext2."metadata.namespace"
+      LEFT OUTER JOIN "_v1_Namespace_labels" lt3 ON o.key = lt3.key
+      JOIN "management.cattle.io_v3_Project_fields" ext4 ON lt3.value = ext4."metadata.name"
+			WHERE ((lt1.label = ? OR lt1.value = ?) OR (ext2."spec.heights" = ?)) AND (lt3.label = ?))
+UNION ALL
+  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext4_spec_clusterName, NULL AS __ix_f_metadata_name FROM
+    "_v1_Namespace" o
+      JOIN "_v1_Namespace_fields" f ON o.key = f.key
+      LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
+      JOIN "tournaments.cattle.io_v3_Capsule_fields" ext2 ON f."metadata.queryField1" = ext2."metadata.namespace"
+      LEFT OUTER JOIN "_v1_Namespace_labels" lt3 ON o.key = lt3.key
+    WHERE ((lt1.label = ? AND lt1.value = ?) OR (ext4."spec.heights" = ?)) AND o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+		JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt3i1 ON o1.key = lt3i1.key
+		WHERE lt3i1.label = ?)))
+)
+WHERE FALSE
+  ORDER BY __ix_ext4_spec_clusterName ASC NULLS LAST, __ix_f_metadata_name ASC`,
+		expectedStmtArgs: []any{"radio", "camels", "System", "field.cattle.io/projectId", "radio", "camels", "System", "field.cattle.io/projectId"},
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
