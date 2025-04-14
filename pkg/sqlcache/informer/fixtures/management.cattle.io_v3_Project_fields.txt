@@ -1,0 +1,5 @@
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('c-m-mb2kj6t6/p-5rftn','p-5rftn','2025-04-11T17:25:28Z','c-m-mb2kj6t6','p-5rftn','4h1m','c-m-mb2kj6t6/p-5rftn','active','c-m-mb2kj6t6');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('c-m-mb2kj6t6/p-dv8mp','p-dv8mp','2025-04-11T17:25:28Z','c-m-mb2kj6t6','p-dv8mp','4h1m','c-m-mb2kj6t6/p-dv8mp','active','c-m-mb2kj6t6');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('c-m-mb2kj6t6/p-g67vq','p-g67vq','2025-04-11T17:36:04Z','c-m-mb2kj6t6','p-g67vq','3h50m','c-m-mb2kj6t6/p-g67vq','active','c-m-mb2kj6t6');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('local/p-8bjmv','p-8bjmv','2025-04-11T17:22:19Z','local','p-8bjmv','4h4m','local/p-8bjmv','active','local');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('local/p-k75hg','p-k75hg','2025-04-11T17:22:19Z','local','p-k75hg','4h4m','local/p-k75hg','active','local');

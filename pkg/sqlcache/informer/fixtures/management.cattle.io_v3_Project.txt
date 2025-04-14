@@ -1,0 +1,5 @@
+INSERT INTO "management.cattle.io_v3_Project" VALUES("c-m-mb2kj6t6/p-5rftn", 'mcioproj-obj1', 'mcioproj-nonce1', 1);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("c-m-mb2kj6t6/p-dv8mp", 'mcioproj-obj2', 'mcioproj-nonce2', 2);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("c-m-mb2kj6t6/p-g67vq", 'mcioproj-obj3', 'mcioproj-nonce3', 3);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("local/p-8bjmv", 'mcioproj-obj4', 'mcioproj-nonce4', 4);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("local/p-k75hg", 'mcioproj-obj5', 'mcioproj-nonce5', 5);

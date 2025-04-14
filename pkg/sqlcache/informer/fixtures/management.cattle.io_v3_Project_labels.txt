@@ -1,0 +1,5 @@
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('c-m-mb2kj6t6/p-5rftn','authz.management.cattle.io/default-project','true');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('c-m-mb2kj6t6/p-dv8mp','authz.management.cattle.io/system-project','true');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('c-m-mb2kj6t6/p-g67vq','cattle.io/creator','norman');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('local/p-8bjmv','authz.management.cattle.io/system-project','true');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('local/p-k75hg','authz.management.cattle.io/default-project','true');
