@@ -29,7 +29,6 @@ type queryInfo struct {
 }
 
 func (l *ListOptionIndexer) constructQuery(lo *ListOptions, partitions []partition.Partition, namespace string, dbName string) (*queryInfo, error) {
-	ensureSortLabelsAreSelected(lo)
 	indirectSortDirective, err := checkForIndirectSortDirective(lo)
 	if err != nil {
 		return nil, err
@@ -38,15 +37,16 @@ func (l *ListOptionIndexer) constructQuery(lo *ListOptions, partitions []partiti
 	if indirectSortDirective != nil && isLabelsFieldList(indirectSortDirective.Fields) {
 		return l.constructIndirectSortQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
 	}
+	ensureSortLabelsAreSelected(lo)
 	return l.finishConstructQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
 }
 
 /** constructIndirectSortQuery - process indirect-sorting
  * Here we create two queries:
  * one that has an existence test for the sorter,
- * and one with a non-existence test.
+ * and one with a non-existence test, so each of these is AND-ed with the other WHERE tests (filters).
  * Then do a `UNION ALL` on the two different queries.
- * The clever part: have the original options-list do only the one indirect sort.
+ * The unobvious part: have the original options-list do only the one indirect sort.
  * Have the copy process any other sort options.
  *
  * Two limitations:
@@ -87,10 +87,7 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	if err != nil {
 		return nil, fmt.Errorf("can't json-decode list options: %w", err)
 	}
-	err = removeIndirectLabel(lo, &loNoLabel, &indirectSortDirective)
-	if err != nil {
-		return nil, err
-	}
+	applyIndirectLabelTests(lo, &loNoLabel, &indirectSortDirective)
 	lo.SortList.SortDirectives = newSortList1
 	loNoLabel.SortList.SortDirectives = newSortList2
 	joinParts1, whereClauses1, params1, needsDistinctModifier1, _, _, _, err1 := l.getQueryParts(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
@@ -126,14 +123,8 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *ListOptions, partitio
 	indent1 := "  "
 	indent2 := indent1 + indent1
 	indent3 := indent2 + indent1
-	where1 := ""
-	if len(whereClauses1) > 0 {
-		where1 = fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses1, " AND \n"+indent3))
-	}
-	where2 := ""
-	if len(whereClauses2) > 0 {
-		where2 = fmt.Sprintf("%sWHERE (%s)", indent2, strings.Join(whereClauses2, " AND \n"+indent3))
-	}
+	where1 := joinWhereClauses(whereClauses1, indent2, indent3, "AND")
+	where2 := joinWhereClauses(whereClauses2, indent2, indent3, "AND")
 
 	parts := []string{
 		"SELECT __ix_object, __ix_objectnonce, __ix_dekid FROM (",
@@ -310,6 +301,61 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters OrFilter, dbName 
 		finalWhereClause = fmt.Sprintf("(%s)", strings.Join(whereClauses, ") OR ("))
 	}
 	return finalWhereClause, joinClauses, params, needDistinct, nil
+}
+
+// ensureSortLabelsAreSelected - if the user tries to sort on a particular label without mentioning it in a query,
+// and it's not an indirect sort directive, we need to ensure the label is added.
+func ensureSortLabelsAreSelected(lo *ListOptions) {
+	if len(lo.SortList.SortDirectives) == 0 {
+		return
+	}
+	unboundSortLabels := make(map[string]bool)
+	for _, sortDirective := range lo.SortList.SortDirectives {
+		fields := sortDirective.Fields
+		if isLabelsFieldList(fields) {
+			unboundSortLabels[fields[2]] = true
+		}
+	}
+	if len(unboundSortLabels) == 0 {
+		return
+	}
+	// If we have sort directives but no filters, add an exists-filter for each label.
+	if lo.Filters == nil || len(lo.Filters) == 0 {
+		lo.Filters = make([]OrFilter, 1)
+		lo.Filters[0].Filters = make([]Filter, len(unboundSortLabels))
+		i := 0
+		for labelName := range unboundSortLabels {
+			lo.Filters[0].Filters[i] = Filter{
+				Field: []string{"metadata", "labels", labelName},
+				Op:    Exists,
+			}
+			i++
+		}
+		return
+	}
+	// Find any labels that are already mentioned in an existing filter
+	// The gotcha is we have to bind the labels for each set of orFilters, so copy them each time
+	for i, orFilters := range lo.Filters {
+		copyUnboundSortLabels := make(map[string]bool, len(unboundSortLabels))
+		for k, v := range unboundSortLabels {
+			copyUnboundSortLabels[k] = v
+		}
+		for _, filter := range orFilters.Filters {
+			if isLabelFilter(&filter) {
+				copyUnboundSortLabels[filter.Field[2]] = false
+			}
+		}
+		// Now for any labels that are still true, add another where clause
+		for labelName, needsBinding := range copyUnboundSortLabels {
+			if needsBinding {
+				// `orFilters` is a copy of lo.Filters[i], so reference the original.
+				lo.Filters[i].Filters = append(lo.Filters[i].Filters, Filter{
+					Field: []string{"metadata", "labels", labelName},
+					Op:    Exists,
+				})
+			}
+		}
+	}
 }
 
 // Possible ops from the k8s parser:
@@ -875,13 +921,20 @@ func (l *ListOptionIndexer) getSortDirectives(lo *ListOptions, dbName string, jo
 	for _, sortDirective := range lo.SortList.SortDirectives {
 		fields := sortDirective.Fields
 		if isLabelsFieldList(fields) {
+			labelName := sortDirective.Fields[2]
+			fullName := fmt.Sprintf("%s:%s", dbName, labelName)
+			labelIndex, ok := joinTableIndexByLabelName[fullName]
+			if !ok {
+				if sortDirective.IsIndirect {
+					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf(`internal error: no join-table index given for labelName "%s"`, labelName)
+				}
+				labelIndex = len(joinTableIndexByLabelName) + 1
+				joinTableIndexByLabelName[fullName] = labelIndex
+			}
 			if sortDirective.IsIndirect {
 				labelName := sortDirective.Fields[2]
 				fullName := fmt.Sprintf("%s:%s", dbName, labelName)
 				labelIndex, ok := joinTableIndexByLabelName[fullName]
-				if !ok {
-					return sortSelectField, sortJoinClauses, sortWhereClauses, orderByClauses, orderByParams, fmt.Errorf(`internal error: no join-table index given for labelName "%s"`, labelName)
-				}
 				//TODO: check the external table name.
 				externalTableName := getExternalTableName(&sortDirective)
 				extIndex, ok := joinTableIndexByLabelName[externalTableName]
@@ -964,6 +1017,20 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 
 // Helper functions for generating SQL in alphabetical order:
 
+func applyIndirectLabelTests(loWithLabel *ListOptions, loWithoutLabel *ListOptions, indirectSortDirective *Sort) {
+	labelFilter := Filter{
+		Field: indirectSortDirective.Fields[:],
+		//Matches: make([]string, 0),
+		Op: Exists,
+	}
+	loWithLabel.Filters = append(loWithLabel.Filters, OrFilter{Filters: []Filter{labelFilter}})
+
+	// And add an AND-test that the label does not exists for the second test
+	nonLabelFilter := labelFilter
+	nonLabelFilter.Op = NotExists
+	loWithoutLabel.Filters = append(loWithoutLabel.Filters, OrFilter{Filters: []Filter{nonLabelFilter}})
+}
+
 func buildSortLabelsClause(labelName string, dbName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, string, error) {
 	fullName := fmt.Sprintf("%s:%s", dbName, labelName)
 	labelIndex, ok := joinTableIndexByLabelName[fullName]
@@ -979,6 +1046,7 @@ func buildSortLabelsClause(labelName string, dbName string, joinTableIndexByLabe
 	}
 	return fmt.Sprintf("(%s) %s NULLS %s", stmt, dir, nullsPosition), labelName, nil
 }
+
 func checkForIndirectSortDirective(lo *ListOptions) (*Sort, error) {
 	indirectSortDirectives := make([]string, 0)
 	var id *Sort
@@ -992,66 +1060,6 @@ func checkForIndirectSortDirective(lo *ListOptions) (*Sort, error) {
 		return nil, fmt.Errorf("can have at most one indirect sort directive, have %d: %s", len(indirectSortDirectives), indirectSortDirectives)
 	}
 	return id, nil
-}
-
-// If the user tries to sort on a particular label without mentioning it in a query,
-// it turns out that the sort-directive is ignored. It could be that the sqlite engine
-// is doing some kind of optimization on the `select distinct`, but verifying an otherwise
-// unreferenced label exists solves this problem.
-// And it's better to do this by modifying the ListOptions object.
-// There are no thread-safety issues in doing this because the ListOptions object is
-// created in Store.ListByPartitions, and that ends up calling ListOptionIndexer.ConstructQuery.
-// No other goroutines access this object.
-func ensureSortLabelsAreSelected(lo *ListOptions) {
-	if len(lo.SortList.SortDirectives) == 0 {
-		return
-	}
-	unboundSortLabels := make(map[string]bool)
-	for _, sortDirective := range lo.SortList.SortDirectives {
-		fields := sortDirective.Fields
-		if isLabelsFieldList(fields) {
-			unboundSortLabels[fields[2]] = true
-		}
-	}
-	if len(unboundSortLabels) == 0 {
-		return
-	}
-	// If we have sort directives but no filters, add an exists-filter for each label.
-	if lo.Filters == nil || len(lo.Filters) == 0 {
-		lo.Filters = make([]OrFilter, 1)
-		lo.Filters[0].Filters = make([]Filter, len(unboundSortLabels))
-		i := 0
-		for labelName := range unboundSortLabels {
-			lo.Filters[0].Filters[i] = Filter{
-				Field: []string{"metadata", "labels", labelName},
-				Op:    Exists,
-			}
-			i++
-		}
-		return
-	}
-	// The gotcha is we have to bind the labels for each set of orFilters, so copy them each time
-	for i, orFilters := range lo.Filters {
-		copyUnboundSortLabels := make(map[string]bool, len(unboundSortLabels))
-		for k, v := range unboundSortLabels {
-			copyUnboundSortLabels[k] = v
-		}
-		for _, filter := range orFilters.Filters {
-			if isLabelFilter(&filter) {
-				copyUnboundSortLabels[filter.Field[2]] = false
-			}
-		}
-		// Now for any labels that are still true, add another where clause
-		for labelName, needsBinding := range copyUnboundSortLabels {
-			if needsBinding {
-				// `orFilters` is a copy of lo.Filters[i], so reference the original.
-				lo.Filters[i].Filters = append(lo.Filters[i].Filters, Filter{
-					Field: []string{"metadata", "labels", labelName},
-					Op:    Exists,
-				})
-			}
-		}
-	}
 }
 
 func formatMatchTarget(filter Filter) string {
@@ -1088,6 +1096,17 @@ func isLabelsFieldList(fields []string) bool {
 	return len(fields) == 3 && fields[0] == "metadata" && fields[1] == "labels"
 }
 
+func joinWhereClauses(whereClauses []string, leadingIndent string, continuingIndent string, op string) string {
+	switch len(whereClauses) {
+	case 0:
+		return ""
+	case 1:
+		return fmt.Sprintf("%sWHERE %s\n", leadingIndent, whereClauses[0])
+	}
+	separator := fmt.Sprintf(") %s\n%s(", op, continuingIndent)
+	return fmt.Sprintf("%sWHERE (%s)\n", leadingIndent, strings.Join(whereClauses, separator))
+}
+
 func prepareComparisonParameters(op Op, target string) (string, float64, error) {
 	num, err := strconv.ParseFloat(target, 32)
 	if err != nil {
@@ -1100,33 +1119,6 @@ func prepareComparisonParameters(op Op, target string) (string, float64, error) 
 		return ">", num, nil
 	}
 	return "", 0, fmt.Errorf("unrecognized operator when expecting '<' or '>': '%s'", op)
-}
-
-func removeIndirectLabel(loWithLabel *ListOptions, loWithoutLabel *ListOptions, indirectSortDirective *Sort) error {
-	if isLabelsFieldList(indirectSortDirective.Fields) {
-		targetLabel := indirectSortDirective.Fields[2]
-		for _, orFilter := range loWithoutLabel.Filters {
-			for j, filter := range orFilter.Filters {
-				if isLabelsFieldList(filter.Field) && filter.Field[2] == targetLabel {
-					orFilter.Filters[j].Op = NotExists
-					return nil
-				}
-			}
-		}
-		return fmt.Errorf("failed to find a filter test on label %s", targetLabel)
-	}
-	//TODO: Add an AND-test that it isn't nil
-	loWithoutLabel.Filters = append(loWithoutLabel.Filters, OrFilter{Filters: []Filter{{
-		Field:   indirectSortDirective.Fields[:],
-		Matches: make([]string, 0),
-		Op:      NotEq,
-	}}})
-	loWithLabel.Filters = append(loWithoutLabel.Filters, OrFilter{Filters: []Filter{{
-		Field:   indirectSortDirective.Fields[:],
-		Matches: make([]string, 0),
-		Op:      Eq,
-	}}})
-	return nil
 }
 
 func processOrderByFields(sd *Sort, extIndex int, orderByClauses []string) ([]string, []string, []string) {

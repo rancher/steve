@@ -1452,6 +1452,9 @@ func TestConstructQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			if test.description == "TestConstructQuery: sort on label statements with no query" {
+				fmt.Printf("stop here")
+			}
 			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
 				fmt.Printf("stop here")
 			}
@@ -1460,7 +1463,7 @@ func TestConstructQuery(t *testing.T) {
 				assert.Equal(t, test.expectedErr, err)
 				return
 			}
-			assert.Nil(t, err)
+			require.Nil(t, err)
 			assert.Equal(t, test.expectedStmt, queryInfo.query)
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
@@ -2423,16 +2426,16 @@ func TestConstructLabelIndirectSort(t *testing.T) {
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
       JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
-    WHERE (lt1.label = ?)
+    WHERE lt1.label = ?
 UNION ALL
   SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, NULL AS __ix_f_metadata_name FROM
     "_v1_Namespace" o
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
-    WHERE (o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+    WHERE o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
 		JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
-		WHERE lt1i1.label = ?))
+		WHERE lt1i1.label = ?)
 )
 WHERE FALSE
   ORDER BY __ix_ext2_spec_clusterName ASC NULLS LAST, __ix_f_metadata_name ASC`,
@@ -2482,7 +2485,7 @@ WHERE FALSE
       JOIN "tournaments.cattle.io_v3_Capsule_fields" ext2 ON f."metadata.queryField1" = ext2."metadata.namespace"
       LEFT OUTER JOIN "_v1_Namespace_labels" lt3 ON o.key = lt3.key
       JOIN "management.cattle.io_v3_Project_fields" ext4 ON lt3.value = ext4."metadata.name"
-			WHERE ((lt1.label = ? OR lt1.value = ?) OR (ext2."spec.heights" = ?)) AND (lt3.label = ?))
+			WHERE ((lt1.label = ? AND lt1.value = ?) OR (ext2."spec.heights" = ?)) AND (lt3.label = ?)
 UNION ALL
   SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext4_spec_clusterName, NULL AS __ix_f_metadata_name FROM
     "_v1_Namespace" o
@@ -2490,10 +2493,10 @@ UNION ALL
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
       JOIN "tournaments.cattle.io_v3_Capsule_fields" ext2 ON f."metadata.queryField1" = ext2."metadata.namespace"
       LEFT OUTER JOIN "_v1_Namespace_labels" lt3 ON o.key = lt3.key
-    WHERE ((lt1.label = ? AND lt1.value = ?) OR (ext4."spec.heights" = ?)) AND o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+    WHERE ((lt1.label = ? AND lt1.value = ?) OR (ext2."spec.heights" = ?)) AND (o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
 		JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt3i1 ON o1.key = lt3i1.key
-		WHERE lt3i1.label = ?)))
+		WHERE lt3i1.label = ?))
 )
 WHERE FALSE
   ORDER BY __ix_ext4_spec_clusterName ASC NULLS LAST, __ix_f_metadata_name ASC`,
