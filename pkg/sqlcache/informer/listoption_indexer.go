@@ -93,6 +93,7 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	for _, f := range fields {
 		indexedFields = append(indexedFields, toColumnName(f))
 	}
+	fmt.Println(indexedFields)
 
 	l := &ListOptionIndexer{
 		Indexer:       i,

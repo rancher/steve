@@ -933,9 +933,6 @@ func (l *ListOptionIndexer) getSortDirectives(lo *sqltypes.ListOptions, dbName s
 				joinTableIndexByLabelName[fullName] = labelIndex
 			}
 			if sortDirective.IsIndirect {
-				labelName := sortDirective.Fields[2]
-				fullName := fmt.Sprintf("%s:%s", dbName, labelName)
-				labelIndex, ok := joinTableIndexByLabelName[fullName]
 				//TODO: check the external table name.
 				externalTableName := getExternalTableName(&sortDirective)
 				extIndex, ok := joinTableIndexByLabelName[externalTableName]

@@ -17,6 +17,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
+	github.com/mattn/go-sqlite3 v1.14.27
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.5
@@ -36,7 +37,7 @@ require (
 	helm.sh/helm/v3 v3.16.2
 	k8s.io/api v0.32.1
 	k8s.io/apiextensions-apiserver v0.32.1
-	k8s.io/apimachinery v0.32.1
+	k8s.io/apimachinery v0.32.3
 	k8s.io/apiserver v0.32.1
 	k8s.io/client-go v0.32.1
 	k8s.io/component-base v0.32.1
