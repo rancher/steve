@@ -7,7 +7,9 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/schema"
+	metricsStore "githu
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
@@ -73,7 +75,7 @@ func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix stri
 	return buf.String()
 }
 
-func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
+func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
 	return func(request *types.APIRequest, resource *types.RawResource) {
 		if resource.Schema == nil {
 			return
