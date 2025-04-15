@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
@@ -246,7 +247,7 @@ func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) erro
 //   - the total number of resources (returned list might be a subset depending on pagination options in lo)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo *ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	queryInfo, err := l.constructQuery(lo, partitions, namespace, db.Sanitize(l.GetName()))
 	if err != nil {
 		return nil, 0, "", err

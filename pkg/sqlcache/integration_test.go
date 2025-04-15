@@ -18,9 +18,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 )
 
 const testNamespace = "sql-test"
@@ -107,8 +107,8 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	err = i.waitForCacheReady(configMapNames, testNamespace, cache)
 	require.NoError(err)
 
-	orFiltersForFilters := func(filters ...informer.Filter) []informer.OrFilter {
-		return []informer.OrFilter{
+	orFiltersForFilters := func(filters ...sqltypes.Filter) []sqltypes.OrFilter {
+		return []sqltypes.OrFilter{
 			{
 				Filters: filters,
 			},
@@ -116,85 +116,85 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	}
 	tests := []struct {
 		name      string
-		filters   []informer.OrFilter
+		filters   []sqltypes.OrFilter
 		wantNames []string
 	}{
 		{
 			name: "matches filter",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"somevalue"},
-				Op:      informer.Eq,
+				Op:      sqltypes.Eq,
 				Partial: false,
 			}),
 			wantNames: []string{"matches-filter"},
 		},
 		{
 			name: "partial matches filter",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"somevalue"},
-				Op:      informer.Eq,
+				Op:      sqltypes.Eq,
 				Partial: true,
 			}),
 			wantNames: []string{"matches-filter", "partial-matches"},
 		},
 		{
 			name: "no matches for filter with underscore as it is interpreted literally",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"somevalu_"},
-				Op:      informer.Eq,
+				Op:      sqltypes.Eq,
 				Partial: true,
 			}),
 			wantNames: nil,
 		},
 		{
 			name: "no matches for filter with percent sign as it is interpreted literally",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"somevalu%"},
-				Op:      informer.Eq,
+				Op:      sqltypes.Eq,
 				Partial: true,
 			}),
 			wantNames: nil,
 		},
 		{
 			name: "match with special characters",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"c%%l_value"},
-				Op:      informer.Eq,
+				Op:      sqltypes.Eq,
 				Partial: true,
 			}),
 			wantNames: []string{"special-character-matches"},
 		},
 		{
 			name: "match with literal backslash character",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{`my\windows\path`},
-				Op:      informer.Eq,
+				Op:      sqltypes.Eq,
 				Partial: true,
 			}),
 			wantNames: []string{"backslash-character-matches"},
 		},
 		{
 			name: "not eq filter",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"somevalue"},
-				Op:      informer.NotEq,
+				Op:      sqltypes.NotEq,
 				Partial: false,
 			}),
 			wantNames: []string{"partial-matches", "not-matches-filter", "missing", "special-character-matches", "backslash-character-matches"},
 		},
 		{
 			name: "partial not eq filter",
-			filters: orFiltersForFilters(informer.Filter{
+			filters: orFiltersForFilters(sqltypes.Filter{
 				Field:   []string{"metadata", "annotations", "somekey"},
 				Matches: []string{"somevalue"},
-				Op:      informer.NotEq,
+				Op:      sqltypes.NotEq,
 				Partial: true,
 			}),
 			wantNames: []string{"not-matches-filter", "missing", "special-character-matches", "backslash-character-matches"},
@@ -202,16 +202,16 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 		{
 			name: "multiple or filters match",
 			filters: orFiltersForFilters(
-				informer.Filter{
+				sqltypes.Filter{
 					Field:   []string{"metadata", "annotations", "somekey"},
 					Matches: []string{"somevalue"},
-					Op:      informer.Eq,
+					Op:      sqltypes.Eq,
 					Partial: true,
 				},
-				informer.Filter{
+				sqltypes.Filter{
 					Field:   []string{"metadata", "annotations", "somekey"},
 					Matches: []string{"notequal"},
-					Op:      informer.Eq,
+					Op:      sqltypes.Eq,
 					Partial: false,
 				},
 			),
@@ -220,16 +220,16 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 		{
 			name: "or filters on different fields",
 			filters: orFiltersForFilters(
-				informer.Filter{
+				sqltypes.Filter{
 					Field:   []string{"metadata", "annotations", "somekey"},
 					Matches: []string{"somevalue"},
-					Op:      informer.Eq,
+					Op:      sqltypes.Eq,
 					Partial: true,
 				},
-				informer.Filter{
+				sqltypes.Filter{
 					Field:   []string{`metadata`, `name`},
 					Matches: []string{"missing"},
-					Op:      informer.Eq,
+					Op:      sqltypes.Eq,
 					Partial: false,
 				},
 			),
@@ -237,23 +237,23 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 		},
 		{
 			name: "and filters, both must match",
-			filters: []informer.OrFilter{
+			filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "annotations", "somekey"},
 							Matches: []string{"somevalue"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{`metadata`, `name`},
 							Matches: []string{"matches-filter"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
@@ -264,10 +264,10 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 		{
 			name: "no matches",
 			filters: orFiltersForFilters(
-				informer.Filter{
+				sqltypes.Filter{
 					Field:   []string{"metadata", "annotations", "somekey"},
 					Matches: []string{"valueNotRepresented"},
-					Op:      informer.Eq,
+					Op:      sqltypes.Eq,
 					Partial: false,
 				},
 			),
@@ -278,7 +278,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	for _, test := range tests {
 		test := test
 		i.Run(test.name, func() {
-			options := informer.ListOptions{
+			options := sqltypes.ListOptions{
 				Filters: test.filters,
 			}
 			partitions := []partition.Partition{defaultPartition}
@@ -334,7 +334,7 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	return wait.PollUntilContextCancel(ctx, time.Millisecond*100, true, func(ctx context.Context) (done bool, err error) {
-		var options informer.ListOptions
+		var options sqltypes.ListOptions
 		partitions := []partition.Partition{defaultPartition}
 		cacheCtx, cacheCancel := context.WithTimeout(ctx, time.Second*5)
 		defer cacheCancel()

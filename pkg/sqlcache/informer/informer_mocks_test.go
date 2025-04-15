@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
+	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -42,7 +43,7 @@ func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockByOptionsLister) ListByOptions(arg0 context.Context, arg1 *ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockByOptionsLister) ListByOptions(arg0 context.Context, arg1 *sqltypes.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByOptions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)

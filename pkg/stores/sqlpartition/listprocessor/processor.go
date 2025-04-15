@@ -11,8 +11,8 @@ import (
 
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
@@ -37,27 +37,27 @@ const (
 )
 
 var endsWithBracket = regexp.MustCompile(`^(.+)\[(.+)]$`)
-var mapK8sOpToRancherOp = map[selection.Operator]informer.Op{
-	selection.Equals:           informer.Eq,
-	selection.DoubleEquals:     informer.Eq,
-	selection.PartialEquals:    informer.Eq,
-	selection.NotEquals:        informer.NotEq,
-	selection.NotPartialEquals: informer.NotEq,
-	selection.In:               informer.In,
-	selection.NotIn:            informer.NotIn,
-	selection.Exists:           informer.Exists,
-	selection.DoesNotExist:     informer.NotExists,
-	selection.LessThan:         informer.Lt,
-	selection.GreaterThan:      informer.Gt,
+var mapK8sOpToRancherOp = map[selection.Operator]sqltypes.Op{
+	selection.Equals:           sqltypes.Eq,
+	selection.DoubleEquals:     sqltypes.Eq,
+	selection.PartialEquals:    sqltypes.Eq,
+	selection.NotEquals:        sqltypes.NotEq,
+	selection.NotPartialEquals: sqltypes.NotEq,
+	selection.In:               sqltypes.In,
+	selection.NotIn:            sqltypes.NotIn,
+	selection.Exists:           sqltypes.Exists,
+	selection.DoesNotExist:     sqltypes.NotExists,
+	selection.LessThan:         sqltypes.Lt,
+	selection.GreaterThan:      sqltypes.Gt,
 }
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
 	ChunkSize  int
 	Resume     string
-	Filters    []informer.OrFilter
-	Sort       informer.Sort
-	Pagination informer.Pagination
+	Filters    []sqltypes.OrFilter
+	Sort       sqltypes.Sort
+	Pagination sqltypes.Pagination
 }
 
 type Cache interface {
@@ -67,10 +67,10 @@ type Cache interface {
 	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
 	//   - a continue token, if there are more pages after the returned one
 	//   - an error instead of all of the above if anything went wrong
-	ListByOptions(ctx context.Context, lo *informer.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
-func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, bool, error) {
+func k8sOpToRancherOp(k8sOp selection.Operator) (sqltypes.Op, bool, error) {
 	v, ok := mapK8sOpToRancherOp[k8sOp]
 	if ok {
 		return v, k8sOp == selection.PartialEquals || k8sOp == selection.NotPartialEquals, nil
@@ -78,12 +78,12 @@ func k8sOpToRancherOp(k8sOp selection.Operator) (informer.Op, bool, error) {
 	return "", false, fmt.Errorf("unknown k8sOp: %s", k8sOp)
 }
 
-func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Filter, error) {
+func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Filter, error) {
 	values := requirement.Values()
 	queryFields := splitQuery(requirement.Key())
 	op, usePartialMatch, err := k8sOpToRancherOp(requirement.Operator())
 	isIndirect, indirectFields := requirement.IndirectInfo()
-	return informer.Filter{
+	return sqltypes.Filter{
 		Field:          queryFields,
 		Matches:        values,
 		Op:             op,
@@ -94,8 +94,8 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (informer.Fil
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOptions, error) {
-	opts := informer.ListOptions{}
+func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOptions, error) {
+	opts := sqltypes.ListOptions{}
 
 	opts.ChunkSize = getLimit(apiOp)
 
@@ -104,13 +104,13 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	opts.Resume = cont
 
 	filterParams := q[filterParam]
-	filterOpts := []informer.OrFilter{}
+	filterOpts := []sqltypes.OrFilter{}
 	for _, filters := range filterParams {
 		requirements, err := queryparser.ParseToRequirements(filters, filterParam)
 		if err != nil {
-			return informer.ListOptions{}, err
+			return sqltypes.ListOptions{}, err
 		}
-		orFilter := informer.OrFilter{}
+		orFilter := sqltypes.OrFilter{}
 		for _, requirement := range requirements {
 			filter, err := k8sRequirementToOrFilter(requirement)
 			if err != nil {
@@ -134,19 +134,19 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 			}
 			return opts, fmt.Errorf("invalid sort key: '%s'", sortKeys)
 		}
-		sortList := *informer.NewSortList()
+		sortList := *sqltypes.NewSortList()
 		for _, requirement := range filterRequirements {
 			if requirement.Operator() != selection.Exists {
 				return opts, fmt.Errorf("sort directive %s can't contain operator (%s)", sortKeys, requirement.Operator())
 			}
 			key := requirement.Key()
-			order := informer.ASC
+			order := sqltypes.ASC
 			if key[0] == '-' {
-				order = informer.DESC
+				order = sqltypes.DESC
 				key = key[1:]
 			}
 			isIndirect, indirectFields := requirement.IndirectInfo()
-			sortDirective := informer.Sort{
+			sortDirective := sqltypes.Sort{
 				Fields:         queryhelper.SafeSplit(key),
 				Order:          order,
 				IsIndirect:     isIndirect,
@@ -158,7 +158,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	}
 
 	var err error
-	pagination := informer.Pagination{}
+	pagination := sqltypes.Pagination{}
 	pagination.PageSize, err = strconv.Atoi(q.Get(pageSizeParam))
 	if err != nil {
 		pagination.PageSize = 0
@@ -169,12 +169,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 	}
 	opts.Pagination = pagination
 
-	op := informer.Eq
+	op := sqltypes.Eq
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
 		if projectsOrNamespaces != "" {
-			op = informer.NotEq
+			op = sqltypes.NotEq
 		}
 	}
 	if projectsOrNamespaces != "" {
@@ -185,12 +185,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (informer.ListOpt
 		if projOrNSFilters == nil {
 			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
 		}
-		if op == informer.NotEq {
+		if op == sqltypes.NotEq {
 			for _, filter := range projOrNSFilters {
-				opts.Filters = append(opts.Filters, informer.OrFilter{Filters: []informer.Filter{filter}})
+				opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{filter}})
 			}
 		} else {
-			opts.Filters = append(opts.Filters, informer.OrFilter{Filters: projOrNSFilters})
+			opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: projOrNSFilters})
 		}
 	}
 
@@ -223,22 +223,22 @@ func splitQuery(query string) []string {
 	return strings.Split(query, ".")
 }
 
-func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op informer.Op, namespaceInformer Cache) ([]informer.Filter, error) {
-	var filters []informer.Filter
+func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sqltypes.Op, namespaceInformer Cache) ([]sqltypes.Filter, error) {
+	var filters []sqltypes.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &informer.ListOptions{
-			Filters: []informer.OrFilter{
+		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "name"},
 							Matches: []string{pn},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 						},
 						{
 							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 							Matches: []string{pn},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 						},
 					},
 				},
@@ -248,7 +248,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op inf
 			return filters, err
 		}
 		for _, item := range uList.Items {
-			filters = append(filters, informer.Filter{
+			filters = append(filters, sqltypes.Filter{
 				Field:   []string{"metadata", "namespace"},
 				Matches: []string{item.GetName()},
 				Op:      op,

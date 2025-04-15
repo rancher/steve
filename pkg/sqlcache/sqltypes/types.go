@@ -1,4 +1,4 @@
-package informer
+package sqltypes
 
 type Op string
 

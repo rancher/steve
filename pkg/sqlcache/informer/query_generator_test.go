@@ -16,6 +16,7 @@ import (
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -27,7 +28,7 @@ import (
 func TestListByOptions(t *testing.T) {
 	type testCase struct {
 		description           string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -48,7 +49,7 @@ func TestListByOptions(t *testing.T) {
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "ListByOptions() with no errors returned, should not return an error",
-		listOptions: ListOptions{},
+		listOptions: sqltypes.ListOptions{},
 		partitions:  []partition.Partition{},
 		ns:          "",
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
@@ -63,8 +64,8 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions() with an empty filter, should not return an error",
-		listOptions: ListOptions{
-			Filters: []OrFilter{{[]Filter{}}},
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{{[]sqltypes.Filter{}}},
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
@@ -79,7 +80,7 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with ChunkSize set should set limit in prepared sql.Stmt",
-		listOptions: ListOptions{ChunkSize: 2},
+		listOptions: sqltypes.ListOptions{ChunkSize: 2},
 		partitions:  []partition.Partition{},
 		ns:          "",
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
@@ -101,7 +102,7 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with Resume set should set offset in prepared sql.Stmt",
-		listOptions: ListOptions{Resume: "4"},
+		listOptions: sqltypes.ListOptions{Resume: "4"},
 		partitions:  []partition.Partition{},
 		ns:          "",
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
@@ -123,13 +124,13 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with 1 OrFilter set with 1 filter should select where that filter is true in prepared sql.Stmt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"somevalue"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 				},
@@ -152,13 +153,13 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set top NotEq should select where that filter is not true in prepared sql.Stmt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"somevalue"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: true,
 					},
 				},
@@ -180,14 +181,14 @@ func TestListByOptions(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter with Partial set to true should select where that partial match on that filter's value is true in prepared sql.Stmt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "ListByOptions with 1 sqltypes.OrFilter set with 1 filter with Partial set to true should select where that partial match on that filter's value is true in prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"somevalue"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 				},
@@ -209,26 +210,26 @@ func TestListByOptions(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with multiple filters should select where any of those filters are true in prepared sql.Stmt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "ListByOptions with 1 sqltypes.OrFilter set with multiple filters should select where any of those filters are true in prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"somevalue"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"someothervalue"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"somethirdvalue"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: true,
 					},
 				},
@@ -251,29 +252,29 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with multiple OrFilters set should select where all OrFilters contain one filter that is true in prepared sql.Stmt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"value1"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 					{
 						Field:   []string{"status", "someotherfield"},
 						Matches: []string{"value2"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: false,
 					},
 				},
 			},
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"value3"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
@@ -298,13 +299,13 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with labels filter should select the label in the prepared sql.Stmt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "guard.cattle.io"},
 						Matches: []string{"lodgepole"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 				},
@@ -330,23 +331,23 @@ func TestListByOptions(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "ListByOptions with two labels filters should use a self-join",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "cows"},
 						Matches: []string{"milk"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
 			},
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "horses"},
 						Matches: []string{"saddles"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
@@ -374,23 +375,23 @@ func TestListByOptions(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "ListByOptions with a mix of one label and one non-label query can still self-join",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "cows"},
 						Matches: []string{"butter"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
 			},
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
 						Matches: []string{"wheat"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
@@ -416,13 +417,13 @@ func TestListByOptions(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
-		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		description: "ListByOptions with only one sqltypes.Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "somefield"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 				},
 			},
@@ -444,12 +445,12 @@ func TestListByOptions(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "sort one field descending",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "somefield"},
-						Order:  DESC,
+						Order:  sqltypes.DESC,
 					},
 				},
 			},
@@ -471,12 +472,12 @@ func TestListByOptions(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "sort one unbound label descending",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "labels", "flip"},
-						Order:  DESC,
+						Order:  sqltypes.DESC,
 					},
 				},
 			},
@@ -500,16 +501,16 @@ func TestListByOptions(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "fields", "3"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 					{
 						Fields: []string{"metadata", "labels", "stub.io/candy"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 				},
 			},
@@ -532,16 +533,16 @@ func TestListByOptions(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "somefield"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 					{
 						Fields: []string{"status", "someotherfield"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 				},
 			},
@@ -561,16 +562,16 @@ func TestListByOptions(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order in prepared sql.Stmt",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "somefield"},
-						Order:  DESC,
+						Order:  sqltypes.DESC,
 					},
 					{
 						Fields: []string{"status", "someotherfield"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 				},
 			},
@@ -589,9 +590,9 @@ func TestListByOptions(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
-		listOptions: ListOptions{
-			Pagination: Pagination{
+		description: "ListByOptions with sqltypes.Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{
+			Pagination: sqltypes.Pagination{
 				PageSize: 10,
 			},
 		},
@@ -615,9 +616,9 @@ func TestListByOptions(t *testing.T) {
 		expectedErr:           nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.Page and no PageSize set should not add anything to prepared sql.Stmt",
-		listOptions: ListOptions{
-			Pagination: Pagination{
+		description: "ListByOptions with sqltypes.Pagination.Page and no PageSize set should not add anything to prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{
+			Pagination: sqltypes.Pagination{
 				Page: 2,
 			},
 		},
@@ -634,9 +635,9 @@ func TestListByOptions(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.Page and PageSize set limit to PageSize and offset to PageSize * (Page - 1) in prepared sql.Stmt",
-		listOptions: ListOptions{
-			Pagination: Pagination{
+		description: "ListByOptions with sqltypes.Pagination.Page and PageSize set limit to PageSize and offset to PageSize * (Page - 1) in prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{
+			Pagination: sqltypes.Pagination{
 				PageSize: 10,
 				Page:     2,
 			},
@@ -818,7 +819,7 @@ func TestListByOptions(t *testing.T) {
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
 		description           string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -831,13 +832,13 @@ func TestConstructQuery(t *testing.T) {
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles IN statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "queryField1"},
 						Matches: []string{"somevalue"},
-						Op:      In,
+						Op:      sqltypes.In,
 					},
 				},
 			},
@@ -856,13 +857,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles NOT-IN statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "queryField1"},
 						Matches: []string{"somevalue"},
-						Op:      NotIn,
+						Op:      sqltypes.NotIn,
 					},
 				},
 			},
@@ -881,12 +882,12 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles EXISTS statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field: []string{"metadata", "queryField1"},
-						Op:    Exists,
+						Op:    sqltypes.Exists,
 					},
 				},
 			},
@@ -898,12 +899,12 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles NOT-EXISTS statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field: []string{"metadata", "queryField1"},
-						Op:    NotExists,
+						Op:    sqltypes.NotExists,
 					},
 				},
 			},
@@ -915,13 +916,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles == statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelEqualFull"},
 						Matches: []string{"somevalue"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
@@ -942,13 +943,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles == statements for label statements, match partial",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelEqualPartial"},
 						Matches: []string{"somevalue"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 				},
@@ -969,13 +970,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles != statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelNotEqualFull"},
 						Matches: []string{"somevalue"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: false,
 					},
 				},
@@ -1000,13 +1001,13 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles != statements for label statements, match partial",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelNotEqualPartial"},
 						Matches: []string{"somevalue"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: true,
 					},
 				},
@@ -1031,23 +1032,23 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles multiple != statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "notEqual1"},
 						Matches: []string{"value1"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: false,
 					},
 				},
 			},
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "notEqual2"},
 						Matches: []string{"value2"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: false,
 					},
 				},
@@ -1076,13 +1077,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles IN statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelIN"},
 						Matches: []string{"somevalue1", "someValue2"},
-						Op:      In,
+						Op:      sqltypes.In,
 					},
 				},
 			},
@@ -1103,13 +1104,13 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles NOTIN statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelNOTIN"},
 						Matches: []string{"somevalue1", "someValue2"},
-						Op:      NotIn,
+						Op:      sqltypes.NotIn,
 					},
 				},
 			},
@@ -1133,13 +1134,13 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles EXISTS statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelEXISTS"},
 						Matches: []string{},
-						Op:      Exists,
+						Op:      sqltypes.Exists,
 					},
 				},
 			},
@@ -1160,13 +1161,13 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles NOTEXISTS statements for label statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "labelNOTEXISTS"},
 						Matches: []string{},
-						Op:      NotExists,
+						Op:      sqltypes.NotExists,
 					},
 				},
 			},
@@ -1189,13 +1190,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles LessThan statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "numericThing"},
 						Matches: []string{"5"},
-						Op:      Lt,
+						Op:      sqltypes.Lt,
 					},
 				},
 			},
@@ -1215,13 +1216,13 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles GreaterThan statements",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "numericThing"},
 						Matches: []string{"35"},
-						Op:      Gt,
+						Op:      sqltypes.Gt,
 					},
 				},
 			},
@@ -1241,29 +1242,29 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "multiple filters with a positive label test and a negative non-label test still outer-join",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "junta"},
 						Matches: []string{"esther"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 					{
 						Field:   []string{"metadata", "queryField1"},
 						Matches: []string{"golgi"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: true,
 					},
 				},
 			},
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"status", "queryField2"},
 						Matches: []string{"gold"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 				},
@@ -1285,33 +1286,33 @@ func TestConstructQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "multiple filters and or-filters with a positive label test and a negative non-label test still outer-join and have correct AND/ORs",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "nectar"},
 						Matches: []string{"stash"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 					{
 						Field:   []string{"metadata", "queryField1"},
 						Matches: []string{"landlady"},
-						Op:      NotEq,
+						Op:      sqltypes.NotEq,
 						Partial: false,
 					},
 				},
 			},
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "lawn"},
 						Matches: []string{"reba", "coil"},
-						Op:      In,
+						Op:      sqltypes.In,
 					},
 					{
 						Field:   []string{"metadata", "queryField1"},
-						Op:      Gt,
+						Op:      sqltypes.Gt,
 						Matches: []string{"2"},
 					},
 				},
@@ -1335,24 +1336,24 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles == statements for label statements, match partial, sort on metadata.queryField1",
-		listOptions: ListOptions{
-			Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
 				{
-					[]Filter{
+					[]sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "labels", "labelEqualPartial"},
 							Matches: []string{"somevalue"},
-							Op:      Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 			},
-			SortList: SortList{
-				SortDirectives: []Sort{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "queryField1"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 				},
 			},
@@ -1372,12 +1373,12 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: sort on label statements with no query",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "labels", "this"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 				},
 			},
@@ -1397,32 +1398,32 @@ func TestConstructQuery(t *testing.T) {
 
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: sort and query on both labels and non-labels without overlap",
-		listOptions: ListOptions{
-			Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
 				{
-					[]Filter{
+					[]sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "queryField1"},
 							Matches: []string{"toys"},
-							Op:      Eq,
+							Op:      sqltypes.Eq,
 						},
 						{
 							Field:   []string{"metadata", "labels", "jamb"},
 							Matches: []string{"juice"},
-							Op:      Eq,
+							Op:      sqltypes.Eq,
 						},
 					},
 				},
 			},
-			SortList: SortList{
-				SortDirectives: []Sort{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "labels", "this"},
-						Order:  ASC,
+						Order:  sqltypes.ASC,
 					},
 					{
 						Fields: []string{"status", "queryField2"},
-						Order:  DESC,
+						Order:  sqltypes.DESC,
 					},
 				},
 			},
@@ -1586,7 +1587,7 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -1598,14 +1599,14 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect Eq",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.Eq",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"System"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1627,14 +1628,14 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect NotEq",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.NotEq",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"System"},
-						Op:             NotEq,
+						Op:             sqltypes.NotEq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1656,14 +1657,14 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect Lt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.Lt",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"10"},
-						Op:             Lt,
+						Op:             sqltypes.Lt,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1685,14 +1686,14 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect Gt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.Gt",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"11"},
-						Op:             Gt,
+						Op:             sqltypes.Gt,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1714,13 +1715,13 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect Exists",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.Exists",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Op:             Exists,
+						Op:             sqltypes.Exists,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1742,13 +1743,13 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect Not-Exists",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect Not-sqltypes.Exists",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Op:             NotExists,
+						Op:             sqltypes.NotExists,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1770,14 +1771,14 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect In-Set",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.In-Set",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"fish", "cows", "ships"},
-						Op:             In,
+						Op:             sqltypes.In,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1799,14 +1800,14 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery: simple redirect NotIn",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery: simple redirect sqltypes.NotIn",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"balloons", "clubs", "cheese"},
-						Op:             NotIn,
+						Op:             sqltypes.NotIn,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1832,13 +1833,13 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 	// Allow only [-a-zA-Z0-9$_\[\].]+
 	tests = append(tests, testCase{
 		description: "IndirectFilterQuery: verify the injected field name is safe",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches:        []string{"System"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "projects", "name ; drop database marks ; select * from _v1_Namespace", "spec.displayName"},
 					},
@@ -1890,7 +1891,7 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -1902,14 +1903,14 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect Eq",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.Eq",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"System"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1930,14 +1931,14 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect NotEq",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.NotEq",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"System"},
-						Op:             NotEq,
+						Op:             sqltypes.NotEq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1958,14 +1959,14 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect Lt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.Lt",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"10"},
-						Op:             Lt,
+						Op:             sqltypes.Lt,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -1986,14 +1987,14 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect Gt",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.Gt",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"11"},
-						Op:             Gt,
+						Op:             sqltypes.Gt,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -2014,13 +2015,13 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect Exists",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.Exists",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
-						Op:             Exists,
+						Op:             sqltypes.Exists,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -2041,13 +2042,13 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect Not-Exists",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect Not-sqltypes.Exists",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
-						Op:             NotExists,
+						Op:             sqltypes.NotExists,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -2068,14 +2069,14 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect In-Set",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.In-Set",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"fish", "cows", "ships"},
-						Op:             In,
+						Op:             sqltypes.In,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -2096,14 +2097,14 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 		expectedErr:      "",
 	})
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - no label: simple redirect NotIn",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - no label: simple redirect sqltypes.NotIn",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"balloons", "clubs", "cheese"},
-						Op:             NotIn,
+						Op:             sqltypes.NotIn,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -2128,13 +2129,13 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 	// Allow only [-a-zA-Z0-9$_\[\].]+
 	tests = append(tests, testCase{
 		description: "IndirectFilterQuery - no label: verify the injected external field name is safe",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"System"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "projects", "name ; drop database marks ; select * from _v1_Namespace", "spec.displayName"},
 					},
@@ -2149,13 +2150,13 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "IndirectFilterQuery - no label: verify the injected selecting field name is safe",
-		listOptions: ListOptions{Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "queryField1 ; drop database thought-this-is=-checked"},
 						Matches:        []string{"System"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "projects", "metadata.name", "spec.displayName"},
 					},
@@ -2206,7 +2207,7 @@ func TestConstructMixedLabelIndirect(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -2218,19 +2219,19 @@ func TestConstructMixedLabelIndirect(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - one label, one redirect Eq",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - one label, one redirect sqltypes.Eq",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				[]Filter{
+				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "radio"},
 						Matches: []string{"fish"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 					},
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"System"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
@@ -2289,7 +2290,7 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -2301,35 +2302,35 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "IndirectFilterQuery - mix of label,non-label x direct,indirect Eq",
-		listOptions: ListOptions{Filters: []OrFilter{
+		description: "IndirectFilterQuery - mix of label,non-label x direct,indirect sqltypes.Eq",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "suitcase"},
 						Matches: []string{"valid"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 					},
 					{
 						Field:          []string{"metadata", "queryField1"},
 						Matches:        []string{"sprint"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.displayName"},
 					},
 					{
 						Field:   []string{"status", "queryField2"},
 						Matches: []string{"moisture"},
-						Op:      Eq,
+						Op:      sqltypes.Eq,
 					},
 				},
 			},
 			{
-				Filters: []Filter{
+				Filters: []sqltypes.Filter{
 					{
 						Field:          []string{"metadata", "labels", "green"},
 						Matches:        []string{"squalor"},
-						Op:             Eq,
+						Op:             sqltypes.Eq,
 						IsIndirect:     true,
 						IndirectFields: []string{"tournaments.cattle.io/v3", "Diary", "metadata.name", "spocks.brain"},
 					},
@@ -2392,7 +2393,7 @@ func TestConstructLabelIndirectSort(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -2405,12 +2406,12 @@ func TestConstructLabelIndirectSort(t *testing.T) {
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, no filters, happy path",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterName"},
 					},
@@ -2444,30 +2445,30 @@ WHERE FALSE
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, two filters, happy path",
-		listOptions: ListOptions{
-			Filters: []OrFilter{
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
 				{
-					[]Filter{
+					[]sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "labels", "radio"},
 							Matches: []string{"camels"},
-							Op:      Eq,
+							Op:      sqltypes.Eq,
 						},
 						{
 							Field:          []string{"metadata", "queryField1"},
 							Matches:        []string{"System"},
-							Op:             Eq,
+							Op:             sqltypes.Eq,
 							IsIndirect:     true,
 							IndirectFields: []string{"tournaments.cattle.io/v3", "Capsule", "metadata.namespace", "spec.heights"},
 						},
 					},
 				},
 			},
-			SortList: SortList{
-				SortDirectives: []Sort{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterName"},
 					},
@@ -2505,12 +2506,12 @@ WHERE FALSE
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, invalid external selector-column",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "foo; drop database bobby1", "spec.clusterName"},
 					},
@@ -2524,12 +2525,12 @@ WHERE FALSE
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, invalid external selector-column",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "bar; drop database bobby2"},
 					},
@@ -2543,12 +2544,12 @@ WHERE FALSE
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, not enough indirect fields",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name"},
 					},
@@ -2562,12 +2563,12 @@ WHERE FALSE
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, too many indirect fields",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "labels", "field.cattle.io/projectId"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "little", "bobby-tables"},
 					},
@@ -2614,7 +2615,7 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 	type testCase struct {
 		description           string
 		dbname                string
-		listOptions           ListOptions
+		listOptions           sqltypes.ListOptions
 		partitions            []partition.Partition
 		ns                    string
 		expectedCountStmt     string
@@ -2628,12 +2629,12 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one sort, no filters, no labels",
 		// Find all mcio.Projects that have the same metadata.name as the namespace, and sort by associated spec.clusterName
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "queryField1"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterName"},
 					},
@@ -2654,12 +2655,12 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one non-label sort, invalid external selector-column",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "queryField1"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "foo; drop database bobby1", "spec.clusterName"},
 					},
@@ -2673,12 +2674,12 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one non-label sort, invalid external selector-column",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "queryField1"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "bar; drop database bobby2"},
 					},
@@ -2692,12 +2693,12 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one non-label sort, not enough indirect fields",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "queryField1"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name"},
 					},
@@ -2711,12 +2712,12 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one non-label sort, too many indirect fields",
-		listOptions: ListOptions{
-			SortList: SortList{
-				SortDirectives: []Sort{
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
 					{
 						Fields:         []string{"metadata", "queryField1"},
-						Order:          ASC,
+						Order:          sqltypes.ASC,
 						IsIndirect:     true,
 						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "little", "bobby-tables"},
 					},
