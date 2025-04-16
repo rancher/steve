@@ -262,7 +262,7 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 				joinClauses = append(joinClauses, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, labelIndex, labelIndex))
 			}
 			needDistinct = true
-			labelFunc := l.getLabelFilter2
+			labelFunc := l.getLabelFilter
 			if isIndirectFilter(&filter) {
 				labelFunc = l.getIndirectLabelFilter
 			}
@@ -635,102 +635,7 @@ func (l *ListOptionIndexer) getIndirectNonLabelFilter(filter sqltypes.Filter, db
 	return "", nil, nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, dbName string) (string, []any, error) {
-	opString := ""
-	escapeString := ""
-	matchFmtToUse := strictMatchFmt
-	labelName := filter.Field[2]
-
-	switch filter.Op {
-	case sqltypes.Eq:
-		if filter.Partial {
-			opString = "LIKE"
-			escapeString = escapeBackslashDirective
-			matchFmtToUse = matchFmt
-		} else {
-			opString = "="
-		}
-		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s ?%s`, index, index, opString, escapeString)
-		return clause, []any{labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse)}, nil
-
-	case sqltypes.NotEq:
-		if filter.Partial {
-			opString = "NOT LIKE"
-			escapeString = escapeBackslashDirective
-			matchFmtToUse = matchFmt
-		} else {
-			opString = "!="
-		}
-		subFilter := sqltypes.Filter{
-			Field: filter.Field,
-			Op:    sqltypes.NotExists,
-		}
-		existenceClause, subParams, err := l.getLabelFilter(index, subFilter, dbName)
-		if err != nil {
-			return "", nil, err
-		}
-		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND lt%d.value %s ?%s)`, existenceClause, index, index, opString, escapeString)
-		params := append(subParams, labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse))
-		return clause, params, nil
-
-	case sqltypes.Lt, sqltypes.Gt:
-		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
-		if err != nil {
-			return "", nil, err
-		}
-		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s ?`, index, index, sym)
-		return clause, []any{labelName, target}, nil
-
-	case sqltypes.Exists:
-		clause := fmt.Sprintf(`lt%d.label = ?`, index)
-		return clause, []any{labelName}, nil
-
-	case sqltypes.NotExists:
-		clause := fmt.Sprintf(`o.key NOT IN (SELECT o1.key FROM "%s" o1
-		JOIN "%s_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "%s_labels" lt%di1 ON o1.key = lt%di1.key
-		WHERE lt%di1.label = ?)`, dbName, dbName, dbName, index, index, index)
-		return clause, []any{labelName}, nil
-
-	case sqltypes.In:
-		target := "(?"
-		if len(filter.Matches) > 0 {
-			target += strings.Repeat(", ?", len(filter.Matches)-1)
-		}
-		target += ")"
-		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value IN %s`, index, index, target)
-		matches := make([]any, len(filter.Matches)+1)
-		matches[0] = labelName
-		for i, match := range filter.Matches {
-			matches[i+1] = match
-		}
-		return clause, matches, nil
-
-	case sqltypes.NotIn:
-		target := "(?"
-		if len(filter.Matches) > 0 {
-			target += strings.Repeat(", ?", len(filter.Matches)-1)
-		}
-		target += ")"
-		subFilter := sqltypes.Filter{
-			Field: filter.Field,
-			Op:    sqltypes.NotExists,
-		}
-		existenceClause, subParams, err := l.getLabelFilter(index, subFilter, dbName)
-		if err != nil {
-			return "", nil, err
-		}
-		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND lt%d.value NOT IN %s)`, existenceClause, index, index, target)
-		matches := append(subParams, labelName)
-		for _, match := range filter.Matches {
-			matches = append(matches, match)
-		}
-		return clause, matches, nil
-	}
-	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
-}
-
-func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int, joinedTables map[string]bool) (string, []string, []any, error) {
+func (l *ListOptionIndexer) getLabelFilter(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int, joinedTables map[string]bool) (string, []string, []any, error) {
 	opString := ""
 	escapeString := ""
 	matchFmtToUse := strictMatchFmt
@@ -767,7 +672,7 @@ func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName strin
 			Field: filter.Field,
 			Op:    sqltypes.NotExists,
 		}
-		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName, joinedTables)
+		existenceClause, _, subParams, err := l.getLabelFilter(subFilter, dbName, joinTableIndexByLabelName, joinedTables)
 		if err != nil {
 			return "", nil, nil, err
 		}
@@ -818,7 +723,7 @@ func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName strin
 			Field: filter.Field,
 			Op:    sqltypes.NotExists,
 		}
-		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName, joinedTables)
+		existenceClause, _, subParams, err := l.getLabelFilter(subFilter, dbName, joinTableIndexByLabelName, joinedTables)
 		if err != nil {
 			return "", nil, nil, err
 		}
