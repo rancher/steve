@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
@@ -73,7 +74,7 @@ func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix stri
 	return buf.String()
 }
 
-func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
+func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
 	return func(request *types.APIRequest, resource *types.RawResource) {
 		if resource.Schema == nil {
 			return
@@ -146,6 +147,25 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 			excludeValues(request, unstr)
 		}
 
+		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
+			id := resource.APIObject.ID
+			ns := getNamespaceFromResource(id)
+			gvr := attributes.GVR(resource.Schema)
+			permissions := map[string]map[string]bool{}
+			for _, res := range strings.Split(permsQuery, ",") {
+				perms := map[string]bool{}
+				for _, verb := range []string{"create", "update", "delete", "list", "get", "watch", "patch"} {
+					allowed := accessSet.Grants(verb, schema2.GroupResource{Group: gvr.Group, Resource: res}, ns, "")
+					// TODO maybe add links rather than true/false
+					perms[verb] = allowed
+				}
+				permissions[res] = perms
+			}
+
+			if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
+				data.PutValue(unstr.Object, permissions, "resourcePermissions")
+			}
+		}
 	}
 }
 
@@ -183,4 +203,12 @@ func excludeValues(request *types.APIRequest, unstr *unstructured.Unstructured) 
 			}
 		}
 	}
+}
+
+func getNamespaceFromResource(resourceID string) string {
+	parts := strings.SplitN(resourceID, "/", 2)
+	if len(parts) == 2 {
+		return parts[1]
+	}
+	return resourceID
 }
