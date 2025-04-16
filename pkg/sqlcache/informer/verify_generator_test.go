@@ -154,7 +154,8 @@ func wrapStartOfQueryGetRows(t *testing.T, ctx context.Context, query string) (*
 	}
 	q := queryInfo.query
 	ptn := regexp.MustCompile(`^(SELECT\s+(?:DISTINCT\s+)?)`)
-	q1 := ptn.ReplaceAllString(q, "$1 o.key, ")
+	q1 := ptn.ReplaceAllString(q, `$1 o.key, `)
+	fmt.Fprintf(os.Stderr, "QQQ: query: [%s], args: [%v]\n", q1, queryInfo.params)
 	stmt, err := dbClient.Prepare(q1)
 	if err != nil {
 		return nil, err
@@ -207,12 +208,22 @@ func TestNonIndirectQueries(t *testing.T) {
 		query:           "filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
 		expectedResults: []string{"cluster-bacon", "cattle-pears", "cluster-eggs", "cattle-limes", "fleet-local", "fleet-default", "default", "cattle-mangoes", "cattle-lemons"},
 	})
+	//tests = append(tests, testCase{
+	//	description:     "label contains a fcio/cattleId, age between 206 and 210', sort by state desc only, name desc",
+	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
+	//	expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
+	//})
+	//tests = append(tests, testCase{
+	//	description:     "TEMP TEST: fields[2] 206 - 208",
+	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<209&sort=metadata.fields[2]",
+	//	expectedResults: []string{"cattle-mangoes", "cattle-limes", "cattle-kiwis"},
+	//})
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			if test.description == "label contains a fcio/cattleId', sort by state desc" {
-				fmt.Printf("QQQ: stop ehere")
-			}
+			//if test.description == "label contains a fcio/cattleId, age between 206 and 210', sort by state desc only, name desc" {
+			//	fmt.Printf("QQQ: stop ehere")
+			//}
 			rows, err := wrapStartOfQueryGetRows(t, context.Background(), test.query)
 			require.Nil(t, err)
 			names := make([]string, 0)
@@ -255,11 +266,16 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("Awp! verify_generator_test.go tests failed to setup: %s", err))
 	}
 	m.Run()
-	teardownTests()
+	err = teardownTests()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "teardown tests failed: %s\n", err)
+	}
 }
 
 func setupTests() error {
-	vaiFile, err := ioutil.TempFile("", "vaidb")
+	var err error
+	vaiFile, err = ioutil.TempFile("", "vaidb")
+	//fmt.Fprintf(os.Stderr, "vaiFile: %s\n", vaiFile.Name())
 	if err != nil {
 		return err
 	}
@@ -298,10 +314,13 @@ func setupTests() error {
 
 func teardownTests() error {
 	if dbClient != nil {
-		dbClient.Close()
+		if err := dbClient.Close(); err != nil {
+			return err
+		}
 	}
 	if vaiFile != nil {
-		os.Remove(vaiFile.Name())
+		//fmt.Fprintf(os.Stderr, "Not deleting file %s\n", vaiFile.Name())
+		return os.Remove(vaiFile.Name())
 	}
 	return nil
 }
