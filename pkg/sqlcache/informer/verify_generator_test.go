@@ -213,6 +213,11 @@ func TestNonIndirectQueries(t *testing.T) {
 	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
 	//	expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
 	//})
+	tests = append(tests, testCase{
+		description:     "label contains a fcio/cattleId, age between 206 and 210 (using set notation)', sort by state desc only, name desc",
+		query:           "filter=metadata.fields[2] in (206, 207, 208, 209),metadata.fields[2]=210&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
+		expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
+	})
 	//tests = append(tests, testCase{
 	//	description:     "TEMP TEST: fields[2] 206 - 208",
 	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<209&sort=metadata.fields[2]",
