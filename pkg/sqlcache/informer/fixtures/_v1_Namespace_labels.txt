@@ -5,9 +5,9 @@ INSERT INTO _v1_Namespace_labels VALUES('cattle-pears','field.cattle.io/projectI
 INSERT INTO _v1_Namespace_labels VALUES('cattle-lemons','field.cattle.io/projectId','project-01');
 INSERT INTO _v1_Namespace_labels VALUES('cattle-lemons','kubernetes.io/metadata.name','cattle-lemons');
 INSERT INTO _v1_Namespace_labels VALUES('cattle-lemons','objectset.rio.cattle.io/hash','362023f752e7f1989d8b652e029bd2c658ae7c44');
-INSERT INTO _v1_Namespace_labels VALUES('cattle-mangos','field.cattle.io/projectId','project-02');
-INSERT INTO _v1_Namespace_labels VALUES('cattle-mangos','kubernetes.io/metadata.name','cattle-mangos');
-INSERT INTO _v1_Namespace_labels VALUES('cattle-mangos','objectset.rio.cattle.io/hash','4510303f19b6cbafc9031148b1866f16c2be7aaa');
+INSERT INTO _v1_Namespace_labels VALUES('cattle-mangoes','field.cattle.io/projectId','project-02');
+INSERT INTO _v1_Namespace_labels VALUES('cattle-mangoes','kubernetes.io/metadata.name','cattle-mangoes');
+INSERT INTO _v1_Namespace_labels VALUES('cattle-mangoes','objectset.rio.cattle.io/hash','4510303f19b6cbafc9031148b1866f16c2be7aaa');
 INSERT INTO _v1_Namespace_labels VALUES('cattle-limes','cattle.io/creator','norman');
 INSERT INTO _v1_Namespace_labels VALUES('cattle-limes','field.cattle.io/projectId','project-03');
 INSERT INTO _v1_Namespace_labels VALUES('cattle-limes','kubernetes.io/metadata.name','cattle-limes');

@@ -2,7 +2,7 @@ INSERT INTO _v1_Namespace VALUES('cluster-01', 'ns-obj2', 'ns-nonce2', 2);
 INSERT INTO _v1_Namespace VALUES('cluster-02', 'ns-obj2b', 'ns-nonce2b', 2);
 INSERT INTO _v1_Namespace VALUES('cattle-pears', 'ns-obj3', 'ns-nonce3', 3);
 INSERT INTO _v1_Namespace VALUES('cattle-lemons', 'ns-obj4', 'ns-nonce4', 4);
-INSERT INTO _v1_Namespace VALUES('cattle-mangos', 'ns-obj5', 'ns-nonce5', 5);
+INSERT INTO _v1_Namespace VALUES('cattle-mangoes', 'ns-obj5', 'ns-nonce5', 5);
 INSERT INTO _v1_Namespace VALUES('cattle-limes', 'ns-obj6', 'ns-nonce6', 6);
 INSERT INTO _v1_Namespace VALUES('cattle-kiwis', 'ns-obj9', 'ns-nonce9', 9);
 INSERT INTO _v1_Namespace VALUES('cattle-plums', 'ns-obj11', 'ns-nonce11', 11);

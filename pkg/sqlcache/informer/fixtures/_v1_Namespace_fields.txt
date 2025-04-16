@@ -2,7 +2,7 @@ INSERT INTO _v1_Namespace_fields VALUES('cluster-01','cluster-01','2025-04-11T17
 INSERT INTO _v1_Namespace_fields VALUES('cluster-02','cluster-02','2025-04-11T17:25:28Z','cluster-02','Hungry','4h1m','cluster-02','hungry','');
 INSERT INTO _v1_Namespace_fields VALUES('cattle-pears','cattle-pears','2025-04-11T17:23:36Z','cattle-pears','Muddy','4h3m','cattle-pears','muddy','project-02');
 INSERT INTO _v1_Namespace_fields VALUES('cattle-lemons','cattle-lemons','2025-04-11T17:23:39Z','cattle-lemons','Active','4h3m','cattle-lemons','active','project-02');
-INSERT INTO _v1_Namespace_fields VALUES('cattle-mangos','cattle-mangos','2025-04-11T17:22:33Z','cattle-mangos','Active','4h4m','cattle-mangos','active','project-02');
+INSERT INTO _v1_Namespace_fields VALUES('cattle-mangoes','cattle-mangoes','2025-04-11T17:22:33Z','cattle-mangoes','Active','4h4m','cattle-mangoes','active','project-02');
 INSERT INTO _v1_Namespace_fields VALUES('cattle-limes','cattle-limes','2025-04-11T17:22:18Z','cattle-limes','Hungry','4h4m','cattle-limes','hungry','project-02');
 INSERT INTO _v1_Namespace_fields VALUES('cattle-kiwis','cattle-kiwis','2025-04-11T17:24:42Z','cattle-kiwis','Active','4h2m','cattle-kiwis','active','');
 INSERT INTO _v1_Namespace_fields VALUES('cattle-plums','cattle-plums','2025-04-11T17:22:02Z','cattle-plums','Active','4h4m','cattle-plums','active','');

@@ -191,9 +191,21 @@ func TestNonIndirectQueries(t *testing.T) {
 		expectedResults: []string{"cluster-01", "project-02", "project-05", "user-01", "cluster-02", "project-03", "project-01", "project-04"},
 	})
 	tests = append(tests, testCase{
-		description:     "label contains a fcio/cattleId', sort by state desc",
-		query:           "filter=metadata.labels[field.cattle.io/projectId]&sort=metadata.state.name",
-		expectedResults: []string{"cluster-01", "project-02", "project-05", "user-01", "cluster-02", "cluster-eggs", "project-03", "cluster-bacon", "project-01", "project-04"},
+		description: "label contains a fcio/cattleId', sort by state desc only",
+		query:       "filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name",
+		expectedResults: []string{"cattle-pears", "cluster-bacon", "cattle-limes", "cluster-eggs",
+			"cattle-lemons", "cattle-mangoes", "fleet-local", "fleet-default", "default"},
+	})
+	tests = append(tests, testCase{
+		description: "label contains a fcio/cattleId', sort by state desc only, name asc",
+		query:       "filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,metadata.name",
+		expectedResults: []string{"cattle-pears", "cluster-bacon", "cattle-limes", "cluster-eggs",
+			"cattle-lemons", "cattle-mangoes", "default", "fleet-default", "fleet-local"},
+	})
+	tests = append(tests, testCase{
+		description:     "label contains a fcio/cattleId', sort by state desc only, name desc",
+		query:           "filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
+		expectedResults: []string{"cluster-bacon", "cattle-pears", "cluster-eggs", "cattle-limes", "fleet-local", "fleet-default", "default", "cattle-mangoes", "cattle-lemons"},
 	})
 
 	for _, test := range tests {
