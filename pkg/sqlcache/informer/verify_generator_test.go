@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -152,11 +151,9 @@ func wrapStartOfQueryGetRows(t *testing.T, ctx context.Context, query string) (*
 	if err != nil {
 		return nil, err
 	}
-	q := queryInfo.query
-	ptn := regexp.MustCompile(`^(SELECT\s+(?:DISTINCT\s+)?)`)
-	q1 := ptn.ReplaceAllString(q, `$1 o.key, `)
-	fmt.Fprintf(os.Stderr, "QQQ: query: [%s], args: [%v]\n", q1, queryInfo.params)
-	stmt, err := dbClient.Prepare(q1)
+	//fmt.Fprintf(os.Stderr, "QQQ: query: %s\n", queryInfo.query)
+	//fmt.Fprintf(os.Stderr, "QQQ: params: %s\n", queryInfo.params)
+	stmt, err := dbClient.Prepare(queryInfo.query)
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +231,8 @@ func TestNonIndirectQueries(t *testing.T) {
 			names := make([]string, 0)
 			for rows.Next() {
 				var key string
-				var o2, o3, o4 string
-				err = rows.Scan(&key, &o2, &o3, &o4)
+				var o2, o3 string
+				err = rows.Scan(&key, &o2, &o3)
 				require.Nil(t, err)
 				names = append(names, key)
 			}
@@ -245,7 +242,55 @@ func TestNonIndirectQueries(t *testing.T) {
 			assert.Equal(t, test.expectedResults, names)
 		})
 	}
+}
 
+func TestSimpleIndirectQueries(t *testing.T) {
+	type testCase struct {
+		description     string
+		query           string
+		expectedResults []string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description:     "indirect on cluster-*, accepting all, ASC",
+		query:           "filter=metadata.name~cluster-&sort=metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName]",
+		expectedResults: []string{"cluster-eggs", "cluster-bacon", "cluster-01", "cluster-02"},
+	})
+	tests = append(tests, testCase{
+		description:     "indirect on cluster-*, accepting all, DESC (so nulls first)",
+		query:           "filter=metadata.name~cluster-&sort=-metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName]",
+		expectedResults: []string{"cluster-01", "cluster-02", "cluster-bacon", "cluster-eggs"},
+	})
+	tests = append(tests, testCase{
+		description:     "label contains a fcio/cattleId, age between 206 and 210 (using set notation)', indirect sort by state desc only, name desc",
+		query:           "filter=metadata.fields[2] in (206, 207, 208, 209),metadata.fields[2]=210&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName],-metadata.name",
+		expectedResults: []string{"cattle-limes", "cluster-bacon", "cattle-mangoes"},
+	})
+	tests = append(tests, testCase{
+		description:     "label contains a fcio/cattleId, age between 206 and 210 (using set notation)', indirect sort by state desc only, name desc, redundant label accessors",
+		query:           "filter=metadata.fields[2] in (206, 207, 208, 209, 210)&filter=metadata.labels[field.cattle.io/projectId]&filter=metadata.labels[field.cattle.io/projectId]&sort=metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName],-metadata.name",
+		expectedResults: []string{"cattle-limes", "cluster-bacon", "cattle-mangoes"},
+	})
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			ctx := context.Background()
+			rows, err := wrapStartOfQueryGetRows(t, ctx, test.query)
+			require.Nil(t, err)
+			names := make([]string, 0)
+			for rows.Next() {
+				var key string
+				var o2, o3 string
+				err = rows.Scan(&key, &o2, &o3)
+				require.Nil(t, err)
+				names = append(names, key)
+			}
+			err = rows.Err()
+			require.Nil(t, err)
+			assert.Equal(t, len(test.expectedResults), len(names))
+			assert.Equal(t, test.expectedResults, names)
+		})
+	}
 }
 
 func TestFilterClusterNamesSortAscending(t *testing.T) {
@@ -254,8 +299,8 @@ func TestFilterClusterNamesSortAscending(t *testing.T) {
 	names := make([]string, 0)
 	for rows.Next() {
 		var key string
-		var o2, o3, o4 string
-		err = rows.Scan(&key, &o2, &o3, &o4)
+		var o2, o3 string
+		err = rows.Scan(&key, &o2, &o3)
 		require.Nil(t, err)
 		names = append(names, key)
 	}

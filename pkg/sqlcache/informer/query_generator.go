@@ -242,7 +242,7 @@ func (l *ListOptionIndexer) finishConstructQuery(lo *sqltypes.ListOptions, parti
 // Other ListOptionIndexer methods for generating SQL in alphabetical order:
 
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
-func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, bool, error) {
+func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int, joinedTables map[string]bool) (string, []string, []any, bool, error) {
 	params := make([]any, 0)
 	whereClauses := make([]string, 0, len(orFilters.Filters))
 	joinClauses := make([]string, 0)
@@ -256,13 +256,17 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 				labelIndex = len(joinTableIndexByLabelName) + 1
 				joinTableIndexByLabelName[fullName] = labelIndex
 			}
-			joinClauses = append(joinClauses, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, labelIndex, labelIndex))
+			_, ok = joinedTables[fullName]
+			if !ok {
+				joinedTables[fullName] = true
+				joinClauses = append(joinClauses, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, labelIndex, labelIndex))
+			}
 			needDistinct = true
 			labelFunc := l.getLabelFilter2
 			if isIndirectFilter(&filter) {
 				labelFunc = l.getIndirectLabelFilter
 			}
-			newWhereClause, newJoins, newParams, err := labelFunc(filter, dbName, joinTableIndexByLabelName)
+			newWhereClause, newJoins, newParams, err := labelFunc(filter, dbName, joinTableIndexByLabelName, joinedTables)
 			if err != nil {
 				return "", nil, nil, needDistinct, err
 			}
@@ -427,7 +431,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func (l *ListOptionIndexer) getIndirectLabelFilter(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, error) {
+func (l *ListOptionIndexer) getIndirectLabelFilter(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int, joinedTables map[string]bool) (string, []string, []any, error) {
 	if len(filter.IndirectFields) != 4 {
 		s := "<empty>"
 		if len(filter.IndirectFields) > 0 {
@@ -461,7 +465,12 @@ func (l *ListOptionIndexer) getIndirectLabelFilter(filter sqltypes.Filter, dbNam
 	if badTableNameChars.MatchString(targetFieldName) {
 		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", targetFieldName)
 	}
-	joinClauses = append(joinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON lt%d.value = ext%d."%s"`, extDBName, extIndex, labelIndex, extIndex, selectorFieldName))
+	extDBNameFields := fmt.Sprintf("%s_fields", extDBName)
+	_, ok = joinedTables[extDBNameFields]
+	if !ok {
+		joinedTables[extDBNameFields] = true
+		joinClauses = append(joinClauses, fmt.Sprintf(`JOIN "%s" ext%d ON lt%d.value = ext%d."%s"`, extDBNameFields, extIndex, labelIndex, extIndex, selectorFieldName))
+	}
 	labelWhereSubClause := fmt.Sprintf("lt%d.label = ?", labelIndex)
 	targetFieldReference := fmt.Sprintf(`ext%d."%s"`, extIndex, targetFieldName)
 	var clause string
@@ -721,7 +730,7 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, db
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, error) {
+func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int, joinedTables map[string]bool) (string, []string, []any, error) {
 	opString := ""
 	escapeString := ""
 	matchFmtToUse := strictMatchFmt
@@ -758,7 +767,7 @@ func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName strin
 			Field: filter.Field,
 			Op:    sqltypes.NotExists,
 		}
-		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName)
+		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName, joinedTables)
 		if err != nil {
 			return "", nil, nil, err
 		}
@@ -809,7 +818,7 @@ func (l *ListOptionIndexer) getLabelFilter2(filter sqltypes.Filter, dbName strin
 			Field: filter.Field,
 			Op:    sqltypes.NotExists,
 		}
-		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName)
+		existenceClause, _, subParams, err := l.getLabelFilter2(subFilter, dbName, joinTableIndexByLabelName, joinedTables)
 		if err != nil {
 			return "", nil, nil, err
 		}
@@ -828,9 +837,12 @@ func (l *ListOptionIndexer) getQueryParts(lo *sqltypes.ListOptions, partitions [
 	whereClauses := make([]string, 0)
 	params := make([]any, 0)
 	needDistinctFinal := false
+	joinedTables := make(map[string]bool)
+	joinedTables[dbName] = true
+	joinedTables[fmt.Sprintf("%s_fields", dbName)] = true
 	// 1- Figure out what we'll be joining and testing
 	for _, orFilters := range lo.Filters {
-		newWhereClause, newJoinParts, newParams, needDistinct, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName)
+		newWhereClause, newJoinParts, newParams, needDistinct, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName, joinedTables)
 
 		if err != nil {
 			return joinParts, whereClauses, params, needDistinctFinal, nil, nil, "", err
