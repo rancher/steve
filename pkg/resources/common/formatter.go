@@ -9,7 +9,6 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/schema"
-	metricsStore "githu
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
