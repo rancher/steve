@@ -161,6 +161,19 @@ func wrapStartOfQueryGetRows(t *testing.T, ctx context.Context, query string) (*
 	return stmt.Query(queryInfo.params...)
 }
 
+func getFirstFieldFromRows(rows *sql.Rows) ([]string, error) {
+	names := make([]string, 0)
+	for rows.Next() {
+		var key string
+		var o2, o3 string
+		if err := rows.Scan(&key, &o2, &o3); err != nil {
+			return names, err
+		}
+		names = append(names, key)
+	}
+	return names, rows.Err()
+}
+
 func TestNonIndirectQueries(t *testing.T) {
 	type testCase struct {
 		description     string
@@ -228,15 +241,7 @@ func TestNonIndirectQueries(t *testing.T) {
 			//}
 			rows, err := wrapStartOfQueryGetRows(t, context.Background(), test.query)
 			require.Nil(t, err)
-			names := make([]string, 0)
-			for rows.Next() {
-				var key string
-				var o2, o3 string
-				err = rows.Scan(&key, &o2, &o3)
-				require.Nil(t, err)
-				names = append(names, key)
-			}
-			err = rows.Err()
+			names, err := getFirstFieldFromRows(rows)
 			require.Nil(t, err)
 			assert.Equal(t, len(test.expectedResults), len(names))
 			assert.Equal(t, test.expectedResults, names)
@@ -277,15 +282,7 @@ func TestSimpleIndirectQueries(t *testing.T) {
 			ctx := context.Background()
 			rows, err := wrapStartOfQueryGetRows(t, ctx, test.query)
 			require.Nil(t, err)
-			names := make([]string, 0)
-			for rows.Next() {
-				var key string
-				var o2, o3 string
-				err = rows.Scan(&key, &o2, &o3)
-				require.Nil(t, err)
-				names = append(names, key)
-			}
-			err = rows.Err()
+			names, err := getFirstFieldFromRows(rows)
 			require.Nil(t, err)
 			assert.Equal(t, len(test.expectedResults), len(names))
 			assert.Equal(t, test.expectedResults, names)
@@ -293,21 +290,30 @@ func TestSimpleIndirectQueries(t *testing.T) {
 	}
 }
 
-func TestFilterClusterNamesSortAscending(t *testing.T) {
-	rows, err := wrapStartOfQueryGetRows(t, context.Background(), "filter=metadata.name~cluster-&sort=metadata.name")
-	require.Nil(t, err)
-	names := make([]string, 0)
-	for rows.Next() {
-		var key string
-		var o2, o3 string
-		err = rows.Scan(&key, &o2, &o3)
-		require.Nil(t, err)
-		names = append(names, key)
+func TestMultiSortWithIndirect(t *testing.T) {
+	type testCase struct {
+		description     string
+		query           string
+		expectedResults []string
 	}
-	err = rows.Err()
-	require.Nil(t, err)
-	assert.Equal(t, 4, len(names))
-	assert.Equal(t, []string{"cluster-01", "cluster-02", "cluster-bacon", "cluster-eggs"}, names)
+	var tests []testCase
+	tests = append(tests, testCase{
+		description:     "indirect on cluster-*, accepting all, ASC",
+		query:           "filter=metadata.name~cluster-&sort=metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName]",
+		expectedResults: []string{"cluster-eggs", "cluster-bacon", "cluster-01", "cluster-02"},
+	})
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			ctx := context.Background()
+			rows, err := wrapStartOfQueryGetRows(t, ctx, test.query)
+			require.Nil(t, err)
+			names, err := getFirstFieldFromRows(rows)
+			require.Nil(t, err)
+			assert.Equal(t, len(test.expectedResults), len(names))
+			assert.Equal(t, test.expectedResults, names)
+		})
+	}
 }
 
 func TestMain(m *testing.M) {
