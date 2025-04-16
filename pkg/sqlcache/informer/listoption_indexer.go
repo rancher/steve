@@ -248,11 +248,18 @@ func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) erro
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
 func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
-	queryInfo, err := l.constructQuery(lo, partitions, namespace, db.Sanitize(l.GetName()))
+	dbName := db.Sanitize(l.GetName())
+	queryInfo, err := l.constructQuery(lo, partitions, namespace, dbName)
 	if err != nil {
 		return nil, 0, "", err
 	}
-	return l.executeQuery(ctx, queryInfo)
+	list, total, token, err := l.executeQuery(ctx, queryInfo)
+	if err != nil {
+		if isSpecialCaseQuery(lo, namespace, dbName) && removeSpecialCaseSituation(&lo, namespace, dbName) {
+			return l.ListByOptions(ctx, lo, partitions, namespace)
+		}
+	}
+	return list, total, token, err
 }
 
 // QueryInfo is a helper-struct that is used to represent the core query and parameters when converting
@@ -266,11 +273,9 @@ type QueryInfo struct {
 	offset      int
 }
 
-func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
+func (l *ListOptionIndexer) constructRegularQuery(lo ListOptions, namespace string, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, error) {
 	ensureSortLabelsAreSelected(&lo)
-	queryInfo := &QueryInfo{}
 	queryUsesLabels := hasLabelFilter(lo.Filters)
-	joinTableIndexByLabelName := make(map[string]int)
 
 	// First, what kind of filtering will we be doing?
 	// 1- Intro: SELECT and JOIN clauses
@@ -308,7 +313,7 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	for _, orFilters := range lo.Filters {
 		orClause, orParams, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName)
 		if err != nil {
-			return queryInfo, err
+			return query, whereClauses, params, err
 		}
 		if orClause == "" {
 			continue
@@ -321,6 +326,60 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	if namespace != "" && namespace != "*" {
 		whereClauses = append(whereClauses, fmt.Sprintf(`f."metadata.namespace" = ?`))
 		params = append(params, namespace)
+	}
+	return query, whereClauses, params, nil
+}
+
+func constructSpecialQuery(lo ListOptions, namespace string, dbName string) (string, []string, []string, error) {
+	if dbName != "_v1_Namespace" {
+		return "", nil, nil, fmt.Errorf("internal error: dbName must be %s, got %s", "_v1_Namespace", dbName)
+	}
+	// If we're grabbing all the namespaces with no filter or sort parameters,
+	// we want them sorted first according to the human name of the project they're associated with,
+	// if there is one, and then sort by namespace name.
+	// Namespaces that aren't in a project show up after the others.
+	// Note that this query will fail if the 'management.cattle.io_v3_Project*' tables haven't
+	// been loaded yet. In which case we redo the query with a sort on `metadata.name`
+	// to prevent this query from being created.
+	query := `SELECT object, objectnonce, dekid FROM
+(
+  SELECT o.object as object, o.objectnonce as objectnonce, o.dekid as dekid, o.key as key, proj."spec.displayName" as humanName FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key 
+    JOIN "management.cattle.io_v3_Project_fields" proj ON nslb.value = proj."metadata.name"
+    WHERE nslb.label = "field.cattle.io/projectId"
+
+  UNION ALL
+
+    SELECT o.object as object, o.objectnonce as objectnonce, o.dekid as dekid, o.key as key, NULL as humanName FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key
+    WHERE (o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+           JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
+           LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
+           WHERE lt1i1.label = "field.cattle.io/projectId"))
+ )`
+	whereClauses := []string{}
+	sortClauses := []string{"humanName ASC NULLS LAST", "key ASC"}
+	return query, whereClauses, sortClauses, nil
+}
+
+func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
+	joinTableIndexByLabelName := make(map[string]int)
+	var err error
+	var query string
+	var whereClauses []string
+	var orderByClauses []string
+	var params []any
+	if isSpecialCaseQuery(lo, namespace, dbName) {
+		query, whereClauses, orderByClauses, err = constructSpecialQuery(lo, namespace, dbName)
+		params = make([]any, 0)
+	} else {
+		query, whereClauses, params, err = l.constructRegularQuery(lo, namespace, dbName, joinTableIndexByLabelName)
+		orderByClauses = make([]string, 0)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// WHERE clauses (from partitions and their corresponding parameters)
@@ -341,7 +400,7 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 			if !thisPartition.All {
 				names := thisPartition.Names
 
-				if len(names) == 0 {
+				if names.Len() == 0 {
 					// degenerate case, there will be no results
 					singlePartitionClauses = append(singlePartitionClauses, "FALSE")
 				} else {
@@ -388,11 +447,14 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	countParams := params[:]
 
 	// 3- Sorting: ORDER BY clauses (from lo.Sort)
-	if len(lo.Sort.Fields) != len(lo.Sort.Orders) {
+	if len(orderByClauses) > 0 {
+		// From the special-case query
+		query += "\n  ORDER BY "
+		query += strings.Join(orderByClauses, ", ")
+	} else if len(lo.Sort.Fields) != len(lo.Sort.Orders) {
 		return nil, fmt.Errorf("sort fields length %d != sort orders length %d", len(lo.Sort.Fields), len(lo.Sort.Orders))
-	}
-	if len(lo.Sort.Fields) > 0 {
-		orderByClauses := []string{}
+	} else if len(lo.Sort.Fields) > 0 {
+		orderByClauses = []string{}
 		for i, field := range lo.Sort.Fields {
 			if isLabelsFieldList(field) {
 				clause, sortParam, err := buildSortLabelsClause(field[2], joinTableIndexByLabelName, lo.Sort.Orders[i] == ASC)
@@ -404,7 +466,7 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 			} else {
 				columnName := toColumnName(field)
 				if err := l.validateColumn(columnName); err != nil {
-					return queryInfo, err
+					return nil, err
 				}
 				direction := "ASC"
 				if lo.Sort.Orders[i] == DESC {
@@ -443,7 +505,7 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 	if lo.Resume != "" {
 		offsetInt, err := strconv.Atoi(lo.Resume)
 		if err != nil {
-			return queryInfo, err
+			return nil, err
 		}
 		offset = offsetInt
 	}
@@ -454,6 +516,8 @@ func (l *ListOptionIndexer) constructQuery(lo ListOptions, partitions []partitio
 		offsetClause = "\n  OFFSET ?"
 		params = append(params, offset)
 	}
+
+	queryInfo := &QueryInfo{}
 	if limit > 0 || offset > 0 {
 		query += limitClause
 		query += offsetClause
@@ -807,20 +871,6 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter Filter, dbName stri
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func prepareComparisonParameters(op Op, target string) (string, float64, error) {
-	num, err := strconv.ParseFloat(target, 32)
-	if err != nil {
-		return "", 0, err
-	}
-	switch op {
-	case Lt:
-		return "<", num, nil
-	case Gt:
-		return ">", num, nil
-	}
-	return "", 0, fmt.Errorf("unrecognized operator when expecting '<' or '>': '%s'", op)
-}
-
 func formatMatchTarget(filter Filter) string {
 	format := strictMatchFmt
 	if filter.Partial {
@@ -836,6 +886,37 @@ func formatMatchTargetWithFormatter(match string, format string) string {
 	match = strings.ReplaceAll(match, `_`, `\_`)
 	match = strings.ReplaceAll(match, `%`, `\%`)
 	return fmt.Sprintf(format, match)
+}
+
+func isSpecialCaseQuery(lo ListOptions, namespace string, dbName string) bool {
+	if dbName == "_v1_Namespace" {
+		return (namespace == "" || namespace == "*") && len(lo.Filters) == 0 && len(lo.Sort.Fields) == 0
+	}
+	return false
+}
+
+func prepareComparisonParameters(op Op, target string) (string, float64, error) {
+	num, err := strconv.ParseFloat(target, 32)
+	if err != nil {
+		return "", 0, err
+	}
+	switch op {
+	case Lt:
+		return "<", num, nil
+	case Gt:
+		return ">", num, nil
+	}
+	return "", 0, fmt.Errorf("unrecognized operator when expecting '<' or '>': '%s'", op)
+}
+
+func removeSpecialCaseSituation(lo *ListOptions, namespace string, dbName string) bool {
+	if dbName == "_v1_Namespace" {
+		// Muddy it and retry
+		lo.Sort.Fields = [][]string{{"metadata", "name"}}
+		lo.Sort.Orders = []SortOrder{ASC}
+		return true
+	}
+	return false
 }
 
 // There are two kinds of string arrays to turn into a string, based on the last value in the array

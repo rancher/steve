@@ -1025,6 +1025,7 @@ func TestListByOptions(t *testing.T) {
 	}
 }
 
+// `'
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
 		description           string
@@ -1679,6 +1680,138 @@ func TestConstructQuery(t *testing.T) {
 	}
 }
 
+func TestConstructSpecialQuery(t *testing.T) {
+	type testCase struct {
+		dbname                string
+		description           string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           error
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		dbname:      "_v1_Namespace",
+		description: "ConstructQuery: unsorted namespaces should be sorted by project name",
+		listOptions: ListOptions{},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		expectedStmt: `SELECT object, objectnonce, dekid FROM
+(
+  SELECT o.object as object, o.objectnonce as objectnonce, o.dekid as dekid, o.key as key, proj."spec.displayName" as humanName FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key 
+    JOIN "management.cattle.io_v3_Project_fields" proj ON nslb.value = proj."metadata.name"
+    WHERE nslb.label = "field.cattle.io/projectId"
+
+  UNION ALL
+
+    SELECT o.object as object, o.objectnonce as objectnonce, o.dekid as dekid, o.key as key, NULL as humanName FROM "_v1_Namespace" o
+    JOIN "_v1_Namespace_fields" f ON o.key = f.key
+    LEFT OUTER JOIN "_v1_Namespace_labels" nslb ON o.key = nslb.key
+    WHERE (o.key NOT IN (SELECT o1.key FROM "_v1_Namespace" o1
+           JOIN "_v1_Namespace_fields" f1 ON o1.key = f1.key
+           LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
+           WHERE lt1i1.label = "field.cattle.io/projectId"))
+ )
+  WHERE
+    (FALSE)
+  ORDER BY humanName ASC NULLS LAST, key ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			if test.listOptions.Filters == nil {
+				test.listOptions.Filters = []OrFilter{}
+			}
+			if test.listOptions.Sort.Fields == nil {
+				test.listOptions.Sort.Fields = [][]string{}
+				test.listOptions.Sort.Orders = []SortOrder{}
+			}
+			assert.True(t, isSpecialCaseQuery(test.listOptions, test.ns, test.dbname))
+			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, test.dbname)
+			if test.expectedErr != nil {
+				assert.Equal(t, test.expectedErr, err)
+				return
+			}
+			assert.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestRemoveSpecialCaseOnNamespace(t *testing.T) {
+	type testCase struct {
+		dbname                string
+		description           string
+		listOptions           ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           error
+	}
+
+	test := testCase{
+		dbname:      "_v1_Namespace",
+		description: "RemoveSpecialCaseOnNamespace: unsorted namespaces should be sorted by namespace name",
+		listOptions: ListOptions{
+			Filters: []OrFilter{},
+			Sort:    Sort{Fields: [][]string{}, Orders: []SortOrder{}},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "_v1_Namespace" o
+  JOIN "_v1_Namespace_fields" f ON o.key = f.key
+  WHERE
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	}
+	assert.True(t, isSpecialCaseQuery(test.listOptions, test.ns, test.dbname))
+	assert.True(t, removeSpecialCaseSituation(&test.listOptions, test.ns, test.dbname))
+	assert.False(t, isSpecialCaseQuery(test.listOptions, test.ns, test.dbname))
+	store := NewMockStore(gomock.NewController(t))
+	i := &Indexer{
+		Store: store,
+	}
+	lii := &ListOptionIndexer{
+		Indexer:       i,
+		indexedFields: []string{"metadata.name"},
+	}
+	queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, test.dbname)
+	if test.expectedErr != nil {
+		assert.Equal(t, test.expectedErr, err)
+		return
+	}
+	assert.Nil(t, err)
+	assert.Equal(t, test.expectedStmt, queryInfo.query)
+	assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+	assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+	assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+}
+
 func TestSmartJoin(t *testing.T) {
 	type testCase struct {
 		description       string
@@ -1748,7 +1881,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		joinTableIndexByLabelName map[string]int
 		direction                 bool
 		expectedStmt              string
-        expectedParam             string
+		expectedParam             string
 		expectedErr               string
 	}
 
