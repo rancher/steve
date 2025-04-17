@@ -13,6 +13,9 @@ sqlite> .read _v1_Namespace_labels.txt
 sqlite> .read management.cattle.io_v3_Project.txt
 sqlite> .read management.cattle.io_v3_Project_fields.txt
 sqlite> .read management.cattle.io_v3_Project_labels.txt
+sqlite> .read _v1_Foods.txt
+sqlite> .read _v1_Foods_fields.txt
+sqlite> .read _v1_Foods_labels.txt
 ```
 
 And query the data to your heart's content.

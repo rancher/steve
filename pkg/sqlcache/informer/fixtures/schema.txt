@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project" (
 		objectnonce TEXT,
 		dekid INTEGER
 	);
+
 CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project_indices" (
 			name TEXT NOT NULL,
 			value TEXT NOT NULL,
@@ -64,3 +65,35 @@ CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project_labels" (
 		PRIMARY KEY (key, label)
 	);
 CREATE INDEX "management.cattle.io_v3_Project_labels_index" ON "management.cattle.io_v3_Project_labels"(label, value);
+
+CREATE TABLE IF NOT EXISTS "_v1_Foods" (
+		key TEXT UNIQUE NOT NULL PRIMARY KEY,
+		object TEXT,
+		objectnonce TEXT,
+		dekid INTEGER
+	);
+CREATE TABLE IF NOT EXISTS "_v1_Foods_indices" (
+			name TEXT NOT NULL,
+			value TEXT NOT NULL,
+			key TEXT NOT NULL REFERENCES "_v1_Foods"(key) ON DELETE CASCADE,
+			PRIMARY KEY (name, value, key)
+        );
+CREATE INDEX "_v1_Foods_indices_index" ON "_v1_Foods_indices"(name, value);
+
+CREATE TABLE IF NOT EXISTS "_v1_Foods_fields" (
+			key TEXT NOT NULL PRIMARY KEY,
+                        foodCode INTEGER,
+                        country TEXT,
+                        state TEXT);
+CREATE INDEX "_v1_Foods_key_index" ON "_v1_Foods_fields"("key");
+CREATE INDEX "_v1_Foods_foodCode_index" ON "_v1_Foods_fields"("foodCode");
+CREATE INDEX "_v1_Foods_country_index" ON "_v1_Foods_fields"("country");
+CREATE INDEX "_v1_Foods_state_index" ON "_v1_Foods_fields"("state");
+CREATE TABLE IF NOT EXISTS "_v1_Foods_labels" (
+		key TEXT NOT NULL REFERENCES "_v1_Foods"(key) ON DELETE CASCADE,
+		label TEXT NOT NULL,
+		value TEXT NOT NULL,
+		PRIMARY KEY (key, label)
+	);
+CREATE INDEX "_v1_Foods_labels_index" ON "_v1_Foods_labels"(label, value);
+
