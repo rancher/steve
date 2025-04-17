@@ -151,8 +151,6 @@ func wrapStartOfQueryGetRows(t *testing.T, ctx context.Context, query string) (*
 	if err != nil {
 		return nil, err
 	}
-	//fmt.Fprintf(os.Stderr, "QQQ: query: %s\n", queryInfo.query)
-	//fmt.Fprintf(os.Stderr, "QQQ: params: %s\n", queryInfo.params)
 	stmt, err := dbClient.Prepare(queryInfo.query)
 	if err != nil {
 		return nil, err
@@ -218,16 +216,16 @@ func TestNonIndirectQueries(t *testing.T) {
 		query:           "filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
 		expectedResults: []string{"cluster-bacon", "cattle-pears", "cluster-eggs", "cattle-limes", "fleet-local", "fleet-default", "default", "cattle-mangoes", "cattle-lemons"},
 	})
-	//tests = append(tests, testCase{
-	//	description:     "label contains a fcio/cattleId, age between 206 and 210', sort by state desc only, name desc",
-	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
-	//	expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
-	//})
 	tests = append(tests, testCase{
 		description:     "label contains a fcio/cattleId, age between 206 and 210 (using set notation)', sort by state desc only, name desc",
 		query:           "filter=metadata.fields[2] in (206, 207, 208, 209),metadata.fields[2]=210&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
 		expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
 	})
+	//tests = append(tests, testCase{
+	//	description:     "label contains a fcio/cattleId, age between 206 and 210', sort by state desc only, name desc",
+	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
+	//	expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
+	//})
 	//tests = append(tests, testCase{
 	//	description:     "TEMP TEST: fields[2] 206 - 208",
 	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<209&sort=metadata.fields[2]",
@@ -236,9 +234,6 @@ func TestNonIndirectQueries(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			//if test.description == "label contains a fcio/cattleId, age between 206 and 210', sort by state desc only, name desc" {
-			//	fmt.Printf("QQQ: stop ehere")
-			//}
 			rows, err := wrapStartOfQueryGetRows(t, context.Background(), test.query)
 			require.Nil(t, err)
 			names, err := getFirstFieldFromRows(rows)
@@ -298,15 +293,48 @@ func TestMultiSortWithIndirect(t *testing.T) {
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
-		description:     "indirect on cluster-*, accepting all, ASC",
-		query:           "filter=metadata.name~cluster-&sort=metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName]",
-		expectedResults: []string{"cluster-eggs", "cluster-bacon", "cluster-01", "cluster-02"},
+		description: "indirect on cluster-*, accepting all, ASC",
+		query:       "filter=metadata.name~cluster-,metadata.name~cattle-&sort=metadata.state.name,metadata.labels[field.cattle.io/projectId]=>[management.cattle.io/v3][Project][metadata.name][spec.clusterName],metadata.name",
+		expectedResults: []string{
+			// state: "active"
+			// cluster-01 clusterName
+			"cattle-lemons",
+			// local clusterName
+			"cattle-mangoes",
+			// no clusterName
+			"cattle-kiwis",
+			"cattle-plums",
+			"cluster-01",
+
+			// state: "hungry"
+			// cluster-01 clusterName
+			"cluster-eggs",
+			// cluster-02 clusterName
+			"cattle-limes",
+			// no clusterName
+			"cluster-02",
+
+			// state: "muddy"
+			// local clusterName
+			"cattle-pears",
+			"cluster-bacon",
+		},
 	})
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			ctx := context.Background()
-			rows, err := wrapStartOfQueryGetRows(t, ctx, test.query)
+			l, lo, err := getListOptionIndexerForQuery(t, ctx, test.query)
+			require.Nil(t, err)
+			p := partition.Partition{Passthrough: true}
+			partitions := []partition.Partition{p}
+			namespace := ""
+			queryInfo, err := l.constructQuery(lo, partitions, namespace, "_v1_Namespace")
+			require.Nil(t, err)
+			stmt, err := dbClient.Prepare(queryInfo.query)
+			require.Nil(t, err)
+			defer stmt.Close()
+			rows, err := stmt.Query(queryInfo.params...)
 			require.Nil(t, err)
 			names, err := getFirstFieldFromRows(rows)
 			require.Nil(t, err)
@@ -375,7 +403,6 @@ func teardownTests() error {
 		}
 	}
 	if vaiFile != nil {
-		//fmt.Fprintf(os.Stderr, "Not deleting file %s\n", vaiFile.Name())
 		return os.Remove(vaiFile.Name())
 	}
 	return nil

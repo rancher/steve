@@ -750,9 +750,6 @@ func TestListByOptions(t *testing.T) {
 			if len(test.extraIndexedFields) > 0 {
 				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
 			}
-			if test.description == "ListByOptions with labels filter should select the label in the prepared sql.Stmt" {
-				fmt.Printf("stop here")
-			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
@@ -1452,12 +1449,6 @@ func TestConstructQuery(t *testing.T) {
 			lii := &ListOptionIndexer{
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
-			}
-			if test.description == "TestConstructQuery: sort on label statements with no query" {
-				fmt.Printf("stop here")
-			}
-			if test.description == "TestConstructQuery: sort and query on both labels and non-labels without overlap" {
-				fmt.Printf("stop here")
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
@@ -2429,7 +2420,7 @@ func TestConstructLabelIndirectSort(t *testing.T) {
       JOIN "management.cattle.io_v3_Project_fields" ext2 ON lt1.value = ext2."metadata.name"
     WHERE lt1.label = ?
 UNION ALL
-  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, NULL AS __ix_f_metadata_name FROM
+  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext2_spec_clusterName, f."metadata.name" AS __ix_f_metadata_name FROM
     "_v1_Namespace" o
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key
@@ -2488,7 +2479,7 @@ WHERE FALSE
       JOIN "management.cattle.io_v3_Project_fields" ext4 ON lt3.value = ext4."metadata.name"
 			WHERE ((lt1.label = ? AND lt1.value = ?) OR (ext2."spec.heights" = ?)) AND (lt3.label = ?)
 UNION ALL
-  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext4_spec_clusterName, NULL AS __ix_f_metadata_name FROM
+  SELECT DISTINCT o.object AS __ix_object, o.objectnonce AS __ix_objectnonce, o.dekid AS __ix_dekid, NULL AS __ix_ext4_spec_clusterName, f."metadata.name" AS __ix_f_metadata_name FROM
     "_v1_Namespace" o
       JOIN "_v1_Namespace_fields" f ON o.key = f.key
       LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON o.key = lt1.key

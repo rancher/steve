@@ -64,17 +64,17 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *sqltypes.ListOptions,
 	var indirectSortDirective sqltypes.Sort
 	newSortList1 := make([]sqltypes.Sort, 1)
 	newSortList2 := make([]sqltypes.Sort, 0, len(lo.SortList.SortDirectives)-1)
-	foundIt := false
+	indirectSortPosition := -1
 	for i, sd := range lo.SortList.SortDirectives {
 		if sd.IsIndirect {
 			indirectSortDirective = lo.SortList.SortDirectives[i]
 			newSortList1[0] = indirectSortDirective
-			foundIt = true
+			indirectSortPosition = i
 		} else {
 			newSortList2 = append(newSortList2, sd)
 		}
 	}
-	if !foundIt {
+	if indirectSortPosition == -1 {
 		return nil, fmt.Errorf("expected an indirect sort directive, didn't find one")
 	}
 	if len(indirectSortDirective.IndirectFields) != 4 {
@@ -147,7 +147,8 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *sqltypes.ListOptions,
 	countParams := params[:]
 	params = append(params, orderByParams2...)
 
-	fullQuery += fmt.Sprintf("\n%sORDER BY %s", indent1, strings.Join(sortParts, ", "))
+	fixedSortParts := putIndirectSortInPosition(sortParts, indirectSortPosition)
+	fullQuery += fmt.Sprintf("\n%sORDER BY %s", indent1, strings.Join(fixedSortParts, ", "))
 	queryInfo := &queryInfo{
 		query:       fullQuery,
 		params:      params,
@@ -155,6 +156,16 @@ func (l *ListOptionIndexer) constructIndirectSortQuery(lo *sqltypes.ListOptions,
 		countParams: countParams,
 	}
 	return queryInfo, nil
+}
+
+func putIndirectSortInPosition(sortParts []string, indirectSortPosition int) []string {
+	fixedSortParts := make([]string, 0, len(sortParts))
+	indirectSortPart := sortParts[0]
+	sortParts = sortParts[1:]
+	fixedSortParts = append(fixedSortParts, sortParts[0:indirectSortPosition]...)
+	fixedSortParts = append(fixedSortParts, indirectSortPart)
+	fixedSortParts = append(fixedSortParts, sortParts[indirectSortPosition:len(sortParts)]...)
+	return fixedSortParts
 }
 
 func (l *ListOptionIndexer) finishConstructQuery(lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string, dbName string, joinTableIndexByLabelName map[string]int) (*queryInfo, error) {
@@ -1070,7 +1081,7 @@ func processOrderByFields(sd *sqltypes.Sort, extIndex int, orderByClauses []stri
 		newName := fmt.Sprintf("__ix_%s_%s", prefix, newBaseName)
 		sortFieldMap[fieldName] = newName
 		importWithParts[i+1] = fmt.Sprintf("%s AS %s", fieldName, newName)
-		importAsNullParts[i+1] = fmt.Sprintf("NULL AS %s", newName)
+		importAsNullParts[i+1] = importWithParts[i+1]
 		sortParts[i+1] = fmt.Sprintf("%s %s", newName, orderParts[1])
 	}
 	return sortParts, importWithParts, importAsNullParts
