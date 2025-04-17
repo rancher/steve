@@ -221,6 +221,7 @@ func TestNonIndirectQueries(t *testing.T) {
 		query:           "filter=metadata.fields[2] in (206, 207, 208, 209),metadata.fields[2]=210&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
 		expectedResults: []string{"cluster-bacon", "cattle-limes", "cattle-mangoes"},
 	})
+	// This is commented out because there's an off-by-one error involving doing '< 211'.
 	//tests = append(tests, testCase{
 	//	description:     "label contains a fcio/cattleId, age between 206 and 210', sort by state desc only, name desc",
 	//	query:           "filter=metadata.fields[2]>205&filter=metadata.fields[2]<211&filter=metadata.labels[field.cattle.io/projectId]&sort=-metadata.state.name,-metadata.name",
@@ -344,6 +345,77 @@ func TestMultiSortWithIndirect(t *testing.T) {
 	}
 }
 
+func TestIndirectFilteringOnANonLabelLink(t *testing.T) {
+	type testCase struct {
+		description     string
+		query           string
+		expectedResults []string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "indirect filter on namespace.state = foods_fields[state].country = japan",
+		query:       "filter=metadata.fields[2]=>[_v1][Foods][foodCode][country]=japan&sort=metadata.name",
+		expectedResults: []string{
+			"cattle-lemons", "default", "project-04", "project-05",
+		},
+	})
+	tests = append(tests, testCase{
+		description: "indirect filter on hungry clusters based on foods from canada",
+		query:       "filter=metadata.fields[2]=>[_v1][Foods][foodCode][country]=canada&sort=metadata.name&filter=metadata.fields[2]=>[_v1][Foods][foodCode][state]=hungry",
+		expectedResults: []string{
+			"cluster-02", "cluster-eggs", "project-03",
+		},
+	})
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			ctx := context.Background()
+			rows, err := wrapStartOfQueryGetRows(t, ctx, test.query)
+			require.Nil(t, err)
+			names, err := getFirstFieldFromRows(rows)
+			require.Nil(t, err)
+			assert.Equal(t, len(test.expectedResults), len(names))
+			assert.Equal(t, test.expectedResults, names)
+		})
+	}
+
+}
+
+func TestIndirectSortingOnANonLabelLink(t *testing.T) {
+	type testCase struct {
+		description     string
+		query           string
+		expectedResults []string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "indirect sort on namespace.state = foods_fields[state].country, select hungries",
+		query:       "sort=metadata.fields[2]=>[_v1][Foods][foodCode][country],metadata.name&filter=metadata.state.name=hungry",
+		expectedResults: []string{
+			// canada
+			"cluster-02",
+			"cluster-eggs",
+			"project-03",
+			// france
+			"local",
+			// mexico
+			"cattle-limes",
+		},
+	})
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			ctx := context.Background()
+			rows, err := wrapStartOfQueryGetRows(t, ctx, test.query)
+			require.Nil(t, err)
+			names, err := getFirstFieldFromRows(rows)
+			require.Nil(t, err)
+			assert.Equal(t, len(test.expectedResults), len(names))
+			assert.Equal(t, test.expectedResults, names)
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	err := setupTests()
 	if err != nil {
@@ -378,6 +450,8 @@ func setupTests() error {
 		"_v1_Namespace_labels.txt", "management.cattle.io_v3_Project.txt",
 		"management.cattle.io_v3_Project_fields.txt",
 		"management.cattle.io_v3_Project_labels.txt",
+		"_v1_Foods.txt", "_v1_Foods_fields.txt",
+		"_v1_Foods_labels.txt",
 	}
 	for _, fileName := range fileNames {
 		fullPath := filepath.Join(fixtureDir, fileName)

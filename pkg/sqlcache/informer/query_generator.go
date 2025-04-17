@@ -287,7 +287,7 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 			}
 			params = append(params, newParams...)
 		} else if isIndirectFilter(&filter) {
-			newWhereClause, newJoins, newParams, err := l.getIndirectNonLabelFilter(filter, dbName, joinTableIndexByLabelName)
+			newWhereClause, newJoins, newParams, err := l.getIndirectNonLabelFilter(filter, dbName, joinTableIndexByLabelName, joinedTables)
 			if err != nil {
 				return "", nil, nil, needDistinct, err
 			}
@@ -554,7 +554,7 @@ func (l *ListOptionIndexer) getIndirectLabelFilter(filter sqltypes.Filter, dbNam
 	return "", nil, nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func (l *ListOptionIndexer) getIndirectNonLabelFilter(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int) (string, []string, []any, error) {
+func (l *ListOptionIndexer) getIndirectNonLabelFilter(filter sqltypes.Filter, dbName string, joinTableIndexByLabelName map[string]int, joinedTables map[string]bool) (string, []string, []any, error) {
 	if len(filter.IndirectFields) != 4 {
 		s := "<empty>"
 		if len(filter.IndirectFields) > 0 {
@@ -582,7 +582,13 @@ func (l *ListOptionIndexer) getIndirectNonLabelFilter(filter sqltypes.Filter, db
 	if badTableNameChars.MatchString(externalFieldName) {
 		return "", nil, nil, fmt.Errorf("invalid database column name '%s'", externalFieldName)
 	}
-	joinClauses := []string{fmt.Sprintf(`JOIN "%s_fields" ext%d ON f."%s" = ext%d."%s"`, extDBName, extIndex, columnName, extIndex, selectorFieldName)}
+	extDBNameFields := fmt.Sprintf("%s_fields", extDBName)
+	_, ok = joinedTables[extDBNameFields]
+	joinClauses := make([]string, 0)
+	if !ok {
+		joinedTables[extDBNameFields] = true
+		joinClauses = append(joinClauses, fmt.Sprintf(`JOIN "%s_fields" ext%d ON f."%s" = ext%d."%s"`, extDBName, extIndex, columnName, extIndex, selectorFieldName))
+	}
 	params := make([]any, 0)
 
 	opString := ""

@@ -49,6 +49,8 @@ func TestSelectorParse(t *testing.T) {
 		"!metadata.labels[im.not.here]",
 		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
 		"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"name => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"metadata.annotations[blah] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -72,8 +74,6 @@ func TestSelectorParse(t *testing.T) {
 		"!metadata.labels(im.not.here)",
 		`x="no double quotes allowed"`,
 		`x='no single quotes allowed'`,
-		"name => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
-		"metadata.annotations[blah] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
 		"metadata.labels[k8s.io/meta-stuff] => not-bracketed = active",
 		"metadata.labels[k8s.io/meta-stuff] => [not][enough][accessors] = active",
 		"metadata.labels[k8s.io/meta-stuff] => [too][many][accessors][by][1] = active",

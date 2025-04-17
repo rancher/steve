@@ -688,22 +688,12 @@ func (p *Parser) parseOperatorAndValues(key string, fieldPath field.PathOption, 
 		} else if newOperator != nil && p.parseType == "sort" {
 			return nil, fmt.Errorf("found an operator (%s) in a sort expression )", *newOperator)
 		}
-		if !p.isValidIndirectKey(key) {
-			return nil, fmt.Errorf("an indirect key must be a label, but got a search on %s", key)
-		}
 		return NewIndirectRequirement(key, indirectFields, newOperator, targetValues.List(), fieldPath)
 	}
 	if err != nil {
 		return nil, err
 	}
 	return NewRequirement(key, operator, values.List(), field.WithPath(p.path))
-}
-
-func (p *Parser) isValidIndirectKey(key string) bool {
-	if p.parseType == "sort" && strings.HasPrefix(key, "-") {
-		key = key[1:]
-	}
-	return strings.HasPrefix(key, "metadata.labels")
 }
 
 // parseKeyAndInferOperator parses literals.
