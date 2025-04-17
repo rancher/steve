@@ -27,15 +27,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/validation/field"
-)
-
-var (
-	ignoreDetail = cmpopts.IgnoreFields(field.Error{}, "Detail")
 )
 
 func TestSelectorParse(t *testing.T) {
@@ -281,30 +275,18 @@ func TestRequirementConstructor(t *testing.T) {
 		Key     string
 		Op      selection.Operator
 		Vals    sets.String
-		WantErr field.ErrorList
+		WantErr string
 	}{
 		{
-			Key: "x1",
-			Op:  selection.In,
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{},
-				},
-			},
+			Key:     "x1",
+			Op:      selection.In,
+			WantErr: "values: Invalid value: []string{}: for 'in', 'notin' operators, values set can't be empty",
 		},
 		{
-			Key:  "x2",
-			Op:   selection.NotIn,
-			Vals: sets.NewString(),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{},
-				},
-			},
+			Key:     "x2",
+			Op:      selection.NotIn,
+			Vals:    sets.NewString(),
+			WantErr: "values: Invalid value: []string{}: for 'in', 'notin' operators, values set can't be empty",
 		},
 		{
 			Key:  "x3",
@@ -317,16 +299,10 @@ func TestRequirementConstructor(t *testing.T) {
 			Vals: sets.NewString("foo"),
 		},
 		{
-			Key:  "x5",
-			Op:   selection.Equals,
-			Vals: sets.NewString("foo", "bar"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{"bar", "foo"},
-				},
-			},
+			Key:     "x5",
+			Op:      selection.Equals,
+			Vals:    sets.NewString("foo", "bar"),
+			WantErr: "values: Invalid value: []string{\"bar\", \"foo\"}: exact-match compatibility requires one single value",
 		},
 		{
 			Key: "x6",
@@ -337,16 +313,10 @@ func TestRequirementConstructor(t *testing.T) {
 			Op:  selection.DoesNotExist,
 		},
 		{
-			Key:  "x8",
-			Op:   selection.Exists,
-			Vals: sets.NewString("foo"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{"foo"},
-				},
-			},
+			Key:     "x8",
+			Op:      selection.Exists,
+			Vals:    sets.NewString("foo"),
+			WantErr: `values: Invalid value: []string{"foo"}: values set must be empty for exists and does not exist`,
 		},
 		{
 			Key:  "x9",
@@ -369,39 +339,21 @@ func TestRequirementConstructor(t *testing.T) {
 			Vals: sets.NewString("6"),
 		},
 		{
-			Key: "x13",
-			Op:  selection.GreaterThan,
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{},
-				},
-			},
+			Key:     "x13",
+			Op:      selection.GreaterThan,
+			WantErr: "values: Invalid value: []string{}: for 'Gt', 'Lt' operators, exactly one value is required",
 		},
 		{
-			Key:  "x14",
-			Op:   selection.GreaterThan,
-			Vals: sets.NewString("bar"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values[0]",
-					BadValue: "bar",
-				},
-			},
+			Key:     "x14",
+			Op:      selection.GreaterThan,
+			Vals:    sets.NewString("bar"),
+			WantErr: `values[0]: Invalid value: "bar": for 'Gt', 'Lt' operators, the value must be an integer`,
 		},
 		{
-			Key:  "x15",
-			Op:   selection.LessThan,
-			Vals: sets.NewString("bar"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values[0]",
-					BadValue: "bar",
-				},
-			},
+			Key:     "x15",
+			Op:      selection.LessThan,
+			Vals:    sets.NewString("bar"),
+			WantErr: `values[0]: Invalid value: "bar": for 'Gt', 'Lt' operators, the value must be an integer`,
 		},
 		{
 			Key: strings.Repeat("a", 254), //breaks DNS rule that len(key) <= 253
@@ -418,25 +370,29 @@ func TestRequirementConstructor(t *testing.T) {
 			Vals: sets.NewString("a b"),
 		},
 		{
-			Key: "x18",
-			Op:  "unsupportedOp",
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeNotSupported,
-					Field:    "operator",
-					BadValue: selection.Operator("unsupportedOp"),
-				},
-			},
+			Key:     "x18",
+			Op:      "unsupportedOp",
+			WantErr: `operator: Unsupported value: "unsupportedOp": supported values: "in", "notin", "=", "==", "!=", "~", "!~", "gt", "lt", "=>", "exists", "!"`,
 		},
 	}
 	for _, rc := range requirementConstructorTests {
 		_, err := NewRequirement(rc.Key, rc.Op, rc.Vals.List())
-		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
-			t.Errorf("NewRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
+		if rc.WantErr != "" {
+			assert.NotNil(t, err)
+			if err != nil {
+				assert.Equal(t, rc.WantErr, err.Error())
+			}
+		} else {
+			assert.Nil(t, err)
 		}
 		_, err = NewIndirectRequirement(rc.Key, []string{"herb", "job", "nice", "reading"}, &rc.Op, rc.Vals.List())
-		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
-			t.Errorf("NewIndirectRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
+		if rc.WantErr != "" {
+			assert.NotNil(t, err)
+			if err != nil {
+				assert.Equal(t, rc.WantErr, err.Error())
+			}
+		} else {
+			assert.Nil(t, err)
 		}
 	}
 }

@@ -189,7 +189,12 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 	default:
 		allErrs = append(allErrs, field.NotSupported(path.Child("operator"), op, validRequirementOperators))
 	}
-	return &Requirement{key: key, operator: op, strValues: vals}, allErrs.ToAggregate()
+	agg := allErrs.ToAggregate()
+	var err error
+	if agg != nil {
+		err = errors.New(agg.Error())
+	}
+	return &Requirement{key: key, operator: op, strValues: vals}, err
 }
 
 func NewIndirectRequirement(key string, indirectFields []string, newOperator *selection.Operator, targetValues []string, opts ...field.PathOption) (*Requirement, error) {
