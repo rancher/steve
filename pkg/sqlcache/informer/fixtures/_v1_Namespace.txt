@@ -19,3 +19,4 @@ INSERT INTO _v1_Namespace VALUES('project-03', 'project-03', 'ns-nonce24', 24);
 INSERT INTO _v1_Namespace VALUES('project-04', 'project-04', 'ns-nonce25', 25);
 INSERT INTO _v1_Namespace VALUES('project-05', 'project-05', 'ns-nonce26', 26);
 INSERT INTO _v1_Namespace VALUES('user-01', 'user-01', 'ns-nonce27', 27);
+INSERT INTO _v1_Namespace VALUES('zebra-01', 'zebra-01', 'ns-nonce28', 28);

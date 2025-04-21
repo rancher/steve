@@ -12,7 +12,7 @@ INSERT INTO _v1_Namespace_fields VALUES('default','default','2024-07-08T19:30:47
 INSERT INTO _v1_Namespace_fields VALUES('fleet-default','fleet-default','2025-04-11T17:22:18Z','fleet-default','Active','213','fleet-default','active','project-02');
 INSERT INTO _v1_Namespace_fields VALUES('fleet-local','fleet-local','2025-04-11T17:22:02Z','fleet-local','Active','214','fleet-local','active','project-02');
 INSERT INTO _v1_Namespace_fields VALUES('local','local','2025-04-11T17:22:17Z','local','Hungry','215','local','hungry','');
-INSERT INTO _v1_Namespace_fields VALUES('before-local','before-local','2025-04-11T17:22:17Z','before-local','Active','216','before-local','active','');
+INSERT INTO _v1_Namespace_fields VALUES('before-local-01','before-local-01','2025-04-11T17:22:17Z','before-local-01','Active','216','before-local-01','active','');
 INSERT INTO _v1_Namespace_fields VALUES('project-01','project-01','2025-04-11T17:25:28Z','project-01','Muddy','217','project-01','muddy','');
 INSERT INTO _v1_Namespace_fields VALUES('project-02','project-02','2025-04-11T17:22:19Z','project-02','Active','218','project-02','active','');
 INSERT INTO _v1_Namespace_fields VALUES('project-03','project-03','2025-04-11T17:25:28Z','project-03','Hungry','219','project-03','hungry','');
@@ -20,3 +20,4 @@ INSERT INTO _v1_Namespace_fields VALUES('project-04','project-04','2025-04-11T17
 INSERT INTO _v1_Namespace_fields VALUES('project-05','project-05','2025-04-11T17:22:19Z','project-05','Active','221','project-05','active','');
 INSERT INTO _v1_Namespace_fields VALUES('project-06','project-06','2025-04-11T17:22:19Z','project-06','Muddy','222','project-06','muddy','');
 INSERT INTO _v1_Namespace_fields VALUES('user-01','user-01','2025-04-11T17:23:27Z','user-01','Active','223','user-01','active','');
+INSERT INTO _v1_Namespace_fields VALUES('zebra-01','zebra-01','2025-04-11T17:23:27Z','zebra-01','Active','224','zebra-01','active','');

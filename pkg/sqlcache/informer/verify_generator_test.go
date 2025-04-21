@@ -98,7 +98,7 @@ func TestEmptyFilter(t *testing.T) {
 	}
 	err = rows.Err()
 	require.Nil(t, err)
-	assert.Equal(t, 20, numRows) // TODO: Improve this
+	assert.Equal(t, 22, numRows)
 }
 
 func TestSimpleFilterOnName(t *testing.T) {
@@ -172,6 +172,21 @@ func getFirstFieldFromRows(rows *sql.Rows) ([]string, error) {
 	return names, rows.Err()
 }
 
+func getResultFromCountQuery(rows *sql.Rows) (int, error) {
+	counts := make([]int, 0)
+	for rows.Next() {
+		var val int
+		if err := rows.Scan(&val); err != nil {
+			return -1, err
+		}
+		counts = append(counts, val)
+	}
+	if len(counts) != 1 {
+		return -1, fmt.Errorf("expected 1 result, got %d", len(counts))
+	}
+	return counts[0], nil
+}
+
 func TestNonIndirectQueries(t *testing.T) {
 	type testCase struct {
 		description     string
@@ -196,8 +211,8 @@ func TestNonIndirectQueries(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description:     "name contains a '0', sort by state asc",
-		query:           "filter=metadata.name~0&sort=metadata.state.name",
-		expectedResults: []string{"cluster-01", "project-02", "project-05", "user-01", "cluster-02", "project-03", "project-01", "project-04"},
+		query:           "filter=metadata.name~0&sort=metadata.state.name,metadata.name",
+		expectedResults: []string{"before-local-01", "cluster-01", "project-02", "project-05", "user-01", "zebra-01", "cluster-02", "project-03", "project-01", "project-04"},
 	})
 	tests = append(tests, testCase{
 		description: "label contains a fcio/cattleId', sort by state desc only",
@@ -356,7 +371,7 @@ func TestIndirectFilteringOnANonLabelLink(t *testing.T) {
 		description: "indirect filter on namespace.state = foods_fields[state].country = japan",
 		query:       "filter=metadata.fields[2]=>[_v1][Foods][foodCode][country]=japan&sort=metadata.name",
 		expectedResults: []string{
-			"cattle-lemons", "default", "project-04", "project-05",
+			"before-local-01", "cattle-lemons", "default", "project-04", "project-05",
 		},
 	})
 	tests = append(tests, testCase{
@@ -416,6 +431,176 @@ func TestIndirectSortingOnANonLabelLink(t *testing.T) {
 	}
 }
 
+func TestPagination(t *testing.T) {
+	type testCase struct {
+		description     string
+		queryTemplate   string
+		expectedResults [][]string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description:   "no sorting, no filter, 3 per page",
+		queryTemplate: "page=%d&pagesize=3",
+		expectedResults: [][]string{
+			{"before-local-01",
+				"cattle-kiwis",
+				"cattle-lemons"},
+			{"cattle-limes",
+				"cattle-mangoes",
+				"cattle-pears"},
+			{"cattle-plums",
+				"cluster-01",
+				"cluster-02"},
+			{"cluster-bacon",
+				"cluster-eggs",
+				"default"},
+			{"fleet-default",
+				"fleet-local",
+				"local"},
+			{"project-01",
+				"project-02",
+				"project-03"},
+			{"project-04",
+				"project-05",
+				"user-01"},
+			{
+				"zebra-01",
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description:   "sort by state, no filter, 5 per page",
+		queryTemplate: "page=%d&pagesize=5&sort=metadata.state.name",
+		expectedResults: [][]string{
+			{
+				"cluster-01",
+				"cattle-lemons",
+				"cattle-mangoes",
+				"cattle-kiwis",
+				"cattle-plums",
+			}, {
+				"default",
+				"fleet-default",
+				"fleet-local",
+				"before-local-01",
+				"project-02",
+			}, {
+				"project-05",
+				"user-01",
+				"zebra-01",
+				"cluster-02",
+				"cattle-limes",
+			}, {
+				"cluster-eggs",
+				"local",
+				"project-03",
+				"cattle-pears",
+				"cluster-bacon",
+			}, {
+				"project-01",
+				"project-04",
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description:   "external sort by country via foodCode, no filter, 4 per page",
+		queryTemplate: "page=%d&pagesize=4&sort=metadata.fields[2] => [_v1][Foods][foodCode][country]",
+		expectedResults: [][]string{
+			{
+				"cluster-01",
+				"cluster-02",
+				"cattle-pears",
+				"cattle-plums",
+			}, {
+				"cluster-bacon",
+				"cluster-eggs",
+				"project-03",
+				"fleet-local",
+			}, {
+				"local",
+				"project-01",
+				"cattle-lemons",
+				"default",
+			}, {
+				"before-local-01",
+				"project-04",
+				"project-05",
+				"cattle-mangoes",
+			}, {
+				"cattle-limes",
+				"fleet-default",
+				"cattle-kiwis",
+				"project-02",
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description:   "external sort active-only by country via foodCode, 7 per page",
+		queryTemplate: "page=%d&pagesize=7&filter=metadata.state.name=active&sort=metadata.fields[2] => [_v1][Foods][foodCode][country]",
+		expectedResults: [][]string{
+			{
+				"cluster-01",
+				"cattle-plums",
+				"fleet-local",
+				"cattle-lemons",
+				"default",
+				"before-local-01",
+				"project-05",
+			}, {
+				"cattle-mangoes",
+				"fleet-default",
+				"cattle-kiwis",
+				"project-02",
+			},
+		},
+	})
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			ctx := context.Background()
+			p := partition.Partition{Passthrough: true}
+			partitions := []partition.Partition{p}
+			namespace := ""
+			numTotal := 0
+			for _, part := range test.expectedResults {
+				numTotal += len(part)
+			}
+			for i, part := range test.expectedResults {
+				query := fmt.Sprintf(test.queryTemplate, i+1)
+				l, lo, err := getListOptionIndexerForQuery(t, ctx, query)
+				require.Nil(t, err)
+				queryInfo, err := l.constructQuery(lo, partitions, namespace, "_v1_Namespace")
+				require.Nil(t, err)
+				rows, err := func() (*sql.Rows, error) {
+					stmt, err := dbClient.Prepare(queryInfo.query)
+					require.Nil(t, err)
+					defer stmt.Close()
+					return stmt.Query(queryInfo.params...)
+				}()
+				require.Nil(t, err)
+				names, err := getFirstFieldFromRows(rows)
+				require.Nil(t, err)
+				assert.Equal(t, len(part), len(names))
+				assert.Equal(t, part, names)
+				if i == len(test.expectedResults)-1 {
+					// Verify that we've seen everything we expected to see
+					rows, err := func() (*sql.Rows, error) {
+						stmt, err := dbClient.Prepare(queryInfo.countQuery)
+						require.Nil(t, err)
+						defer stmt.Close()
+						return stmt.Query(queryInfo.countParams...)
+					}()
+					require.Nil(t, err)
+					var fullCount int
+					fullCount, err = getResultFromCountQuery(rows)
+					require.Nil(t, err)
+					assert.Equal(t, numTotal, fullCount)
+				}
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	err := setupTests()
 	if err != nil {
@@ -431,7 +616,6 @@ func TestMain(m *testing.M) {
 func setupTests() error {
 	var err error
 	vaiFile, err = ioutil.TempFile("", "vaidb")
-	//fmt.Fprintf(os.Stderr, "vaiFile: %s\n", vaiFile.Name())
 	if err != nil {
 		return err
 	}
