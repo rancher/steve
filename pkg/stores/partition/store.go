@@ -4,6 +4,7 @@ package partition
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -389,7 +390,7 @@ func toAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 
 	if event.Type == watch.Error {
 		status, _ := event.Object.(*metav1.Status)
-		apiEvent.Error = fmt.Errorf(status.Message)
+		apiEvent.Error = errors.New(status.Message)
 		return apiEvent
 	}
 
