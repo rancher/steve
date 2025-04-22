@@ -54,6 +54,9 @@ func TestSelectorParse(t *testing.T) {
 		"metadata.labels[im.here]",
 		"!metadata.labels[im.not.here]",
 		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
+		`metadata.labels[k8s.io/meta-stuff] ~ "m!a@t#c$h%e^v&e*r(y)t-_i=n+g)t{o[$]c}o]m|m\\a:;'<.>"`,
+		`x="double quotes ok"`,
+		`x='single quotes ok'`,
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -75,8 +78,6 @@ func TestSelectorParse(t *testing.T) {
 		"metadata.labels-im.here",
 		"metadata.labels[missing/close-bracket",
 		"!metadata.labels(im.not.here)",
-		`x="no double quotes allowed"`,
-		`x='no single quotes allowed'`,
 	}
 	for _, test := range testGoodStrings {
 		_, err := Parse(test)
@@ -110,11 +111,13 @@ func TestLexer(t *testing.T) {
 		{"!=", NotEqualsToken},
 		{"(", OpenParToken},
 		{")", ClosedParToken},
-		{`'sq string''`, ErrorToken},
-		{`"dq string"`, ErrorToken},
+		{`'sq string'`, QuotedStringToken},
+		{`"dq string"`, QuotedStringToken},
 		{"~", PartialEqualsToken},
 		{"!~", NotPartialEqualsToken},
 		{"||", ErrorToken},
+		{`"double-quoted string"`, QuotedStringToken},
+		{`'single-quoted string'`, QuotedStringToken},
 	}
 	for _, v := range testcases {
 		l := &Lexer{s: v.s, pos: 0}
@@ -122,8 +125,14 @@ func TestLexer(t *testing.T) {
 		if token != v.t {
 			t.Errorf("Got %d it should be %d for '%s'", token, v.t, v.s)
 		}
-		if v.t != ErrorToken && lit != v.s {
-			t.Errorf("Got '%s' it should be '%s'", lit, v.s)
+		if v.t != ErrorToken {
+			exp := v.s
+			if v.t == QuotedStringToken {
+				exp = exp[1 : len(exp)-1]
+			}
+			if lit != exp {
+				t.Errorf("Got '%s' it should be '%s'", lit, exp)
+			}
 		}
 	}
 }
@@ -153,6 +162,8 @@ func TestLexerSequence(t *testing.T) {
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken}},
 		{"key gt 3", []Token{IdentifierToken, IdentifierToken, IdentifierToken}},
 		{"key lt 4", []Token{IdentifierToken, IdentifierToken, IdentifierToken}},
+		{`key = 'sqs'`, []Token{IdentifierToken, EqualsToken, QuotedStringToken}},
+		{`key = "dqs"`, []Token{IdentifierToken, EqualsToken, QuotedStringToken}},
 		{"key=value", []Token{IdentifierToken, EqualsToken, IdentifierToken}},
 		{"key == value", []Token{IdentifierToken, DoubleEqualsToken, IdentifierToken}},
 		{"key ~ value", []Token{IdentifierToken, PartialEqualsToken, IdentifierToken}},
@@ -184,6 +195,7 @@ func TestLexerSequence(t *testing.T) {
 		}
 	}
 }
+
 func TestParserLookahead(t *testing.T) {
 	testcases := []struct {
 		s string
@@ -200,9 +212,9 @@ func TestParserLookahead(t *testing.T) {
 		{"== != (), = notin", []Token{DoubleEqualsToken, NotEqualsToken, OpenParToken, ClosedParToken, CommaToken, EqualsToken, NotInToken, EndOfStringToken}},
 		{"key>2", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
-		{"key gt 3", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
-		{"key lt 4", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
-		{`key = multi-word-string`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
+		{"key gt 3", []Token{IdentifierToken, IdentifierToken, IdentifierToken, EndOfStringToken}},
+		{"key lt 4", []Token{IdentifierToken, IdentifierToken, IdentifierToken, EndOfStringToken}},
+		{`key = "multi-word-string"`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
@@ -210,15 +222,16 @@ func TestParserLookahead(t *testing.T) {
 		if len(p.scannedItems) != len(v.t) {
 			t.Errorf("Expected %d items for test %s, found %d", len(v.t), v.s, len(p.scannedItems))
 		}
-		for {
-			token, lit := p.lookahead(KeyAndOperator)
-
-			token2, lit2 := p.consume(KeyAndOperator)
+		for i, entry := range v.t {
+			token, _ := p.consume(KeyAndOperator)
 			if token == EndOfStringToken {
+				if i != len(v.t)-1 {
+					t.Errorf("Expected end of string token at position %d for test '%s', but length is %d", i, v.s, len(v.t))
+				}
 				break
 			}
-			if token != token2 || lit != lit2 {
-				t.Errorf("Bad values")
+			if token != entry {
+				t.Errorf("Expected token %v at position %d for test '%s', but got %v", entry, i, v.s, token)
 			}
 		}
 	}

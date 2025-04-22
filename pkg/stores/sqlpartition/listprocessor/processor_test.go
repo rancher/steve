@@ -265,7 +265,23 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: `filter=a1="c1"`},
 			},
 		},
-		errExpected: true,
+		expectedLO: informer.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []informer.OrFilter{
+				{
+					Filters: []informer.Filter{
+						{
+							Field:   []string{"a1"},
+							Matches: []string{"c1"},
+							Op:      informer.Eq,
+						},
+					},
+				},
+			},
+			Pagination: informer.Pagination{
+				Page: 1,
+			},
+		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
