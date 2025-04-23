@@ -24,7 +24,7 @@ jobs:
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@a4f60bb28d35aeee14e6880718e0c85ff1882e64 # v6.0.1
       with:
-        version: v1.54.0
+        version: v1.60.3
     - name: Build
       run: make build-bin
     - name: Test

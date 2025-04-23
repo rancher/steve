@@ -19,16 +19,16 @@
         }
     },
     "run": {
-        "skip-dirs": [
+        "tests": false,
+        "timeout": "10m"
+    },
+    "issues": {
+        "exclude-dirs": [
             "vendor",
             "tests",
             "pkg/client",
             "pkg/generated"
         ],
-        "tests": false,
-        "timeout": "10m"
-    },
-    "issues": {
         "exclude-rules": [
             {
                 "linters": "govet",
