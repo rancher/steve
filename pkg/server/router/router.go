@@ -3,8 +3,11 @@ package router
 import (
 	"net/http"
 
+	openapi_v2 "github.com/google/gnostic-models/openapiv2"
+	openapi_v3 "github.com/google/gnostic-models/openapiv3"
 	"github.com/gorilla/mux"
 	"github.com/rancher/apiserver/pkg/urlbuilder"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type RouterFunc func(h Handlers) http.Handler
@@ -31,7 +34,9 @@ func Routes(h Handlers) http.Handler {
 	if h.ExtensionAPIServer != nil {
 		m.Path("/ext").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
 		m.PathPrefix("/ext/").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
+
 		m.Path("/v1/ext.cattle.io.{[A-Za-z]+}").Handler(h.ExtensionAPIServer)
+		m.Path("/apis/ext.cattle.io.{[A-Za-z]+}").Handler(h.ExtensionAPIServer)
 	}
 
 	m.Path("/v1/{type}").Handler(h.K8sResource)
@@ -42,10 +47,16 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/v1/{type}/{namespace}/{name}").Queries("link", "{link}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}/{link}").Handler(h.K8sResource)
+
 	m.Path("/api").Handler(h.K8sProxy) // Can't just prefix this as UI needs /apikeys path
 	m.PathPrefix("/api/").Handler(h.K8sProxy)
+
+	m.Path("/apis").Handler(merge[metav1.APIGroupList](h.K8sProxy, h.ExtensionAPIServer))
 	m.PathPrefix("/apis").Handler(h.K8sProxy)
-	m.PathPrefix("/openapi").Handler(h.K8sProxy)
+
+	m.PathPrefix("/openapi/v2").Handler(merge[openapi_v2.Document](h.K8sProxy, h.ExtensionAPIServer))
+	m.PathPrefix("/openapi/v3").Handler(merge[openapi_v3.Document](h.K8sProxy, h.ExtensionAPIServer))
+
 	m.PathPrefix("/version").Handler(h.K8sProxy)
 	m.NotFoundHandler = h.Next
 
