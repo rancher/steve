@@ -52,6 +52,7 @@ replace (
 
 require (
 	github.com/adrg/xdg v0.5.3
+	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.4
 	github.com/google/gnostic-models v0.6.9
 	github.com/gorilla/mux v1.8.1
