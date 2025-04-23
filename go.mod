@@ -1,12 +1,20 @@
 module github.com/rancher/steve
 
-go 1.20
+go 1.22
 
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
+
+	k8s.io/api => k8s.io/api v0.28.6
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.28.6
+	k8s.io/apimachinery => k8s.io/apimachinery v0.28.6
+	k8s.io/apiserver => k8s.io/apiserver v0.28.6
 	k8s.io/client-go => github.com/rancher/client-go v1.28.6-rancher1-debug-45509-1
+	k8s.io/component-base => k8s.io/component-base v0.28.6
+	k8s.io/kms => k8s.io/kms v0.28.6
+	sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
 )
 
 require (
