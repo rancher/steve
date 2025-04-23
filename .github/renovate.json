@@ -5,8 +5,11 @@
   "baseBranches": [
     "master"
   ],
-  "packageRules": {
-    "matchPackageNames": ["helm.sh/helm/v3"]
-  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["helm.sh/helm/v3"],
+      "enabled": false
+    }
+  ],
   "prHourlyLimit": 2
 }
