@@ -42,15 +42,20 @@ func DefaultTemplateForStore(store types.Store,
 }
 
 func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix string) {
+	return buildBasePath(gvr, meta.GetNamespace(), meta.GetName())
+}
+
+func buildBasePath(gvr schema2.GroupVersionResource, namespace string, includeName string) string {
 	buf := &strings.Builder{}
+
 	if gvr.Group == "management.cattle.io" && gvr.Version == "v3" {
 		buf.WriteString("/v1/")
 		buf.WriteString(gvr.Group)
 		buf.WriteString(".")
 		buf.WriteString(gvr.Resource)
-		if meta.GetNamespace() != "" {
+		if namespace != "" {
 			buf.WriteString("/")
-			buf.WriteString(meta.GetNamespace())
+			buf.WriteString(namespace)
 		}
 	} else {
 		if gvr.Group == "" {
@@ -62,15 +67,19 @@ func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix stri
 			buf.WriteString(gvr.Version)
 			buf.WriteString("/")
 		}
-		if meta.GetNamespace() != "" {
+		if namespace != "" {
 			buf.WriteString("namespaces/")
-			buf.WriteString(meta.GetNamespace())
+			buf.WriteString(namespace)
 			buf.WriteString("/")
 		}
 		buf.WriteString(gvr.Resource)
 	}
-	buf.WriteString("/")
-	buf.WriteString(meta.GetName())
+
+	if includeName != "" {
+		buf.WriteString("/")
+		buf.WriteString(includeName)
+	}
+
 	return buf.String()
 }
 
@@ -148,16 +157,23 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 		}
 
 		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
-			id := resource.APIObject.ID
-			ns := getNamespaceFromResource(id)
-			gvr := attributes.GVR(resource.Schema)
-			permissions := map[string]map[string]bool{}
+			ns := getNamespaceFromResource(resource.APIObject)
+			permissions := map[string]map[string]string{}
+
 			for _, res := range strings.Split(permsQuery, ",") {
-				perms := map[string]bool{}
+				s := request.Schemas.LookupSchema(res)
+				if s == nil {
+					continue
+				}
+				gvr := attributes.GVR(s)
+				gr := schema2.GroupResource{Group: gvr.Group, Resource: gvr.Resource}
+				perms := map[string]string{}
+
 				for _, verb := range []string{"create", "update", "delete", "list", "get", "watch", "patch"} {
-					allowed := accessSet.Grants(verb, schema2.GroupResource{Group: gvr.Group, Resource: res}, ns, "")
-					// TODO maybe add links rather than true/false
-					perms[verb] = allowed
+					if accessSet.Grants(verb, gr, ns, "") {
+						url := request.URLBuilder.RelativeToRoot(buildBasePath(gvr, ns, ""))
+						perms[verb] = url
+					}
 				}
 				permissions[res] = perms
 			}
@@ -205,10 +221,26 @@ func excludeValues(request *types.APIRequest, unstr *unstructured.Unstructured) 
 	}
 }
 
-func getNamespaceFromResource(resourceID string) string {
-	parts := strings.SplitN(resourceID, "/", 2)
-	if len(parts) == 2 {
-		return parts[1]
+func getNamespaceFromResource(obj types.APIObject) string {
+	unstr, ok := obj.Object.(*unstructured.Unstructured)
+	if !ok {
+		return ""
 	}
-	return resourceID
+
+	// If we have a backingNamespace, use that
+	if statusRaw, ok := unstr.Object["status"]; ok {
+		if statusMap, ok := statusRaw.(map[string]interface{}); ok {
+			if backingNamespace, ok := statusMap["backingNamespace"].(string); ok && backingNamespace != "" {
+				return backingNamespace
+			}
+		}
+	}
+
+	// Otherwise, if the id has a slash, we will interpret that
+	parts := strings.SplitN(obj.ID, "/", 2)
+	if len(parts) == 2 {
+		return parts[0] + "-" + parts[1]
+	}
+
+	return obj.ID
 }

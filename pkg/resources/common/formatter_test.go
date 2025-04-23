@@ -1088,7 +1088,7 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 		resourcePermissions map[string][]string
 		schema              *types.APISchema
 		apiObject           types.APIObject
-		want                map[string]map[string]bool
+		want                map[string]map[string]string
 	}{
 		{
 			name:                "get update patch on project and get on projectroletemplatebindings",
@@ -1112,15 +1112,11 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 					Object: map[string]interface{}{},
 				},
 			},
-			want: map[string]map[string]bool{
+			want: map[string]map[string]string{
 				"projectroletemplatebindings": {
-					"get":    true,
-					"list":   true,
-					"watch":  true,
-					"create": false,
-					"delete": false,
-					"patch":  false,
-					"update": false,
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
 				},
 			},
 		},
@@ -1147,24 +1143,16 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 					Object: map[string]interface{}{},
 				},
 			},
-			want: map[string]map[string]bool{
+			want: map[string]map[string]string{
 				"projectroletemplatebindings": {
-					"get":    true,
-					"list":   true,
-					"watch":  true,
-					"create": false,
-					"delete": false,
-					"patch":  false,
-					"update": false,
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
 				},
 				"pods": {
-					"get":    true,
-					"list":   true,
-					"watch":  true,
-					"create": false,
-					"delete": false,
-					"patch":  false,
-					"update": false,
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",
 				},
 			},
 		},
@@ -1188,17 +1176,7 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 					Object: map[string]interface{}{},
 				},
 			},
-			want: map[string]map[string]bool{
-				"unknown": {
-					"get":    false,
-					"list":   false,
-					"watch":  false,
-					"create": false,
-					"delete": false,
-					"patch":  false,
-					"update": false,
-				},
-			},
+			want: nil,
 		},
 	}
 
@@ -1234,7 +1212,7 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 				}
 				for _, verb := range verbs {
 					accessSet.Add(verb, gvr.GroupResource(), accesscontrol.Access{
-						Namespace: projectid,
+						Namespace: clusterid + "-" + projectid,
 					})
 				}
 			}
@@ -1254,6 +1232,30 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 				Query: url.Values{
 					"checkPermissions": {strings.Join(checkPerms, ",")},
 				},
+				Schemas: types.EmptyAPISchemas(),
+			}
+			addSchema := func(names ...string) {
+				for _, name := range names {
+					if name == "unknown" {
+						continue
+					}
+					req.Schemas.MustAddSchema(types.APISchema{
+						Schema: &schemas.Schema{
+							ID:                name,
+							CollectionMethods: []string{"get"},
+							ResourceMethods:   []string{"get"},
+							Attributes: map[string]interface{}{
+								"group":    "management.cattle.io",
+								"resource": name,
+								"version":  "v1",
+							},
+						},
+					})
+				}
+			}
+
+			for res := range test.want {
+				addSchema(res)
 			}
 
 			resource := &types.RawResource{
@@ -1274,21 +1276,22 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 			u, ok := resource.APIObject.Object.(*unstructured.Unstructured)
 			require.True(t, ok, "APIObject.Object is not Unstructured")
 
-			rawPerms, ok := u.Object["resourcePermissions"]
-			require.True(t, ok, "resourcePermissions field missing")
+			if test.want != nil {
+				rawPerms, ok := u.Object["resourcePermissions"]
+				require.True(t, ok, "resourcePermissions field missing")
 
-			permMap, ok := rawPerms.(map[string]map[string]bool)
-			require.True(t, ok, "resourcePermissions is not map[string]map[string]bool")
+				permMap, ok := rawPerms.(map[string]map[string]string)
+				require.True(t, ok, "resourcePermissions is not map[string]map[string]string")
 
-			got := map[string]map[string]bool{}
-			for res, actionMap := range permMap {
-				got[res] = map[string]bool{}
-				for action, boolVal := range actionMap {
-					got[res][action] = boolVal
+				got := map[string]map[string]string{}
+				for res, actionMap := range permMap {
+					got[res] = map[string]string{}
+					for action, boolVal := range actionMap {
+						got[res][action] = boolVal
+					}
 				}
+				require.Equal(t, test.want, got)
 			}
-
-			require.Equal(t, test.want, got)
 		})
 	}
 }
