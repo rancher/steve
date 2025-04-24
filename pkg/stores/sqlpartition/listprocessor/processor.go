@@ -3,6 +3,7 @@ package listprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -93,7 +94,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 	filterParams := q[filterParam]
 	filterOpts := []sqltypes.OrFilter{}
 	for _, filters := range filterParams {
-		requirements, err := queryparser.ParseToRequirements(filters)
+		requirements, err := queryparser.ParseToRequirements(filters, filterParam)
 		if err != nil {
 			return sqltypes.ListOptions{}, err
 		}
@@ -109,26 +110,37 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 	}
 	opts.Filters = filterOpts
 
-	sortKeys := q.Get(sortParam)
-	if sortKeys != "" {
-		sortList := *sqltypes.NewSortList()
-		sortParts := strings.Split(sortKeys, ",")
-		for _, sortPart := range sortParts {
-			field := sortPart
-			if len(field) > 0 {
-				sortOrder := sqltypes.ASC
-				if field[0] == '-' {
-					sortOrder = sqltypes.DESC
-					field = field[1:]
-				}
-				if len(field) > 0 {
-					sortDirective := sqltypes.Sort{
-						Fields: queryhelper.SafeSplit(field),
-						Order:  sortOrder,
-					}
-					sortList.SortDirectives = append(sortList.SortDirectives, sortDirective)
-				}
+	if q.Has(sortParam) {
+		sortKeys := q.Get(sortParam)
+		filterRequirements, err := queryparser.ParseToRequirements(sortKeys, sortParam)
+		if err != nil {
+			return opts, err
+		}
+		if len(filterRequirements) == 0 {
+			if len(sortKeys) == 0 {
+				return opts, errors.New("invalid sort key: <empty string>")
 			}
+			return opts, fmt.Errorf("invalid sort key: '%s'", sortKeys)
+		}
+		sortList := *sqltypes.NewSortList()
+		for _, requirement := range filterRequirements {
+			if requirement.Operator() != selection.Exists {
+				return opts, fmt.Errorf("sort directive %s can't contain operator (%s)", sortKeys, requirement.Operator())
+			}
+			key := requirement.Key()
+			order := sqltypes.ASC
+			if key[0] == '-' {
+				order = sqltypes.DESC
+				key = key[1:]
+			}
+			isIndirect, indirectFields := requirement.IndirectInfo()
+			sortDirective := sqltypes.Sort{
+				Fields:         queryhelper.SafeSplit(key),
+				Order:          order,
+				IsIndirect:     isIndirect,
+				IndirectFields: indirectFields,
+			}
+			sortList.SortDirectives = append(sortList.SortDirectives, sortDirective)
 		}
 		opts.SortList = sortList
 	}
