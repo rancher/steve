@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"regexp"
 	"sort"
 	"strconv"
