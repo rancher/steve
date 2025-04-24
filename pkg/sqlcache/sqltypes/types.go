@@ -40,10 +40,12 @@ type ListOptions struct {
 //
 // If more than one value is given for the `Match` field, we do an "IN (<values>)" test
 type Filter struct {
-	Field   []string
-	Matches []string
-	Op      Op
-	Partial bool
+	Field          []string
+	Matches        []string
+	Op             Op
+	Partial        bool
+	IsIndirect     bool
+	IndirectFields []string
 }
 
 // OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
@@ -57,12 +59,10 @@ type OrFilter struct {
 // The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
 // e.g. To sort internal clusters first followed by clusters in alpha order: sort=-spec.internal,spec.displayName
 type Sort struct {
-	Fields []string
-	Order  SortOrder
-}
-
-type SortList struct {
-	SortDirectives []Sort
+	Fields         []string
+	Order          SortOrder
+	IsIndirect     bool
+	IndirectFields []string
 }
 
 type SortList struct {
@@ -73,12 +73,6 @@ type SortList struct {
 type Pagination struct {
 	PageSize int
 	Page     int
-}
-
-func NewSortList() *SortList {
-	return &SortList{
-		SortDirectives: []Sort{},
-	}
 }
 
 func NewSortList() *SortList {
