@@ -28,7 +28,7 @@ type ListOptions struct {
 	ChunkSize  int
 	Resume     string
 	Filters    []OrFilter
-	Sort       Sort
+	SortList   SortList
 	Pagination Pagination
 }
 
@@ -40,10 +40,10 @@ type ListOptions struct {
 //
 // If more than one value is given for the `Match` field, we do an "IN (<values>)" test
 type Filter struct {
-	Field          []string
-	Matches        []string
-	Op             Op
-	Partial        bool
+	Field   []string
+	Matches []string
+	Op      Op
+	Partial bool
 }
 
 // OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
@@ -57,8 +57,8 @@ type OrFilter struct {
 // The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
 // e.g. To sort internal clusters first followed by clusters in alpha order: sort=-spec.internal,spec.displayName
 type Sort struct {
-	Fields [][]string
-	Orders []SortOrder
+	Fields []string
+	Order  SortOrder
 }
 
 type SortList struct {
@@ -68,7 +68,7 @@ type SortList struct {
 // Pagination represents how to return paginated results.
 type Pagination struct {
 	PageSize int
-	Page  int
+	Page     int
 }
 
 func NewSortList() *SortList {

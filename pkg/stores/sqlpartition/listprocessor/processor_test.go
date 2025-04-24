@@ -744,10 +744,13 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: sqltypes.Sort{
-				Fields: [][]string{
-					{"metadata", "name"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 			Filters: make([]sqltypes.OrFilter, 0),
 			Pagination: sqltypes.Pagination{
@@ -765,9 +768,13 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "name"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.DESC,
+					},
+				},
 			},
 			Filters: make([]sqltypes.OrFilter, 0),
 			Pagination: sqltypes.Pagination{
@@ -785,14 +792,16 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: sqltypes.Sort{
-				Fields: [][]string{
-					{"metadata", "name"},
-					{"spec", "something"},
-				},
-				Orders: []sqltypes.SortOrder{
-					sqltypes.DESC,
-					sqltypes.ASC,
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.DESC,
+					},
+					{
+						Fields: []string{"spec", "something"},
+						Order:  sqltypes.ASC,
+					},
 				},
 			},
 			Filters: make([]sqltypes.OrFilter, 0),
@@ -811,12 +820,25 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "labels", "beef.cattle.io/snort"},
-					{"metadata", "labels", "steer"},
-					{"metadata", "labels", "bossie.cattle.io/moo"},
-					{"spec", "something"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC, sqltypes.ASC, sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "beef.cattle.io/snort"},
+						Order:  sqltypes.DESC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "steer"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "bossie.cattle.io/moo"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"spec", "something"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 			Filters: make([]sqltypes.OrFilter, 0),
 			Pagination: sqltypes.Pagination{
