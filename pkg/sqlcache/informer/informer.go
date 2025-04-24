@@ -30,7 +30,7 @@ type Informer struct {
 }
 
 type ByOptionsLister interface {
-	ListByOptions(ctx context.Context, lo sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
@@ -66,7 +66,7 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	// copy of the known state of all objects (in an Indexer).
 	// The resync period option here is passed from Informer to Reflector to periodically (re)-push all known
 	// objects to the DeltaFIFO. That causes the periodic (re-)firing all registered handlers.
-	// sqltypes.In this case we are not registering any handlers to this particular informer, so re-syncing is a no-op.
+	// In this case we are not registering any handlers to this particular informer, so re-syncing is a no-op.
 	// We therefore just disable it right away.
 	resyncPeriod := time.Duration(0)
 
@@ -103,7 +103,7 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 //   - the total number of resources (returned list might be a subset depending on pagination options in lo)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (i *Informer) ListByOptions(ctx context.Context, lo sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+func (i *Informer) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	return i.ByOptionsLister.ListByOptions(ctx, lo, partitions, namespace)
 }
 

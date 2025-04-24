@@ -978,7 +978,7 @@ func TestListByOptions(t *testing.T) {
 			if len(test.extraIndexedFields) > 0 {
 				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
@@ -1667,7 +1667,7 @@ func TestConstructQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
-			queryInfo, err := lii.constructQuery(test.listOptions, test.partitions, test.ns, "something")
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
 				return
