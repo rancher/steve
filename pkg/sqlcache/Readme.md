@@ -25,10 +25,13 @@ like any other informer, but with a wider array of options. The options are conf
 ### List Options
 ListOptions includes the following:
 * Match filters for indexed fields. Filters are for specifying the value a given field in an object should be in order to
-be included in the list. Filters can be set to equals or not equals. Filters can be set to look for partial matches or
-exact (strict) matches. Filters can be OR'd and AND'd with one another. Filters only work on fields that have been indexed.
-* Primary field and secondary field sorting order. Can choose up to two fields to sort on. Sort order can be ascending
-or descending. Default sorting is to sort on metadata.namespace in ascending first and then sort on metadata.name.
+be included in the list. Filters are similar to the operators on labels in the `kubectl` CLI. Filters can be set to look for partial matches or
+exact (strict) matches. Filters can be OR'd and AND'd with one another.  A query of the form `filter=field1 OP1 val1,field2 OP2 val2` is an `OR` test,
+while separate filters are AND'd together, as in `filter=field1 OP1 val1&filter=field2 OP2 val2`.
+* Filters only work on fields that have been indexed. All `metadata.labels` are also indexed.
+* Any number of sort fields can be specified, but must be comma-separated in a single `sort=....` query.
+Precede each field with a dash (`-`) to sort descending. The default sort is `sort=metadata.namespace,metadata.name`
+(sort first by namespace, then name).
 * Page size to specify how many items to include in a response.
 * Page number to specify offset. For example, a page size of 50 and a page number of 2, will return items starting at
 index 50. Index will be dependent on sort. Page numbers start at 1.
@@ -95,10 +98,12 @@ intended to be used as a way of enforcing RBAC.
 ## Technical Information
 
 ### SQL Tables
-There are three tables that are created for the ListOption informer:
+There are four tables that are created for the ListOption informer:
 * object table - this contains objects, including all their fields, as blobs. These blobs may be encrypted.
 * fields table - this contains specific fields of value for objects. These are specified on informer create and are fields
 that it is desired to filter or order on.
+* labels table - this contains the labels for each object in the object table.
+They go in a separate table because an object can have any number of labels.
 * indices table - the indices table stores indexes created and objects' values for each index. This backs the generic indexer
 that contains the functionality needed to conform to cache.Indexer.
 
@@ -136,16 +141,12 @@ have the following indexes by default:
 
 ### ListOptions Behavior
 Defaults:
-* Sort.PrimaryField: `metadata.namespace`
-* Sort.SecondaryField: `metadata.name`
-* Sort.PrimaryOrder: `ASC` (ascending)
-* Sort.SecondaryOrder: `ASC` (ascending)
+* `sort=metadata.namespace,metadata.name` (ascending order for both)
 * All filters have partial matching set to false by default
 
 There are some uncommon ways someone could use ListOptions where it would be difficult to predict what the result would be.
 Below is a non-exhaustive list of some of these cases and what the behavior is:
 * Setting Pagination.Page but not Pagination.PageSize will cause Page to be ignored
-* Setting Sort.SecondaryField only will sort as though it was Sort.PrimaryField. Sort.SecondaryOrder will still be applied
 and Sort.PrimaryOrder will be ignored
 
 ### Writing Secure Queries
