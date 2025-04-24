@@ -40,10 +40,10 @@ type ListOptions struct {
 //
 // If more than one value is given for the `Match` field, we do an "IN (<values>)" test
 type Filter struct {
-	Field   []string
-	Matches []string
-	Op      Op
-	Partial bool
+	Field          []string
+	Matches        []string
+	Op             Op
+	Partial        bool
 }
 
 // OrFilter represents a set of possible fields to filter by, where an item may match any filter in the set to be included in the result.
@@ -65,10 +65,20 @@ type SortList struct {
 	SortDirectives []Sort
 }
 
+type SortList struct {
+	SortDirectives []Sort
+}
+
 // Pagination represents how to return paginated results.
 type Pagination struct {
 	PageSize int
-	Page     int
+	Page  int
+}
+
+func NewSortList() *SortList {
+	return &SortList{
+		SortDirectives: []Sort{},
+	}
 }
 
 func NewSortList() *SortList {
