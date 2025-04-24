@@ -13,7 +13,6 @@ import (
 	"github.com/rancher/norman/types/convert"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/sirupsen/logrus"
-	"helm.sh/helm/v3/pkg/release"
 	rspb "k8s.io/helm/pkg/proto/hapi/release"
 )
 
@@ -67,7 +66,7 @@ func Pod(_ *types.APIRequest, resource *types.RawResource) {
 
 // decodeHelm3 receives a helm3 release data string, decodes the string data using the standard base64 library
 // and unmarshals the data into release.Release struct to return it.
-func decodeHelm3(data string) (*release.Release, error) {
+func decodeHelm3(data string) (any, error) {
 	b, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return nil, err
@@ -91,8 +90,8 @@ func decodeHelm3(data string) (*release.Release, error) {
 		r = gzr
 	}
 
-	var rls release.Release
-	// unmarshal release object bytes
+	var rls json.RawMessage
+	// unmarshal JSON release payload
 	if err := json.NewDecoder(r).Decode(&rls); err != nil {
 		return nil, err
 	}
