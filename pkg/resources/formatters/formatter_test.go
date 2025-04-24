@@ -8,18 +8,19 @@ import (
 	"net/url"
 	"testing"
 
+	pbchart "github.com/rancher/steve/pkg/resources/formatters/internal/legacytypes/helmv2api"
+	rspb "github.com/rancher/steve/pkg/resources/formatters/internal/legacytypes/helmv2api"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	pbchart "k8s.io/helm/pkg/proto/hapi/chart"
-	rspb "k8s.io/helm/pkg/proto/hapi/release"
 )
 
 var rv2 = rspb.Release{
-	Name: "helmV3Release",
+	Name: "helmV2Release",
 	Chart: &pbchart.Chart{
 		Metadata: &pbchart.Metadata{
 			Name:    "chartName",

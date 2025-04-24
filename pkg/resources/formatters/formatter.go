@@ -7,13 +7,17 @@ import (
 	"encoding/json"
 	"io"
 
+	// helm v2 is long since deprecated
+	// Unlike helm v3, it uses Protobuf encoding, so we can't use generic decoding without the message descriptors.
+	// The relevant types were vendored, since they won't change anymore. We should consider dropping support for Helm v2.
+	rspb "github.com/rancher/steve/pkg/resources/formatters/internal/legacytypes/helmv2api"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/norman/types/convert"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/sirupsen/logrus"
-	rspb "k8s.io/helm/pkg/proto/hapi/release"
 )
 
 var (
