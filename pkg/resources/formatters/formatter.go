@@ -57,7 +57,7 @@ func HandleHelmData(request *types.APIRequest, resource *types.RawResource) {
 	}
 }
 
-func Pod(request *types.APIRequest, resource *types.RawResource) {
+func Pod(_ *types.APIRequest, resource *types.RawResource) {
 	data := resource.APIObject.Data()
 	fields := data.StringSlice("metadata", "fields")
 	if len(fields) > 2 {
@@ -77,25 +77,23 @@ func decodeHelm3(data string) (*release.Release, error) {
 	if len(b) <= 3 {
 		return nil, ErrNotHelmRelease
 	}
+	var r io.Reader = bytes.NewReader(b)
 
 	// For backwards compatibility with releases that were stored before
 	// compression was introduced we skip decompression if the
 	// gzip magic header is not found
 	if bytes.Equal(b[0:3], magicGzip) {
-		r, err := gzip.NewReader(bytes.NewReader(b))
+		gzr, err := gzip.NewReader(r)
 		if err != nil {
 			return nil, err
 		}
-		b2, err := io.ReadAll(r)
-		if err != nil {
-			return nil, err
-		}
-		b = b2
+		defer gzr.Close()
+		r = gzr
 	}
 
 	var rls release.Release
 	// unmarshal release object bytes
-	if err := json.Unmarshal(b, &rls); err != nil {
+	if err := json.NewDecoder(r).Decode(&rls); err != nil {
 		return nil, err
 	}
 	return &rls, nil
@@ -116,6 +114,8 @@ func decodeHelm2(data string) (*rspb.Release, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer r.Close()
+
 		b2, err := io.ReadAll(r)
 		if err != nil {
 			return nil, err
