@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -23,7 +23,7 @@ func TestParseQuery(t *testing.T) {
 		setupNSCache func() Cache
 		nsc          Cache
 		req          *types.APIRequest
-		expectedLO   informer.ListOptions
+		expectedLO   sqltypes.ListOptions
 		errExpected  bool
 		errorText    string
 	}
@@ -35,10 +35,10 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: ""},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters:   make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters:   make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -51,21 +51,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
 							Matches: []string{"ns1"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -82,19 +82,19 @@ func TestParseQuery(t *testing.T) {
 				},
 			}
 			nsc := NewMockCache(gomock.NewController(t))
-			nsc.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
-				Filters: []informer.OrFilter{
+			nsc.EXPECT().ListByOptions(context.Background(), sqltypes.ListOptions{
+				Filters: []sqltypes.OrFilter{
 					{
-						Filters: []informer.Filter{
+						Filters: []sqltypes.Filter{
 							{
 								Field:   []string{"metadata", "name"},
 								Matches: []string{"somethin"},
-								Op:      informer.Eq,
+								Op:      sqltypes.Eq,
 							},
 							{
 								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 								Matches: []string{"somethin"},
-								Op:      informer.Eq,
+								Op:      sqltypes.Eq,
 							},
 						},
 					},
@@ -111,40 +111,40 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
 							Matches: []string{"ns1"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
 		errExpected: true,
 		setupNSCache: func() Cache {
 			nsi := NewMockCache(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
-				Filters: []informer.OrFilter{
+			nsi.EXPECT().ListByOptions(context.Background(), sqltypes.ListOptions{
+				Filters: []sqltypes.OrFilter{
 					{
-						Filters: []informer.Filter{
+						Filters: []sqltypes.Filter{
 							{
 								Field:   []string{"metadata", "name"},
 								Matches: []string{"somethin"},
-								Op:      informer.Eq,
+								Op:      sqltypes.Eq,
 							},
 							{
 								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 								Matches: []string{"somethin"},
-								Op:      informer.Eq,
+								Op:      sqltypes.Eq,
 							},
 						},
 					},
@@ -161,21 +161,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "namespace"},
 							Matches: []string{"ns1"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -185,19 +185,19 @@ func TestParseQuery(t *testing.T) {
 				Items: []unstructured.Unstructured{},
 			}
 			nsi := NewMockCache(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), informer.ListOptions{
-				Filters: []informer.OrFilter{
+			nsi.EXPECT().ListByOptions(context.Background(), sqltypes.ListOptions{
+				Filters: []sqltypes.OrFilter{
 					{
-						Filters: []informer.Filter{
+						Filters: []sqltypes.Filter{
 							{
 								Field:   []string{"metadata", "name"},
 								Matches: []string{"somethin"},
-								Op:      informer.Eq,
+								Op:      sqltypes.Eq,
 							},
 							{
 								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 								Matches: []string{"somethin"},
-								Op:      informer.Eq,
+								Op:      sqltypes.Eq,
 							},
 						},
 					},
@@ -213,21 +213,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a~c"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -239,21 +239,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a=c"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -274,21 +274,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]~heads"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
 							Matches: []string{"heads"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -300,21 +300,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=metadata.annotations[chumley.example.com/fish]=seals"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "annotations", "chumley.example.com/fish"},
 							Matches: []string{"seals"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -326,20 +326,20 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=metadata.fields[3]<5"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "fields", "3"},
 							Matches: []string{"5"},
-							Op:      informer.Lt,
+							Op:      sqltypes.Lt,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -351,21 +351,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]~heads"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "labels", "grover.example.com/fish"},
 							Matches: []string{"heads"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -377,31 +377,31 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a=c&filter=b=d"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"b"},
 							Matches: []string{"d"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -413,31 +413,31 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a=c&filter=b=d"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a"},
 							Matches: []string{"c"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"b"},
 							Matches: []string{"d"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -449,27 +449,27 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=beer=pabst,metadata.labels[beer2.io/ale] ~schlitz"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"beer"},
 							Matches: []string{"pabst"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "beer2.io/ale"},
 							Matches: []string{"schlitz"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -481,27 +481,27 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=beer=natty-bo,metadata.labels.beer3~rainier"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"beer"},
 							Matches: []string{"natty-bo"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "beer3"},
 							Matches: []string{"rainier"},
-							Op:      informer.Eq,
+							Op:      sqltypes.Eq,
 							Partial: true,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -513,27 +513,27 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a1In in (x1),a2In IN (x2)"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a1In"},
 							Matches: []string{"x1"},
-							Op:      informer.In,
+							Op:      sqltypes.In,
 							Partial: false,
 						},
 						{
 							Field:   []string{"a2In"},
 							Matches: []string{"x2"},
-							Op:      informer.In,
+							Op:      sqltypes.In,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -545,21 +545,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a2In in (x2a, x2b)"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a2In"},
 							Matches: []string{"x2a", "x2b"},
-							Op:      informer.In,
+							Op:      sqltypes.In,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -571,27 +571,27 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a1NotIn notin (x1),a2NotIn NOTIN (x2)"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a1NotIn"},
 							Matches: []string{"x1"},
-							Op:      informer.NotIn,
+							Op:      sqltypes.NotIn,
 							Partial: false,
 						},
 						{
 							Field:   []string{"a2NotIn"},
 							Matches: []string{"x2"},
-							Op:      informer.NotIn,
+							Op:      sqltypes.NotIn,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -603,21 +603,21 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a3NotIn in (x3a, x3b)"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a3NotIn"},
 							Matches: []string{"x3a", "x3b"},
-							Op:      informer.In,
+							Op:      sqltypes.In,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -629,27 +629,27 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a4In iN (x4a),a4NotIn nOtIn (x4b)"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a4In"},
 							Matches: []string{"x4a"},
-							Op:      informer.In,
+							Op:      sqltypes.In,
 							Partial: false,
 						},
 						{
 							Field:   []string{"a4NotIn"},
 							Matches: []string{"x4b"},
-							Op:      informer.NotIn,
+							Op:      sqltypes.NotIn,
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -671,33 +671,33 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=metadata.labels.a5In1,!metadata.labels.a5In2, ! metadata.labels.a5In3"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"metadata", "labels", "a5In1"},
-							Op:      informer.Exists,
+							Op:      sqltypes.Exists,
 							Matches: []string{},
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "a5In2"},
-							Op:      informer.NotExists,
+							Op:      sqltypes.NotExists,
 							Matches: []string{},
 							Partial: false,
 						},
 						{
 							Field:   []string{"metadata", "labels", "a5In3"},
-							Op:      informer.NotExists,
+							Op:      sqltypes.NotExists,
 							Matches: []string{},
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -709,27 +709,27 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "filter=a<1,b>2"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters: []informer.OrFilter{
+			Filters: []sqltypes.OrFilter{
 				{
-					Filters: []informer.Filter{
+					Filters: []sqltypes.Filter{
 						{
 							Field:   []string{"a"},
-							Op:      informer.Lt,
+							Op:      sqltypes.Lt,
 							Matches: []string{"1"},
 							Partial: false,
 						},
 						{
 							Field:   []string{"b"},
-							Op:      informer.Gt,
+							Op:      sqltypes.Gt,
 							Matches: []string{"2"},
 							Partial: false,
 						},
 					},
 				},
 			},
-			Pagination: informer.Pagination{
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -742,15 +742,15 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "sort=metadata.name"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
+			Sort: sqltypes.Sort{
 				Fields: [][]string{
 					{"metadata", "name"}},
-				Orders: []informer.SortOrder{informer.ASC},
+				Orders: []sqltypes.SortOrder{sqltypes.ASC},
 			},
-			Filters: make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters: make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -763,14 +763,14 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "sort=-metadata.name"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
+			Sort: sqltypes.Sort{
 				Fields: [][]string{{"metadata", "name"}},
-				Orders: []informer.SortOrder{informer.DESC},
+				Orders: []sqltypes.SortOrder{sqltypes.DESC},
 			},
-			Filters: make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters: make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -783,20 +783,20 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "sort=-metadata.name,spec.something"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
+			Sort: sqltypes.Sort{
 				Fields: [][]string{
 					{"metadata", "name"},
 					{"spec", "something"},
 				},
-				Orders: []informer.SortOrder{
-					informer.DESC,
-					informer.ASC,
+				Orders: []sqltypes.SortOrder{
+					sqltypes.DESC,
+					sqltypes.ASC,
 				},
 			},
-			Filters: make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters: make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -809,17 +809,17 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "sort=-metadata.labels[beef.cattle.io/snort],metadata.labels.steer,metadata.labels[bossie.cattle.io/moo],spec.something"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Sort: informer.Sort{
+			Sort: sqltypes.Sort{
 				Fields: [][]string{{"metadata", "labels", "beef.cattle.io/snort"},
 					{"metadata", "labels", "steer"},
 					{"metadata", "labels", "bossie.cattle.io/moo"},
 					{"spec", "something"}},
-				Orders: []informer.SortOrder{informer.DESC, informer.ASC, informer.ASC, informer.ASC},
+				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC, sqltypes.ASC, sqltypes.ASC},
 			},
-			Filters: make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters: make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -835,11 +835,11 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "continue=5"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
 			Resume:    "5",
-			Filters:   make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters:   make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -852,11 +852,11 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "continue=5"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
 			Resume:    "5",
-			Filters:   make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters:   make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -869,10 +869,10 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "limit=3"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: 3,
-			Filters:   make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters:   make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
@@ -885,10 +885,10 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "page=3"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters:   make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters:   make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				Page: 3,
 			},
 		},
@@ -901,10 +901,10 @@ func TestParseQuery(t *testing.T) {
 				URL: &url.URL{RawQuery: "pagesize=20"},
 			},
 		},
-		expectedLO: informer.ListOptions{
+		expectedLO: sqltypes.ListOptions{
 			ChunkSize: defaultLimit,
-			Filters:   make([]informer.OrFilter, 0),
-			Pagination: informer.Pagination{
+			Filters:   make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
 				PageSize: 20,
 				Page:     1,
 			},
