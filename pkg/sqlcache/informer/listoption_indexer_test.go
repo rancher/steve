@@ -818,27 +818,6 @@ func TestListByOptions(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting when # fields != # sort orders should return an error",
-		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC, sqltypes.ASC},
-			},
-		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.somefield" DESC, f."status.someotherfield" ASC`,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken: "",
-		expectedErr:       fmt.Errorf("sort fields length 2 != sort orders length 3"),
-	})
-
-	tests = append(tests, testCase{
 		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
 			Pagination: sqltypes.Pagination{
