@@ -14,9 +14,9 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
-	informer "github.com/rancher/steve/pkg/sqlcache/informer"
 	factory "github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
+	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	summary "github.com/rancher/wrangler/v3/pkg/summary"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -51,7 +51,7 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockCache) ListByOptions(arg0 context.Context, arg1 informer.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockCache) ListByOptions(arg0 context.Context, arg1 sqltypes.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByOptions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
