@@ -647,9 +647,13 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -670,9 +674,13 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "sort one field descending",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  sqltypes.DESC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -693,9 +701,13 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "sort one unbound label descending",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "labels", "flip"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "flip"},
+						Order:  sqltypes.DESC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -718,9 +730,17 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "fields", "3"}, {"metadata", "labels", "stub.io/candy"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC, sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "fields", "3"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "stub.io/candy"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 		},
 		extraIndexedFields: []string{"metadata.fields[3]", "metadata.labels[stub.io/candy]"},
@@ -742,9 +762,17 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC, sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"status", "someotherfield"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -763,9 +791,17 @@ func TestListByOptions(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "somefield"},
+						Order:  sqltypes.DESC,
+					},
+					{
+						Fields: []string{"status", "someotherfield"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -779,27 +815,6 @@ func TestListByOptions(t *testing.T) {
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
 		expectedContToken: "",
 		expectedErr:       nil,
-	})
-
-	tests = append(tests, testCase{
-		description: "ListByOptions sorting when # fields != # sort orders should return an error",
-		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC, sqltypes.ASC},
-			},
-		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.somefield" DESC, f."status.someotherfield" ASC`,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken: "",
-		expectedErr:       fmt.Errorf("sort fields length 2 != sort orders length 3"),
 	})
 
 	tests = append(tests, testCase{
@@ -1548,9 +1563,13 @@ func TestConstructQuery(t *testing.T) {
 					},
 				},
 			},
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "queryField1"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "queryField1"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -1567,26 +1586,15 @@ func TestConstructQuery(t *testing.T) {
 	})
 
 	tests = append(tests, testCase{
-		description: "ConstructQuery: sorting when # fields < # sort orders should return an error",
-		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC, sqltypes.ASC},
-			},
-		},
-		partitions:       []partition.Partition{},
-		ns:               "",
-		expectedStmt:     "",
-		expectedStmtArgs: []any{},
-		expectedErr:      fmt.Errorf("sort fields length 2 != sort orders length 3"),
-	})
-
-	tests = append(tests, testCase{
 		description: "TestConstructQuery: sort on label statements with no query",
 		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "labels", "this"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "this"},
+						Order:  sqltypes.ASC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -1621,9 +1629,17 @@ func TestConstructQuery(t *testing.T) {
 					},
 				},
 			},
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "labels", "this"}, {"status", "queryField2"}},
-				Orders: []sqltypes.SortOrder{sqltypes.ASC, sqltypes.DESC},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "this"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"status", "queryField2"},
+						Order:  sqltypes.DESC,
+					},
+				},
 			},
 		},
 		partitions: []partition.Partition{},
@@ -1638,21 +1654,6 @@ func TestConstructQuery(t *testing.T) {
   ORDER BY (CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
 		expectedStmtArgs: []any{"toys", "jamb", "juice", "this", "this"},
 		expectedErr:      nil,
-	})
-
-	tests = append(tests, testCase{
-		description: "ConstructQuery: sorting when # fields > # sort orders should return an error",
-		listOptions: sqltypes.ListOptions{
-			Sort: sqltypes.Sort{
-				Fields: [][]string{{"metadata", "somefield"}, {"status", "someotherfield"}, {"metadata", "labels", "a1"}, {"metadata", "labels", "a2"}},
-				Orders: []sqltypes.SortOrder{sqltypes.DESC, sqltypes.ASC, sqltypes.ASC},
-			},
-		},
-		partitions:       []partition.Partition{},
-		ns:               "",
-		expectedStmt:     "",
-		expectedStmtArgs: []any{},
-		expectedErr:      fmt.Errorf("sort fields length 4 != sort orders length 3"),
 	})
 
 	t.Parallel()

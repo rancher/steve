@@ -50,15 +50,6 @@ var mapK8sOpToRancherOp = map[selection.Operator]sqltypes.Op{
 	selection.GreaterThan:      sqltypes.Gt,
 }
 
-// ListOptions represents the query parameters that may be included in a list request.
-type ListOptions struct {
-	ChunkSize  int
-	Resume     string
-	Filters    []sqltypes.OrFilter
-	Sort       sqltypes.Sort
-	Pagination sqltypes.Pagination
-}
-
 type Cache interface {
 	// ListByOptions returns objects according to the specified list options and partitions.
 	// Specifically:
@@ -118,9 +109,9 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 	}
 	opts.Filters = filterOpts
 
-	sortOpts := sqltypes.Sort{}
 	sortKeys := q.Get(sortParam)
 	if sortKeys != "" {
+		sortList := *sqltypes.NewSortList()
 		sortParts := strings.Split(sortKeys, ",")
 		for _, sortPart := range sortParts {
 			field := sortPart
@@ -131,13 +122,16 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 					field = field[1:]
 				}
 				if len(field) > 0 {
-					sortOpts.Fields = append(sortOpts.Fields, queryhelper.SafeSplit(field))
-					sortOpts.Orders = append(sortOpts.Orders, sortOrder)
+					sortDirective := sqltypes.Sort{
+						Fields: queryhelper.SafeSplit(field),
+						Order:  sortOrder,
+					}
+					sortList.SortDirectives = append(sortList.SortDirectives, sortDirective)
 				}
 			}
 		}
+		opts.SortList = sortList
 	}
-	opts.Sort = sortOpts
 
 	var err error
 	pagination := sqltypes.Pagination{}
