@@ -28,7 +28,7 @@ type ListOptions struct {
 	ChunkSize  int
 	Resume     string
 	Filters    []OrFilter
-	Sort       Sort
+	SortList   SortList
 	Pagination Pagination
 }
 
@@ -57,8 +57,8 @@ type OrFilter struct {
 // The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
 // e.g. To sort internal clusters first followed by clusters in alpha order: sort=-spec.internal,spec.displayName
 type Sort struct {
-	Fields [][]string
-	Orders []SortOrder
+	Fields []string
+	Order  SortOrder
 }
 
 type SortList struct {

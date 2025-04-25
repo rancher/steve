@@ -389,26 +389,24 @@ func (l *ListOptionIndexer) constructQuery(lo sqltypes.ListOptions, partitions [
 	countParams := params[:]
 
 	// 3- Sorting: ORDER BY clauses (from lo.Sort)
-	if len(lo.Sort.Fields) != len(lo.Sort.Orders) {
-		return nil, fmt.Errorf("sort fields length %d != sort orders length %d", len(lo.Sort.Fields), len(lo.Sort.Orders))
-	}
-	if len(lo.Sort.Fields) > 0 {
+	if len(lo.SortList.SortDirectives) > 0 {
 		orderByClauses := []string{}
-		for i, field := range lo.Sort.Fields {
-			if isLabelsFieldList(field) {
-				clause, sortParam, err := buildSortLabelsClause(field[2], joinTableIndexByLabelName, lo.Sort.Orders[i] == sqltypes.ASC)
+		for _, sortDirective := range lo.SortList.SortDirectives {
+			fields := sortDirective.Fields
+			if isLabelsFieldList(fields) {
+				clause, sortParam, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC)
 				if err != nil {
 					return nil, err
 				}
 				orderByClauses = append(orderByClauses, clause)
 				params = append(params, sortParam)
 			} else {
-				columnName := toColumnName(field)
+				columnName := toColumnName(fields)
 				if err := l.validateColumn(columnName); err != nil {
 					return queryInfo, err
 				}
 				direction := "ASC"
-				if lo.Sort.Orders[i] == sqltypes.DESC {
+				if sortDirective.Order == sqltypes.DESC {
 					direction = "DESC"
 				}
 				orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
@@ -596,13 +594,14 @@ func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[strin
 // created in Store.ListByPartitions, and that ends up calling ListOptionIndexer.ConstructQuery.
 // No other goroutines access this object.
 func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
-	if len(lo.Sort.Fields) == 0 {
+	if len(lo.SortList.SortDirectives) == 0 {
 		return
 	}
 	unboundSortLabels := make(map[string]bool)
-	for _, fieldList := range lo.Sort.Fields {
-		if isLabelsFieldList(fieldList) {
-			unboundSortLabels[fieldList[2]] = true
+	for _, sortDirective := range lo.SortList.SortDirectives {
+		fields := sortDirective.Fields
+		if isLabelsFieldList(fields) {
+			unboundSortLabels[fields[2]] = true
 		}
 	}
 	if len(unboundSortLabels) == 0 {
