@@ -1,0 +1,6 @@
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('cluster-01/project-01','project-01','2025-04-11T17:25:28Z','cluster-01','project-01','4h1m','cluster-01/project-01','active','cluster-01');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('cluster-02/project-03','project-03','2025-04-11T17:25:28Z','cluster-02','project-03','4h1m','cluster-02/project-03','active','cluster-02');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('cluster-01/project-04','project-04','2025-04-11T17:36:04Z','cluster-01','project-04','3h50m','cluster-01/project-04','active','cluster-01');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('local/project-02','project-02','2025-04-11T17:22:19Z','local','project-02','4h4m','local/project-02','active','local');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('local/project-05','project-05','2025-04-11T17:22:19Z','local','project-05','4h4m','local/project-05','active','local');
+INSERT INTO "management.cattle.io_v3_Project_fields" VALUES('local/project-06','project-06','2025-04-11T17:22:19Z','local','project-06','4h4m','local/project-06','active','before-local-01');
