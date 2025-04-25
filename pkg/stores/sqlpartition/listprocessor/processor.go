@@ -57,7 +57,7 @@ type Cache interface {
 	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
 	//   - a continue token, if there are more pages after the returned one
 	//   - an error instead of all of the above if anything went wrong
-	ListByOptions(ctx context.Context, lo sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 }
 
 func k8sOpToRancherOp(k8sOp selection.Operator) (sqltypes.Op, bool, error) {
@@ -202,7 +202,7 @@ func splitQuery(query string) []string {
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sqltypes.Op, namespaceInformer Cache) ([]sqltypes.Filter, error) {
 	var filters []sqltypes.Filter
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, _, err := namespaceInformer.ListByOptions(ctx, sqltypes.ListOptions{
+		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &sqltypes.ListOptions{
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
