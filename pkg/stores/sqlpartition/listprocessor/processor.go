@@ -73,11 +73,14 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Fil
 	values := requirement.Values()
 	queryFields := splitQuery(requirement.Key())
 	op, usePartialMatch, err := k8sOpToRancherOp(requirement.Operator())
+	isIndirect, indirectFields := requirement.IndirectInfo()
 	return sqltypes.Filter{
-		Field:   queryFields,
-		Matches: values,
-		Op:      op,
-		Partial: usePartialMatch,
+		Field:          queryFields,
+		Matches:        values,
+		Op:             op,
+		Partial:        usePartialMatch,
+		IsIndirect:     isIndirect,
+		IndirectFields: indirectFields,
 	}, err
 }
 
