@@ -131,10 +131,6 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 			delete(resource.Links, "patch")
 		}
 
-		if _, ok := resource.Links["patch"]; !ok && slice.ContainsString(resource.Schema.ResourceMethods, "blocked-PATCH") {
-			resource.Links["patch"] = "blocked"
-		}
-
 		if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
 			// with the sql cache, these were already added by the indexer. However, the sql cache
 			// is only used for lists, so we need to re-add here for get/watch
