@@ -371,6 +371,33 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() with an indirect labels filter param should create an indirect labels-specific filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.labels[grover.example.com/fish]=>[_v1][Foods][foodCode][country]=japan"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:          []string{"metadata", "labels", "grover.example.com/fish"},
+							Matches:        []string{"japan"},
+							Op:             sqltypes.Eq,
+							IsIndirect:     true,
+							IndirectFields: []string{"_v1", "Foods", "foodCode", "country"},
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with multiple filter params, should include multiple or filters.",
 		req: &types.APIRequest{
 			Request: &http.Request{
