@@ -1,0 +1,6 @@
+INSERT INTO "management.cattle.io_v3_Project" VALUES("cluster-01/project-01", 'mcioproj-obj1', 'mcioproj-nonce1', 1);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("cluster-01/project-03", 'mcioproj-obj2', 'mcioproj-nonce2', 2);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("cluster-01/project-04", 'mcioproj-obj3', 'mcioproj-nonce3', 3);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("local/project-02", 'mcioproj-obj4', 'mcioproj-nonce4', 4);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("local/project-05", 'mcioproj-obj5', 'mcioproj-nonce5', 5);
+INSERT INTO "management.cattle.io_v3_Project" VALUES("local/project-06", 'mcioproj-obj6', 'mcioproj-nonce6', 6);
