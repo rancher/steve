@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -313,7 +314,7 @@ func TestInformerListByOptions(t *testing.T) {
 		informer := &Informer{
 			ByOptionsLister: indexer,
 		}
-		lo := ListOptions{}
+		lo := sqltypes.ListOptions{}
 		var partitions []partition.Partition
 		ns := "somens"
 		expectedList := &unstructured.UnstructuredList{
@@ -336,7 +337,7 @@ func TestInformerListByOptions(t *testing.T) {
 		informer := &Informer{
 			ByOptionsLister: indexer,
 		}
-		lo := ListOptions{}
+		lo := sqltypes.ListOptions{}
 		var partitions []partition.Partition
 		ns := "somens"
 		indexer.EXPECT().ListByOptions(context.Background(), lo, partitions, ns).Return(nil, 0, "", fmt.Errorf("error"))
