@@ -284,7 +284,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 			partitions := []partition.Partition{defaultPartition}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 			defer cancel()
-			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, options, partitions, testNamespace)
+			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, &options, partitions, testNamespace)
 			i.Require().NoError(err)
 			// since there's no additional pages, the continue token should be empty
 			i.Require().Equal("", continueToken)
@@ -338,7 +338,7 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 		partitions := []partition.Partition{defaultPartition}
 		cacheCtx, cacheCancel := context.WithTimeout(ctx, time.Second*5)
 		defer cacheCancel()
-		currentResources, total, _, err := cache.ListByOptions(cacheCtx, options, partitions, namespace)
+		currentResources, total, _, err := cache.ListByOptions(cacheCtx, &options, partitions, namespace)
 		if err != nil {
 			// note that we don't return the error since that would stop the polling
 			return false, nil
