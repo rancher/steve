@@ -65,10 +65,20 @@ type SortList struct {
 	SortDirectives []Sort
 }
 
+type SortList struct {
+	SortDirectives []Sort
+}
+
 // Pagination represents how to return paginated results.
 type Pagination struct {
 	PageSize int
 	Page     int
+}
+
+func NewSortList() *SortList {
+	return &SortList{
+		SortDirectives: []Sort{},
+	}
 }
 
 func NewSortList() *SortList {
