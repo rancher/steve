@@ -156,3 +156,35 @@ of a query that may be user supplied, such as columns, should be carefully valid
 ### Troubleshooting SQLite
 A useful tool for troubleshooting the database files is the sqlite command line tool. Another useful tool is the goland
 sqlite plugin. Both of these tools can be used with the database files.
+
+### Indirect Querying
+You can do filtering and sorting on the current table (which backs the resource name after `/v1/` in the URL)
+based on related values in another table using indirect indexing. This works for both sorting and filtering.
+This assumes that the main table has a field, call it field F1, with a 1:1 relation with a field F2 on some other table T2.
+We then can access some other field F3 on the selected row of T2 based on F1, and then operate on that value F3.
+Sorting will sort on that value (either ascending or descending), and operators will do boolean operations on that value
+and compare the result against field F1.
+
+Let's look at a specific example: sort namespaces based on the human-friendly name of the associated project's cluster:
+
+`sort=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName],metadata.name`
+
+Normally the namespaces are displayed in order of their internal name (`metadata.name`), but the above command groups them each according to the name of their enclosing cluster, using the friendly name of the cluster (`local` for the local cluster, and whatever name the user gave when creating downstream clusters).
+
+Staying on this particular query, you can show only namespaces in the local cluster with this query:
+
+`filter=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName] = local`
+
+or show all the other namespaces:
+
+`filter=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName] != local`
+
+An implementation note: some namespaces might not have a label `field.cattle.io/projectId`. With only the sort command, these namespaces show up in the null-clusterName group after all the other groups.  If you don't want to show these namespaces, you can combine a filter and a sort:
+
+`filter=metadata.labels[field.cattle.io/projectId]&sort=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName],metadata.name`
+
+The filter command uses the implicit `EXISTS` operator, available only for labels. This query selects only those namespaces that have the specied label, and the sort operates on those selected fields.
+
+#### General Syntax
+
+The syntax for the part to the left of the `=>` operator is the same as for other operators. The external reference, to the right of that operator, has exactly four bracketed parts: `[GROUP/API][KIND][FOREIGN-KEY-FIELD][TARGET-FIELD]`. For core Kubernetes types, leave `GROUP` empty.  `KIND` is usually a capitalized singular noun. The two field names can use both dotted-accessor and square-bracket notation.
