@@ -76,9 +76,3 @@ func NewSortList() *SortList {
 		SortDirectives: []Sort{},
 	}
 }
-
-func NewSortList() *SortList {
-	return &SortList{
-		SortDirectives: []Sort{},
-	}
-}
