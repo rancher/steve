@@ -784,6 +784,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		return nil, 0, "", err
 	}
 
+	inf.SetFieldGetterForGroupName(getFieldsForSchemaForGroupFunc(apiOp))
 	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
 	if err != nil {
 		if errors.Is(err, informer.ErrInvalidColumn) {
@@ -841,4 +842,22 @@ func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.API
 		return s.Watch(apiOp, schema, wr)
 	}
 	return s.WatchNames(apiOp, schema, wr, partition.Names)
+}
+
+// Closure to wrap the apiOp.Schemas field if we need it later to check external access.
+func getFieldsForSchemaForGroupFunc(apiOp *types.APIRequest) func(groupName string) ([][]string, error) {
+	return func(groupName string) ([][]string, error) {
+		if apiOp == nil {
+			return nil, nil
+		}
+		schema := apiOp.Schemas.LookupSchema(groupName)
+		if schema == nil {
+			return nil, fmt.Errorf("no schema found for group %s", groupName)
+
+		}
+		gvk := attributes.GVK(schema)
+		fields := getFieldsFromSchema(schema)
+		fields = append(fields, getFieldForGVK(gvk)...)
+		return fields, nil
+	}
 }

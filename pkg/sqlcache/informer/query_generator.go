@@ -23,6 +23,9 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	if err != nil {
 		return nil, err
 	}
+    if indirectSortDirective != nil {
+		l.validateDirective(indirectSortDirective)
+	}
 	joinTableIndexByLabelName := make(map[string]int)
 	if indirectSortDirective != nil && isLabelsFieldList(indirectSortDirective.Fields) {
 		return l.constructIndirectSortQuery(lo, partitions, namespace, dbName, joinTableIndexByLabelName)
@@ -935,6 +938,42 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 	}
 	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
 }
+
+func makeGVK(gv string, k string) string {
+       ga := strings.SplitN(gv, "/", 2)
+       g := ga[0]
+       v := ga[1]
+       return fmt.Sprintf("%s_%s_%s", g, v, k)
+}
+
+func (l *ListOptionIndexer) validateDirective(isd *sqltypes.Sort) error {
+       if !isd.IsIndirect {
+               return nil
+       }
+       fieldsList, err := l.fieldGetterForGroupName(isd.IndirectFields[0])
+       if err != nil {
+               return err
+       }
+       gvk := makeGVK(isd.IndirectFields[0], isd.IndirectFields[1])
+       found := false
+       for _, fields := range fieldsList {
+               if smartJoin(fields) == isd.IndirectFields[2] {
+                       found = true
+                       break
+               }
+       }
+       if !found {
+               return fmt.Errorf("invalid indirect field: no entry for field %s in GVK [%s]", isd.IndirectFields[2], gvk)
+       }
+       found = false
+       for _, fields := range fieldsList {
+               if smartJoin(fields) == isd.IndirectFields[3] {
+                       return nil
+               }
+       }
+       return fmt.Errorf("invalid indirect field: no entry for field %s in GVK [%s]", isd.IndirectFields[3], gvk)
+}
+
 
 // Helper functions for generating SQL in alphabetical order:
 

@@ -24,8 +24,9 @@ import (
 type ListOptionIndexer struct {
 	*Indexer
 
-	namespaced    bool
-	indexedFields []string
+	namespaced              bool
+	indexedFields           []string
+	fieldGetterForGroupName func(groupName string) ([][]string, error)
 
 	addFieldQuery     string
 	deleteFieldQuery  string
@@ -174,6 +175,10 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	l.deleteLabelsStmt = l.Prepare(l.deleteLabelsQuery)
 
 	return l, nil
+}
+
+func (l *ListOptionIndexer) SetFieldGetterForGroupName(fieldGetter func(groupName string) ([][]string, error)) {
+	l.fieldGetterForGroupName = fieldGetter
 }
 
 /* Core methods */

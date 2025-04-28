@@ -31,6 +31,7 @@ type Informer struct {
 
 type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	SetFieldGetterForGroupName(func(groupName string) ([][]string, error))
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
@@ -105,6 +106,11 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 //   - an error instead of all of the above if anything went wrong
 func (i *Informer) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	return i.ByOptionsLister.ListByOptions(ctx, lo, partitions, namespace)
+}
+
+// Used for validating external fields
+func (i *Informer) SetFieldGetterForGroupName(f func(groupName string) ([][]string, error)) {
+	i.ByOptionsLister.SetFieldGetterForGroupName(f)
 }
 
 // SetSyntheticWatchableInterval - call this function to override the default interval time of 5 seconds
