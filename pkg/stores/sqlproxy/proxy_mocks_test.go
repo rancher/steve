@@ -67,6 +67,18 @@ func (mr *MockCacheMockRecorder) ListByOptions(arg0, arg1, arg2, arg3 any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockCache)(nil).ListByOptions), arg0, arg1, arg2, arg3)
 }
 
+// SetFieldGetterForGroupName mocks base method.
+func (m *MockCache) SetFieldGetterForGroupName(arg0 func(g, v, k string) [][]string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetFieldGetterForGroupName", arg0)
+}
+
+// SetFieldGetterForGroupName indicates an expected call of SetFieldGetterForGroupName.
+func (mr *MockCacheMockRecorder) SetFieldGetterForGroupName(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetFieldGetterForGroupName", reflect.TypeOf((*MockCache)(nil).SetFieldGetterForGroupName), arg0, arg1, arg2)
+}
+
 // MockClientGetter is a mock of ClientGetter interface.
 type MockClientGetter struct {
 	ctrl     *gomock.Controller

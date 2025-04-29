@@ -58,3 +58,15 @@ func (mr *MockByOptionsListerMockRecorder) ListByOptions(arg0, arg1, arg2, arg3 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockByOptionsLister)(nil).ListByOptions), arg0, arg1, arg2, arg3)
 }
+
+// SetFieldGetterForGroupName mocks base method.
+func (m *MockByOptionsLister) SetFieldGetterForGroupName(arg0 func(arg0, arg1, arg2 string) [][]string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetFieldGetterForGroupName", arg0)
+}
+
+// SetFieldGetterForGroupName indicates an expected call of SetFieldGetterForGroupName.
+func (mr *MockByOptionsListerMockRecorder) SetFieldGetterForGroupName(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetFieldGetterForGroupName", reflect.TypeOf((*MockByOptionsLister)(nil).SetFieldGetterForGroupName), arg0)
+}

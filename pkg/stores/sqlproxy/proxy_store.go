@@ -173,8 +173,8 @@ var (
 		},
 	}
 	commonIndexFields = [][]string{
-		{`id`},
-		{`metadata`, `state`, `name`},
+		{"id"},
+		{"metadata", "state", "name"},
 	}
 	baseNSSchema = types.APISchema{
 		Schema: &schemas.Schema{
@@ -845,19 +845,33 @@ func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.API
 }
 
 // Closure to wrap the apiOp.Schemas field if we need it later to check external access.
-func getFieldsForSchemaForGroupFunc(apiOp *types.APIRequest) func(groupName string) ([][]string, error) {
-	return func(groupName string) ([][]string, error) {
-		if apiOp == nil {
-			return nil, nil
+func getFieldsForSchemaForGroupFunc(apiOp *types.APIRequest) func(g, v, k string) [][]string {
+	return func(g, v, k string) [][]string {
+		fields := make([][]string, 0)
+		var currentSchema *types.APISchema
+		var gvk schema.GroupVersionKind
+		assumeNamespaced := true
+		needFakeGVKValue := true
+		if apiOp != nil {
+			currentSchema = apiOp.Schemas.LookupSchema(g)
+			if currentSchema != nil {
+				fields = getFieldsFromSchema(currentSchema)
+				gvk = attributes.GVK(currentSchema)
+				needFakeGVKValue = false
+				ns := attributes.Namespaced(currentSchema)
+				if !ns {
+					assumeNamespaced = false
+				}
+			}
 		}
-		schema := apiOp.Schemas.LookupSchema(groupName)
-		if schema == nil {
-			return nil, fmt.Errorf("no schema found for group %s", groupName)
-
+		if needFakeGVKValue {
+			gvk = schema.GroupVersionKind{g, v, k}
 		}
-		gvk := attributes.GVK(schema)
-		fields := getFieldsFromSchema(schema)
 		fields = append(fields, getFieldForGVK(gvk)...)
-		return fields, nil
+		fields = append(fields, []string{"metadata", "name"}, []string{"metadata", "creationTimestamp"})
+		if assumeNamespaced {
+			fields = append(fields, []string{"metadata", "namespace"})
+		}
+		return fields
 	}
 }

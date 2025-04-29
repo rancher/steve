@@ -31,7 +31,7 @@ type Informer struct {
 
 type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
-	SetFieldGetterForGroupName(func(groupName string) ([][]string, error))
+	SetFieldGetterForGroupName(func(g, v, k string) [][]string)
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
@@ -109,7 +109,7 @@ func (i *Informer) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, 
 }
 
 // Used for validating external fields
-func (i *Informer) SetFieldGetterForGroupName(f func(groupName string) ([][]string, error)) {
+func (i *Informer) SetFieldGetterForGroupName(f func(g, v, k string) [][]string) {
 	i.ByOptionsLister.SetFieldGetterForGroupName(f)
 }
 

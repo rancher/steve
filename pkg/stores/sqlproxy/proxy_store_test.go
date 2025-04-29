@@ -166,6 +166,10 @@ func TestNewProxyStore(t *testing.T) {
 	}
 }
 
+func nullFieldGetter(_ string) ([][]string, error) {
+	return [][]string{}, nil
+}
+
 func TestListByPartitions(t *testing.T) {
 	type testCase struct {
 		description string
@@ -245,6 +249,7 @@ func TestListByPartitions(t *testing.T) {
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), true).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			bloi.EXPECT().SetFieldGetterForGroupName(gomock.Any()).Return()
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list)
@@ -462,6 +467,7 @@ func TestListByPartitions(t *testing.T) {
 
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			bloi.EXPECT().SetFieldGetterForGroupName(gomock.Any()).Return()
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list)
@@ -611,6 +617,7 @@ func TestListByPartitions(t *testing.T) {
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), true).Return(c, nil)
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
+			bloi.EXPECT().SetFieldGetterForGroupName(gomock.Any()).Return()
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
 			_, _, _, err = s.ListByPartitions(req, schema, partitions)

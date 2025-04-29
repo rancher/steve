@@ -47,6 +47,7 @@ func getListOptionIndexer(t *testing.T, ctx context.Context, namespaced bool) (*
 		namespaced:    namespaced,
 		indexedFields: fields,
 	}
+	l.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 	return l, nil
 }
 

@@ -747,6 +747,7 @@ func TestListByOptions(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.somefield", "status.someotherfield"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			if len(test.extraIndexedFields) > 0 {
 				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
 			}
@@ -1450,6 +1451,7 @@ func TestConstructQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
@@ -1572,6 +1574,38 @@ func TestBuildSortLabelsClause(t *testing.T) {
 			}
 		})
 	}
+}
+
+func gvkKey(group, version, kind string) string {
+	return group + "_" + version + "_" + kind
+}
+
+func returnProjectNameFieldsForGroupName(g string, v string, k string) [][]string {
+	gvk := gvkKey(g, v, k)
+	x, ok := map[string][][]string{
+		gvkKey("management.cattle.io", "v3", "Project"): {
+			{"metadata", "name"},
+			{"spec", "displayName"},
+			{"spec", "clusterName"},
+		},
+		gvkKey("tournaments.cattle.io", "v3", "Diary"): {
+			{"metadata", "name"},
+			{"spocks", "brain"},
+		},
+		gvkKey("tournaments.cattle.io", "v3", "Capsule"): {
+			{"metadata", "name"},
+			{"spec", "heights"},
+		},
+		gvkKey("", "v1", "Foods"): {
+			{"foodCode"},
+			{"country"},
+			{"state"},
+		},
+	}[gvk]
+	if !ok {
+		return [][]string{}
+	}
+	return x
 }
 
 func TestConstructIndirectLabelFilterQuery(t *testing.T) {
@@ -1856,6 +1890,7 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			dbname := test.dbname
 			if dbname == "" {
 				dbname = "sometable"
@@ -1875,7 +1910,6 @@ func TestConstructIndirectLabelFilterQuery(t *testing.T) {
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
 		})
 	}
-
 }
 
 func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
@@ -2173,6 +2207,7 @@ func TestConstructIndirectNonLabelFilterQuery(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			dbname := test.dbname
 			if dbname == "" {
 				dbname = "sometable"
@@ -2256,6 +2291,7 @@ func TestConstructMixedLabelIndirect(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			dbname := test.dbname
 			if dbname == "" {
 				dbname = "sometable"
@@ -2359,6 +2395,7 @@ func TestConstructMixedMultiTypes(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			dbname := test.dbname
 			if dbname == "" {
 				dbname = "sometable"
@@ -2583,6 +2620,7 @@ WHERE FALSE
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			dbname := test.dbname
 			if dbname == "" {
 				dbname = "sometable"
@@ -2683,6 +2721,44 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 		expectedErr: "invalid database column name 'bar; drop database bobby2'",
 	})
 	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one non-label sort, invalid external selector-column due to typo on pivot field",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
+						Order:          sqltypes.ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.namex", "spec.clusterName"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'metadata.namex'",
+	})
+	tests = append(tests, testCase{
+		description: "SimpleIndirectSort - one non-label sort, invalid external selector-column due to typo on target field",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields:         []string{"metadata", "queryField1"},
+						Order:          sqltypes.ASC,
+						IsIndirect:     true,
+						IndirectFields: []string{"management.cattle.io/v3", "Project", "metadata.name", "spec.clusterNamex"},
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{},
+		ns:          "",
+		dbname:      "_v1_Namespace",
+		expectedErr: "invalid database column name 'spec.clusterNamex'",
+	})
+	tests = append(tests, testCase{
 		description: "SimpleIndirectSort - one non-label sort, not enough indirect fields",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
@@ -2732,9 +2808,13 @@ func TestConstructSimpleNonLabelIndirectSort(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
 			}
+			lii.SetFieldGetterForGroupName(returnProjectNameFieldsForGroupName)
 			dbname := test.dbname
 			if dbname == "" {
 				dbname = "sometable"
+			}
+			if test.description == "SimpleIndirectSort - one sort, no filters, no labels" {
+				fmt.Println("stop here")
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, dbname)
 			if test.expectedErr != "" {

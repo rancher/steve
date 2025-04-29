@@ -26,7 +26,7 @@ type ListOptionIndexer struct {
 
 	namespaced              bool
 	indexedFields           []string
-	fieldGetterForGroupName func(groupName string) ([][]string, error)
+	fieldGetterForGroupName func(g string, v string, k string) [][]string
 
 	addFieldQuery     string
 	deleteFieldQuery  string
@@ -173,11 +173,18 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	l.deleteLabelsQuery = fmt.Sprintf(deleteLabelsStmtFmt, dbName)
 	l.upsertLabelsStmt = l.Prepare(l.upsertLabelsQuery)
 	l.deleteLabelsStmt = l.Prepare(l.deleteLabelsQuery)
+	l.SetNullFieldGetterFunc()
 
 	return l, nil
 }
 
-func (l *ListOptionIndexer) SetFieldGetterForGroupName(fieldGetter func(groupName string) ([][]string, error)) {
+func (l *ListOptionIndexer) SetNullFieldGetterFunc() {
+	l.SetFieldGetterForGroupName(func(string, string, string) [][]string {
+		return [][]string{}
+	})
+}
+
+func (l *ListOptionIndexer) SetFieldGetterForGroupName(fieldGetter func(g string, v string, k string) [][]string) {
 	l.fieldGetterForGroupName = fieldGetter
 }
 
