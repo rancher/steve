@@ -33,8 +33,8 @@ func Routes(h Handlers) http.Handler {
 		m.Path("/ext").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
 		m.PathPrefix("/ext/").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
 
-		m.Path("/v1/ext.cattle.io.{[A-Za-z]+}").Handler(h.ExtensionAPIServer)
-		m.Path("/apis/ext.cattle.io.{[A-Za-z]+}").Handler(h.ExtensionAPIServer)
+		m.PathPrefix("/v1/ext.cattle.io").Handler(h.ExtensionAPIServer)
+		m.PathPrefix("/apis/ext.cattle.io").Handler(h.ExtensionAPIServer)
 	}
 
 	m.Path("/v1/{type}").Handler(h.K8sResource)
