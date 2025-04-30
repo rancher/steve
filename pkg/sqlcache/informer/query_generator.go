@@ -967,7 +967,6 @@ func (l *ListOptionIndexer) validateDirective(isd *sqltypes.Sort) error {
 		return fmt.Errorf("expected indirect sort directive to have 4 indirect fields, got %d", len(isd.IndirectFields))
 	}
 	g, v, k := getGVKFieldsFromIndirectFields(isd.IndirectFields)
-	//gvk := makeGVK(isd.IndirectFields[0], isd.IndirectFields[1])
 	fieldsList := l.fieldGetterForGroupName(g, v, k)
 	found := false
 	for _, fields := range fieldsList {
