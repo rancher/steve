@@ -2,10 +2,7 @@ package client
 
 import (
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -16,6 +13,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
+)
+
+const (
+	// defaultQPS and defaultBurst are used to configure the rest.Config for
+	// factory created clients.
+	defaultQPS   float32 = 10000
+	defaultBurst int     = 100
 )
 
 type Factory struct {
@@ -50,9 +54,41 @@ func (a *addQuery) WrappedRoundTripper() http.RoundTripper {
 	return a.next
 }
 
-func NewFactory(cfg *rest.Config, impersonate bool) (*Factory, error) {
+type factoryOptions struct {
+	qps   float32
+	burst int
+}
+
+func defaultFactoryOptions() *factoryOptions {
+	return &factoryOptions{
+		qps:   defaultQPS,
+		burst: defaultBurst,
+	}
+}
+
+// WithQPSAndBurst configures the rest.Config used for creating the clients in
+// the factory with the provided burst and qps configuration.
+//
+// See https://pkg.go.dev/k8s.io/client-go/rest#Config for more.
+func WithQPSAndBurst(qps float32, burst int) FactoryOption {
+	return func(opts *factoryOptions) {
+		opts.qps = qps
+		opts.burst = burst
+	}
+}
+
+// FactoryOption is an option-func for configuring the newly created factory.
+type FactoryOption func(*factoryOptions)
+
+func NewFactory(cfg *rest.Config, impersonate bool, opts ...FactoryOption) (*Factory, error) {
 	clientCfg := rest.CopyConfig(cfg)
-	updateConfigFromEnvironment(clientCfg)
+	options := defaultFactoryOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	clientCfg.QPS = options.qps
+	clientCfg.Burst = options.burst
 
 	watchClientCfg := rest.CopyConfig(clientCfg)
 	watchClientCfg.Timeout = 30 * time.Minute
@@ -200,28 +236,4 @@ func newClient(ctx *types.APIRequest, cfg *rest.Config, s *types.APISchema, name
 
 	gvr := attributes.GVR(s)
 	return client.Resource(gvr).Namespace(namespace), nil
-}
-
-func updateConfigFromEnvironment(cfg *rest.Config) {
-	cfg.QPS = 10000
-	if v := os.Getenv("RANCHER_CLIENT_QPS"); v != "" {
-		qps, err := strconv.ParseFloat(v, 32)
-		if err != nil {
-			log.Printf("steve: configuring client failed to parse RANCHER_CLIENT_QPS: %s", err)
-		} else {
-			log.Printf("steve: configuring client.QPS = %v", qps)
-			cfg.QPS = float32(qps)
-		}
-	}
-
-	cfg.Burst = 100
-	if v := os.Getenv("RANCHER_CLIENT_BURST"); v != "" {
-		burst, err := strconv.Atoi(v)
-		if err != nil {
-			log.Printf("steve: configuring client failed to parse RANCHER_CLIENT_BURST: %s", err)
-		} else {
-			log.Printf("steve: configuring client.Burst = %v", burst)
-			cfg.Burst = burst
-		}
-	}
 }
