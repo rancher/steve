@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/url"
+	"os"
 	"testing"
 
 	pbchart "github.com/rancher/steve/pkg/resources/formatters/internal/legacytypes/helmv2api"
@@ -16,7 +17,9 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	yaml "sigs.k8s.io/yaml/goyaml.v3"
 )
 
 var rv2 = rspb.Release{
@@ -398,4 +401,40 @@ func newRequest(value string) *types.APIRequest {
 		req.Query.Add("includeHelmData", value)
 	}
 	return req
+}
+
+func loadTestYamlFile(t *testing.T, path string, into any) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	if err := yaml.NewDecoder(f).Decode(into); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_decodeHelm2(t *testing.T) {
+	// sample ConfigMap from installing a "mariadb" chart using helm v2.1.7
+	var cm corev1.ConfigMap
+	loadTestYamlFile(t, "testdata/release-cm.yaml", &cm)
+
+	releaseData := cm.Data["release"]
+	if releaseData == "" {
+		t.Fatalf("release data is empty")
+	}
+
+	release, err := decodeHelm2(releaseData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "mariadb", release.Name)
+	assert.Equal(t, "default", release.Namespace)
+	assert.Equal(t, "mariadb", release.Chart.Metadata.Name)
+	assert.Equal(t, "7.3.14", release.Chart.Metadata.Version)
+	assert.NotEmpty(t, release.Chart.GetValues().GetRaw())
+	assert.Equal(t, "{}\n", release.GetConfig().GetRaw())
 }
