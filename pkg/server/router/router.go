@@ -3,11 +3,9 @@ package router
 import (
 	"net/http"
 
-	openapi_v2 "github.com/google/gnostic-models/openapiv2"
-	openapi_v3 "github.com/google/gnostic-models/openapiv3"
 	"github.com/gorilla/mux"
 	"github.com/rancher/apiserver/pkg/urlbuilder"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/rancher/steve/pkg/server/router/merge"
 )
 
 type RouterFunc func(h Handlers) http.Handler
@@ -51,11 +49,11 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/api").Handler(h.K8sProxy) // Can't just prefix this as UI needs /apikeys path
 	m.PathPrefix("/api/").Handler(h.K8sProxy)
 
-	m.Path("/apis").Handler(merge[metav1.APIGroupList](h.K8sProxy, h.ExtensionAPIServer))
+	m.Path("/apis").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.ApiGropuListMerger))
 	m.PathPrefix("/apis").Handler(h.K8sProxy)
 
-	m.PathPrefix("/openapi/v2").Handler(merge[openapi_v2.Document](h.K8sProxy, h.ExtensionAPIServer))
-	m.PathPrefix("/openapi/v3").Handler(merge[openapi_v3.Document](h.K8sProxy, h.ExtensionAPIServer))
+	m.PathPrefix("/openapi/v2").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.OpenAPIV2Merger))
+	m.PathPrefix("/openapi/v3").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.OpenAPIV3Merger))
 
 	m.PathPrefix("/version").Handler(h.K8sProxy)
 	m.NotFoundHandler = h.Next
