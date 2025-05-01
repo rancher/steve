@@ -4,6 +4,7 @@ package listprocessor
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -357,21 +359,34 @@ func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructu
 	if len(s.Fields) == 0 {
 		return list
 	}
-	sort.Slice(list, func(i, j int) bool {
-		leftNode := list[i].Object
-		rightNode := list[j].Object
-		for i, field := range s.Fields {
-			leftValue := convert.ToString(data.GetValueN(leftNode, field...))
-			rightValue := convert.ToString(data.GetValueN(rightNode, field...))
-			if leftValue != rightValue {
-				if s.Orders[i] == ASC {
-					return leftValue < rightValue
-				}
-				return rightValue < leftValue
+	sortFunc := func(leftNode, rightNode unstructured.Unstructured) int {
+		leftObject := leftNode.Object
+		rightObject := rightNode.Object
+		for i, fields := range s.Fields {
+			lv1, ok := data.GetValueFromAny(leftObject, fields...)
+			if !ok {
+				logrus.Debugf("Failed to walk %v with fields %s", leftObject, fields)
+				return 0
 			}
+			rv1, ok := data.GetValueFromAny(rightObject, fields...)
+			if !ok {
+				logrus.Debugf("Failed to walk %v with fields %s", rightObject, fields)
+				return 0
+			}
+			leftValue := convert.ToString(lv1)
+			rightValue := convert.ToString(rv1)
+			if leftValue == rightValue {
+				continue
+			}
+			val := strings.Compare(leftValue, rightValue)
+			if s.Orders[i] == DESC {
+				val *= -1
+			}
+			return val
 		}
-		return false
-	})
+		return 0
+	}
+	slices.SortStableFunc(list, sortFunc)
 	return list
 }
 
