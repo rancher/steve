@@ -16,7 +16,7 @@ import (
 
 const (
 	headerContentType          = "Content-Type"
-	contentTypeApplicationJson = "application/json"
+	contentTypeApplicationJSON = "application/json"
 	contentTypeTextPlain       = "text/plain; charset=utf-8"
 
 	headerContentEncoding = "Content-Encoding"
@@ -54,7 +54,7 @@ func (r *recorder) isOk() bool {
 
 func (r *recorder) getBodyData() ([]byte, error) {
 	switch contentType := r.Header().Get(headerContentType); contentType {
-	case contentTypeApplicationJson, contentTypeTextPlain:
+	case contentTypeApplicationJSON, contentTypeTextPlain:
 	default:
 		return nil, fmt.Errorf("unsupported content type '%s'", contentType)
 	}
@@ -110,7 +110,7 @@ func typedMergeFunc[T any](f func(T, T) (T, error)) mergeFunc {
 	}
 }
 
-var ApiGropuListMerger = typedMergeFunc(func(lhs metav1.APIGroupList, rhs metav1.APIGroupList) (metav1.APIGroupList, error) {
+var APIGropuListMerger = typedMergeFunc(func(lhs metav1.APIGroupList, rhs metav1.APIGroupList) (metav1.APIGroupList, error) {
 	lhs.Groups = append(lhs.Groups, slices.DeleteFunc(rhs.Groups, func(target metav1.APIGroup) bool {
 		return slices.ContainsFunc(lhs.Groups, func(g metav1.APIGroup) bool {
 			return g.Name == target.Name
@@ -163,7 +163,7 @@ func (m *merger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	secondaryRecorder := newRecorder()
 	m.secondary.ServeHTTP(secondaryRecorder, r)
 
-	w.Header().Set(headerContentType, contentTypeApplicationJson)
+	w.Header().Set(headerContentType, contentTypeApplicationJSON)
 
 	if primaryRecorder.isOk() && !secondaryRecorder.isOk() {
 		b, err := io.ReadAll(primaryRecorder.body)

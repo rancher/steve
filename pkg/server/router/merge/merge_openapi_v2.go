@@ -36,7 +36,7 @@ func mergeSlices[T comparable](lhs, rhs []T) []T {
 	})
 }
 
-func mergeOpenApiV2Document(lhs, rhs *openapiv2.Document) (*openapiv2.Document, error) {
+func mergeOpenAPIV2Document(lhs, rhs *openapiv2.Document) (*openapiv2.Document, error) {
 	if lhs.Swagger != rhs.Swagger {
 		return nil, fmt.Errorf("found mismatched swagger versions: '%s' != '%s'", lhs.Swagger, rhs.Swagger)
 	}
@@ -123,7 +123,7 @@ func OpenAPIV2Merger(primaryData []byte, secondaryData []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to parse document: %w", err)
 	}
 
-	merged, err := mergeOpenApiV2Document(primaryDocument, secondaryDocument)
+	merged, err := mergeOpenAPIV2Document(primaryDocument, secondaryDocument)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge openapi documents: %w", err)
 	}
