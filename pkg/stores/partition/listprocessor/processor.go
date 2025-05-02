@@ -355,38 +355,53 @@ func matchesAll(obj map[string]interface{}, filters []OrFilter) bool {
 }
 
 // SortList sorts the slice by the provided sort criteria.
+// Convert the sorted list so we calculate the sort values only once per node,
+// making this an O(n) operation rather than an O(n**2) one.
+//
+// list of u.U => list of { u.U, []stringValues } =>
+// sorted list of { u.U, []stringValues } =>
+// final list of u.U from the above sorted list
 func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructured {
 	if len(s.Fields) == 0 {
 		return list
 	}
-	sortFunc := func(leftNode, rightNode unstructured.Unstructured) int {
-		leftObject := leftNode.Object
-		rightObject := rightNode.Object
+	type transformedData struct {
+		originalItem unstructured.Unstructured
+		stringValues []string
+	}
+	transformedList := make([]transformedData, len(list))
+	for i := range list {
+		td := &transformedList[i]
+		td.stringValues = make([]string, len(s.Fields))
+		listItem := list[i]
+		td.originalItem = listItem
 		for i, fields := range s.Fields {
-			lv1, ok := data.GetValueFromAny(leftObject, fields...)
-			if !ok {
-				logrus.Debugf("Failed to walk %v with fields %s", leftObject, fields)
-				return 0
+			val, ok := data.GetValueFromAny(listItem.Object, fields...)
+			if ok {
+				td.stringValues[i] = val.(string)
+			} else {
+				logrus.Debugf("Failed to walk list item %d with fields %s", i, fields)
+				td.stringValues[i] = ""
 			}
-			rv1, ok := data.GetValueFromAny(rightObject, fields...)
-			if !ok {
-				logrus.Debugf("Failed to walk %v with fields %s", rightObject, fields)
-				return 0
-			}
-			leftValue := convert.ToString(lv1)
-			rightValue := convert.ToString(rv1)
-			if leftValue == rightValue {
+		}
+	}
+	sortFunc := func(leftNode, rightNode transformedData) int {
+		for i := range leftNode.stringValues {
+			diff := strings.Compare(leftNode.stringValues[i], rightNode.stringValues[i])
+			if diff == 0 {
 				continue
 			}
-			val := strings.Compare(leftValue, rightValue)
 			if s.Orders[i] == DESC {
-				val *= -1
+				diff *= -1
 			}
-			return val
+			return diff
 		}
 		return 0
 	}
-	slices.SortStableFunc(list, sortFunc)
+	slices.SortStableFunc(transformedList, sortFunc)
+	for i := range transformedList {
+		list[i] = transformedList[i].originalItem
+	}
 	return list
 }
 
