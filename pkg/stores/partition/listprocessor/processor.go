@@ -358,40 +358,46 @@ func matchesAll(obj map[string]interface{}, filters []OrFilter) bool {
 // Convert the sorted list so we calculate the sort values only once per node,
 // making this an O(n) operation rather than an O(n**2) one.
 //
-// list of u.U => list of { u.U, []stringValues } =>
-// sorted list of { u.U, []stringValues } =>
+// list of u.U => list of { *u.U, []stringValues } =>
+// sorted list of { *u.U, []stringValues } =>
 // final list of u.U from the above sorted list
+//
+// We do this because it's much faster to compare two string arrays then to compare
+// the string arrays based on walking objects repeatedly
 func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructured {
 	if len(s.Fields) == 0 {
 		return list
 	}
 	type transformedData struct {
-		originalItem unstructured.Unstructured
+		originalItem *unstructured.Unstructured
 		stringValues []string
 	}
 	transformedList := make([]transformedData, len(list))
 	for i := range list {
 		td := &transformedList[i]
+		td.originalItem = &list[i]
 		td.stringValues = make([]string, len(s.Fields))
-		listItem := list[i]
-		td.originalItem = listItem
-		for i, fields := range s.Fields {
-			val, ok := data.GetValueFromAny(listItem.Object, fields...)
+		for j, fields := range s.Fields {
+			val, ok := data.GetValueFromAny(list[i].Object, fields...)
 			if ok {
-				td.stringValues[i] = val.(string)
+				td.stringValues[j] = val.(string)
 			} else {
 				logrus.Debugf("Failed to walk list item %d with fields %s", i, fields)
-				td.stringValues[i] = ""
+				td.stringValues[j] = ""
 			}
 		}
 	}
+	// We can't use slices.Compare(leftNode.stringValues, rightNode.stringValues)
+	// because some comparisons might use ASC-order, and others DESC-order.
 	sortFunc := func(leftNode, rightNode transformedData) int {
 		for i := range leftNode.stringValues {
 			diff := strings.Compare(leftNode.stringValues[i], rightNode.stringValues[i])
 			if diff == 0 {
+				// the two substrings are the same, so continue walking the arrays
 				continue
 			}
 			if s.Orders[i] == DESC {
+				// reversing sort order just means inverting the comparison value
 				diff *= -1
 			}
 			return diff
@@ -399,10 +405,11 @@ func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructu
 		return 0
 	}
 	slices.SortStableFunc(transformedList, sortFunc)
+	newList := make([]unstructured.Unstructured, len(list))
 	for i := range transformedList {
-		list[i] = transformedList[i].originalItem
+		newList[i] = *transformedList[i].originalItem
 	}
-	return list
+	return newList
 }
 
 // PaginateList returns a subset of the result based on the pagination criteria as well as the total number of pages the caller can expect.
