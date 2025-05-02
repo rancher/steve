@@ -645,6 +645,9 @@ func (p *Parser) parse() (internalSelector, error) {
 				return nil, fmt.Errorf("found '%s', expected: ',' or 'end of string'", l)
 			}
 		case EndOfStringToken:
+			if len(requirements) == 0 && p.parseType == "sort" {
+				return nil, fmt.Errorf("no sort criteria specified")
+			}
 			return requirements, nil
 		default:
 			return nil, fmt.Errorf("found '%s', expected: !, identifier, or 'end of string'", lit)
@@ -658,11 +661,18 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 		return nil, err
 	}
 	fieldPath := field.WithPath(p.path)
-	if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
-		if p.parseType == "filter" && !labelSelectorRegex.MatchString(key) {
-			return nil, fmt.Errorf("existence tests are valid only for labels; not valid for field '%s'", key)
+	if p.parseType == "sort" {
+		if operator == selection.Exists {
+			return NewRequirement(key, operator, []string{}, fieldPath)
 		}
-		return NewRequirement(key, operator, []string{}, fieldPath)
+	} else {
+		// p.parseType == "filter"
+		if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
+			if !labelSelectorRegex.MatchString(key) {
+				return nil, fmt.Errorf("existence tests are valid only for labels; not valid for field '%s'", key)
+			}
+			return NewRequirement(key, operator, []string{}, fieldPath)
+		}
 	}
 	return p.parseOperatorAndValues(key, fieldPath, true)
 }
@@ -671,6 +681,9 @@ func (p *Parser) parseOperatorAndValues(key string, fieldPath field.PathOption, 
 	operator, err := p.parseOperator()
 	if err != nil {
 		return nil, err
+	}
+	if p.parseType == "sort" && operator != selection.IndirectSelector {
+		return nil, fmt.Errorf("found an operator (%s) in a sort expression )", operator)
 	}
 	var values sets.String
 	switch operator {
@@ -703,6 +716,9 @@ func (p *Parser) parseKeyAndInferOperator() (string, selection.Operator, error) 
 	var operator selection.Operator
 	tok, literal := p.consume(Values)
 	if tok == DoesNotExistToken {
+		if p.parseType == "sort" {
+			return "", selection.DoesNotExist, fmt.Errorf("found unexpected token '%s' in sort parameter", literal)
+		}
 		operator = selection.DoesNotExist
 		tok, literal = p.consume(Values)
 	}

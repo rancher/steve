@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func TestSelectorParse(t *testing.T) {
+func TestSelectorParseFilterQuery(t *testing.T) {
 	testGoodStrings := []string{
 		"x=a,y=b,z=c",
 		"",
@@ -90,6 +90,77 @@ func TestSelectorParse(t *testing.T) {
 	}
 	for _, test := range testBadStrings {
 		_, err := Parse(test, "filter")
+		if err == nil {
+			t.Errorf("%v: did not get expected error\n", test)
+		}
+	}
+}
+
+func TestSelectorParseSortQuery(t *testing.T) {
+	testGoodStrings := []string{
+		"metadata.labels.im-here",
+		"metadata.labels[im.here]",
+		"no-label-presence-test",
+		"metadata.labels-im.here",
+		"metadata.labels[k8s.io/meta-stuff] => [needs][no][operator][end-of-string]",
+		// This is a bad filter string because it doesn't conform to a label accessor
+		// as it's missing the close-bracket, but it's ok for sorting (for now).
+		// When we add integration tests watch what happens
+		"metadata.labels[missing/close-bracket",
+	}
+	testBadStrings := []string{
+		"x=a,y=b,z=c",
+		"",
+		"x!=a,y=b",
+		"close ~ value",
+		"notclose !~ value",
+		"x>1",
+		"x>1,z<5",
+		"x gt 1,z lt 5",
+		`y == def`,
+
+		"!metadata.labels.im-not-here",
+
+		"!metadata.labels[im.not.here]",
+
+		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
+		"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"name => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"metadata.annotations[blah] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+
+		"!no-label-absence-test",
+		"x=a||y=b",
+		"x==a==b",
+		"!x=a",
+		"x<a",
+		"x=",
+		"x= ",
+		"x=,z= ",
+		"x= ,z= ",
+		"x ~",
+		"x !~",
+		"~ val",
+		"!~ val",
+		"= val",
+		"== val",
+		"!metadata.labels(im.not.here)",
+		`x="no double quotes allowed"`,
+		`x='no single quotes allowed'`,
+		"metadata.labels[k8s.io/meta-stuff] => not-bracketed = active",
+		"metadata.labels[k8s.io/meta-stuff] => [not][enough][accessors] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [too][many][accessors][by][1] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][an][operator][no-following-operator] no-operator",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][a][post-operator][value] >",
+		"metadata.labels[not/followed/by/accessor] => = active",
+	}
+	for _, test := range testGoodStrings {
+		_, err := Parse(test, "sort")
+		if err != nil {
+			t.Errorf("%v: error %v (%#v)\n", test, err, err)
+		}
+	}
+	for _, test := range testBadStrings {
+		_, err := Parse(test, "sort")
 		if err == nil {
 			t.Errorf("%v: did not get expected error\n", test)
 		}
