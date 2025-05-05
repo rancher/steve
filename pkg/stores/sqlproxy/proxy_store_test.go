@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,6 +47,7 @@ import (
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
 var c *watch.FakeWatcher
+var parallelDataLock sync.Mutex
 
 type testFactory struct {
 	*client.Factory
@@ -160,7 +162,6 @@ func TestNewProxyStore(t *testing.T) {
 			assert.Nil(t, s.namespaceCache)
 		},
 	})
-	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
@@ -617,7 +618,6 @@ func TestListByPartitions(t *testing.T) {
 			assert.NotNil(t, err)
 		},
 	})
-	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
@@ -765,7 +765,6 @@ func TestReset(t *testing.T) {
 			assert.NotNil(t, err)
 		},
 	})
-	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
