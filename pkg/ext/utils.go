@@ -139,8 +139,9 @@ func CreateOrUpdate[T runtime.Object](
 		}
 
 		newObj, err := createFn(ctx, tObj, &metav1.CreateOptions{
-			DryRun:       options.DryRun,
-			FieldManager: options.FieldManager,
+			DryRun:          options.DryRun,
+			FieldManager:    options.FieldManager,
+			FieldValidation: options.FieldValidation,
 		})
 		if err != nil {
 			return nil, false, convertError(err)

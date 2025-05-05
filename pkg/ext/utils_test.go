@@ -100,8 +100,9 @@ func TestCreateOrUpdate(t *testing.T) {
 		forceAllowCreate := false
 
 		options := &metav1.UpdateOptions{
-			DryRun:       []string{"All"},
-			FieldManager: "test",
+			DryRun:          []string{"All"},
+			FieldManager:    "test",
+			FieldValidation: metav1.FieldValidationStrict,
 		}
 
 		getFn := func(ctx context.Context, name string, opts *metav1.GetOptions) (*TestType, error) {
@@ -115,6 +116,7 @@ func TestCreateOrUpdate(t *testing.T) {
 			require.NotNil(t, opts)
 			assert.Equal(t, options.DryRun, opts.DryRun)
 			assert.Equal(t, options.FieldManager, opts.FieldManager)
+			assert.Equal(t, options.FieldValidation, opts.FieldValidation)
 
 			return obj.DeepCopy(), nil
 		}
