@@ -34,9 +34,17 @@ func addKnownTypesTest(scheme *runtime.Scheme) error {
 }
 
 var (
+	testTypeResource = "testtypes"
+
 	testTypeGV = schema.GroupVersion{
 		Group:   "ext.cattle.io",
 		Version: "v1",
+	}
+
+	testTypeGVR = schema.GroupVersionResource{
+		Group:    testTypeGV.Group,
+		Version:  testTypeGV.Version,
+		Resource: testTypeResource,
 	}
 
 	testTypeListFixture = TestTypeList{
@@ -103,7 +111,6 @@ func (in *TestTypeList) DeepCopyInto(out *TestTypeList) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	return
 }
 
 func (in *TestTypeList) DeepCopy() *TestTypeList {
@@ -131,7 +138,6 @@ func (in *TestType) DeepCopyInto(out *TestType) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	return
 }
 
 func (in *TestType) DeepCopy() *TestType {
@@ -196,7 +202,7 @@ func newDefaultTestStore() *testStore[*TestType, *TestTypeList] {
 		objT:     &TestType{},
 		objListT: &TestTypeList{},
 		gvk:      testTypeGV.WithKind("TestType"),
-		gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypes"},
+		gvr:      testTypeGVR,
 		items: map[string]*TestType{
 			testTypeFixture.Name: &testTypeFixture,
 		},

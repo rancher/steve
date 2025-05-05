@@ -65,7 +65,7 @@ func TestStore(t *testing.T) {
 	ts := httptest.NewServer(extensionAPIServer)
 	defer ts.Close()
 
-	recWatch, err := createRecordingWatcher(scheme, testTypeGV.WithResource("testtypes"), ts.URL)
+	recWatch, err := createRecordingWatcher(scheme, testTypeGVR, ts.URL)
 	require.NoError(t, err)
 
 	updatedObj := testTypeFixture.DeepCopy()
@@ -306,35 +306,35 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			objT:     &TestTypeOther{},
 			objListT: &TestTypeOtherList{},
 			gvk:      testTypeGV.WithKind("TestTypeOther"),
-			gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypes"},
+			gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypeothers"},
 		})
 		if err != nil {
 			return err
 		}
 
-		err = s.Install("testtypes", differentVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
+		err = s.Install(testTypeResource, differentVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
 			singular: "testtype",
 			objT:     &TestType{},
 			objListT: &TestTypeList{},
 			gvk:      differentVersion.WithKind("TestType"),
-			gvr:      schema.GroupVersionResource{Group: differentVersion.Group, Version: differentVersion.Version, Resource: "testtypes"},
+			gvr:      schema.GroupVersionResource{Group: differentVersion.Group, Version: differentVersion.Version, Resource: testTypeResource},
 		})
 		if err != nil {
 			return err
 		}
 
-		err = s.Install("testtypes", differentGroupVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
+		err = s.Install(testTypeResource, differentGroupVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
 			singular: "testtype",
 			objT:     &TestType{},
 			objListT: &TestTypeList{},
 			gvk:      differentGroupVersion.WithKind("TestType"),
-			gvr:      schema.GroupVersionResource{Group: differentGroupVersion.Group, Version: differentVersion.Version, Resource: "testtypes"},
+			gvr:      schema.GroupVersionResource{Group: differentGroupVersion.Group, Version: differentVersion.Version, Resource: testTypeResource},
 		})
 		if err != nil {
 			return err
 		}
 
-		err = s.Install("testtypes", partialGroupVersion.WithKind("TestType"), &partialStorage{
+		err = s.Install(testTypeResource, partialGroupVersion.WithKind("TestType"), &partialStorage{
 			gvk: partialGroupVersion.WithKind("TestType"),
 		})
 		if err != nil {
@@ -482,7 +482,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 						},
 					},
 					{
-						Name:         "testtypes",
+						Name:         testTypeResource,
 						SingularName: "testtype",
 						Namespaced:   false,
 						Kind:         "TestType",
@@ -507,7 +507,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 				GroupVersion: "ext.cattle.io/v2",
 				APIResources: []metav1.APIResource{
 					{
-						Name:         "testtypes",
+						Name:         testTypeResource,
 						SingularName: "testtype",
 						Namespaced:   false,
 						Kind:         "TestType",
@@ -532,7 +532,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 				GroupVersion: "ext2.cattle.io/v3",
 				APIResources: []metav1.APIResource{
 					{
-						Name:         "testtypes",
+						Name:         testTypeResource,
 						SingularName: "testtype",
 						Namespaced:   false,
 						Kind:         "TestType",
@@ -557,7 +557,7 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 				GroupVersion: "ext.cattle.io/v4",
 				APIResources: []metav1.APIResource{
 					{
-						Name:         "testtypes",
+						Name:         testTypeResource,
 						SingularName: "testtype",
 						Namespaced:   false,
 						Kind:         "TestType",
@@ -674,7 +674,7 @@ func setupExtensionAPIServer(
 	extensionAPIServerSetter func(*ExtensionAPIServer) error,
 ) (*ExtensionAPIServer, error) {
 	fn := func(e *ExtensionAPIServer) error {
-		err := e.Install("testtypes", testTypeGV.WithKind("TestType"), store)
+		err := e.Install(testTypeResource, testTypeGV.WithKind("TestType"), store)
 		if err != nil {
 			return fmt.Errorf("InstallStore: %w", err)
 		}
@@ -822,7 +822,7 @@ func TestCustomColumns(t *testing.T) {
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, func(s *ExtensionAPIServer) error {
-		err := s.Install("testtypes", testTypeGV.WithKind("TestType"), store)
+		err := s.Install(testTypeResource, testTypeGV.WithKind("TestType"), store)
 		if err != nil {
 			return err
 		}

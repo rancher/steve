@@ -58,7 +58,7 @@ func (t *authzTestStore) List(ctx context.Context, _ *metainternalversion.ListOp
 		decision, _, err := t.authorizer.Authorize(ctx, authorizer.AttributesRecord{
 			User:            userInfo,
 			Verb:            "customverb",
-			Resource:        "testtypes",
+			Resource:        testTypeResource,
 			ResourceRequest: true,
 			APIGroup:        "ext.cattle.io",
 		})
@@ -162,7 +162,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			testStore:  newDefaultTestStore(),
 			authorizer: s.GetAuthorizer(),
 		}
-		err := s.Install("testtypes", testTypeGV.WithKind("TestType"), store)
+		err := s.Install(testTypeResource, testTypeGV.WithKind("TestType"), store)
 		if err != nil {
 			return err
 		}
