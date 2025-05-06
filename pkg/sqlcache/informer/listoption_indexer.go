@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -652,11 +653,15 @@ func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
 // KEY ! []  # ,!KEY, => assert KEY doesn't exist
 // KEY in VALUES
 // KEY notin VALUES
+// KEY contains VALUE
 
 func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []any, error) {
 	opString := ""
 	escapeString := ""
 	columnName := toColumnName(filter.Field)
+	if filter.Op == sqltypes.Contains {
+		return l.getFieldArrayFilter(filter, columnName)
+	}
 	if err := l.validateColumn(columnName); err != nil {
 		return "", nil, err
 	}
@@ -711,6 +716,42 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 	}
 
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
+}
+
+func (l *ListOptionIndexer) getFieldArrayFilter(filter sqltypes.Filter, columnName string) (string, []any, error) {
+	if len(filter.Matches) > 1 {
+		return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
+	}
+	// Allow for a weird case where we can have both
+	// `fieldName[1]`, `fieldName[2]`... and also bare `fieldName` - check the explicit array first
+	associatedColumnNames := make([]string, 0)
+	i := 1
+	for {
+		candidate := fmt.Sprintf("%s[%d]", columnName, i)
+		if !slices.Contains(l.indexedFields, candidate) {
+			break
+		}
+		associatedColumnNames = append(associatedColumnNames, candidate)
+		i += 1
+	}
+	if len(associatedColumnNames) == 0 {
+		return l.getSimpleFieldArrayFilter(filter, columnName)
+	}
+	target := fmt.Sprintf("(f.%s)", strings.Join(associatedColumnNames, ", f."))
+	matches := []any{filter.Matches[0]}
+	clause := fmt.Sprintf(`? IN %s`, target)
+	return clause, matches, nil
+}
+
+func (l *ListOptionIndexer) getSimpleFieldArrayFilter(filter sqltypes.Filter, columnName string) (string, []any, error) {
+	if err := l.validateColumn(columnName); err != nil {
+		return "", nil, err
+	}
+	needle := filter.Matches[0]
+	clause := fmt.Sprintf(`INSTR(CONCAT("|", f."%s", "|"), CONCAT("|", ?, "|")) > 0 OR
+     (INSTR("|", ?) > 0 AND INSTR(f."%s", ?) > 0)`, columnName, columnName)
+	matches := []any{needle, needle, needle}
+	return clause, matches, nil
 }
 
 func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, dbName string) (string, []any, error) {

@@ -1106,6 +1106,31 @@ func TestConstructQuery(t *testing.T) {
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles NOT-IN statements",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Matches: []string{"somevalue"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.queryField1" NOT IN (?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"somevalue"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles EXISTS statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
@@ -1666,6 +1691,96 @@ func TestConstructQuery(t *testing.T) {
 			lii := &ListOptionIndexer{
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+			if test.expectedErr != nil {
+				assert.Equal(t, test.expectedErr, err)
+				return
+			}
+			assert.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructQueryWithExplicitArrays(t *testing.T) {
+	type testCase struct {
+		description           string
+		listOptions           sqltypes.ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           error
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles CONTAIN statements on indexed arrays",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle01"},
+						Field:   []string{"metadata", "fields"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (? IN (f.metadata.fields[1], f.metadata.fields[2], f.metadata.fields[3])) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"needle01"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles INARRAY statements on single strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle02"},
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (INSTR(CONCAT("|", f."metadata.queryField1", "|"), CONCAT("|", ?, "|")) > 0 OR
+     (INSTR("|", ?) > 0 AND INSTR(f."metadata.queryField1", ?) > 0)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"needle02", "needle02", "needle02"},
+		expectedErr:      nil,
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {

@@ -9,6 +9,7 @@ const (
 	NotExists Op = "NotExists"
 	In        Op = "In"
 	NotIn     Op = "NotIn"
+	Contains  Op = "Contains"
 	Lt        Op = "Lt"
 	Gt        Op = "Gt"
 )
