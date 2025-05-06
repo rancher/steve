@@ -57,6 +57,8 @@ func TestSelectorParse(t *testing.T) {
 		`metadata.labels[k8s.io/meta-stuff] ~ "m!a@t#c$h%e^v&e*r(y)t-_i=n+g)t{o[$]c}o]m|m\\a:;'<.>"`,
 		`x="double quotes ok"`,
 		`x='single quotes ok'`,
+		`x="double quotes with \\ and \" ok"`,
+		`x='single quotes with \\ and \' ok'`,
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",

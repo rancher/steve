@@ -484,6 +484,8 @@ StringLoop:
 		case inEscape:
 			buffer = append(buffer, ch)
 			inEscape = false
+		case ch == '\\':
+			inEscape = true
 		case ch == delim:
 			// Don't include the end-delimiter
 			break StringLoop
