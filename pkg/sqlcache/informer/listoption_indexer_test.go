@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1831,6 +1832,128 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			assert.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructQueryWithLabelContainsOp(t *testing.T) {
+	type testCase struct {
+		description           string
+		listOptions           sqltypes.ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any /*
+			Copyright 2023 SUSE LLC
+
+			Adapted from client-go, Copyright 2014 The Kubernetes Authors.
+		*/
+		expectedStmt     string
+		expectedStmtArgs []any
+		expectedErr      string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: handles CONTAIN statements on labels",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle03a"},
+						Field:   []string{"metadata", "labels", "labelContains01"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  WHERE
+    ((lt1.label = ?) AND
+    (INSTR(CONCAT("|", lt1.value, "|"), CONCAT("|", ?, "|")) > 0 OR
+    (INSTR("|", ?) > 0 AND INSTR(lt1.value, ?) > 0))) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"labelContains01", "needle03a", "needle03a", "needle03a"},
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on too many target strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"too", "many", "targets"},
+						Field:   []string{"metadata", "labels", "labelContains02"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 3 were specified",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on incomplete labels field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"meadow"},
+						Field:   []string{"metadata", "labels"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "column is invalid [metadata.labels]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on no target string",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "labels", "pasture"},
+						Op:    sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "no target value given for metadata.labels.pasture Contains",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
 				assert.Equal(t, test.expectedErr, err.Error())
 				return
 			}

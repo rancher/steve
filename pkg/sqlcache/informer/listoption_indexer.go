@@ -766,6 +766,17 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, db
 		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s ?%s`, index, index, opString, escapeString)
 		return clause, []any{labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse)}, nil
 
+	case sqltypes.Contains:
+		if len(filter.Matches) != 1 {
+			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
+		}
+		clause := fmt.Sprintf(`(lt%d.label = ?) AND
+    (INSTR(CONCAT("|", lt%d.value, "|"), CONCAT("|", ?, "|")) > 0 OR
+    (INSTR("|", ?) > 0 AND INSTR(lt%d.value, ?) > 0))`,
+			index, index, index)
+		params := []any{labelName, filter.Matches[0], filter.Matches[0], filter.Matches[0]}
+		return clause, params, nil
+
 	case sqltypes.NotEq:
 		if filter.Partial {
 			opString = "NOT LIKE"
