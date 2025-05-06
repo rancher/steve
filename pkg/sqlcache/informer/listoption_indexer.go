@@ -719,7 +719,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 }
 
 func (l *ListOptionIndexer) getFieldArrayFilter(filter sqltypes.Filter, columnName string) (string, []any, error) {
-	if len(filter.Matches) > 1 {
+	if len(filter.Matches) != 1 {
 		return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
 	}
 	// Allow for a weird case where we can have both
