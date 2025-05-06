@@ -1706,7 +1706,7 @@ func TestConstructQuery(t *testing.T) {
 	}
 }
 
-func TestConstructQueryWithExplicitArrays(t *testing.T) {
+func TestConstructQueryWithContainsOp(t *testing.T) {
 	type testCase struct {
 		description           string
 		listOptions           sqltypes.ListOptions
@@ -1716,7 +1716,7 @@ func TestConstructQueryWithExplicitArrays(t *testing.T) {
 		expectedCountStmtArgs []any
 		expectedStmt          string
 		expectedStmtArgs      []any
-		expectedErr           error
+		expectedErr           string
 	}
 
 	var tests []testCase
@@ -1743,10 +1743,9 @@ func TestConstructQueryWithExplicitArrays(t *testing.T) {
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"needle01"},
-		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: handles INARRAY statements on single strings",
+		description: "TestConstructQuery: handles CONTAIN statements on single strings",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -1769,7 +1768,59 @@ func TestConstructQueryWithExplicitArrays(t *testing.T) {
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"needle02", "needle02", "needle02"},
-		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: error CONTAIN statements on too many target strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"too", "many", "targets"},
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		//partitions: []partition.Partition{},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 3 were specified",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: error CONTAIN statements on unrecognized field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"this"},
+						Field:   []string{"bills", "farm"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		//partitions: []partition.Partition{},
+		ns:          "",
+		expectedErr: "column is invalid [bills.farm]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: error CONTAIN statements on no target string",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "queryField1"},
+						Op:    sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		//partitions: []partition.Partition{},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 0 were specified",
 	})
 	t.Parallel()
 	for _, test := range tests {
@@ -1782,9 +1833,12 @@ func TestConstructQueryWithExplicitArrays(t *testing.T) {
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
 			}
+			if test.expectedErr == "glub3" {
+				fmt.Println("stop here")
+			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
-			if test.expectedErr != nil {
-				assert.Equal(t, test.expectedErr, err)
+			if test.expectedErr != "" {
+				assert.Equal(t, test.expectedErr, err.Error())
 				return
 			}
 			assert.Nil(t, err)
