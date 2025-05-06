@@ -1094,7 +1094,7 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 			name:                "get update patch on project and get on projectroletemplatebindings",
 			topLevelPermissions: []string{"get", "update", "patch"},
 			resourcePermissions: map[string][]string{
-				"projectroletemplatebindings": {"get", "list", "watch"},
+				"projectRoleTemplateBindings": {"get", "list", "watch"},
 			},
 			schema: &types.APISchema{
 				Schema: &schemas.Schema{
@@ -1113,18 +1113,18 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 				},
 			},
 			want: map[string]map[string]string{
-				"projectroletemplatebindings": {
-					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
-					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
-					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
+				"projectRoleTemplateBindings": {
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
 				},
 			},
 		},
 		{
-			name:                "get update patch on project and get on projectroletemplatebindings and pods",
+			name:                "get update patch on project and get on projectRoleTemplateBindings and pods",
 			topLevelPermissions: []string{"get", "update", "patch"},
 			resourcePermissions: map[string][]string{
-				"projectroletemplatebindings": {"get", "list", "watch"},
+				"projectRoleTemplateBindings": {"get", "list", "watch"},
 				"pods":                        {"get", "list", "watch"},
 			},
 			schema: &types.APISchema{
@@ -1144,10 +1144,10 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 				},
 			},
 			want: map[string]map[string]string{
-				"projectroletemplatebindings": {
-					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
-					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
-					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectroletemplatebindings",
+				"projectRoleTemplateBindings": {
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
 				},
 				"pods": {
 					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",

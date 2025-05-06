@@ -236,11 +236,8 @@ func getNamespaceFromResource(obj types.APIObject) string {
 		}
 	}
 
-	// Otherwise, if the id has a slash, we will interpret that
-	parts := strings.SplitN(obj.ID, "/", 2)
-	if len(parts) == 2 {
-		return parts[0] + "-" + parts[1]
-	}
-
-	return obj.ID
+	// Otherwise, if the id has a slash, we will interpret that.
+	// This is used to determine a project's namespace when there is no backingNamespace present.
+	// For cases where there is no slash, we use the object's ID, which is the same as the namespace.
+	return strings.Replace(obj.ID, "/", "-", 1)
 }
