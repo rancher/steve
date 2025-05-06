@@ -1707,7 +1707,67 @@ func TestConstructQuery(t *testing.T) {
 	}
 }
 
-func TestConstructQueryWithContainsOp(t *testing.T) {
+func TestConstructQueryErrors(t *testing.T) {
+	type testCase struct {
+		description string
+		listOptions sqltypes.ListOptions
+		ns          string
+		expectedErr string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQueryErrors: incomplete labels field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"barnyard"},
+						Field:   []string{"metadata", "labels"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "column is invalid [metadata.labels]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryErrors: no target given",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "no target value given for metadata.queryField1 =",
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			_, err := lii.constructQuery(&test.listOptions, nil, test.ns, "something")
+			require.NotNil(t, err)
+			assert.Equal(t, test.expectedErr, err.Error())
+		})
+	}
+}
+
+func TestConstructQueryWithPlainContainsOp(t *testing.T) {
 	type testCase struct {
 		description           string
 		listOptions           sqltypes.ListOptions
@@ -1722,7 +1782,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: handles CONTAIN statements on indexed arrays",
+		description: "TestConstructQueryWithPlainContainsOp: handles CONTAIN statements on indexed arrays",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -1746,7 +1806,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedStmtArgs: []any{"needle01"},
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: handles CONTAIN statements on single strings",
+		description: "TestConstructQueryWithPlainContainsOp: handles CONTAIN statements on single strings",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -1770,7 +1830,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedStmtArgs: []any{"needle02"},
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: error CONTAIN statements on too many target strings",
+		description: "TestConstructQueryWithPlainContainsOp: error CONTAIN statements on too many target strings",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -1787,7 +1847,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedErr: "array checking works on exactly one field, 3 were specified",
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: error CONTAIN statements on unrecognized field",
+		description: "TestConstructQueryWithPlainContainsOp: error CONTAIN statements on unrecognized field",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -1804,7 +1864,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedErr: "column is invalid [bills.farm]: supplied column is invalid",
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: error CONTAIN statements on no target string",
+		description: "TestConstructQueryWithPlainContainsOp: error CONTAIN statements on no target string",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -1817,7 +1877,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		},
 		},
 		ns:          "",
-		expectedErr: "array checking works on exactly one field, 0 were specified",
+		expectedErr: "no target value given for metadata.queryField1 Contains",
 	})
 	t.Parallel()
 	for _, test := range tests {

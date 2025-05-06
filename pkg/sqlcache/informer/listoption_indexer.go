@@ -546,6 +546,12 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 	var err error
 
 	for _, filter := range orFilters.Filters {
+		op := filter.Op
+		if op != sqltypes.Exists && op != sqltypes.NotExists {
+			if len(filter.Matches) == 0 {
+				return "", nil, fmt.Errorf("no target value given for %s %s", smartJoin(filter.Field), op)
+			}
+		}
 		if isLabelFilter(&filter) {
 			index, ok := joinTableIndexByLabelName[filter.Field[2]]
 			if !ok {
@@ -976,7 +982,7 @@ func extractSubFields(fields string) []string {
 }
 
 func isLabelFilter(f *sqltypes.Filter) bool {
-	return len(f.Field) >= 2 && f.Field[0] == "metadata" && f.Field[1] == "labels"
+	return len(f.Field) == 3 && f.Field[0] == "metadata" && f.Field[1] == "labels"
 }
 
 func hasLabelFilter(filters []sqltypes.OrFilter) bool {
