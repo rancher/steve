@@ -1739,7 +1739,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (? IN (f.metadata.fields[1], f.metadata.fields[2], f.metadata.fields[3])) AND
+    (? IN (f.metadata.fields[1], f.metadata.fields[2], f.metadata.fields[3], f.metadata.fields[5])) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"needle01"},
@@ -1832,9 +1832,6 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			lii := &ListOptionIndexer{
 				Indexer:       i,
 				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
-			}
-			if test.expectedErr == "glub3" {
-				fmt.Println("stop here")
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != "" {

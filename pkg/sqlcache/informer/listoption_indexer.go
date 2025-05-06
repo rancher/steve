@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -722,17 +721,14 @@ func (l *ListOptionIndexer) getFieldArrayFilter(filter sqltypes.Filter, columnNa
 	if len(filter.Matches) != 1 {
 		return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
 	}
+	indexedRegex := regexp.MustCompile(fmt.Sprintf(`^%s\[\d\]$`, columnName))
 	// Allow for a weird case where we can have both
 	// `fieldName[1]`, `fieldName[2]`... and also bare `fieldName` - check the explicit array first
-	associatedColumnNames := make([]string, 0)
-	i := 1
-	for {
-		candidate := fmt.Sprintf("%s[%d]", columnName, i)
-		if !slices.Contains(l.indexedFields, candidate) {
-			break
+	associatedColumnNames := make([]string, 0, len(l.indexedFields))
+	for _, fieldName := range l.indexedFields {
+		if indexedRegex.MatchString(fieldName) {
+			associatedColumnNames = append(associatedColumnNames, fieldName)
 		}
-		associatedColumnNames = append(associatedColumnNames, candidate)
-		i += 1
 	}
 	if len(associatedColumnNames) == 0 {
 		return l.getSimpleFieldArrayFilter(filter, columnName)
