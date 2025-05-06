@@ -175,7 +175,9 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 						perms[verb] = url
 					}
 				}
-				permissions[res] = perms
+				if len(perms) > 0 {
+					permissions[res] = perms
+				}
 			}
 
 			if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
