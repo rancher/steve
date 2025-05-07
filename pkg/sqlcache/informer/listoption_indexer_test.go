@@ -1738,8 +1738,8 @@ func TestConstructQueryErrors(t *testing.T) {
 			{
 				[]sqltypes.Filter{
 					{
-						Field:   []string{"metadata", "queryField1"},
-						Op:      sqltypes.Eq,
+						Field: []string{"metadata", "queryField1"},
+						Op:    sqltypes.Eq,
 					},
 				},
 			},
@@ -1943,12 +1943,11 @@ func TestConstructQueryWithLabelContainsOp(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((lt1.label = ?) AND
-    (INSTR(CONCAT("|", lt1.value, "|"), CONCAT("|", ?, "|")) > 0 OR
-    (INSTR("|", ?) > 0 AND INSTR(lt1.value, ?) > 0))) AND
+    (lt1.label = ? AND
+    INSTR(CONCAT("|", lt1.value, "|"), CONCAT("|", ?, "|")) > 0) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"labelContains01", "needle03a", "needle03a", "needle03a"},
+		expectedStmtArgs: []any{"labelContains01", "needle03a"},
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on too many target strings",
