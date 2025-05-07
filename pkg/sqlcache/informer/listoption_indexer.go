@@ -744,9 +744,8 @@ func (l *ListOptionIndexer) getSimpleFieldArrayFilter(filter sqltypes.Filter, co
 		return "", nil, err
 	}
 	needle := filter.Matches[0]
-	clause := fmt.Sprintf(`INSTR(CONCAT("|", f."%s", "|"), CONCAT("|", ?, "|")) > 0 OR
-     (INSTR("|", ?) > 0 AND INSTR(f."%s", ?) > 0)`, columnName, columnName)
-	matches := []any{needle, needle, needle}
+	clause := fmt.Sprintf(`INSTR(CONCAT("|", f."%s", "|"), CONCAT("|", ?, "|")) > 0`, columnName)
+	matches := []any{needle}
 	return clause, matches, nil
 }
 

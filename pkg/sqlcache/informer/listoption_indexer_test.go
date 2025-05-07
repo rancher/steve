@@ -1763,11 +1763,10 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (INSTR(CONCAT("|", f."metadata.queryField1", "|"), CONCAT("|", ?, "|")) > 0 OR
-     (INSTR("|", ?) > 0 AND INSTR(f."metadata.queryField1", ?) > 0)) AND
+    (INSTR(CONCAT("|", f."metadata.queryField1", "|"), CONCAT("|", ?, "|")) > 0) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"needle02", "needle02", "needle02"},
+		expectedStmtArgs: []any{"needle02"},
 	})
 	tests = append(tests, testCase{
 		description: "TestConstructQuery: error CONTAIN statements on too many target strings",
