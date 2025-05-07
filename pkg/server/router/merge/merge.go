@@ -81,6 +81,11 @@ func (r *recorder) getBodyData() ([]byte, error) {
 	return body, nil
 }
 
+func mergeHeaders(dst http.Header, lhs http.Header, rhs http.Header) {
+	maps.Copy(dst, rhs)
+	maps.Copy(dst, lhs)
+}
+
 type mergeFunc func([]byte, []byte) ([]byte, error)
 
 func typedMergeFunc[T any](f func(T, T) (T, error)) mergeFunc {
@@ -210,6 +215,5 @@ func (m *merger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// todo: write status
-	// todo: write headers
+	mergeHeaders(w.Header(), primaryRecorder.headers, secondaryRecorder.headers)
 }
