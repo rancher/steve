@@ -66,7 +66,7 @@ var (
 		string(selection.Exists), string(selection.DoesNotExist),
 	}
 	binaryOperators = []string{
-		string(selection.In), string(selection.NotIn),
+		string(selection.In), string(selection.NotIn), string(selection.Contains),
 		string(selection.Equals), string(selection.DoubleEquals), string(selection.NotEquals),
 		string(selection.PartialEquals), string(selection.NotPartialEquals),
 		string(selection.GreaterThan), string(selection.LessThan),
@@ -163,7 +163,7 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "exact-match compatibility requires one single value"))
 		}
-	case selection.PartialEquals, selection.NotPartialEquals:
+	case selection.PartialEquals, selection.NotPartialEquals, selection.Contains:
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "partial-match compatibility requires one single value"))
 		}
@@ -377,24 +377,27 @@ const (
 	NotPartialEqualsToken
 	// OpenParToken represents open parenthesis
 	OpenParToken
+	// ContainsToken represents "contains"
+	ContainsToken
 )
 
 // string2token contains the mapping between lexer Token and token literal
 // (except IdentifierToken, EndOfStringToken and ErrorToken since it makes no sense)
 var string2token = map[string]Token{
-	")":     ClosedParToken,
-	",":     CommaToken,
-	"!":     DoesNotExistToken,
-	"==":    DoubleEqualsToken,
-	"=":     EqualsToken,
-	"~":     PartialEqualsToken,
-	">":     GreaterThanToken,
-	"in":    InToken,
-	"<":     LessThanToken,
-	"!=":    NotEqualsToken,
-	"!~":    NotPartialEqualsToken,
-	"notin": NotInToken,
-	"(":     OpenParToken,
+	")":        ClosedParToken,
+	",":        CommaToken,
+	"contains": ContainsToken,
+	"!":        DoesNotExistToken,
+	"==":       DoubleEqualsToken,
+	"=":        EqualsToken,
+	"~":        PartialEqualsToken,
+	">":        GreaterThanToken,
+	"in":       InToken,
+	"<":        LessThanToken,
+	"!=":       NotEqualsToken,
+	"!~":       NotPartialEqualsToken,
+	"notin":    NotInToken,
+	"(":        OpenParToken,
 }
 
 // ScannedItem contains the Token and the literal produced by the lexer.
@@ -638,7 +641,7 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	switch operator {
 	case selection.In, selection.NotIn:
 		values, err = p.parseValues()
-	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.PartialEquals, selection.NotPartialEquals:
+	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.PartialEquals, selection.NotPartialEquals, selection.Contains:
 		values, err = p.parseSingleValue()
 	}
 	if err != nil {
@@ -688,6 +691,8 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 		op = selection.GreaterThan
 	case LessThanToken:
 		op = selection.LessThan
+	case ContainsToken:
+		op = selection.Contains
 	case NotInToken:
 		op = selection.NotIn
 	case NotEqualsToken:

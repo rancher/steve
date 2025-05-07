@@ -623,6 +623,31 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'contains' with single value",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a4Contains contains marbles"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"a4Contains"},
+							Matches: []string{"marbles"},
+							Op:      sqltypes.Contains,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() should handle 'in' and 'notin' in mixed case",
 		req: &types.APIRequest{
 			Request: &http.Request{
