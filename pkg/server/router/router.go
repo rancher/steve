@@ -49,7 +49,7 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/api").Handler(h.K8sProxy) // Can't just prefix this as UI needs /apikeys path
 	m.PathPrefix("/api/").Handler(h.K8sProxy)
 
-	m.Path("/apis").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.APIGropuListMerger))
+	m.Path("/apis").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.APIGroupListMerger))
 	m.PathPrefix("/apis").Handler(h.K8sProxy)
 
 	m.PathPrefix("/openapi/v2").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.OpenAPIV2Merger))

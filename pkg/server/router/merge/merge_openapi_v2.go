@@ -17,7 +17,7 @@ func mergeSlicesOnValue[T comparable, C comparable](lhs, rhs []T, getter func(T)
 		return lhs
 	}
 
-	for _, t := range lhs {
+	for _, t := range rhs {
 		found := slices.ContainsFunc(lhs, func(v T) bool {
 			return getter(v) == getter(t)
 		})

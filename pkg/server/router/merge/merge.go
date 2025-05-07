@@ -115,7 +115,7 @@ func typedMergeFunc[T any](f func(T, T) (T, error)) mergeFunc {
 	}
 }
 
-var APIGropuListMerger = typedMergeFunc(func(lhs metav1.APIGroupList, rhs metav1.APIGroupList) (metav1.APIGroupList, error) {
+var APIGroupListMerger = typedMergeFunc(func(lhs metav1.APIGroupList, rhs metav1.APIGroupList) (metav1.APIGroupList, error) {
 	lhs.Groups = append(lhs.Groups, slices.DeleteFunc(rhs.Groups, func(target metav1.APIGroup) bool {
 		return slices.ContainsFunc(lhs.Groups, func(g metav1.APIGroup) bool {
 			return g.Name == target.Name
@@ -215,5 +215,5 @@ func (m *merger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mergeHeaders(w.Header(), primaryRecorder.headers, secondaryRecorder.headers)
+	mergeHeaders(w.Header(), primaryRecorder.headers, secondaryRecorder.headers
 }
