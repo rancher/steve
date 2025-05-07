@@ -1,0 +1,5 @@
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('cluster-01/project-01','authz.management.cattle.io/default-project','true');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('cluster-01/project-03','authz.management.cattle.io/system-project','true');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('cluster-01/project-04','cattle.io/creator','norman');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('local/project-02','authz.management.cattle.io/system-project','true');
+INSERT INTO "management.cattle.io_v3_Project_labels" VALUES('local/project-05','authz.management.cattle.io/default-project','true');

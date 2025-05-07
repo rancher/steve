@@ -1,0 +1,106 @@
+/* Tables and indices for _v1_Namespace and without the blobs */
+
+CREATE TABLE IF NOT EXISTS "_v1_Namespace" (
+		key TEXT UNIQUE NOT NULL PRIMARY KEY,
+		object TEXT,
+		objectnonce TEXT,
+		dekid INTEGER
+	);
+CREATE TABLE IF NOT EXISTS "_v1_Namespace_indices" (
+			name TEXT NOT NULL,
+			value TEXT NOT NULL,
+			key TEXT NOT NULL REFERENCES "_v1_Namespace"(key) ON DELETE CASCADE,
+			PRIMARY KEY (name, value, key)
+        );
+CREATE INDEX "_v1_Namespace_indices_index" ON "_v1_Namespace_indices"(name, value);
+CREATE TABLE IF NOT EXISTS "_v1_Namespace_fields" (
+			key TEXT NOT NULL PRIMARY KEY,
+            "metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.fields[0]" TEXT, "metadata.fields[1]" TEXT, "metadata.fields[2]" TEXT, "id" TEXT, "metadata.state.name" TEXT, "metadata.labels[field.cattle.io/projectId]" TEXT
+	   );
+CREATE INDEX "_v1_Namespace_metadata.name_index" ON "_v1_Namespace_fields"("metadata.name");
+CREATE INDEX "_v1_Namespace_metadata.creationTimestamp_index" ON "_v1_Namespace_fields"("metadata.creationTimestamp");
+CREATE INDEX "_v1_Namespace_metadata.fields[0]_index" ON "_v1_Namespace_fields"("metadata.fields[0]");
+CREATE INDEX "_v1_Namespace_metadata.fields[1]_index" ON "_v1_Namespace_fields"("metadata.fields[1]");
+CREATE INDEX "_v1_Namespace_metadata.fields[2]_index" ON "_v1_Namespace_fields"("metadata.fields[2]");
+CREATE INDEX "_v1_Namespace_id_index" ON "_v1_Namespace_fields"("id");
+CREATE INDEX "_v1_Namespace_metadata.state.name_index" ON "_v1_Namespace_fields"("metadata.state.name");
+CREATE INDEX "_v1_Namespace_metadata.labels[field.cattle.io/projectId]_index" ON "_v1_Namespace_fields"("metadata.labels[field.cattle.io/projectId]");
+CREATE TABLE IF NOT EXISTS "_v1_Namespace_labels" (
+		key TEXT NOT NULL REFERENCES "_v1_Namespace"(key) ON DELETE CASCADE,
+		label TEXT NOT NULL,
+		value TEXT NOT NULL,
+		PRIMARY KEY (key, label)
+	);
+CREATE INDEX "_v1_Namespace_labels_index" ON "_v1_Namespace_labels"(label, value);
+CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project" (
+		key TEXT UNIQUE NOT NULL PRIMARY KEY,
+		object TEXT,
+		objectnonce TEXT,
+		dekid INTEGER
+	);
+
+CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project_indices" (
+			name TEXT NOT NULL,
+			value TEXT NOT NULL,
+			key TEXT NOT NULL REFERENCES "management.cattle.io_v3_Project"(key) ON DELETE CASCADE,
+			PRIMARY KEY (name, value, key)
+        );
+CREATE INDEX "management.cattle.io_v3_Project_indices_index" ON "management.cattle.io_v3_Project_indices"(name, value);
+CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project_fields" (
+			key TEXT NOT NULL PRIMARY KEY,
+            "metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "metadata.fields[0]" TEXT, "metadata.fields[1]" TEXT, "id" TEXT, "metadata.state.name" TEXT, "spec.clusterName" TEXT
+	   );
+CREATE INDEX "management.cattle.io_v3_Project_metadata.name_index" ON "management.cattle.io_v3_Project_fields"("metadata.name");
+CREATE INDEX "management.cattle.io_v3_Project_metadata.creationTimestamp_index" ON "management.cattle.io_v3_Project_fields"("metadata.creationTimestamp");
+CREATE INDEX "management.cattle.io_v3_Project_metadata.namespace_index" ON "management.cattle.io_v3_Project_fields"("metadata.namespace");
+CREATE INDEX "management.cattle.io_v3_Project_metadata.fields[0]_index" ON "management.cattle.io_v3_Project_fields"("metadata.fields[0]");
+CREATE INDEX "management.cattle.io_v3_Project_metadata.fields[1]_index" ON "management.cattle.io_v3_Project_fields"("metadata.fields[1]");
+CREATE INDEX "management.cattle.io_v3_Project_id_index" ON "management.cattle.io_v3_Project_fields"("id");
+CREATE INDEX "management.cattle.io_v3_Project_metadata.state.name_index" ON "management.cattle.io_v3_Project_fields"("metadata.state.name");
+CREATE INDEX "management.cattle.io_v3_Project_spec.clusterName_index" ON "management.cattle.io_v3_Project_fields"("spec.clusterName");
+CREATE TABLE IF NOT EXISTS "management.cattle.io_v3_Project_labels" (
+		key TEXT NOT NULL REFERENCES "management.cattle.io_v3_Project"(key) ON DELETE CASCADE,
+		label TEXT NOT NULL,
+		value TEXT NOT NULL,
+		PRIMARY KEY (key, label)
+	);
+CREATE INDEX "management.cattle.io_v3_Project_labels_index" ON "management.cattle.io_v3_Project_labels"(label, value);
+
+CREATE TABLE IF NOT EXISTS "_v1_Foods" (
+		key TEXT UNIQUE NOT NULL PRIMARY KEY,
+		object TEXT,
+		objectnonce TEXT,
+		dekid INTEGER
+	);
+CREATE TABLE IF NOT EXISTS "_v1_Foods_indices" (
+			name TEXT NOT NULL,
+			value TEXT NOT NULL,
+			key TEXT NOT NULL REFERENCES "_v1_Foods"(key) ON DELETE CASCADE,
+			PRIMARY KEY (name, value, key)
+        );
+CREATE INDEX "_v1_Foods_indices_index" ON "_v1_Foods_indices"(name, value);
+
+CREATE TABLE IF NOT EXISTS "_v1_Foods_fields" (
+			key TEXT NOT NULL PRIMARY KEY,
+                        "metadata.name" TEXT,
+                        foodCode INTEGER,
+                        country TEXT,
+                        state TEXT,
+                        "recipe[1]" TEXT,
+                        "recipe[2]" TEXT,
+                        "recipe[3]" TEXT,
+                        "recipe[4]" TEXT,
+                        "brands" TEXT
+                        );
+CREATE INDEX "_v1_Foods_key_index" ON "_v1_Foods_fields"("key");
+CREATE INDEX "_v1_Foods_foodCode_index" ON "_v1_Foods_fields"("foodCode");
+CREATE INDEX "_v1_Foods_country_index" ON "_v1_Foods_fields"("country");
+CREATE INDEX "_v1_Foods_state_index" ON "_v1_Foods_fields"("state");
+CREATE TABLE IF NOT EXISTS "_v1_Foods_labels" (
+		key TEXT NOT NULL REFERENCES "_v1_Foods"(key) ON DELETE CASCADE,
+		label TEXT NOT NULL,
+		value TEXT NOT NULL,
+		PRIMARY KEY (key, label)
+	);
+CREATE INDEX "_v1_Foods_labels_index" ON "_v1_Foods_labels"(label, value);
+
