@@ -215,5 +215,5 @@ func (m *merger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mergeHeaders(w.Header(), primaryRecorder.headers, secondaryRecorder.headers
+	mergeHeaders(w.Header(), primaryRecorder.headers, secondaryRecorder.headers)
 }
