@@ -1782,7 +1782,6 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			},
 		},
 		},
-		//partitions: []partition.Partition{},
 		ns:          "",
 		expectedErr: "array checking works on exactly one field, 3 were specified",
 	})
@@ -1800,7 +1799,6 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			},
 		},
 		},
-		//partitions: []partition.Partition{},
 		ns:          "",
 		expectedErr: "column is invalid [bills.farm]: supplied column is invalid",
 	})
