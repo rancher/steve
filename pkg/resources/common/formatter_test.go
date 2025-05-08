@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -12,7 +13,9 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/accesscontrol/fake"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
+	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -1069,6 +1072,226 @@ func Test_formatterLinks(t *testing.T) {
 			fmtter(request, resource)
 			require.Equal(t, test.wantLinks, resource.Links)
 
+		})
+	}
+}
+
+func TestFormatterAddsResourcePermissions(t *testing.T) {
+	const (
+		clusterid = "clusterid"
+		projectid = "projectid"
+	)
+
+	tests := []struct {
+		name                string
+		topLevelPermissions []string
+		resourcePermissions map[string][]string
+		schema              *types.APISchema
+		apiObject           types.APIObject
+		want                map[string]map[string]string
+	}{
+		{
+			name:                "get update patch on project and get on projectroletemplatebindings",
+			topLevelPermissions: []string{"get", "update", "patch"},
+			resourcePermissions: map[string][]string{
+				"projectRoleTemplateBindings": {"get", "list", "watch"},
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: clusterid + "/" + projectid,
+					Attributes: map[string]interface{}{
+						"group":    "management.cattle.io",
+						"version":  "v1",
+						"resource": "projects",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: clusterid + "/" + projectid,
+				Object: &unstructured.Unstructured{
+					Object: map[string]interface{}{},
+				},
+			},
+			want: map[string]map[string]string{
+				"projectRoleTemplateBindings": {
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+				},
+			},
+		},
+		{
+			name:                "get update patch on project and get on projectRoleTemplateBindings and pods",
+			topLevelPermissions: []string{"get", "update", "patch"},
+			resourcePermissions: map[string][]string{
+				"projectRoleTemplateBindings": {"get", "list", "watch"},
+				"pods":                        {"get", "list", "watch"},
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: clusterid + "/" + projectid,
+					Attributes: map[string]interface{}{
+						"group":    "management.cattle.io",
+						"version":  "v1",
+						"resource": "projects",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: clusterid + "/" + projectid,
+				Object: &unstructured.Unstructured{
+					Object: map[string]interface{}{},
+				},
+			},
+			want: map[string]map[string]string{
+				"projectRoleTemplateBindings": {
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/projectRoleTemplateBindings",
+				},
+				"pods": {
+					"get":   "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",
+					"list":  "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",
+					"watch": "/apis/management.cattle.io/v1/namespaces/clusterid-projectid/pods",
+				},
+			},
+		},
+		{
+			name:                "get update remove on project and a checkPermissions on an unknown resource",
+			topLevelPermissions: []string{"get", "update", "patch"},
+			resourcePermissions: map[string][]string{},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: clusterid + "/" + projectid,
+					Attributes: map[string]interface{}{
+						"group":    "management.cattle.io",
+						"version":  "v1",
+						"resource": "projects",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: clusterid + "/" + projectid,
+				Object: &unstructured.Unstructured{
+					Object: map[string]interface{}{},
+				},
+			},
+			want: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			defaultUserInfo := user.DefaultInfo{}
+
+			ctrl := gomock.NewController(t)
+			asl := fake.NewMockAccessSetLookup(ctrl)
+			accessSet := accesscontrol.AccessSet{}
+
+			// Se up the AccessSet for the top level resource
+			if len(test.topLevelPermissions) > 0 {
+				gvr := attributes.GVR(test.schema)
+				objMeta, _ := meta.Accessor(test.apiObject.Object)
+				resource := accesscontrol.Access{
+					Namespace:    objMeta.GetNamespace(),
+					ResourceName: objMeta.GetName(),
+				}
+
+				for _, verb := range test.topLevelPermissions {
+					accessSet.Add(verb, gvr.GroupResource(), resource)
+				}
+			}
+
+			// Se up the AccessSet for the top nested resources
+			for resource, verbs := range test.resourcePermissions {
+				gvr := schema2.GroupVersionResource{
+					Group:    "management.cattle.io",
+					Version:  "v1",
+					Resource: resource,
+				}
+				for _, verb := range verbs {
+					accessSet.Add(verb, gvr.GroupResource(), accesscontrol.Access{
+						Namespace: clusterid + "-" + projectid,
+					})
+				}
+			}
+
+			ctx := context.Background()
+			ctx = request.WithUser(ctx, &defaultUserInfo)
+			httpRequest, _ := http.NewRequestWithContext(ctx, "", "", bytes.NewBuffer([]byte{}))
+
+			var checkPerms []string
+			for res := range test.want {
+				checkPerms = append(checkPerms, res)
+			}
+
+			req := &types.APIRequest{
+				Request:    httpRequest,
+				URLBuilder: &urlbuilder.DefaultURLBuilder{},
+				Query: url.Values{
+					"checkPermissions": {strings.Join(checkPerms, ",")},
+				},
+				Schemas: types.EmptyAPISchemas(),
+			}
+			addSchema := func(names ...string) {
+				for _, name := range names {
+					if name == "unknown" {
+						continue
+					}
+					req.Schemas.MustAddSchema(types.APISchema{
+						Schema: &schemas.Schema{
+							ID:                name,
+							CollectionMethods: []string{"get"},
+							ResourceMethods:   []string{"get"},
+							Attributes: map[string]interface{}{
+								"group":    "management.cattle.io",
+								"resource": name,
+								"version":  "v1",
+							},
+						},
+					})
+				}
+			}
+
+			for res := range test.want {
+				addSchema(res)
+			}
+
+			resource := &types.RawResource{
+				Schema:    test.schema,
+				APIObject: test.apiObject,
+				Links:     map[string]string{},
+			}
+			fakeCache := &common.FakeSummaryCache{
+				SummarizedObject: &summary.SummarizedObject{},
+			}
+
+			asl.EXPECT().AccessFor(&defaultUserInfo).Return(&accessSet).AnyTimes()
+
+			formatter := formatter(fakeCache, asl)
+			formatter(req, resource)
+
+			// Extract the resultant resourcePermissions
+			u, ok := resource.APIObject.Object.(*unstructured.Unstructured)
+			require.True(t, ok, "APIObject.Object is not Unstructured")
+
+			if test.want != nil {
+				rawPerms, ok := u.Object["resourcePermissions"]
+				require.True(t, ok, "resourcePermissions field missing")
+
+				permMap, ok := rawPerms.(map[string]map[string]string)
+				require.True(t, ok, "resourcePermissions is not map[string]map[string]string")
+
+				got := map[string]map[string]string{}
+				for res, actionMap := range permMap {
+					got[res] = map[string]string{}
+					for action, boolVal := range actionMap {
+						got[res][action] = boolVal
+					}
+				}
+				require.Equal(t, test.want, got)
+			}
 		})
 	}
 }

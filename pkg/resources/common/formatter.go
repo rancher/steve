@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
@@ -41,15 +42,20 @@ func DefaultTemplateForStore(store types.Store,
 }
 
 func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix string) {
+	return buildBasePath(gvr, meta.GetNamespace(), meta.GetName())
+}
+
+func buildBasePath(gvr schema2.GroupVersionResource, namespace string, includeName string) string {
 	buf := &strings.Builder{}
+
 	if gvr.Group == "management.cattle.io" && gvr.Version == "v3" {
 		buf.WriteString("/v1/")
 		buf.WriteString(gvr.Group)
 		buf.WriteString(".")
 		buf.WriteString(gvr.Resource)
-		if meta.GetNamespace() != "" {
+		if namespace != "" {
 			buf.WriteString("/")
-			buf.WriteString(meta.GetNamespace())
+			buf.WriteString(namespace)
 		}
 	} else {
 		if gvr.Group == "" {
@@ -61,19 +67,23 @@ func selfLink(gvr schema2.GroupVersionResource, meta metav1.Object) (prefix stri
 			buf.WriteString(gvr.Version)
 			buf.WriteString("/")
 		}
-		if meta.GetNamespace() != "" {
+		if namespace != "" {
 			buf.WriteString("namespaces/")
-			buf.WriteString(meta.GetNamespace())
+			buf.WriteString(namespace)
 			buf.WriteString("/")
 		}
 		buf.WriteString(gvr.Resource)
 	}
-	buf.WriteString("/")
-	buf.WriteString(meta.GetName())
+
+	if includeName != "" {
+		buf.WriteString("/")
+		buf.WriteString(includeName)
+	}
+
 	return buf.String()
 }
 
-func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
+func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
 	return func(request *types.APIRequest, resource *types.RawResource) {
 		if resource.Schema == nil {
 			return
@@ -146,6 +156,34 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 			excludeValues(request, unstr)
 		}
 
+		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
+			ns := getNamespaceFromResource(resource.APIObject)
+			permissions := map[string]map[string]string{}
+
+			for _, res := range strings.Split(permsQuery, ",") {
+				s := request.Schemas.LookupSchema(res)
+				if s == nil {
+					continue
+				}
+				gvr := attributes.GVR(s)
+				gr := schema2.GroupResource{Group: gvr.Group, Resource: gvr.Resource}
+				perms := map[string]string{}
+
+				for _, verb := range []string{"create", "update", "delete", "list", "get", "watch", "patch"} {
+					if accessSet.Grants(verb, gr, ns, "") {
+						url := request.URLBuilder.RelativeToRoot(buildBasePath(gvr, ns, ""))
+						perms[verb] = url
+					}
+				}
+				if len(perms) > 0 {
+					permissions[res] = perms
+				}
+			}
+
+			if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
+				data.PutValue(unstr.Object, permissions, "resourcePermissions")
+			}
+		}
 	}
 }
 
@@ -183,4 +221,25 @@ func excludeValues(request *types.APIRequest, unstr *unstructured.Unstructured) 
 			}
 		}
 	}
+}
+
+func getNamespaceFromResource(obj types.APIObject) string {
+	unstr, ok := obj.Object.(*unstructured.Unstructured)
+	if !ok {
+		return ""
+	}
+
+	// If we have a backingNamespace, use that
+	if statusRaw, ok := unstr.Object["status"]; ok {
+		if statusMap, ok := statusRaw.(map[string]interface{}); ok {
+			if backingNamespace, ok := statusMap["backingNamespace"].(string); ok && backingNamespace != "" {
+				return backingNamespace
+			}
+		}
+	}
+
+	// Otherwise, if the id has a slash, we will interpret that.
+	// This is used to determine a project's namespace when there is no backingNamespace present.
+	// For cases where there is no slash, we use the object's ID, which is the same as the namespace.
+	return strings.Replace(obj.ID, "/", "-", 1)
 }
