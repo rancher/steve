@@ -23,7 +23,7 @@ require (
 	github.com/rancher/apiserver v0.6.0
 	github.com/rancher/dynamiclistener v0.6.2
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/lasso v0.2.1
+	github.com/rancher/lasso v0.2.2
 	github.com/rancher/norman v0.6.0
 	github.com/rancher/remotedialer v0.4.5-rc.1
 	github.com/rancher/wrangler/v3 v3.2.0-rc.3
