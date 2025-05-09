@@ -32,15 +32,14 @@ require (
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/mock v0.5.0
 	golang.org/x/sync v0.12.0
+	google.golang.org/protobuf v1.35.2
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v3 v3.17.2
 	k8s.io/api v0.32.2
 	k8s.io/apiextensions-apiserver v0.32.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/apiserver v0.32.2
 	k8s.io/client-go v0.32.2
 	k8s.io/component-base v0.32.2
-	k8s.io/helm v2.17.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/kube-aggregator v0.32.1
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
@@ -48,11 +47,11 @@ require (
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	modernc.org/sqlite v1.36.0
 	sigs.k8s.io/controller-runtime v0.19.0
+	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
 	cel.dev/expr v0.18.0 // indirect
-	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -132,7 +131,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/grpc v1.65.0 // indirect
-	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
@@ -146,5 +144,4 @@ require (
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.3 // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
 )
