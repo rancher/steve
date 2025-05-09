@@ -49,6 +49,7 @@ func TestSelectorParse(t *testing.T) {
 		"x>1,z<5",
 		"x gt 1,z lt 5",
 		`y == def`,
+		"whitman contains multitudes",
 		"metadata.labels.im-here",
 		"!metadata.labels.im-not-here",
 		"metadata.labels[im.here]",
@@ -77,6 +78,7 @@ func TestSelectorParse(t *testing.T) {
 		"!metadata.labels(im.not.here)",
 		`x="no double quotes allowed"`,
 		`x='no single quotes allowed'`,
+		"zhlog contains (wrong, idea)",
 	}
 	for _, test := range testGoodStrings {
 		_, err := Parse(test)
@@ -114,6 +116,7 @@ func TestLexer(t *testing.T) {
 		{`"dq string"`, ErrorToken},
 		{"~", PartialEqualsToken},
 		{"!~", NotPartialEqualsToken},
+		{"contains", ContainsToken},
 		{"||", ErrorToken},
 	}
 	for _, v := range testcases {
@@ -163,6 +166,7 @@ func TestLexerSequence(t *testing.T) {
 		{"key!~ value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key !~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key!~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{"whitman contains multitudes", []Token{IdentifierToken, ContainsToken, IdentifierToken}},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -203,6 +207,7 @@ func TestParserLookahead(t *testing.T) {
 		{"key gt 3", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key lt 4", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
 		{`key = multi-word-string`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
+		{"whitman contains multitudes", []Token{IdentifierToken, ContainsToken, IdentifierToken, EndOfStringToken}},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
@@ -240,6 +245,7 @@ func TestParseOperator(t *testing.T) {
 		{"notin", nil},
 		{"!=", nil},
 		{"!~", nil},
+		{"contains", nil},
 		{"!", fmt.Errorf("found '%s', expected: %v", selection.DoesNotExist, strings.Join(binaryOperators, ", "))},
 		{"exists", fmt.Errorf("found '%s', expected: %v", selection.Exists, strings.Join(binaryOperators, ", "))},
 		{"(", fmt.Errorf("found '%s', expected: %v", "(", strings.Join(binaryOperators, ", "))},
@@ -408,6 +414,11 @@ func TestRequirementConstructor(t *testing.T) {
 					BadValue: selection.Operator("unsupportedOp"),
 				},
 			},
+		},
+		{
+			Key:  "x19",
+			Op:   selection.Contains,
+			Vals: sets.NewString("multitudes"),
 		},
 	}
 	for _, rc := range requirementConstructorTests {
