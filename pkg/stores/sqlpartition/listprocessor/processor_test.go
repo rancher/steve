@@ -259,13 +259,54 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with filter param set, with value in double quotes should return an error.",
+		description: "ParseQuery() with filter param set, with value in double quotes.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: `filter=a1="c1"`},
 			},
 		},
-		errExpected: true,
+		expectedLO: sqltypes.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"a1"},
+							Matches: []string{"c1"},
+							Op:      sqltypes.Eq,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with filter param set, with value in single quotes.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1b='c1b'"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			ChunkSize: defaultLimit,
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"a1b"},
+							Matches: []string{"c1b"},
+							Op:      sqltypes.Eq,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
