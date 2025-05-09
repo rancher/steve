@@ -239,6 +239,8 @@ github.com/rancher/wrangler/v3 v3.2.0-rc.3 h1:MySHWLxLLrGrM2sq5YYp7Ol1kQqYt9lvIz
 github.com/rancher/wrangler/v3 v3.2.0-rc.3/go.mod h1:0C5QyvSrQOff8gQQzpB/L/FF03EQycjR3unSJcKCHno=
 github.com/rancher/wrangler/v3 v3.2.1-rc.3 h1:AdZsO/WkVLm8faMWRoJpafSuIPaEqN7F2cE9LkhZe3k=
 github.com/rancher/wrangler/v3 v3.2.1-rc.3/go.mod h1:RV8kkv5br5HaxXWamIbr95pOjvVeoC5CeBldcdw5Fv0=
+github.com/rancher/wrangler/v3 v3.2.1-rc.4 h1:XTn2wynYeyKKVPKhJHzQ4VtEpKRJ4x2z79oUUoCXIGg=
+github.com/rancher/wrangler/v3 v3.2.1-rc.4/go.mod h1:RV8kkv5br5HaxXWamIbr95pOjvVeoC5CeBldcdw5Fv0=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU5NdKM8=
