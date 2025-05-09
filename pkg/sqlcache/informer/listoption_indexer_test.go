@@ -1800,7 +1800,7 @@ func TestConstructQueryWithPlainContainsOp(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (? IN (f.metadata.fields[1], f.metadata.fields[2], f.metadata.fields[3], f.metadata.fields[5])) AND
+    (? IN (f."metadata.fields[1]", f."metadata.fields[2]", f."metadata.fields[3]", f."metadata.fields[5]")) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"needle01"},
