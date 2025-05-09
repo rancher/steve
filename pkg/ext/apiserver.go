@@ -129,6 +129,10 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 		return nil, fmt.Errorf("listener must be provided")
 	}
 
+	if opts.GetOpenAPIDefinitions == nil {
+		return nil, fmt.Errorf("GetOpenAPIDefinitions must be provided")
+	}
+
 	recommendedOpts := genericoptions.NewRecommendedOptions("", codecs.LegacyCodec())
 	recommendedOpts.SecureServing.Listener = opts.Listener
 
