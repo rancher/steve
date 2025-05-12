@@ -145,11 +145,11 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 		s = s.DeepCopy()
 		attributes.SetAccess(s, verbAccess)
 
-		if s.ResourceFields == nil {
-			s.ResourceFields = make(map[string]schemas.Field)
+		if s.Attributes == nil {
+			s.Attributes = make(map[string]interface{})
 		}
-		s.ResourceFields["resourcePermissions"] = schemas.Field{
-			Type:        "map[json]",
+		s.Attributes["resourcePermissions"] = schemas.Field{
+			Type:        "map[string]",
 			Description: "Per-resource access permissions",
 		}
 
