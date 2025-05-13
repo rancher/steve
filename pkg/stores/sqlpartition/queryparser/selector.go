@@ -176,14 +176,20 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "for 'Gt', 'Lt' operators, exactly one value is required"))
 		}
 		for i := range vals {
-			if _, err := strconv.ParseInt(vals[i], 10, 64); err != nil {
-				allErrs = append(allErrs, field.Invalid(valuePath.Index(i), vals[i], "for 'Gt', 'Lt' operators, the value must be an integer"))
+			if _, err := strconv.ParseFloat(vals[i], 32); err != nil {
+				allErrs = append(allErrs, field.Invalid(valuePath.Index(i), vals[i], "for 'Gt', 'Lt' operators, the value must be a number"))
 			}
 		}
 	default:
 		allErrs = append(allErrs, field.NotSupported(path.Child("operator"), op, validRequirementOperators))
 	}
-	return &Requirement{key: key, operator: op, strValues: vals}, allErrs.ToAggregate()
+	agg := allErrs.ToAggregate()
+
+	var err error
+	if agg != nil {
+		err = errors.New(agg.Error())
+	}
+	return &Requirement{key: key, operator: op, strValues: vals}, err
 }
 
 func (r *Requirement) hasValue(value string) bool {

@@ -699,10 +699,13 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		if err != nil {
 			return "", nil, err
 		}
-		clauseTemplate := fmt.Sprintf(`f."%%s" %s ?`, sym)
 		if len(multipleFields) > 0 {
+			// If we don't do this than sql will do an alpha < or > check, and in ascii anything
+			// starting with a letter is > any numeric value
+			clauseTemplate := fmt.Sprintf(`((typeof(f."%%s") = "real" OR typeof(f."%%s") = "integer") AND f."%%s" %s ?)`, sym)
 			return repeatInfo(clauseTemplate, multipleFields, target, orConnector)
 		}
+		clauseTemplate := fmt.Sprintf(`f."%%s" %s ?`, sym)
 		return fmt.Sprintf(clauseTemplate, columnName), []any{target}, nil
 
 	case sqltypes.Exists, sqltypes.NotExists:
@@ -745,7 +748,7 @@ func repeatInfo(clauseTemplate string, fieldsList []string, formattedTarget any,
 	count := len(fieldsList)
 	clauses := make([]string, count)
 	for i, field := range fieldsList {
-		clauses[i] = fmt.Sprintf(clauseTemplate, field)
+		clauses[i] = strings.ReplaceAll(clauseTemplate, "%s", field)
 	}
 	terms := slices.Repeat([]any{formattedTarget}, count)
 	return strings.Join(clauses, connector), terms, nil

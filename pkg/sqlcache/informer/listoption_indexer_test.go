@@ -1770,10 +1770,10 @@ func TestConstructQueryWithIndexableFields(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (f."metadata.fields[1]" < ? OR
-    f."metadata.fields[2]" < ? OR
-    f."metadata.fields[3]" < ? OR
-    f."metadata.fields[5]" < ?) AND
+    (((typeof(f."metadata.fields[1]") = "real" OR typeof(f."metadata.fields[1]") = "integer") AND f."metadata.fields[1]" < ?) OR
+    ((typeof(f."metadata.fields[2]") = "real" OR typeof(f."metadata.fields[2]") = "integer") AND f."metadata.fields[2]" < ?) OR
+    ((typeof(f."metadata.fields[3]") = "real" OR typeof(f."metadata.fields[3]") = "integer") AND f."metadata.fields[3]" < ?) OR
+    ((typeof(f."metadata.fields[5]") = "real" OR typeof(f."metadata.fields[5]") = "integer") AND f."metadata.fields[5]" < ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{float64(5), float64(5), float64(5), float64(5)},
@@ -1798,10 +1798,10 @@ func TestConstructQueryWithIndexableFields(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (f."metadata.fields[1]" > ? OR
-    f."metadata.fields[2]" > ? OR
-    f."metadata.fields[3]" > ? OR
-    f."metadata.fields[5]" > ?) AND
+    (((typeof(f."metadata.fields[1]") = "real" OR typeof(f."metadata.fields[1]") = "integer") AND f."metadata.fields[1]" > ?) OR
+    ((typeof(f."metadata.fields[2]") = "real" OR typeof(f."metadata.fields[2]") = "integer") AND f."metadata.fields[2]" > ?) OR
+    ((typeof(f."metadata.fields[3]") = "real" OR typeof(f."metadata.fields[3]") = "integer") AND f."metadata.fields[3]" > ?) OR
+    ((typeof(f."metadata.fields[5]") = "real" OR typeof(f."metadata.fields[5]") = "integer") AND f."metadata.fields[5]" > ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{float64(6), float64(6), float64(6), float64(6)},
@@ -1882,10 +1882,10 @@ func TestConstructQueryWithIndexableFields(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (f."metadata.fields[1]" > ? OR
-    f."metadata.fields[2]" > ? OR
-    f."metadata.fields[3]" > ? OR
-    f."metadata.fields[5]" > ?) AND
+    (((typeof(f."metadata.fields[1]") = "real" OR typeof(f."metadata.fields[1]") = "integer") AND f."metadata.fields[1]" > ?) OR
+    ((typeof(f."metadata.fields[2]") = "real" OR typeof(f."metadata.fields[2]") = "integer") AND f."metadata.fields[2]" > ?) OR
+    ((typeof(f."metadata.fields[3]") = "real" OR typeof(f."metadata.fields[3]") = "integer") AND f."metadata.fields[3]" > ?) OR
+    ((typeof(f."metadata.fields[5]") = "real" OR typeof(f."metadata.fields[5]") = "integer") AND f."metadata.fields[5]" > ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{float64(6), float64(6), float64(6), float64(6)},
