@@ -11,7 +11,6 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
@@ -144,14 +143,6 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 
 		s = s.DeepCopy()
 		attributes.SetAccess(s, verbAccess)
-
-		if s.ResourceFields == nil {
-			s.ResourceFields = make(map[string]schemas.Field)
-		}
-		s.ResourceFields["resourcePermissions"] = schemas.Field{
-			Type:        "map[json]",
-			Description: "Per-resource access permissions",
-		}
 
 		if verbAccess.AnyVerb("list", "get") {
 			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodGet))
