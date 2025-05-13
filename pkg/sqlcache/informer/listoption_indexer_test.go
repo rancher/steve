@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1106,6 +1107,31 @@ func TestConstructQuery(t *testing.T) {
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles NOT-IN statements",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Matches: []string{"somevalue"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.queryField1" NOT IN (?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"somevalue"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles EXISTS statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
@@ -1670,6 +1696,324 @@ func TestConstructQuery(t *testing.T) {
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
+				return
+			}
+			assert.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructQueryErrors(t *testing.T) {
+	type testCase struct {
+		description string
+		listOptions sqltypes.ListOptions
+		ns          string
+		expectedErr string
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQueryErrors: incomplete labels field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"barnyard"},
+						Field:   []string{"metadata", "labels"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "column is invalid [metadata.labels]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryErrors: no target given",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "queryField1"},
+						Op:    sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "no target value given for metadata.queryField1 =",
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+			}
+			_, err := lii.constructQuery(&test.listOptions, nil, test.ns, "something")
+			require.NotNil(t, err)
+			assert.Equal(t, test.expectedErr, err.Error())
+		})
+	}
+}
+
+func TestConstructQueryWithPlainContainsOp(t *testing.T) {
+	type testCase struct {
+		description           string
+		listOptions           sqltypes.ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithPlainContainsOp: handles CONTAIN statements on indexed arrays",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle01"},
+						Field:   []string{"metadata", "fields"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (? IN (f.metadata.fields[1], f.metadata.fields[2], f.metadata.fields[3], f.metadata.fields[5])) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"needle01"},
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithPlainContainsOp: handles CONTAIN statements on single strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle02"},
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (INSTR(CONCAT("|", f."metadata.queryField1", "|"), CONCAT("|", ?, "|")) > 0) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"needle02"},
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithPlainContainsOp: error CONTAIN statements on too many target strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"too", "many", "targets"},
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 3 were specified",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithPlainContainsOp: error CONTAIN statements on unrecognized field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"this"},
+						Field:   []string{"bills", "farm"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "column is invalid [bills.farm]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithPlainContainsOp: error CONTAIN statements on no target string",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "queryField1"},
+						Op:    sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "no target value given for metadata.queryField1 Contains",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			assert.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructQueryWithLabelContainsOp(t *testing.T) {
+	type testCase struct {
+		description           string
+		listOptions           sqltypes.ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any /*
+			Copyright 2023 SUSE LLC
+
+			Adapted from client-go, Copyright 2014 The Kubernetes Authors.
+		*/
+		expectedStmt     string
+		expectedStmtArgs []any
+		expectedErr      string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: handles CONTAIN statements on labels",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle03a"},
+						Field:   []string{"metadata", "labels", "labelContains01"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  WHERE
+    (lt1.label = ? AND
+    INSTR(CONCAT("|", lt1.value, "|"), CONCAT("|", ?, "|")) > 0) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"labelContains01", "needle03a"},
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on too many target strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"too", "many", "targets"},
+						Field:   []string{"metadata", "labels", "labelContains02"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 3 were specified",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on incomplete labels field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"meadow"},
+						Field:   []string{"metadata", "labels"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "column is invalid [metadata.labels]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithLabelContainsOp: error CONTAIN statements on no target string",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "labels", "pasture"},
+						Op:    sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "no target value given for metadata.labels.pasture Contains",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
 				return
 			}
 			assert.Nil(t, err)
