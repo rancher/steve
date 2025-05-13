@@ -5,6 +5,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rancher/apiserver/pkg/urlbuilder"
+	"github.com/rancher/steve/pkg/server/router/merge"
 )
 
 type RouterFunc func(h Handlers) http.Handler
@@ -31,6 +32,9 @@ func Routes(h Handlers) http.Handler {
 	if h.ExtensionAPIServer != nil {
 		m.Path("/ext").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
 		m.PathPrefix("/ext/").Handler(http.StripPrefix("/ext", h.ExtensionAPIServer))
+
+		m.PathPrefix("/v1/ext.cattle.io").Handler(h.ExtensionAPIServer)
+		m.PathPrefix("/apis/ext.cattle.io").Handler(h.ExtensionAPIServer)
 	}
 
 	m.Path("/v1/{type}").Handler(h.K8sResource)
@@ -41,10 +45,16 @@ func Routes(h Handlers) http.Handler {
 	m.Path("/v1/{type}/{namespace}/{name}").Queries("link", "{link}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}").Handler(h.K8sResource)
 	m.Path("/v1/{type}/{namespace}/{name}/{link}").Handler(h.K8sResource)
+
 	m.Path("/api").Handler(h.K8sProxy) // Can't just prefix this as UI needs /apikeys path
 	m.PathPrefix("/api/").Handler(h.K8sProxy)
+
+	m.Path("/apis").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.APIGroupListMerger))
 	m.PathPrefix("/apis").Handler(h.K8sProxy)
-	m.PathPrefix("/openapi").Handler(h.K8sProxy)
+
+	m.PathPrefix("/openapi/v2").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.OpenAPIV2Merger))
+	m.PathPrefix("/openapi/v3").Handler(merge.Merge(h.K8sProxy, h.ExtensionAPIServer, merge.OpenAPIV3Merger))
+
 	m.PathPrefix("/version").Handler(h.K8sProxy)
 	m.NotFoundHandler = h.Next
 
