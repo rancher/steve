@@ -1106,31 +1106,6 @@ func TestConstructQuery(t *testing.T) {
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: handles NOT-IN statements",
-		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
-			{
-				[]sqltypes.Filter{
-					{
-						Field:   []string{"metadata", "queryField1"},
-						Matches: []string{"somevalue"},
-						Op:      sqltypes.NotIn,
-					},
-				},
-			},
-		},
-		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.queryField1" NOT IN (?)) AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"somevalue"},
-		expectedErr:      nil,
-	})
-	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles EXISTS statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
@@ -1706,7 +1681,7 @@ func TestConstructQuery(t *testing.T) {
 	}
 }
 
-func TestConstructQueryWithContainsOp(t *testing.T) {
+func TestConstructQueryWithIndexableFields(t *testing.T) {
 	type testCase struct {
 		description           string
 		listOptions           sqltypes.ListOptions
@@ -1716,19 +1691,19 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedCountStmtArgs []any
 		expectedStmt          string
 		expectedStmtArgs      []any
-		expectedErr           string
+		expectedErr           error
 	}
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: handles CONTAIN statements on indexed arrays",
+		description: "TestConstructQueryWithIndexableFields: handles EQUAL statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Matches: []string{"needle01"},
 						Field:   []string{"metadata", "fields"},
-						Op:      sqltypes.Contains,
+						Matches: []string{"chill"},
+						Op:      sqltypes.Eq,
 					},
 				},
 			},
@@ -1739,20 +1714,24 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (? IN (f.metadata.fields[1], f.metadata.fields[2], f.metadata.fields[3], f.metadata.fields[5])) AND
+    (f."metadata.fields[1]" = ? OR
+    f."metadata.fields[2]" = ? OR
+    f."metadata.fields[3]" = ? OR
+    f."metadata.fields[5]" = ?) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"needle01"},
+		expectedStmtArgs: []any{"chill", "chill", "chill", "chill"},
+		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: handles CONTAIN statements on single strings",
+		description: "TestConstructQueryWithIndexableFields: handles NOT-EQUAL statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Matches: []string{"needle02"},
-						Field:   []string{"metadata", "queryField1"},
-						Op:      sqltypes.Contains,
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"valley"},
+						Op:      sqltypes.NotEq,
 					},
 				},
 			},
@@ -1763,62 +1742,271 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (INSTR(CONCAT("|", f."metadata.queryField1", "|"), CONCAT("|", ?, "|")) > 0) AND
+    (f."metadata.fields[1]" != ? AND
+    f."metadata.fields[2]" != ? AND
+    f."metadata.fields[3]" != ? AND
+    f."metadata.fields[5]" != ?) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"needle02"},
+		expectedStmtArgs: []any{"valley", "valley", "valley", "valley"},
+		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: error CONTAIN statements on too many target strings",
+		description: "TestConstructQueryWithIndexableFields: handles LESSTHAN statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Matches: []string{"too", "many", "targets"},
-						Field:   []string{"metadata", "queryField1"},
-						Op:      sqltypes.Contains,
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"5"},
+						Op:      sqltypes.Lt,
 					},
 				},
 			},
 		},
 		},
-		ns:          "",
-		expectedErr: "array checking works on exactly one field, 3 were specified",
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" < ? OR
+    f."metadata.fields[2]" < ? OR
+    f."metadata.fields[3]" < ? OR
+    f."metadata.fields[5]" < ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{float64(5), float64(5), float64(5), float64(5)},
+		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: error CONTAIN statements on unrecognized field",
+		description: "TestConstructQueryWithIndexableFields: handles GREATER-THAN statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Matches: []string{"this"},
-						Field:   []string{"bills", "farm"},
-						Op:      sqltypes.Contains,
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"6"},
+						Op:      sqltypes.Gt,
 					},
 				},
 			},
 		},
 		},
-		ns:          "",
-		expectedErr: "column is invalid [bills.farm]: supplied column is invalid",
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" > ? OR
+    f."metadata.fields[2]" > ? OR
+    f."metadata.fields[3]" > ? OR
+    f."metadata.fields[5]" > ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{float64(6), float64(6), float64(6), float64(6)},
+		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQuery: error CONTAIN statements on no target string",
+		description: "TestConstructQueryWithIndexableFields: handles IN statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Field: []string{"metadata", "queryField1"},
-						Op:    sqltypes.Contains,
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"waveFunction", "beachParty"},
+						Op:      sqltypes.In,
 					},
 				},
 			},
 		},
 		},
-		//partitions: []partition.Partition{},
-		ns:          "",
-		expectedErr: "array checking works on exactly one field, 0 were specified",
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" IN (?, ?) OR
+    f."metadata.fields[2]" IN (?, ?) OR
+    f."metadata.fields[3]" IN (?, ?) OR
+    f."metadata.fields[5]" IN (?, ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"waveFunction", "beachParty", "waveFunction", "beachParty", "waveFunction", "beachParty", "waveFunction", "beachParty"},
+		expectedErr:      nil,
 	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithIndexableFields: handles NOT-IN statements",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"taxi", "sauvignon"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" NOT IN (?, ?) AND
+    f."metadata.fields[2]" NOT IN (?, ?) AND
+    f."metadata.fields[3]" NOT IN (?, ?) AND
+    f."metadata.fields[5]" NOT IN (?, ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"taxi", "sauvignon", "taxi", "sauvignon", "taxi", "sauvignon", "taxi", "sauvignon"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithIndexableFields: handles GREATER-THAN statements",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"6"},
+						Op:      sqltypes.Gt,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" > ? OR
+    f."metadata.fields[2]" > ? OR
+    f."metadata.fields[3]" > ? OR
+    f."metadata.fields[5]" > ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{float64(6), float64(6), float64(6), float64(6)},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "multiple array tests in a single OrFilter work",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"joe"},
+						Op:      sqltypes.Eq,
+					},
+					{
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"bob"},
+						Op:      sqltypes.NotEq,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    ((f."metadata.fields[1]" = ? OR
+    f."metadata.fields[2]" = ? OR
+    f."metadata.fields[3]" = ? OR
+    f."metadata.fields[5]" = ?) OR (f."metadata.fields[1]" != ? AND
+    f."metadata.fields[2]" != ? AND
+    f."metadata.fields[3]" != ? AND
+    f."metadata.fields[5]" != ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"joe", "joe", "joe", "joe", "bob", "bob", "bob", "bob"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "multiple or-filters with do and-matching on both array-testing statements",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"advice"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+			{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "fields"},
+						Matches: []string{"tidy"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" = ? OR
+    f."metadata.fields[2]" = ? OR
+    f."metadata.fields[3]" = ? OR
+    f."metadata.fields[5]" = ?) AND
+    (f."metadata.fields[1]" = ? OR
+    f."metadata.fields[2]" = ? OR
+    f."metadata.fields[3]" = ? OR
+    f."metadata.fields[5]" = ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"advice", "advice", "advice", "advice", "tidy", "tidy", "tidy", "tidy"},
+		expectedErr:      nil,
+	})
+
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithIndexableFields: handles EQUAL statements with sorting",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "fields"},
+							Matches: []string{"block"},
+							Op:      sqltypes.Eq,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"status", "queryField2"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (f."metadata.fields[1]" = ? OR
+    f."metadata.fields[2]" = ? OR
+    f."metadata.fields[3]" = ? OR
+    f."metadata.fields[5]" = ?) AND
+    (FALSE)
+  ORDER BY f."status.queryField2" DESC`,
+		expectedStmtArgs: []any{"block", "block", "block", "block"},
+		expectedErr:      nil,
+	})
+
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -1831,8 +2019,8 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields[1]", "metadata.fields[2]", "metadata.fields[3]", "metadata.fields[5]"},
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
-			if test.expectedErr != "" {
-				assert.Equal(t, test.expectedErr, err.Error())
+			if test.expectedErr != nil {
+				assert.Equal(t, test.expectedErr, err)
 				return
 			}
 			assert.Nil(t, err)
