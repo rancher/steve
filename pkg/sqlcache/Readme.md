@@ -25,10 +25,13 @@ like any other informer, but with a wider array of options. The options are conf
 ### List Options
 ListOptions includes the following:
 * Match filters for indexed fields. Filters are for specifying the value a given field in an object should be in order to
-be included in the list. Filters can be set to equals or not equals. Filters can be set to look for partial matches or
-exact (strict) matches. Filters can be OR'd and AND'd with one another. Filters only work on fields that have been indexed.
-* Primary field and secondary field sorting order. Can choose up to two fields to sort on. Sort order can be ascending
-or descending. Default sorting is to sort on metadata.namespace in ascending first and then sort on metadata.name.
+be included in the list. Filters are similar to the operators on labels in the `kubectl` CLI. Filters can be set to look for partial matches or
+exact (strict) matches. Filters can be OR'd and AND'd with one another.  A query of the form `filter=field1 OP1 val1,field2 OP2 val2` is an `OR` test,
+while separate filters are AND'd together, as in `filter=field1 OP1 val1&filter=field2 OP2 val2`.
+* Filters only work on fields that have been indexed. All `metadata.labels` are also indexed.
+* Any number of sort fields can be specified, but must be comma-separated in a single `sort=....` query.
+Precede each field with a dash (`-`) to sort descending. The default sort is `sort=metadata.namespace,metadata.name`
+(sort first by namespace, then name).
 * Page size to specify how many items to include in a response.
 * Page number to specify offset. For example, a page size of 50 and a page number of 2, will return items starting at
 index 50. Index will be dependent on sort. Page numbers start at 1.
@@ -95,10 +98,12 @@ intended to be used as a way of enforcing RBAC.
 ## Technical Information
 
 ### SQL Tables
-There are three tables that are created for the ListOption informer:
+There are four tables that are created for the ListOption informer:
 * object table - this contains objects, including all their fields, as blobs. These blobs may be encrypted.
 * fields table - this contains specific fields of value for objects. These are specified on informer create and are fields
 that it is desired to filter or order on.
+* labels table - this contains the labels for each object in the object table.
+They go in a separate table because an object can have any number of labels.
 * indices table - the indices table stores indexes created and objects' values for each index. This backs the generic indexer
 that contains the functionality needed to conform to cache.Indexer.
 
@@ -136,16 +141,12 @@ have the following indexes by default:
 
 ### ListOptions Behavior
 Defaults:
-* Sort.PrimaryField: `metadata.namespace`
-* Sort.SecondaryField: `metadata.name`
-* Sort.PrimaryOrder: `ASC` (ascending)
-* Sort.SecondaryOrder: `ASC` (ascending)
+* `sort=metadata.namespace,metadata.name` (ascending order for both)
 * All filters have partial matching set to false by default
 
 There are some uncommon ways someone could use ListOptions where it would be difficult to predict what the result would be.
 Below is a non-exhaustive list of some of these cases and what the behavior is:
 * Setting Pagination.Page but not Pagination.PageSize will cause Page to be ignored
-* Setting Sort.SecondaryField only will sort as though it was Sort.PrimaryField. Sort.SecondaryOrder will still be applied
 and Sort.PrimaryOrder will be ignored
 
 ### Writing Secure Queries
@@ -155,3 +156,35 @@ of a query that may be user supplied, such as columns, should be carefully valid
 ### Troubleshooting SQLite
 A useful tool for troubleshooting the database files is the sqlite command line tool. Another useful tool is the goland
 sqlite plugin. Both of these tools can be used with the database files.
+
+### Indirect Querying
+You can do filtering and sorting on the current table (which backs the resource name after `/v1/` in the URL)
+based on related values in another table using indirect indexing. This works for both sorting and filtering.
+This assumes that the main table has a field, call it field F1, with a 1:1 relation with a field F2 on some other table T2.
+We then can access some other field F3 on the selected row of T2 based on F1, and then operate on that value F3.
+Sorting will sort on that value (either ascending or descending), and operators will do boolean operations on that value
+and compare the result against field F1.
+
+Let's look at a specific example: sort namespaces based on the human-friendly name of the associated project's cluster:
+
+`sort=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName],metadata.name`
+
+Normally the namespaces are displayed in order of their internal name (`metadata.name`), but the above command groups them each according to the name of their enclosing cluster, using the friendly name of the cluster (`local` for the local cluster, and whatever name the user gave when creating downstream clusters).
+
+Staying on this particular query, you can show only namespaces in the local cluster with this query:
+
+`filter=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName] = local`
+
+or show all the other namespaces:
+
+`filter=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName] != local`
+
+An implementation note: some namespaces might not have a label `field.cattle.io/projectId`. With only the sort command, these namespaces show up in the null-clusterName group after all the other groups.  If you don't want to show these namespaces, you can combine a filter and a sort:
+
+`filter=metadata.labels[field.cattle.io/projectId]&sort=metadata.labels[field.cattle.io/projectId] => [management.cattle.io/v3][Project][metadata.name][spec.clusterName],metadata.name`
+
+The filter command uses the implicit `EXISTS` operator, available only for labels. This query selects only those namespaces that have the specied label, and the sort operates on those selected fields.
+
+#### General Syntax
+
+The syntax for the part to the left of the `=>` operator is the same as for other operators. The external reference, to the right of that operator, has exactly four bracketed parts: `[GROUP/API][KIND][FOREIGN-KEY-FIELD][TARGET-FIELD]`. For core Kubernetes types, leave `GROUP` empty.  `KIND` is usually a capitalized singular noun. The two field names can use both dotted-accessor and square-bracket notation.

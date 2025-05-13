@@ -27,18 +27,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-var (
-	ignoreDetail = cmpopts.IgnoreFields(field.Error{}, "Detail")
-)
-
-func TestSelectorParse(t *testing.T) {
+func TestSelectorParseFilterQuery(t *testing.T) {
 	testGoodStrings := []string{
 		"x=a,y=b,z=c",
 		"",
@@ -54,6 +48,9 @@ func TestSelectorParse(t *testing.T) {
 		"metadata.labels[im.here]",
 		"!metadata.labels[im.not.here]",
 		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
+		"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"name => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"metadata.annotations[blah] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -77,15 +74,93 @@ func TestSelectorParse(t *testing.T) {
 		"!metadata.labels(im.not.here)",
 		`x="no double quotes allowed"`,
 		`x='no single quotes allowed'`,
+		"metadata.labels[k8s.io/meta-stuff] => not-bracketed = active",
+		"metadata.labels[k8s.io/meta-stuff] => [not][enough][accessors] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [too][many][accessors][by][1] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][an][operator][end-of-string]",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][an][operator][no-following-operator] no-operator",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][a][post-operator][value] >",
+		"metadata.labels[not/followed/by/accessor] => = active",
 	}
 	for _, test := range testGoodStrings {
-		_, err := Parse(test)
+		_, err := Parse(test, "filter")
 		if err != nil {
 			t.Errorf("%v: error %v (%#v)\n", test, err, err)
 		}
 	}
 	for _, test := range testBadStrings {
-		_, err := Parse(test)
+		_, err := Parse(test, "filter")
+		if err == nil {
+			t.Errorf("%v: did not get expected error\n", test)
+		}
+	}
+}
+
+func TestSelectorParseSortQuery(t *testing.T) {
+	testGoodStrings := []string{
+		"metadata.labels.im-here",
+		"metadata.labels[im.here]",
+		"no-label-presence-test",
+		"metadata.labels-im.here",
+		"metadata.labels[k8s.io/meta-stuff] => [needs][no][operator][end-of-string]",
+		// This is a bad filter string because it doesn't conform to a label accessor
+		// as it's missing the close-bracket, but it's ok for sorting (for now).
+		// When we add integration tests watch what happens
+		"metadata.labels[missing/close-bracket",
+	}
+	testBadStrings := []string{
+		"x=a,y=b,z=c",
+		"",
+		"x!=a,y=b",
+		"close ~ value",
+		"notclose !~ value",
+		"x>1",
+		"x>1,z<5",
+		"x gt 1,z lt 5",
+		`y == def`,
+
+		"!metadata.labels.im-not-here",
+
+		"!metadata.labels[im.not.here]",
+
+		"metadata.labels[k8s.io/meta-stuff] ~ has-dashes_underscores.dots.only",
+		"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"name => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+		"metadata.annotations[blah] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+
+		"!no-label-absence-test",
+		"x=a||y=b",
+		"x==a==b",
+		"!x=a",
+		"x<a",
+		"x=",
+		"x= ",
+		"x=,z= ",
+		"x= ,z= ",
+		"x ~",
+		"x !~",
+		"~ val",
+		"!~ val",
+		"= val",
+		"== val",
+		"!metadata.labels(im.not.here)",
+		`x="no double quotes allowed"`,
+		`x='no single quotes allowed'`,
+		"metadata.labels[k8s.io/meta-stuff] => not-bracketed = active",
+		"metadata.labels[k8s.io/meta-stuff] => [not][enough][accessors] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [too][many][accessors][by][1] = active",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][an][operator][no-following-operator] no-operator",
+		"metadata.labels[k8s.io/meta-stuff] => [missing][a][post-operator][value] >",
+		"metadata.labels[not/followed/by/accessor] => = active",
+	}
+	for _, test := range testGoodStrings {
+		_, err := Parse(test, "sort")
+		if err != nil {
+			t.Errorf("%v: error %v (%#v)\n", test, err, err)
+		}
+	}
+	for _, test := range testBadStrings {
+		_, err := Parse(test, "sort")
 		if err == nil {
 			t.Errorf("%v: did not get expected error\n", test)
 		}
@@ -115,6 +190,7 @@ func TestLexer(t *testing.T) {
 		{"~", PartialEqualsToken},
 		{"!~", NotPartialEqualsToken},
 		{"||", ErrorToken},
+		{"=>", IndirectAccessToken},
 	}
 	for _, v := range testcases {
 		l := &Lexer{s: v.s, pos: 0}
@@ -163,6 +239,9 @@ func TestLexerSequence(t *testing.T) {
 		{"key!~ value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key !~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key!~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+			[]Token{IdentifierToken, IndirectAccessToken, IdentifierToken, EqualsToken, IdentifierToken},
+		},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -203,6 +282,10 @@ func TestParserLookahead(t *testing.T) {
 		{"key gt 3", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key lt 4", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
 		{`key = multi-word-string`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
+
+		{"metadata.labels[k8s.io/meta-stuff] => [management.cattle.io/v3][tokens][id][metadata.state.name] = active",
+			[]Token{IdentifierToken, IndirectAccessToken, IdentifierToken, EqualsToken, IdentifierToken, EndOfStringToken},
+		},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
@@ -240,6 +323,7 @@ func TestParseOperator(t *testing.T) {
 		{"notin", nil},
 		{"!=", nil},
 		{"!~", nil},
+		{"=>", nil},
 		{"!", fmt.Errorf("found '%s', expected: %v", selection.DoesNotExist, strings.Join(binaryOperators, ", "))},
 		{"exists", fmt.Errorf("found '%s', expected: %v", selection.Exists, strings.Join(binaryOperators, ", "))},
 		{"(", fmt.Errorf("found '%s', expected: %v", "(", strings.Join(binaryOperators, ", "))},
@@ -262,30 +346,18 @@ func TestRequirementConstructor(t *testing.T) {
 		Key     string
 		Op      selection.Operator
 		Vals    sets.String
-		WantErr field.ErrorList
+		WantErr string
 	}{
 		{
-			Key: "x1",
-			Op:  selection.In,
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{},
-				},
-			},
+			Key:     "x1",
+			Op:      selection.In,
+			WantErr: "values: Invalid value: []string{}: for 'in', 'notin' operators, values set can't be empty",
 		},
 		{
-			Key:  "x2",
-			Op:   selection.NotIn,
-			Vals: sets.NewString(),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{},
-				},
-			},
+			Key:     "x2",
+			Op:      selection.NotIn,
+			Vals:    sets.NewString(),
+			WantErr: "values: Invalid value: []string{}: for 'in', 'notin' operators, values set can't be empty",
 		},
 		{
 			Key:  "x3",
@@ -298,16 +370,10 @@ func TestRequirementConstructor(t *testing.T) {
 			Vals: sets.NewString("foo"),
 		},
 		{
-			Key:  "x5",
-			Op:   selection.Equals,
-			Vals: sets.NewString("foo", "bar"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{"bar", "foo"},
-				},
-			},
+			Key:     "x5",
+			Op:      selection.Equals,
+			Vals:    sets.NewString("foo", "bar"),
+			WantErr: "values: Invalid value: []string{\"bar\", \"foo\"}: exact-match compatibility requires one single value",
 		},
 		{
 			Key: "x6",
@@ -318,16 +384,10 @@ func TestRequirementConstructor(t *testing.T) {
 			Op:  selection.DoesNotExist,
 		},
 		{
-			Key:  "x8",
-			Op:   selection.Exists,
-			Vals: sets.NewString("foo"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{"foo"},
-				},
-			},
+			Key:     "x8",
+			Op:      selection.Exists,
+			Vals:    sets.NewString("foo"),
+			WantErr: `values: Invalid value: []string{"foo"}: values set must be empty for exists and does not exist`,
 		},
 		{
 			Key:  "x9",
@@ -350,39 +410,21 @@ func TestRequirementConstructor(t *testing.T) {
 			Vals: sets.NewString("6"),
 		},
 		{
-			Key: "x13",
-			Op:  selection.GreaterThan,
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values",
-					BadValue: []string{},
-				},
-			},
+			Key:     "x13",
+			Op:      selection.GreaterThan,
+			WantErr: "values: Invalid value: []string{}: for 'Gt', 'Lt' operators, exactly one value is required",
 		},
 		{
-			Key:  "x14",
-			Op:   selection.GreaterThan,
-			Vals: sets.NewString("bar"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values[0]",
-					BadValue: "bar",
-				},
-			},
+			Key:     "x14",
+			Op:      selection.GreaterThan,
+			Vals:    sets.NewString("bar"),
+			WantErr: `values[0]: Invalid value: "bar": for 'Gt', 'Lt' operators, the value must be an integer`,
 		},
 		{
-			Key:  "x15",
-			Op:   selection.LessThan,
-			Vals: sets.NewString("bar"),
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeInvalid,
-					Field:    "values[0]",
-					BadValue: "bar",
-				},
-			},
+			Key:     "x15",
+			Op:      selection.LessThan,
+			Vals:    sets.NewString("bar"),
+			WantErr: `values[0]: Invalid value: "bar": for 'Gt', 'Lt' operators, the value must be an integer`,
 		},
 		{
 			Key: strings.Repeat("a", 254), //breaks DNS rule that len(key) <= 253
@@ -399,21 +441,29 @@ func TestRequirementConstructor(t *testing.T) {
 			Vals: sets.NewString("a b"),
 		},
 		{
-			Key: "x18",
-			Op:  "unsupportedOp",
-			WantErr: field.ErrorList{
-				&field.Error{
-					Type:     field.ErrorTypeNotSupported,
-					Field:    "operator",
-					BadValue: selection.Operator("unsupportedOp"),
-				},
-			},
+			Key:     "x18",
+			Op:      "unsupportedOp",
+			WantErr: `operator: Unsupported value: "unsupportedOp": supported values: "in", "notin", "=", "==", "!=", "~", "!~", "gt", "lt", "=>", "exists", "!"`,
 		},
 	}
 	for _, rc := range requirementConstructorTests {
 		_, err := NewRequirement(rc.Key, rc.Op, rc.Vals.List())
-		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
-			t.Errorf("NewRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
+		if rc.WantErr != "" {
+			assert.NotNil(t, err)
+			if err != nil {
+				assert.Equal(t, rc.WantErr, err.Error())
+			}
+		} else {
+			assert.Nil(t, err)
+		}
+		_, err = NewIndirectRequirement(rc.Key, []string{"herb", "job", "nice", "reading"}, &rc.Op, rc.Vals.List())
+		if rc.WantErr != "" {
+			assert.NotNil(t, err)
+			if err != nil {
+				assert.Equal(t, rc.WantErr, err.Error())
+			}
+		} else {
+			assert.Nil(t, err)
 		}
 	}
 }
