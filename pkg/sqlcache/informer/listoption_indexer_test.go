@@ -1752,7 +1752,7 @@ func TestConstructQueryWithIndexableFields(t *testing.T) {
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
-		description: "TestConstructQueryWithIndexableFields: handles LESSTHAN statements",
+		description: "TestConstructQueryWithIndexableFields: handles LESS-THAN statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
