@@ -898,9 +898,10 @@ func getField(a any, field string) (any, error) {
 				}
 				obj = fmt.Sprintf("%v", t[key])
 			} else if i == len(subFields)-1 {
-				// If the last layer is an array, return array.map(a => a[subfield])
-				result := make([]string, len(t))
-				for index, v := range t {
+				// If the last layer is an array, return array.map(a => a[subfield]).uniq
+				result := make([]string, 0, len(t))
+				resultMap := make(map[string]bool)
+				for _, v := range t {
 					itemVal, ok := v.(map[string]interface{})
 					if !ok {
 						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
@@ -909,7 +910,11 @@ func getField(a any, field string) (any, error) {
 					if !ok {
 						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
 					}
-					result[index] = itemStr
+					_, ok = resultMap[itemStr]
+					if !ok {
+						result = append(result, itemStr)
+						resultMap[itemStr] = true
+					}
 				}
 				return result, nil
 			}
