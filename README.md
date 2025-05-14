@@ -117,7 +117,9 @@ Example, filtering by object name:
 /v1/{type}?filter=metadata.name=foo
 ```
 
-if a target value is surrounded by single-quotes, it succeeds only on an exact match:
+When SQLite caching is not enabled, matching works this way:
+
+If a target value is surrounded by single-quotes, it succeeds only on an exact match:
 
 Example, filtering by object name:
 
@@ -132,6 +134,11 @@ Example, filtering by object name:
 ```
 /v1/{type}?filter=metadata.name="can-be-a-substri"
 ```
+
+When SQLite caching is enabled, there are different operators.  `FIELD = VALUE` does exact matching,
+`FIELD ~ VALUE` does partial matching. You can use quotes around `VALUE` to delimit it; if it contains
+only alphanumeric characters and characters that aren't significant in filters (like '=', ',', etc.),
+they don't need to be quoted.
 
 One filter can list multiple possible fields to match, these are ORed together:
 
@@ -159,6 +166,10 @@ item is included in the list.
 ```
 /v1/{type}?filter=spec.containers.image=alpine
 ```
+
+When SQLite caching is enabled, multiple values are stored separated by "or-bars" (`|`),
+like `abc|def|ghi`. You'll need to use the partial-match operator `~` to match one member,
+like `/v1/{type}?filter=spec.containers.image ~ ghi`.
 
 **If SQLite caching is enabled** (`server.Options.SQLCache=true`),
 filtering is only supported for a subset of attributes:
