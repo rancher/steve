@@ -905,11 +905,17 @@ func getField(a any, field string) (any, error) {
 					if !ok {
 						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
 					}
-					itemStr, ok := itemVal[subField].(string)
-					if !ok {
-						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
+
+					_, found := itemVal[subField]
+					if found {
+						itemStr, ok := itemVal[subField].(string)
+						if !ok {
+							return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
+						}
+						result[index] = itemStr
+					} else {
+						result[index] = ""
 					}
-					result[index] = itemStr
 				}
 				return result, nil
 			}
