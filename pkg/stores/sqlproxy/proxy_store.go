@@ -569,6 +569,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 
 		opts := informer.WatchOptions{
+			ResourceVersion: w.Revision,
 			Filter: informer.WatchFilter{
 				ID:        w.ID,
 				Namespace: idNamespace,
@@ -737,7 +738,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		return nil, 0, "", err
@@ -768,7 +769,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchem
 		return nil, 0, "", err
 	}
 
-	return list.Items, total, continueToken, nil
+	return list, total, continueToken, nil
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions

@@ -96,6 +96,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
+		// create events table
+		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		// create field table
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		// create field table indexes
@@ -196,6 +198,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
+		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, fmt.Errorf("error"))
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
@@ -236,6 +239,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
+		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
@@ -280,6 +284,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
+		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
@@ -1869,10 +1874,16 @@ func TestWatchMany(t *testing.T) {
 			},
 		},
 	}
-	fooUpdated := foo.DeepCopy()
-	fooUpdated.SetLabels(map[string]string{
+	foo.SetResourceVersion("100")
+	foo2 := foo.DeepCopy()
+	foo2.SetResourceVersion("120")
+	foo2.SetLabels(map[string]string{
 		"hello": "world",
 	})
+	foo3 := foo.DeepCopy()
+	foo3.SetResourceVersion("140")
+	foo4 := foo2.DeepCopy()
+	foo4.SetResourceVersion("160")
 
 	err = loi.Add(foo)
 	assert.NoError(t, err)
@@ -1883,14 +1894,14 @@ func TestWatchMany(t *testing.T) {
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	watcher2, errCh2 := startWatcher(ctx2)
 
-	err = loi.Update(fooUpdated)
+	err = loi.Update(foo2)
 	assert.NoError(t, err)
 
 	events = receiveEvents(watcher1)
-	assert.Equal(t, []watch.Event{{Type: watch.Modified, Object: fooUpdated}}, events)
+	assert.Equal(t, []watch.Event{{Type: watch.Modified, Object: foo2}}, events)
 
 	events = receiveEvents(watcher2)
-	assert.Equal(t, []watch.Event{{Type: watch.Modified, Object: fooUpdated}}, events)
+	assert.Equal(t, []watch.Event{{Type: watch.Modified, Object: foo2}}, events)
 
 	watcher3, errCh3 := startWatcher(ctx)
 
@@ -1898,18 +1909,18 @@ func TestWatchMany(t *testing.T) {
 	err = waitStopWatcher(errCh2)
 	assert.NoError(t, err)
 
-	err = loi.Delete(fooUpdated)
+	err = loi.Delete(foo2)
 	assert.NoError(t, err)
-	err = loi.Add(foo)
+	err = loi.Add(foo3)
 	assert.NoError(t, err)
-	err = loi.Update(fooUpdated)
+	err = loi.Update(foo4)
 	assert.NoError(t, err)
 
 	events = receiveEvents(watcher3)
 	assert.Equal(t, []watch.Event{
-		{Type: watch.Deleted, Object: fooUpdated},
-		{Type: watch.Added, Object: foo},
-		{Type: watch.Modified, Object: fooUpdated},
+		{Type: watch.Deleted, Object: foo2},
+		{Type: watch.Added, Object: foo3},
+		{Type: watch.Modified, Object: foo4},
 	}, events)
 
 	// Verify cancelled watcher don't receive anything anymore
@@ -1918,9 +1929,9 @@ func TestWatchMany(t *testing.T) {
 
 	events = receiveEvents(watcher1)
 	assert.Equal(t, []watch.Event{
-		{Type: watch.Deleted, Object: fooUpdated},
-		{Type: watch.Added, Object: foo},
-		{Type: watch.Modified, Object: fooUpdated},
+		{Type: watch.Deleted, Object: foo2},
+		{Type: watch.Added, Object: foo3},
+		{Type: watch.Modified, Object: foo4},
 	}, events)
 
 	cancel()
@@ -2087,4 +2098,158 @@ func TestWatchFilter(t *testing.T) {
 		})
 	}
 
+}
+
+func TestWatchResourceVersion(t *testing.T) {
+	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
+		errCh := make(chan error, 1)
+		eventsCh := make(chan watch.Event, 100)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{ResourceVersion: rv}, eventsCh)
+			errCh <- watchErr
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	waitStopWatcher := func(errCh chan error) error {
+		select {
+		case <-time.After(time.Second * 5):
+			return fmt.Errorf("not finished in time")
+		case err := <-errCh:
+			return err
+		}
+	}
+
+	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
+		timer := time.NewTimer(time.Millisecond * 50)
+		var events []watch.Event
+		for {
+			select {
+			case <-timer.C:
+				return events
+			case ev := <-eventsCh:
+				events = append(events, ev)
+			}
+		}
+	}
+
+	foo := &unstructured.Unstructured{}
+	foo.SetResourceVersion("100")
+	foo.SetName("foo")
+	foo.SetNamespace("foo")
+	foo.SetLabels(map[string]string{
+		"app": "foo",
+	})
+
+	fooUpdated := foo.DeepCopy()
+	fooUpdated.SetResourceVersion("120")
+	fooUpdated.SetLabels(map[string]string{
+		"app": "changed",
+	})
+
+	bar := &unstructured.Unstructured{}
+	bar.SetResourceVersion("150")
+	bar.SetName("bar")
+	bar.SetNamespace("bar")
+	bar.SetLabels(map[string]string{
+		"app": "bar",
+	})
+
+	barNew := &unstructured.Unstructured{}
+	barNew.SetResourceVersion("160")
+	barNew.SetName("bar")
+	barNew.SetNamespace("bar")
+	barNew.SetLabels(map[string]string{
+		"app": "bar",
+	})
+
+	parentCtx := context.Background()
+
+	loi, err := makeListOptionIndexer(parentCtx, [][]string{})
+	assert.NoError(t, err)
+
+	getRV := func(t *testing.T) string {
+		t.Helper()
+		list, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+		assert.NoError(t, err)
+		return list.GetResourceVersion()
+	}
+
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	rv1 := getRV(t)
+
+	err = loi.Update(fooUpdated)
+	assert.NoError(t, err)
+	rv2 := getRV(t)
+
+	err = loi.Add(bar)
+	assert.NoError(t, err)
+	rv3 := getRV(t)
+
+	err = loi.Delete(bar)
+	assert.NoError(t, err)
+	rv4 := getRV(t)
+
+	err = loi.Add(barNew)
+	assert.NoError(t, err)
+	rv5 := getRV(t)
+
+	tests := []struct {
+		rv             string
+		expectedEvents []watch.Event
+	}{
+		{
+			rv: "",
+		},
+		{
+			rv: rv1,
+			expectedEvents: []watch.Event{
+				{Type: watch.Modified, Object: fooUpdated},
+				{Type: watch.Added, Object: bar},
+				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Added, Object: barNew},
+			},
+		},
+		{
+			rv: rv2,
+			expectedEvents: []watch.Event{
+				{Type: watch.Added, Object: bar},
+				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Added, Object: barNew},
+			},
+		},
+		{
+			rv: rv3,
+			expectedEvents: []watch.Event{
+				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Added, Object: barNew},
+			},
+		},
+		{
+			rv: rv4,
+			expectedEvents: []watch.Event{
+				{Type: watch.Added, Object: barNew},
+			},
+		},
+		{
+			rv:             rv5,
+			expectedEvents: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.rv, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(parentCtx)
+			watcherCh, errCh := startWatcher(ctx, loi, test.rv)
+			gotEvents := receiveEvents(watcherCh)
+
+			assert.Equal(t, test.expectedEvents, gotEvents)
+
+			cancel()
+			err := waitStopWatcher(errCh)
+			assert.NoError(t, err)
+		})
+	}
 }

@@ -143,10 +143,10 @@ func (mr *MockUnstructuredStoreMockRecorder) Delete(arg0, arg1, arg2 any) *gomoc
 }
 
 // ListByPartitions mocks base method.
-func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
+func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByPartitions", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]unstructured.Unstructured)
+	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(string)
 	ret3, _ := ret[3].(error)
