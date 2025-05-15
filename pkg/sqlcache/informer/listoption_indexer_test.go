@@ -1790,3 +1790,163 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		})
 	}
 }
+
+func TestGetField(t *testing.T) {
+	tests := []struct {
+		name           string
+		obj            any
+		field          string
+		expectedResult any
+		expectedErr    bool
+	}{
+		{
+			name: "simple",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"foo": "bar",
+				},
+			},
+			field:          "foo",
+			expectedResult: "bar",
+		},
+		{
+			name: "nested",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"foo": map[string]any{
+						"bar": "baz",
+					},
+				},
+			},
+			field:          "foo.bar",
+			expectedResult: "baz",
+		},
+		{
+			name: "array",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"theList": []any{
+						"foo", "bar", "baz",
+					},
+				},
+			},
+			field:          "theList[1]",
+			expectedResult: "bar",
+		},
+		{
+			name: "array of object",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"theList": []any{
+						map[string]any{
+							"name": "foo",
+						},
+						map[string]any{
+							"name": "bar",
+						},
+						map[string]any{
+							"name": "baz",
+						},
+					},
+				},
+			},
+			field:          "theList.name",
+			expectedResult: []string{"foo", "bar", "baz"},
+		},
+		{
+			name: "annotation",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"annotations": map[string]any{
+						"with.dot.in.it/and-slash": "foo",
+					},
+				},
+			},
+			field:          "annotations[with.dot.in.it/and-slash]",
+			expectedResult: "foo",
+		},
+		{
+			name: "field not found",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"rules": []any{
+							map[string]any{},
+							map[string]any{
+								"host": "example.com",
+							},
+						},
+					},
+				},
+			},
+			field:          "spec.rules.host",
+			expectedResult: []string{"", "example.com"},
+		},
+		{
+			name: "array index invalid",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"theList": []any{
+						"foo", "bar", "baz",
+					},
+				},
+			},
+			field:       "theList[a]",
+			expectedErr: true,
+		},
+		{
+			name: "array index out of bound",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"theList": []any{
+						"foo", "bar", "baz",
+					},
+				},
+			},
+			field:       "theList[3]",
+			expectedErr: true,
+		},
+		{
+			name: "invalid array",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"rules": []any{
+							1,
+						},
+					},
+				},
+			},
+			field:       "spec.rules.host",
+			expectedErr: true,
+		},
+		{
+			name: "invalid array nested",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"rules": []any{
+							map[string]any{
+								"host": 1,
+							},
+						},
+					},
+				},
+			},
+			field:       "spec.rules.host",
+			expectedErr: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := getField(test.obj, test.field)
+			if test.expectedErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectedResult, result)
+		})
+	}
+}
