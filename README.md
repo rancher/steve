@@ -135,10 +135,72 @@ Example, filtering by object name:
 /v1/{type}?filter=metadata.name="can-be-a-substri"
 ```
 
-When SQLite caching is enabled, there are different operators.  `FIELD = VALUE` does exact matching,
-`FIELD ~ VALUE` does partial matching. You can use quotes around `VALUE` to delimit it; if it contains
-only alphanumeric characters and characters that aren't significant in filters (like '=', ',', etc.),
-they don't need to be quoted.
+When SQLite caching is enabled, equality is slightly different from non-sql-supported matching.
+Equality can be specified with either one or two '=' signs.
+
+The following matches objects called either 'cat' or 'cows':
+
+```
+filter=metadata.name=cat,metadata.name==cows
+```
+
+The following matches objects whose names contain either the substring 'cat' or 'cows':
+
+```
+filter=metadata.name~cat,metadata.name~cows
+```
+
+For example, this will match an object with `metadata.name=cowcatcher`
+
+Set membership is done with the `in` operator:
+
+```
+filter=metadata.name in (cat, cows)
+```
+
+When called via `http` the spaces will need to be encoded either as `+` or `%20`.
+
+There are negative forms of the above operators:
+
+```
+filter=metadata.name!=dog  # no dogs allowed
+filter=metadata.name!~x    # skip any names containing an 'x'
+filter=metadata.name notin (goldfish, silverfish) # ignore these
+```
+
+Labels can be tested with the implicit "EXISTS" operator:
+
+```
+filter=metadata.labels[cattle.io.fences/wooden]
+```
+
+This will select any objects that have the specified label.  Negate this test by
+preceding it with a `!`:
+
+```
+filter=!metadata.labels[cattle.io.fences/bamboo]
+```
+
+Existence tests only work for `metadata.labels`.
+
+If you need to do a numeric computation, you can use the `<` and `>` operators.
+
+```
+filter=metadata.fields[3]>10&metadata.fields[3]<20
+```
+
+This is specific to a particular kind of Kubernetes object.
+
+Finally, most values need to conform to specific syntaxes. But if the VALUE in an
+expression contains unusual characters, you can quote the value with either single
+or double quotes:
+
+```
+filter=metadata.name="oxford,metadata.labels.comma"
+```
+
+Without the quotes, the expression would be finding either objects called `oxford`,
+or that have the label "comma", which is very different from objects called `oxford,metadata.labels.comma`.
 
 One filter can list multiple possible fields to match, these are ORed together:
 
