@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1786,6 +1787,94 @@ func TestBuildSortLabelsClause(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Equal(t, test.expectedStmt, stmt)
 				assert.Equal(t, test.expectedParam, param)
+			}
+		})
+	}
+}
+
+func TestGetField(t *testing.T) {
+	type testCase struct {
+		description   string
+		object        *unstructured.Unstructured
+		fieldList     string
+		expectedValue any
+		expectedErr   string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestGetField: returns full string arrays, removing duplicates",
+		object: &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					// This has to be an array of interfaces so the underlying code works.
+					// This is because golang type assertions are very specific.
+					"containers": []interface{}{
+						map[string]interface{}{"image": "serpent"},
+						map[string]interface{}{"image": "ribbon"},
+						map[string]interface{}{"image": "cushion"},
+						map[string]interface{}{"image": "ribbon"},
+					},
+				},
+			},
+		},
+		fieldList:     "metadata.containers.image",
+		expectedValue: []string{"serpent", "ribbon", "cushion"},
+	})
+	tests = append(tests, testCase{
+		description: "TestGetField: non-existent field returns nil",
+		object: &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "charlie",
+				},
+			},
+		},
+		fieldList:     "purple",
+		expectedValue: nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestGetField: returns a full hash",
+		object: &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "charlie",
+				},
+			},
+		},
+		fieldList: "metadata",
+		expectedValue: map[string]interface{}{
+			"name": "charlie",
+		},
+	})
+	tests = append(tests, testCase{
+		description: "TestGetField: complains about trying to access non-string array item",
+		object: &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"containers": []interface{}{
+						map[string]interface{}{"size": "5"},
+						map[string]interface{}{"size": "6"},
+						map[string]interface{}{"size": "7"},
+						map[string]interface{}{"size": 5},
+					},
+					"name": "charlie",
+				},
+			},
+		},
+		fieldList:   "metadata.containers.size",
+		expectedErr: "[listoption indexer] failed to get subfield [size] from slice items",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			result, err := getField(test.object, test.fieldList)
+			if test.expectedErr != "" {
+				require.NotNil(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+			} else {
+				require.Nil(t, err)
+				assert.Equal(t, test.expectedValue, result)
 			}
 		})
 	}

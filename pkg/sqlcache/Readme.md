@@ -27,8 +27,8 @@ ListOptions includes the following:
 * Match filters for indexed fields. Filters are for specifying the value a given field in an object should be in order to
 be included in the list. Filters can be set to equals or not equals. Filters can be set to look for partial matches or
 exact (strict) matches. Filters can be OR'd and AND'd with one another. Filters only work on fields that have been indexed.
-* Primary field and secondary field sorting order. Can choose up to two fields to sort on. Sort order can be ascending
-or descending. Default sorting is to sort on metadata.namespace in ascending first and then sort on metadata.name.
+* Sort order can be ascending
+or descending. Default sorting is to sort on metadata.namespace in ascending first and then sort on metadata.name. There can be any number of sort directives, comma-separated in a single `sort=` directive. Put a minus sign (`-`) before a field to sort DESC on that field (e.g. `sort=-metadata.namespace,metadata.name` sorts on the namespaces in descending order, and the names within each namespace in default ascending order).
 * Page size to specify how many items to include in a response.
 * Page number to specify offset. For example, a page size of 50 and a page number of 2, will return items starting at
 index 50. Index will be dependent on sort. Page numbers start at 1.
@@ -95,12 +95,13 @@ intended to be used as a way of enforcing RBAC.
 ## Technical Information
 
 ### SQL Tables
-There are three tables that are created for the ListOption informer:
+There are four tables that are created for the ListOption informer:
 * object table - this contains objects, including all their fields, as blobs. These blobs may be encrypted.
 * fields table - this contains specific fields of value for objects. These are specified on informer create and are fields
 that it is desired to filter or order on.
 * indices table - the indices table stores indexes created and objects' values for each index. This backs the generic indexer
 that contains the functionality needed to conform to cache.Indexer.
+*  labels table - stores any labels created for each object.
 
 ### SQLite Driver
 There are multiple SQLite drivers that this package could have used. One of the most, if not the most, popular SQLite golang
@@ -136,17 +137,12 @@ have the following indexes by default:
 
 ### ListOptions Behavior
 Defaults:
-* Sort.PrimaryField: `metadata.namespace`
-* Sort.SecondaryField: `metadata.name`
-* Sort.PrimaryOrder: `ASC` (ascending)
-* Sort.SecondaryOrder: `ASC` (ascending)
+* Sort `metadata.namespace,metadata.name` (both ASC)
 * All filters have partial matching set to false by default
 
 There are some uncommon ways someone could use ListOptions where it would be difficult to predict what the result would be.
 Below is a non-exhaustive list of some of these cases and what the behavior is:
 * Setting Pagination.Page but not Pagination.PageSize will cause Page to be ignored
-* Setting Sort.SecondaryField only will sort as though it was Sort.PrimaryField. Sort.SecondaryOrder will still be applied
-and Sort.PrimaryOrder will be ignored
 
 ### Writing Secure Queries
 Values should be supplied to SQL queries using placeholders, read [Avoiding SQL Injection Risk](https://go.dev/doc/database/sql-injection). Any other portions

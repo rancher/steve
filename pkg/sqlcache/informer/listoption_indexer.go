@@ -57,7 +57,7 @@ const (
 	   )`
 	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
 
-	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items: %w"
+	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 
 	createLabelsTableFmt = `CREATE TABLE IF NOT EXISTS "%s_labels" (
 		key TEXT NOT NULL REFERENCES "%s"(key) ON DELETE CASCADE,
@@ -898,18 +898,23 @@ func getField(a any, field string) (any, error) {
 				}
 				obj = fmt.Sprintf("%v", t[key])
 			} else if i == len(subFields)-1 {
-				// If the last layer is an array, return array.map(a => a[subfield])
-				result := make([]string, len(t))
-				for index, v := range t {
+				// If the last layer is an array, return array.map(a => a[subfield]).uniq
+				result := make([]string, 0, len(t))
+				resultMap := make(map[string]bool)
+				for _, v := range t {
 					itemVal, ok := v.(map[string]interface{})
 					if !ok {
-						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
+						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField)
 					}
 					itemStr, ok := itemVal[subField].(string)
 					if !ok {
-						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
+						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField)
 					}
-					result[index] = itemStr
+					_, ok = resultMap[itemStr]
+					if !ok {
+						result = append(result, itemStr)
+						resultMap[itemStr] = true
+					}
 				}
 				return result, nil
 			}
