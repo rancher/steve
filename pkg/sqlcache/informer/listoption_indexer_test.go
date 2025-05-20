@@ -11,14 +11,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1941,12 +1942,12 @@ func TestGetField(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := getField(test.obj, test.field)
 			if test.expectedErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
 
-			assert.NoError(t, err)
-			assert.Equal(t, test.expectedResult, result)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedResult, result)
 		})
 	}
 }
