@@ -57,7 +57,7 @@ const (
 	   )`
 	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
 
-	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items: %w"
+	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 
 	createLabelsTableFmt = `CREATE TABLE IF NOT EXISTS "%s_labels" (
 		key TEXT NOT NULL REFERENCES "%s"(key) ON DELETE CASCADE,
@@ -903,14 +903,14 @@ func getField(a any, field string) (any, error) {
 				for index, v := range t {
 					itemVal, ok := v.(map[string]interface{})
 					if !ok {
-						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
+						return nil, fmt.Errorf(failedToGetFromSliceFmt, subField)
 					}
 
 					_, found := itemVal[subField]
 					if found {
 						itemStr, ok := itemVal[subField].(string)
 						if !ok {
-							return nil, fmt.Errorf(failedToGetFromSliceFmt, subField, err)
+							return nil, fmt.Errorf(failedToGetFromSliceFmt, subField)
 						}
 						result[index] = itemStr
 					} else {
