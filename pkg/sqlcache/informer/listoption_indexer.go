@@ -100,8 +100,10 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 		namespaced:    namespaced,
 		indexedFields: indexedFields,
 	}
-	l.RegisterAfterUpsert(l.addIndexFields)
-	l.RegisterAfterUpsert(l.addLabels)
+	l.RegisterAfterAdd(l.addIndexFields)
+	l.RegisterAfterUpdate(l.addIndexFields)
+	l.RegisterAfterAdd(l.addLabels)
+	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterDelete(l.deleteIndexFields)
 	l.RegisterAfterDelete(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
