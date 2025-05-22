@@ -73,7 +73,6 @@ var (
 			{"reason"},
 		},
 		gvkKey("", "v1", "Namespace"): {
-			{"metadata", "labels", "field.cattle.io/projectId"},
 			{"spec", "displayName"},
 		},
 		gvkKey("", "v1", "Node"): {

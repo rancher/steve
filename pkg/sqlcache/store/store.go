@@ -134,6 +134,7 @@ func (s *Store) checkUpdateExternalInfo(key string) error {
 	})
 }
 
+
 func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
 		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
