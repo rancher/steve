@@ -50,11 +50,13 @@ func TestNewListOptionIndexer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		store.EXPECT().RegisterAfterUpsert(gomock.Any())
+		store.EXPECT().RegisterAfterAdd(gomock.Any())
+		store.EXPECT().RegisterAfterUpdate(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
 		// create field table
@@ -115,11 +117,13 @@ func TestNewListOptionIndexer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		store.EXPECT().RegisterAfterUpsert(gomock.Any())
+		store.EXPECT().RegisterAfterAdd(gomock.Any())
+		store.EXPECT().RegisterAfterUpdate(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
@@ -144,11 +148,13 @@ func TestNewListOptionIndexer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		store.EXPECT().RegisterAfterUpsert(gomock.Any())
+		store.EXPECT().RegisterAfterAdd(gomock.Any())
+		store.EXPECT().RegisterAfterUpdate(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -181,11 +187,13 @@ func TestNewListOptionIndexer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		store.EXPECT().RegisterAfterUpsert(gomock.Any())
+		store.EXPECT().RegisterAfterAdd(gomock.Any())
+		store.EXPECT().RegisterAfterUpdate(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -222,11 +230,13 @@ func TestNewListOptionIndexer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		store.EXPECT().RegisterAfterUpsert(gomock.Any())
+		store.EXPECT().RegisterAfterAdd(gomock.Any())
+		store.EXPECT().RegisterAfterUpdate(gomock.Any())
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterUpsert(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -306,50 +316,6 @@ func TestListByOptions(t *testing.T) {
 		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
 		expectedContToken: "",
 		expectedErr:       nil,
-	})
-	tests = append(tests, testCase{
-		description: "ListByOptions with ChunkSize set should set limit in prepared sql.Stmt",
-		listOptions: sqltypes.ListOptions{ChunkSize: 2},
-		partitions:  []partition.Partition{},
-		ns:          "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC 
-  LIMIT ?`,
-		expectedStmtArgs: []interface{}{2},
-		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE))`,
-		expectedCountStmtArgs: []any{},
-		returnList:            []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:          &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken:     "",
-		expectedErr:           nil,
-	})
-	tests = append(tests, testCase{
-		description: "ListByOptions with Resume set should set offset in prepared sql.Stmt",
-		listOptions: sqltypes.ListOptions{Resume: "4"},
-		partitions:  []partition.Partition{},
-		ns:          "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC 
-  OFFSET ?`,
-		expectedStmtArgs: []interface{}{4},
-		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE))`,
-		expectedCountStmtArgs: []any{},
-		returnList:            []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:          &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken:     "",
-		expectedErr:           nil,
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with 1 OrFilter set with 1 filter should select where that filter is true in prepared sql.Stmt",

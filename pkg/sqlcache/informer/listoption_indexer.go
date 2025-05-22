@@ -100,8 +100,10 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 		namespaced:    namespaced,
 		indexedFields: indexedFields,
 	}
-	l.RegisterAfterUpsert(l.addIndexFields)
-	l.RegisterAfterUpsert(l.addLabels)
+	l.RegisterAfterAdd(l.addIndexFields)
+	l.RegisterAfterUpdate(l.addIndexFields)
+	l.RegisterAfterAdd(l.addLabels)
+	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterDelete(l.deleteIndexFields)
 	l.RegisterAfterDelete(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
@@ -423,29 +425,18 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		}
 	}
 
-	// 4- Pagination: LIMIT clause (from lo.Pagination and/or lo.ChunkSize/lo.Resume)
+	// 4- Pagination: LIMIT clause (from lo.Pagination)
 
 	limitClause := ""
-	// take the smallest limit between lo.Pagination and lo.ChunkSize
 	limit := lo.Pagination.PageSize
-	if limit == 0 || (lo.ChunkSize > 0 && lo.ChunkSize < limit) {
-		limit = lo.ChunkSize
-	}
 	if limit > 0 {
 		limitClause = "\n  LIMIT ?"
 		params = append(params, limit)
 	}
 
-	// OFFSET clause (from lo.Pagination and/or lo.Resume)
+	// OFFSET clause (from lo.Pagination)
 	offsetClause := ""
 	offset := 0
-	if lo.Resume != "" {
-		offsetInt, err := strconv.Atoi(lo.Resume)
-		if err != nil {
-			return queryInfo, err
-		}
-		offset = offsetInt
-	}
 	if lo.Pagination.Page >= 1 {
 		offset += lo.Pagination.PageSize * (lo.Pagination.Page - 1)
 	}
