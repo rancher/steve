@@ -36,8 +36,7 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
-			Filters:   make([]sqltypes.OrFilter, 0),
+			Filters: make([]sqltypes.OrFilter, 0),
 			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
@@ -52,7 +51,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -112,7 +110,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -162,7 +159,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -214,7 +210,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -240,7 +235,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -266,7 +260,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -291,7 +284,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -316,7 +308,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -342,7 +333,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -368,7 +358,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -393,7 +382,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -419,7 +407,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -455,7 +442,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -491,7 +477,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -523,7 +508,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -555,7 +539,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -587,7 +570,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -613,7 +595,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -645,7 +626,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -671,7 +651,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -713,7 +692,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -751,7 +729,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			Filters: []sqltypes.OrFilter{
 				{
 					Filters: []sqltypes.Filter{
@@ -784,7 +761,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
@@ -808,7 +784,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
@@ -832,7 +807,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
@@ -860,7 +834,6 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
@@ -891,56 +864,6 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If continue params is given, resume" +
-			" should be set with assigned value.",
-		req: &types.APIRequest{
-			Request: &http.Request{
-				URL: &url.URL{RawQuery: "continue=5"},
-			},
-		},
-		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
-			Resume:    "5",
-			Filters:   make([]sqltypes.OrFilter, 0),
-			Pagination: sqltypes.Pagination{
-				Page: 1,
-			},
-		},
-	})
-	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If continue param is given, resume" +
-			" should be set with assigned value.",
-		req: &types.APIRequest{
-			Request: &http.Request{
-				URL: &url.URL{RawQuery: "continue=5"},
-			},
-		},
-		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
-			Resume:    "5",
-			Filters:   make([]sqltypes.OrFilter, 0),
-			Pagination: sqltypes.Pagination{
-				Page: 1,
-			},
-		},
-	})
-	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If limit param is given, chunksize" +
-			" should be set with assigned value.",
-		req: &types.APIRequest{
-			Request: &http.Request{
-				URL: &url.URL{RawQuery: "limit=3"},
-			},
-		},
-		expectedLO: sqltypes.ListOptions{
-			ChunkSize: 3,
-			Filters:   make([]sqltypes.OrFilter, 0),
-			Pagination: sqltypes.Pagination{
-				Page: 1,
-			},
-		},
-	})
-	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If page param is given, page" +
 			" should be set with assigned value.",
 		req: &types.APIRequest{
@@ -949,8 +872,7 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
-			Filters:   make([]sqltypes.OrFilter, 0),
+			Filters: make([]sqltypes.OrFilter, 0),
 			Pagination: sqltypes.Pagination{
 				Page: 3,
 			},
@@ -965,8 +887,7 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			ChunkSize: defaultLimit,
-			Filters:   make([]sqltypes.OrFilter, 0),
+			Filters: make([]sqltypes.OrFilter, 0),
 			Pagination: sqltypes.Pagination{
 				PageSize: 20,
 				Page:     1,
