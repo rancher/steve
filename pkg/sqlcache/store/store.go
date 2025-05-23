@@ -12,6 +12,9 @@ import (
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 
 	// needed for drivers
@@ -36,11 +39,13 @@ const (
 type Store struct {
 	db.Client
 
-	ctx           context.Context
-	name          string
-	typ           reflect.Type
-	keyFunc       cache.KeyFunc
-	shouldEncrypt bool
+	ctx                context.Context
+	gvk                schema.GroupVersionKind
+	name               string
+	externalUpdateInfo *sqltypes.ExternalGVKUpdates
+	typ                reflect.Type
+	keyFunc            cache.KeyFunc
+	shouldEncrypt      bool
 
 	upsertQuery   string
 	deleteQuery   string
@@ -62,16 +67,18 @@ type Store struct {
 var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, name string) (*Store, error) {
+func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
 	s := &Store{
-		ctx:           ctx,
-		name:          name,
-		typ:           reflect.TypeOf(example),
-		Client:        c,
-		keyFunc:       keyFunc,
-		shouldEncrypt: shouldEncrypt,
-		afterUpsert:   []func(key string, obj any, tx transaction.Client) error{},
-		afterDelete:   []func(key string, tx transaction.Client) error{},
+		ctx:                ctx,
+		name:               name,
+		gvk:                gvk,
+		externalUpdateInfo: externalUpdateInfo,
+		typ:                reflect.TypeOf(example),
+		Client:             c,
+		keyFunc:            keyFunc,
+		shouldEncrypt:      shouldEncrypt,
+		afterUpsert:        []func(key string, obj any, tx transaction.Client) error{},
+		afterDelete:        []func(key string, tx transaction.Client) error{},
 	}
 
 	dbName := db.Sanitize(s.name)
@@ -108,19 +115,117 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 /* Core methods */
 // upsert saves an obj with its key, or updates key with obj if it exists in this Store
 func (s *Store) upsert(key string, obj any) error {
-	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+	err := s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
 		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
 		if err != nil {
 			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
 		}
 
-		err = s.runAfterUpsert(key, obj, tx)
-		if err != nil {
-			return err
+		return s.runAfterUpsert(key, obj, tx)
+	})
+	if err != nil {
+		return err
+	}
+	if s.externalUpdateInfo == nil {
+		return nil
+	}
+	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+		if s.externalUpdateInfo != nil {
+			err = s.updateExternalInfo(tx, key, s.externalUpdateInfo)
+			if err != nil {
+				// Just report and ignore errors
+				logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
+			}
 		}
-
 		return nil
 	})
+}
+
+func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
+	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
+		rawGetStmt := fmt.Sprintf(`select distinct lt1.key, ex2."%s"
+ from "%s_fields" f left outer join "%s_labels" lt1 join "%s_fields" ex2
+ where ex2.key = ?
+      and f."%s" != ex2."%s"
+      and lt1.label = ? and lt1.value = ex2."%s"`,
+			labelDep.TargetFinalFieldName,
+			labelDep.SourceGVK,
+			labelDep.SourceGVK,
+			labelDep.TargetGVK,
+			labelDep.TargetFinalFieldName,
+			labelDep.TargetFinalFieldName,
+			labelDep.TargetKeyFieldName)
+		getStmt := s.Prepare(rawGetStmt)
+		rows, err := s.QueryForRows(s.ctx, getStmt, key, labelDep.SourceLabelName)
+		if err != nil {
+			logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			continue
+		}
+		result, err := s.ReadStrings2(rows)
+		if err != nil {
+			logrus.Infof("Error reading objects for table %s, key %s: %s", labelDep.TargetGVK, key, err)
+			continue
+		}
+		if len(result) == 0 {
+			continue
+		}
+		for _, innerResult := range result {
+			sourceKey := innerResult[0]
+			finalTargetValue := innerResult[1]
+			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
+				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
+			preparedStmt := s.Prepare(rawStmt)
+			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+			if err != nil {
+				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
+				continue
+			}
+		}
+	}
+	for _, nonLabelDep := range externalUpdateInfo.ExternalDependencies {
+		rawGetStmt := fmt.Sprintf(`select f.key, ex2."%s"
+ from "%s_fields" f join "%s_fields" ex2
+ where ex2.key = ?
+      and f."%s" != ex2."%s"
+      and f."%s" = ex2."%s"`,
+			nonLabelDep.TargetFinalFieldName,
+			nonLabelDep.SourceGVK,
+			nonLabelDep.TargetGVK,
+			nonLabelDep.TargetFinalFieldName,
+			nonLabelDep.TargetFinalFieldName,
+			nonLabelDep.SourceFieldName,
+			nonLabelDep.TargetKeyFieldName)
+		// TODO: Try to fold the two blocks together
+
+		getStmt := s.Prepare(rawGetStmt)
+		rows, err := s.QueryForRows(s.ctx, getStmt, key, nonLabelDep.SourceFieldName)
+		if err != nil {
+			logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			continue
+		}
+		result, err := s.ReadStrings2(rows)
+		if err != nil {
+			logrus.Infof("Error reading objects for table %s, key %s: %s", nonLabelDep.TargetGVK, key, err)
+			continue
+		}
+		if len(result) == 0 {
+			continue
+		}
+		for _, innerResult := range result {
+			sourceKey := innerResult[0]
+			finalTargetValue := innerResult[1]
+			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
+				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
+			preparedStmt := s.Prepare(rawStmt)
+			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+			if err != nil {
+				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
+				continue
+			}
+		}
+	}
+	return nil
+
 }
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
