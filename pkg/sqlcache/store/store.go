@@ -167,7 +167,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
-			rawStmt := fmt.Sprintf(`UPDATE %s_fields SET "%s" = ? WHERE key = ?`,
+			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
 			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
@@ -209,7 +209,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
-			rawStmt := fmt.Sprintf(`UPDATE %s_fields SET "%s" = ? WHERE key = ?`,
+			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
 			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
