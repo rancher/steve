@@ -808,7 +808,7 @@ func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient) *Store
 		SourceLabelName:      "field.cattle.io/projectId",
 		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
 		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.displayName",
+		TargetFinalFieldName: "spec.clusterName",
 	}
 	namespaceNonLabelDep := sqltypes.ExternalDependency{
 		SourceGVK:            gvkKey("", "v1", "Pods"),
