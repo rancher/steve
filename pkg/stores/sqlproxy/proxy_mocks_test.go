@@ -267,18 +267,18 @@ func (m *MockCacheFactory) EXPECT() *MockCacheFactoryMockRecorder {
 }
 
 // CacheFor mocks base method.
-func (m *MockCacheFactory) CacheFor(arg0 context.Context, arg1 [][]string, arg2 *sqltypes.ExternalGVKUpdates, arg3 cache.TransformFunc, arg4 dynamic.ResourceInterface, arg5 schema.GroupVersionKind, arg6, arg7 bool) (factory.Cache, error) {
+func (m *MockCacheFactory) CacheFor(arg0 context.Context, arg1 [][]string, arg2, arg3 *sqltypes.ExternalGVKUpdates, arg4 cache.TransformFunc, arg5 dynamic.ResourceInterface, arg6 schema.GroupVersionKind, arg7, arg8 bool) (factory.Cache, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CacheFor", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	ret := m.ctrl.Call(m, "CacheFor", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 	ret0, _ := ret[0].(factory.Cache)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CacheFor indicates an expected call of CacheFor.
-func (mr *MockCacheFactoryMockRecorder) CacheFor(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 any) *gomock.Call {
+func (mr *MockCacheFactoryMockRecorder) CacheFor(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
 }
 
 // Reset mocks base method.

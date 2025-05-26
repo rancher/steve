@@ -191,6 +191,8 @@ var (
 			},
 		},
 	}
+	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
+	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
 	namespaceProjectLabelDep = sqltypes.ExternalLabelDependency{
 		SourceGVK:            gvkKey("", "v1", "Namespace"),
 		SourceLabelName:      "field.cattle.io/projectId",
@@ -198,12 +200,16 @@ var (
 		TargetKeyFieldName:   "metadata.name",
 		TargetFinalFieldName: "spec.displayName",
 	}
+	namespaceUpdates = sqltypes.ExternalGVKUpdates{
+		AffectedGVK:               namespaceGVK,
+		ExternalDependencies:      nil,
+		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
+	}
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
-		schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}: &sqltypes.ExternalGVKUpdates{
-			AffectedGVK:               schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"},
-			ExternalDependencies:      nil,
-			ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
-		},
+		mcioProjectGvk: &namespaceUpdates,
+	}
+	selfGVKDependencies = sqltypes.ExternalGVKDependency{
+		namespaceGVK: &namespaceUpdates,
 	}
 )
 
@@ -277,7 +283,7 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
+	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
 	Reset() error
 }
 
@@ -359,7 +365,7 @@ func (s *Store) initializeNamespaceCache() error {
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	nsInformer, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], transformFunc, tableClient, gvk, false, true)
+	nsInformer, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, false, true)
 	if err != nil {
 		return err
 	}
@@ -778,7 +784,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(schema)
-	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(schema))
+	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(schema))
 	if err != nil {
 		return nil, 0, "", err
 	}
