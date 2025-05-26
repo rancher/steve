@@ -10,6 +10,7 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/sirupsen/logrus"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
@@ -108,6 +109,7 @@ func (p *Factory) IsImpersonating() bool {
 }
 
 func (p *Factory) K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error) {
+	logrus.Debug("steve: client.Factory.K8sInterface()")
 	cfg, err := setupConfig(ctx, p.clientCfg, p.impersonate)
 	if err != nil {
 		return nil, err
@@ -117,30 +119,37 @@ func (p *Factory) K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, err
 }
 
 func (p *Factory) AdminK8sInterface() (kubernetes.Interface, error) {
+	logrus.Debug("steve: client.Factory.AdminK8sInterface()")
 	return kubernetes.NewForConfig(p.clientCfg)
 }
 
 func (p *Factory) DynamicClient(ctx *types.APIRequest, warningHandler rest.WarningHandler) (dynamic.Interface, error) {
+	logrus.Debug("steve: client.Factory.DynamicClient")
 	return newDynamicClient(ctx, p.clientCfg, p.impersonate, warningHandler)
 }
 
 func (p *Factory) Client(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.Client")
 	return newClient(ctx, p.clientCfg, s, namespace, p.impersonate, warningHandler)
 }
 
 func (p *Factory) AdminClient(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.AdminClient")
 	return newClient(ctx, p.clientCfg, s, namespace, false, warningHandler)
 }
 
 func (p *Factory) ClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.AdminClient")
 	return newClient(ctx, p.watchClientCfg, s, namespace, p.impersonate, warningHandler)
 }
 
 func (p *Factory) AdminClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.AdminClientForWatch")
 	return newClient(ctx, p.watchClientCfg, s, namespace, false, warningHandler)
 }
 
 func (p *Factory) TableClient(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.TableClient")
 	if attributes.Table(s) {
 		return newClient(ctx, p.tableClientCfg, s, namespace, p.impersonate, warningHandler)
 	}
@@ -148,6 +157,7 @@ func (p *Factory) TableClient(ctx *types.APIRequest, s *types.APISchema, namespa
 }
 
 func (p *Factory) TableAdminClient(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.TableAdminClient")
 	if attributes.Table(s) {
 		return newClient(ctx, p.tableClientCfg, s, namespace, false, warningHandler)
 	}
@@ -155,6 +165,7 @@ func (p *Factory) TableAdminClient(ctx *types.APIRequest, s *types.APISchema, na
 }
 
 func (p *Factory) TableClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.TableClientForWatch")
 	if attributes.Table(s) {
 		return newClient(ctx, p.tableWatchClientCfg, s, namespace, p.impersonate, warningHandler)
 	}
@@ -162,6 +173,7 @@ func (p *Factory) TableClientForWatch(ctx *types.APIRequest, s *types.APISchema,
 }
 
 func (p *Factory) TableAdminClientForWatch(ctx *types.APIRequest, s *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	logrus.Debug("steve: client.Factory.TableAdminClientForWatch")
 	if attributes.Table(s) {
 		return newClient(ctx, p.tableWatchClientCfg, s, namespace, false, warningHandler)
 	}
