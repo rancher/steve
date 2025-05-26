@@ -80,7 +80,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, gvk, dbClient, false, true, true)
+		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true)
 		assert.Nil(t, err)
 		assert.NotNil(t, informer.ByOptionsLister)
 		assert.NotNil(t, informer.SharedIndexInformer)
@@ -104,7 +104,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, gvk, dbClient, false, true, true)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewIndexer(), should return an error", test: func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, gvk, dbClient, false, true, true)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewListOptionIndexer(), should return an error", test: func(t *testing.T) {
@@ -191,7 +191,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, gvk, dbClient, false, true, true)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with transform func", test: func(t *testing.T) {
@@ -254,7 +254,7 @@ func TestNewInformer(t *testing.T) {
 		transformFunc := func(input interface{}) (interface{}, error) {
 			return "someoutput", nil
 		}
-		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, transformFunc, gvk, dbClient, false, true, true)
+		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true)
 		assert.Nil(t, err)
 		assert.NotNil(t, informer.ByOptionsLister)
 		assert.NotNil(t, informer.SharedIndexInformer)
@@ -262,10 +262,10 @@ func TestNewInformer(t *testing.T) {
 
 		// we can't test func == func, so instead we check if the output was as expected
 		input := "someinput"
-		ouput, err := mockInformer.transformFunc(input)
+		output, err := mockInformer.transformFunc(input)
 		assert.Nil(t, err)
-		outputStr, ok := ouput.(string)
-		assert.True(t, ok, "ouput from transform was expected to be a string")
+		outputStr, ok := output.(string)
+		assert.True(t, ok, "output from transform was expected to be a string")
 		assert.Equal(t, "someoutput", outputStr)
 
 		newInformer = cache.NewSharedIndexInformer
@@ -290,7 +290,7 @@ func TestNewInformer(t *testing.T) {
 		transformFunc := func(input interface{}) (interface{}, error) {
 			return "someoutput", nil
 		}
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, transformFunc, gvk, dbClient, false, true, true)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true)
 		assert.Error(t, err)
 		newInformer = cache.NewSharedIndexInformer
 	}})

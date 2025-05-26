@@ -43,6 +43,7 @@ type Store struct {
 	gvk                schema.GroupVersionKind
 	name               string
 	externalUpdateInfo *sqltypes.ExternalGVKUpdates
+	selfUpdateInfo     *sqltypes.ExternalGVKUpdates
 	typ                reflect.Type
 	keyFunc            cache.KeyFunc
 	shouldEncrypt      bool
@@ -67,12 +68,13 @@ type Store struct {
 var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
+func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
 	s := &Store{
 		ctx:                ctx,
 		name:               name,
 		gvk:                gvk,
 		externalUpdateInfo: externalUpdateInfo,
+		selfUpdateInfo:     selfUpdateInfo,
 		typ:                reflect.TypeOf(example),
 		Client:             c,
 		keyFunc:            keyFunc,
@@ -126,19 +128,27 @@ func (s *Store) upsert(key string, obj any) error {
 	if err != nil {
 		return err
 	}
-	if s.externalUpdateInfo == nil {
-		return nil
-	}
-	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-		if s.externalUpdateInfo != nil {
+	if s.externalUpdateInfo != nil {
+		s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
 			err = s.updateExternalInfo(tx, key, s.externalUpdateInfo)
 			if err != nil {
 				// Just report and ignore errors
 				logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
 			}
-		}
-		return nil
-	})
+			return nil
+		})
+	}
+	if s.selfUpdateInfo != nil {
+		s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+			err = s.updateExternalInfo(tx, key, s.selfUpdateInfo)
+			if err != nil {
+				// Just report and ignore errors
+				logrus.Errorf("Error updating external info %v: %s", s.selfUpdateInfo, err)
+			}
+			return nil
+		})
+	}
+	return nil
 }
 
 func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
