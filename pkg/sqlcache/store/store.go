@@ -44,6 +44,7 @@ type Store struct {
 	gvk                schema.GroupVersionKind
 	name               string
 	externalUpdateInfo *sqltypes.ExternalGVKUpdates
+	selfUpdateInfo     *sqltypes.ExternalGVKUpdates
 	typ                reflect.Type
 	keyFunc            cache.KeyFunc
 	shouldEncrypt      bool
@@ -72,12 +73,13 @@ type Store struct {
 var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
+func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
 	s := &Store{
 		ctx:                ctx,
 		name:               name,
 		gvk:                gvk,
 		externalUpdateInfo: externalUpdateInfo,
+		selfUpdateInfo:     selfUpdateInfo,
 		typ:                reflect.TypeOf(example),
 		Client:             c,
 		keyFunc:            keyFunc,
