@@ -1066,7 +1066,7 @@ func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
 
-func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient) *Store {
+func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient, updateExternal bool, updateSelf bool) *Store {
 	name := "testStoreObject"
 	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
 	namespaceProjectLabelDep := sqltypes.ExternalLabelDependency{
@@ -1088,7 +1088,15 @@ func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient) *Store
 		ExternalDependencies:      []sqltypes.ExternalDependency{namespaceNonLabelDep},
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
 	}
-	store, err := NewStore(context.Background(), testStoreObject{}, testStoreKeyFunc, client, false, gvk, name, &updateInfo)
+	externalUpdateInfo := &updateInfo
+	selfUpdateInfo := &updateInfo
+	if !updateExternal {
+		externalUpdateInfo = nil
+	}
+	if !updateSelf {
+		selfUpdateInfo = nil
+	}
+	store, err := NewStore(context.Background(), testStoreObject{}, testStoreKeyFunc, client, false, gvk, name, externalUpdateInfo, selfUpdateInfo)
 	if err != nil {
 		t.Error(err)
 	}
