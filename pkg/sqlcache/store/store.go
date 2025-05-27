@@ -138,18 +138,18 @@ func (s *Store) checkUpdateExternalInfo(key string) error {
 
 func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
-		rawGetStmt := fmt.Sprintf(`select distinct lt1.key, ex2."%s"
- from "%s_fields" f left outer join "%s_labels" lt1 join "%s_fields" ex2
- where ex2.key = ?
-      and f."%s" != ex2."%s"
-      and lt1.label = ? and lt1.value = ex2."%s"`,
+		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
+  LEFT OUTER JOIN "%s_labels" lt1 ON f.key = lt1.key
+  JOIN "%s_fields" ex2 ON lt1.value = ex2."%s"
+ WHERE lt1.label = ? AND f."%s" != ex2."%s"`,
 			labelDep.TargetFinalFieldName,
 			labelDep.SourceGVK,
 			labelDep.SourceGVK,
 			labelDep.TargetGVK,
+			labelDep.TargetKeyFieldName,
 			labelDep.TargetFinalFieldName,
 			labelDep.TargetFinalFieldName,
-			labelDep.TargetKeyFieldName)
+		)
 		getStmt := s.Prepare(rawGetStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, key, labelDep.SourceLabelName)
 		if err != nil {
@@ -178,18 +178,16 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		}
 	}
 	for _, nonLabelDep := range externalUpdateInfo.ExternalDependencies {
-		rawGetStmt := fmt.Sprintf(`select f.key, ex2."%s"
- from "%s_fields" f join "%s_fields" ex2
- where ex2.key = ?
-      and f."%s" != ex2."%s"
-      and f."%s" = ex2."%s"`,
+		rawGetStmt := fmt.Sprintf(`SELECT f.key, ex2."%s"
+ FROM "%s_fields" f JOIN "%s_fields" ex2 ON f."%s" = ex2."%s"
+ WHERE f."%s" != ex2."%s"`,
 			nonLabelDep.TargetFinalFieldName,
 			nonLabelDep.SourceGVK,
 			nonLabelDep.TargetGVK,
-			nonLabelDep.TargetFinalFieldName,
-			nonLabelDep.TargetFinalFieldName,
 			nonLabelDep.SourceFieldName,
-			nonLabelDep.TargetKeyFieldName)
+			nonLabelDep.TargetKeyFieldName,
+			nonLabelDep.TargetFinalFieldName,
+			nonLabelDep.TargetFinalFieldName)
 		// TODO: Try to fold the two blocks together
 
 		getStmt := s.Prepare(rawGetStmt)
