@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
@@ -114,6 +115,10 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	return s, nil
 }
 
+func isDBError(e error) bool {
+	return strings.Contains(e.Error(), "SQL logic error: no such table:")
+}
+
 /* Core methods */
 // upsert saves an obj with its key, or updates key with obj if it exists in this Store
 func (s *Store) upsert(key string, obj any) error {
@@ -128,25 +133,17 @@ func (s *Store) upsert(key string, obj any) error {
 	if err != nil {
 		return err
 	}
-	if s.externalUpdateInfo != nil {
-		s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-			err = s.updateExternalInfo(tx, key, s.externalUpdateInfo)
-			if err != nil {
-				// Just report and ignore errors
-				logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
-			}
-			return nil
-		})
-	}
-	if s.selfUpdateInfo != nil {
-		s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-			err = s.updateExternalInfo(tx, key, s.selfUpdateInfo)
-			if err != nil {
-				// Just report and ignore errors
-				logrus.Errorf("Error updating external info %v: %s", s.selfUpdateInfo, err)
-			}
-			return nil
-		})
+	for _, updateBlock := range []*sqltypes.ExternalGVKUpdates{s.externalUpdateInfo, s.selfUpdateInfo} {
+		if updateBlock != nil {
+			s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+				err = s.updateExternalInfo(tx, key, updateBlock)
+				if err != nil && !isDBError(err) {
+					// Just report and ignore errors
+					logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
+				}
+				return nil
+			})
+		}
 	}
 	return nil
 }
@@ -168,7 +165,9 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		getStmt := s.Prepare(rawGetStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, key, labelDep.SourceLabelName)
 		if err != nil {
-			logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			if !isDBError(err) {
+				logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			}
 			continue
 		}
 		result, err := s.ReadStrings2(rows)
@@ -208,7 +207,9 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		getStmt := s.Prepare(rawGetStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, key, nonLabelDep.SourceFieldName)
 		if err != nil {
-			logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			if !isDBError(err) {
+				logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			}
 			continue
 		}
 		result, err := s.ReadStrings2(rows)
