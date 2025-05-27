@@ -784,11 +784,10 @@ func TestAddWithSelfUpdates(t *testing.T) {
 					t.Fail()
 				}
 			}).Times(2)
-		rawStmt := `select distinct lt1.key, ex2."spec.clusterName"
-         from "_v1_Namespace_fields" f left outer join "_v1_Namespace_labels" lt1 join "management.cattle.io_v3_Project_fields" ex2
-         where ex2.key = ?
-              and f."spec.clusterName" != ex2."spec.clusterName"
-              and lt1.label = ? and lt1.value = ex2."metadata.name"`
+		rawStmt := `SELECT DISTINCT f.key, ex2."spec.clusterName" FROM "_v1_Namespace_fields" f
+  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
+  JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
+  WHERE lt1.label = ? AND f."spec.clusterName" != ex2."spec.clusterName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		results1 := []any{testObject.Id, "field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
@@ -798,11 +797,9 @@ func TestAddWithSelfUpdates(t *testing.T) {
 		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 		stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
 
-		rawStmt3 := `select f.key, ex2."spec.projectName"
-         from "_v1_Pods_fields" f join "provisioner.cattle.io_v3_Cluster_fields" ex2
-         where ex2.key = ?
-              and f."spec.projectName" != ex2."spec.projectName"
-              and f."field.cattle.io/fixer" = ex2."metadata.name"`
+		rawStmt3 := `SELECT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
+  JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
+  WHERE f."spec.projectName" != ex2."spec.projectName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 		results2 := []any{testObject.Id, "field.cattle.io/fixer"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
@@ -838,16 +835,13 @@ func TestAddWithBothUpdates(t *testing.T) {
 		stmts := NewMockStmt(gomock.NewController(t))
 		store := SetupStoreWithExternalDependencies(t, c, true, true)
 
-		rawStmt := `select distinct lt1.key, ex2."spec.clusterName"
-         from "_v1_Namespace_fields" f left outer join "_v1_Namespace_labels" lt1 join "management.cattle.io_v3_Project_fields" ex2
-         where ex2.key = ?
-              and f."spec.clusterName" != ex2."spec.clusterName"
-              and lt1.label = ? and lt1.value = ex2."metadata.name"`
-		rawStmt3 := `select f.key, ex2."spec.projectName"
-         from "_v1_Pods_fields" f join "provisioner.cattle.io_v3_Cluster_fields" ex2
-         where ex2.key = ?
-              and f."spec.projectName" != ex2."spec.projectName"
-              and f."field.cattle.io/fixer" = ex2."metadata.name"`
+		rawStmt := `SELECT DISTINCT f.key, ex2."spec.clusterName" FROM "_v1_Namespace_fields" f
+  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
+  JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
+  WHERE lt1.label = ? AND f."spec.clusterName" != ex2."spec.clusterName"`
+		rawStmt3 := `SELECT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
+  JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
+  WHERE f."spec.projectName" != ex2."spec.projectName"`
 
 		c.EXPECT().Upsert(txC, store.upsertStmt, "testStoreObject", testObject, store.shouldEncrypt).Return(nil)
 		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
