@@ -725,10 +725,10 @@ func TestAddWithExternalUpdates(t *testing.T) {
 					t.Fail()
 				}
 			}).Times(2)
-		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
+		rawStmt := `SELECT DISTINCT f.key, ex2."spec.clusterName" FROM "_v1_Namespace_fields" f
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
   JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-  WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
+  WHERE lt1.label = ? AND f."spec.clusterName" != ex2."spec.clusterName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		results1 := []any{"field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
