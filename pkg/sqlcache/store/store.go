@@ -126,6 +126,38 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 
 func isDBError(e error) bool {
 	return strings.Contains(e.Error(), "SQL logic error: no such table:")
+<<<<<<< HEAD
+=======
+}
+
+/* Core methods */
+// upsert saves an obj with its key, or updates key with obj if it exists in this Store
+func (s *Store) upsert(key string, obj any) error {
+	err := s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
+		if err != nil {
+			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
+		}
+
+		return s.runAfterUpsert(key, obj, tx)
+	})
+	if err != nil {
+		return err
+	}
+	for _, updateBlock := range []*sqltypes.ExternalGVKUpdates{s.externalUpdateInfo, s.selfUpdateInfo} {
+		if updateBlock != nil {
+			s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+				err = s.updateExternalInfo(tx, key, updateBlock)
+				if err != nil && !isDBError(err) {
+					// Just report and ignore errors
+					logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
+				}
+				return nil
+			})
+		}
+	}
+	return nil
+>>>>>>> b743d77 (Stop emitting errors when joining tables if one of the tables doesn't exist.)
 }
 
 func (s *Store) checkUpdateExternalInfo(key string) {
