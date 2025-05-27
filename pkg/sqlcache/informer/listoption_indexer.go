@@ -535,6 +535,12 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 	var err error
 
 	for _, filter := range orFilters.Filters {
+		op := filter.Op
+		if op != sqltypes.Exists && op != sqltypes.NotExists {
+			if len(filter.Matches) == 0 {
+				return "", nil, fmt.Errorf("no target value given for %s %s", smartJoin(filter.Field), op)
+			}
+		}
 		if isLabelFilter(&filter) {
 			index, ok := joinTableIndexByLabelName[filter.Field[2]]
 			if !ok {
@@ -641,11 +647,15 @@ func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
 // KEY ! []  # ,!KEY, => assert KEY doesn't exist
 // KEY in VALUES
 // KEY notin VALUES
+// KEY contains VALUE
 
 func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []any, error) {
 	opString := ""
 	escapeString := ""
 	columnName := toColumnName(filter.Field)
+	if filter.Op == sqltypes.Contains {
+		return l.getFieldArrayFilter(filter, columnName)
+	}
 	if err := l.validateColumn(columnName); err != nil {
 		return "", nil, err
 	}
@@ -702,6 +712,38 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
+func (l *ListOptionIndexer) getFieldArrayFilter(filter sqltypes.Filter, columnName string) (string, []any, error) {
+	if len(filter.Matches) != 1 {
+		return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
+	}
+	indexedRegex := regexp.MustCompile(fmt.Sprintf(`^%s\[\d\]$`, columnName))
+	// Allow for a weird case where we can have both
+	// `fieldName[1]`, `fieldName[2]`... and also bare `fieldName` - check the explicit array first
+	associatedColumnNames := make([]string, 0, len(l.indexedFields))
+	for _, fieldName := range l.indexedFields {
+		if indexedRegex.MatchString(fieldName) {
+			associatedColumnNames = append(associatedColumnNames, fieldName)
+		}
+	}
+	if len(associatedColumnNames) == 0 {
+		return l.getSimpleFieldArrayFilter(filter, columnName)
+	}
+	target := fmt.Sprintf("(f.%s)", strings.Join(associatedColumnNames, ", f."))
+	matches := []any{filter.Matches[0]}
+	clause := fmt.Sprintf(`? IN %s`, target)
+	return clause, matches, nil
+}
+
+func (l *ListOptionIndexer) getSimpleFieldArrayFilter(filter sqltypes.Filter, columnName string) (string, []any, error) {
+	if err := l.validateColumn(columnName); err != nil {
+		return "", nil, err
+	}
+	needle := filter.Matches[0]
+	clause := fmt.Sprintf(`INSTR(CONCAT("|", f."%s", "|"), CONCAT("|", ?, "|")) > 0`, columnName)
+	matches := []any{needle}
+	return clause, matches, nil
+}
+
 func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, dbName string) (string, []any, error) {
 	opString := ""
 	escapeString := ""
@@ -718,6 +760,16 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, db
 		}
 		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s ?%s`, index, index, opString, escapeString)
 		return clause, []any{labelName, formatMatchTargetWithFormatter(filter.Matches[0], matchFmtToUse)}, nil
+
+	case sqltypes.Contains:
+		if len(filter.Matches) != 1 {
+			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
+		}
+		clause := fmt.Sprintf(`lt%d.label = ? AND
+    INSTR(CONCAT("|", lt%d.value, "|"), CONCAT("|", ?, "|")) > 0`,
+			index, index)
+		params := []any{labelName, filter.Matches[0]}
+		return clause, params, nil
 
 	case sqltypes.NotEq:
 		if filter.Partial {
@@ -924,7 +976,7 @@ func extractSubFields(fields string) []string {
 }
 
 func isLabelFilter(f *sqltypes.Filter) bool {
-	return len(f.Field) >= 2 && f.Field[0] == "metadata" && f.Field[1] == "labels"
+	return len(f.Field) == 3 && f.Field[0] == "metadata" && f.Field[1] == "labels"
 }
 
 func hasLabelFilter(filters []sqltypes.OrFilter) bool {
