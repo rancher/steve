@@ -148,6 +148,18 @@ func (s *Store) upsert(key string, obj any) error {
 	return nil
 }
 
+// This function is called in two different conditions:
+// Let's say resource B has a field X that we want to copy into resource A
+// When a B is upserted, we update any A's that depend on it
+// When an A is upserted, we check to see if any B's have that info
+// The `key` argument here can belong to either an A or a B, depending on which resource is being updated.
+// So it's only used in debug messages.
+// The SELECT queries are more generic -- find *all* the instances of A that have a connection to B,
+// ignoring any cases where A.X == B.X, as there's no need to update those.
+//
+// Some code later on in the function verifies that we aren't overwriting a non-empty value
+// with the empty string. I assume this is never desired.
+
 func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
 		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
@@ -163,7 +175,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 			labelDep.TargetFinalFieldName,
 		)
 		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt, key, labelDep.SourceLabelName)
+		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
@@ -181,6 +193,10 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
+			ignoreUpdate, err := s.overrideCheck(labelDep.TargetFinalFieldName, labelDep.SourceGVK, sourceKey, finalTargetValue)
+			if ignoreUpdate || err != nil {
+				continue
+			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
@@ -223,6 +239,10 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
+			ignoreUpdate, err := s.overrideCheck(nonLabelDep.TargetFinalFieldName, nonLabelDep.SourceGVK, sourceKey, finalTargetValue)
+			if ignoreUpdate || err != nil {
+				continue
+			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
@@ -231,10 +251,44 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
 			}
+			logrus.Debugf("QQQ: non-label-Updated %s[%s].%s to %s",
+				nonLabelDep.SourceGVK,
+				sourceKey,
+				nonLabelDep.TargetFinalFieldName,
+				finalTargetValue)
 		}
 	}
 	return nil
 
+}
+
+// If the new value will change a non-empty current value, return [true, error:nil]
+func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetValue string) (bool, error) {
+	rawGetValueStmt := fmt.Sprintf(`SELECT f."%s" FROM  "%s_fields" f WHERE f.key = ?`,
+		finalFieldName, sourceGVK)
+	getValueStmt := s.Prepare(rawGetValueStmt)
+	rows, err := s.QueryForRows(s.ctx, getValueStmt, sourceKey)
+	if err != nil {
+		logrus.Debugf("Checking the field, got error %s", err)
+		return false, err
+	}
+	results, err := s.ReadStrings(rows)
+	if err != nil {
+		logrus.Infof("Checking the field for table %s, key %s, got error %s", sourceGVK, sourceKey, err)
+		return false, err
+	}
+	if len(results) == 1 {
+		currentValue := results[0]
+		if len(currentValue) > 0 && len(finalTargetValue) == 0 {
+			logrus.Debugf("Don't override %s key %s, field %s=%s with an empty string",
+				sourceGVK,
+				sourceKey,
+				finalFieldName,
+				currentValue)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
