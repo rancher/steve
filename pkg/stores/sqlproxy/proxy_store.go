@@ -63,8 +63,6 @@ var (
 	paramCodec  = runtime.NewParameterCodec(paramScheme)
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
 	typeSpecificIndexedFields = map[string][][]string{
-		gvkKey("", "v1", "ConfigMap"): {
-			{"metadata", "labels", "harvesterhci.io/cloud-init-template"}},
 		gvkKey("", "v1", "Event"): {
 			{"_type"},
 			{"involvedObject", "kind"},
@@ -140,7 +138,6 @@ var (
 		gvkKey("cluster.x-k8s.io", "v1beta1", "MachineDeployment"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
-			{"metadata", "labels", "provider.cattle.io"},
 			{"spec", "internal"},
 			{"spec", "displayName"},
 			{"status", "connected"},
@@ -162,7 +159,6 @@ var (
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
 			{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"},
-			{"metadata", "labels", "provider.cattle.io"},
 			{"status", "clusterName"},
 			{"status", "provider"},
 		},
