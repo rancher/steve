@@ -152,8 +152,8 @@ var (
 		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Project"): {
-			{"spec", "displayName"},
 			{"spec", "clusterName"},
+			{"spec", "displayName"},
 		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
 			{"spec", "rules", "host"},
