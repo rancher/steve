@@ -171,9 +171,7 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 		}
 	}
 
-	result.Attributes = map[string]interface{}{
-		"accessSet": access,
-	}
+	accesscontrol.SetAccessSetAttribute(result, access)
 	return result, nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+const accessSetAttribute = "accessSet"
+
 type AccessControl struct {
 	apiserver.SchemaBasedAccess
 }
@@ -25,7 +27,7 @@ func (a *AccessControl) CanDo(apiOp *types.APIRequest, resource, verb, namespace
 		}
 	}
 	group, resource := kv.Split(resource, "/")
-	accessSet := apiOp.Schemas.Attributes["accessSet"].(*AccessSet)
+	accessSet := AccessSetFromAPIRequest(apiOp)
 	if accessSet.Grants(verb, schema.GroupResource{
 		Group:    group,
 		Resource: resource,
@@ -43,4 +45,18 @@ func (a *AccessControl) CanWatch(apiOp *types.APIRequest, schema *types.APISchem
 		}
 	}
 	return a.SchemaBasedAccess.CanWatch(apiOp, schema)
+}
+
+func SetAccessSetAttribute(schemas *types.APISchemas, accessSet *AccessSet) {
+	if schemas.Attributes == nil {
+		schemas.Attributes = map[string]interface{}{}
+	}
+	schemas.Attributes[accessSetAttribute] = accessSet
+}
+
+func AccessSetFromAPIRequest(req *types.APIRequest) *AccessSet {
+	if v, ok := req.Schemas.Attributes[accessSetAttribute]; ok {
+		return v.(*AccessSet)
+	}
+	return nil
 }
