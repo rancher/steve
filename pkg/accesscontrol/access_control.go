@@ -55,6 +55,9 @@ func SetAccessSetAttribute(schemas *types.APISchemas, accessSet *AccessSet) {
 }
 
 func AccessSetFromAPIRequest(req *types.APIRequest) *AccessSet {
+	if req == nil || req.Schemas == nil {
+		return nil
+	}
 	if v, ok := req.Schemas.Attributes[accessSetAttribute]; ok {
 		return v.(*AccessSet)
 	}
