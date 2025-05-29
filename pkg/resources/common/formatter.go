@@ -1,13 +1,18 @@
 package common
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
@@ -154,6 +159,14 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			includeFields(request, unstr)
 			excludeFields(request, unstr)
 			excludeValues(request, unstr)
+
+			u, _ := json.Marshal(unstr)
+			fmt.Println("BEFORE", string(u))
+
+			convertMetadataFields(request, unstr)
+
+			u, _ = json.Marshal(unstr)
+			fmt.Println("AFTER", string(u))
 		}
 
 		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
@@ -205,6 +218,34 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 		for _, f := range fields {
 			fieldParts := strings.Split(f, ".")
 			data.RemoveValue(unstr.Object, fieldParts...)
+		}
+	}
+}
+
+func convertMetadataFields(request *types.APIRequest, unstr *unstructured.Unstructured) {
+	if request.Schema != nil {
+		cols := GetColumnDefinitions(request.Schema)
+		for _, col := range cols {
+			if col.Type == "date" {
+				index := GetIndexValueFromString(col.Field)
+				curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+				if err != nil || !got {
+					return
+				}
+
+				millis, err := strconv.ParseInt(curValue[index].(string), 10, 64)
+				if err != nil {
+					return
+				}
+
+				timestamp := time.Unix(0, millis*int64(time.Millisecond))
+				duration := time.Since(timestamp)
+
+				curValue[index] = duration.String()
+				if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+					return
+				}
+			}
 		}
 	}
 }
