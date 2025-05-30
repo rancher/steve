@@ -2,12 +2,16 @@ package common
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/sirupsen/logrus"
+
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
@@ -19,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 func DefaultTemplate(clientGetter proxy.ClientGetter,
@@ -157,6 +162,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			includeFields(request, unstr)
 			excludeFields(request, unstr)
 			excludeValues(request, unstr)
+			convertMetadataFields(request, unstr)
 		}
 
 		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
@@ -208,6 +214,46 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 		for _, f := range fields {
 			fieldParts := strings.Split(f, ".")
 			data.RemoveValue(unstr.Object, fieldParts...)
+		}
+	}
+}
+
+func convertMetadataFields(request *types.APIRequest, unstr *unstructured.Unstructured) {
+	if request.Schema != nil {
+		cols := GetColumnDefinitions(request.Schema)
+		for _, col := range cols {
+			if col.Type == "date" {
+				index := GetIndexValueFromString(col.Field)
+				if index == -1 {
+					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)
+					return
+				}
+
+				curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+				if err != nil {
+					logrus.Errorf("failed to get metadata.fields slice from unstr.Object: %s", err.Error())
+				}
+
+				if !got {
+					logrus.Debugf("couldn't find metadata.fields at unstr.Object")
+					return
+				}
+
+				millis, err := strconv.ParseInt(curValue[index].(string), 10, 64)
+				if err != nil {
+					logrus.Errorf("failed to convert timestamp value: %s", err.Error())
+					return
+				}
+
+				timestamp := time.Unix(0, millis*int64(time.Millisecond))
+				dur := time.Since(timestamp)
+
+				curValue[index] = duration.HumanDuration(dur)
+				if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+					logrus.Errorf("failed to set value back to metadata.fields slice: %s", err.Error())
+					return
+				}
+			}
 		}
 	}
 }
