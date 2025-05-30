@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
+	common "github.com/rancher/steve/pkg/resources/common"
 	factory "github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -31,6 +32,7 @@ import (
 type MockCache struct {
 	ctrl     *gomock.Controller
 	recorder *MockCacheMockRecorder
+	isgomock struct{}
 }
 
 // MockCacheMockRecorder is the mock recorder for MockCache.
@@ -51,9 +53,9 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockCache) ListByOptions(arg0 context.Context, arg1 *sqltypes.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockCache) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListByOptions", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ListByOptions", ctx, lo, partitions, namespace)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(string)
@@ -62,15 +64,16 @@ func (m *MockCache) ListByOptions(arg0 context.Context, arg1 *sqltypes.ListOptio
 }
 
 // ListByOptions indicates an expected call of ListByOptions.
-func (mr *MockCacheMockRecorder) ListByOptions(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockCacheMockRecorder) ListByOptions(ctx, lo, partitions, namespace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockCache)(nil).ListByOptions), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockCache)(nil).ListByOptions), ctx, lo, partitions, namespace)
 }
 
 // MockClientGetter is a mock of ClientGetter interface.
 type MockClientGetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientGetterMockRecorder
+	isgomock struct{}
 }
 
 // MockClientGetterMockRecorder is the mock recorder for MockClientGetter.
@@ -91,18 +94,18 @@ func (m *MockClientGetter) EXPECT() *MockClientGetterMockRecorder {
 }
 
 // AdminClient mocks base method.
-func (m *MockClientGetter) AdminClient(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string, arg3 rest.WarningHandler) (dynamic.ResourceInterface, error) {
+func (m *MockClientGetter) AdminClient(ctx *types.APIRequest, arg1 *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdminClient", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "AdminClient", ctx, arg1, namespace, warningHandler)
 	ret0, _ := ret[0].(dynamic.ResourceInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AdminClient indicates an expected call of AdminClient.
-func (mr *MockClientGetterMockRecorder) AdminClient(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) AdminClient(ctx, arg1, namespace, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminClient", reflect.TypeOf((*MockClientGetter)(nil).AdminClient), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdminClient", reflect.TypeOf((*MockClientGetter)(nil).AdminClient), ctx, arg1, namespace, warningHandler)
 }
 
 // AdminK8sInterface mocks base method.
@@ -121,33 +124,33 @@ func (mr *MockClientGetterMockRecorder) AdminK8sInterface() *gomock.Call {
 }
 
 // Client mocks base method.
-func (m *MockClientGetter) Client(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string, arg3 rest.WarningHandler) (dynamic.ResourceInterface, error) {
+func (m *MockClientGetter) Client(ctx *types.APIRequest, arg1 *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Client", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Client", ctx, arg1, namespace, warningHandler)
 	ret0, _ := ret[0].(dynamic.ResourceInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Client indicates an expected call of Client.
-func (mr *MockClientGetterMockRecorder) Client(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) Client(ctx, arg1, namespace, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Client", reflect.TypeOf((*MockClientGetter)(nil).Client), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Client", reflect.TypeOf((*MockClientGetter)(nil).Client), ctx, arg1, namespace, warningHandler)
 }
 
 // DynamicClient mocks base method.
-func (m *MockClientGetter) DynamicClient(arg0 *types.APIRequest, arg1 rest.WarningHandler) (dynamic.Interface, error) {
+func (m *MockClientGetter) DynamicClient(ctx *types.APIRequest, warningHandler rest.WarningHandler) (dynamic.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DynamicClient", arg0, arg1)
+	ret := m.ctrl.Call(m, "DynamicClient", ctx, warningHandler)
 	ret0, _ := ret[0].(dynamic.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DynamicClient indicates an expected call of DynamicClient.
-func (mr *MockClientGetterMockRecorder) DynamicClient(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) DynamicClient(ctx, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DynamicClient", reflect.TypeOf((*MockClientGetter)(nil).DynamicClient), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DynamicClient", reflect.TypeOf((*MockClientGetter)(nil).DynamicClient), ctx, warningHandler)
 }
 
 // IsImpersonating mocks base method.
@@ -165,84 +168,85 @@ func (mr *MockClientGetterMockRecorder) IsImpersonating() *gomock.Call {
 }
 
 // K8sInterface mocks base method.
-func (m *MockClientGetter) K8sInterface(arg0 *types.APIRequest) (kubernetes.Interface, error) {
+func (m *MockClientGetter) K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "K8sInterface", arg0)
+	ret := m.ctrl.Call(m, "K8sInterface", ctx)
 	ret0, _ := ret[0].(kubernetes.Interface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // K8sInterface indicates an expected call of K8sInterface.
-func (mr *MockClientGetterMockRecorder) K8sInterface(arg0 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) K8sInterface(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "K8sInterface", reflect.TypeOf((*MockClientGetter)(nil).K8sInterface), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "K8sInterface", reflect.TypeOf((*MockClientGetter)(nil).K8sInterface), ctx)
 }
 
 // TableAdminClient mocks base method.
-func (m *MockClientGetter) TableAdminClient(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string, arg3 rest.WarningHandler) (dynamic.ResourceInterface, error) {
+func (m *MockClientGetter) TableAdminClient(ctx *types.APIRequest, arg1 *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TableAdminClient", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "TableAdminClient", ctx, arg1, namespace, warningHandler)
 	ret0, _ := ret[0].(dynamic.ResourceInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // TableAdminClient indicates an expected call of TableAdminClient.
-func (mr *MockClientGetterMockRecorder) TableAdminClient(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) TableAdminClient(ctx, arg1, namespace, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableAdminClient", reflect.TypeOf((*MockClientGetter)(nil).TableAdminClient), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableAdminClient", reflect.TypeOf((*MockClientGetter)(nil).TableAdminClient), ctx, arg1, namespace, warningHandler)
 }
 
 // TableAdminClientForWatch mocks base method.
-func (m *MockClientGetter) TableAdminClientForWatch(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string, arg3 rest.WarningHandler) (dynamic.ResourceInterface, error) {
+func (m *MockClientGetter) TableAdminClientForWatch(ctx *types.APIRequest, arg1 *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TableAdminClientForWatch", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "TableAdminClientForWatch", ctx, arg1, namespace, warningHandler)
 	ret0, _ := ret[0].(dynamic.ResourceInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // TableAdminClientForWatch indicates an expected call of TableAdminClientForWatch.
-func (mr *MockClientGetterMockRecorder) TableAdminClientForWatch(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) TableAdminClientForWatch(ctx, arg1, namespace, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableAdminClientForWatch", reflect.TypeOf((*MockClientGetter)(nil).TableAdminClientForWatch), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableAdminClientForWatch", reflect.TypeOf((*MockClientGetter)(nil).TableAdminClientForWatch), ctx, arg1, namespace, warningHandler)
 }
 
 // TableClient mocks base method.
-func (m *MockClientGetter) TableClient(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string, arg3 rest.WarningHandler) (dynamic.ResourceInterface, error) {
+func (m *MockClientGetter) TableClient(ctx *types.APIRequest, arg1 *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TableClient", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "TableClient", ctx, arg1, namespace, warningHandler)
 	ret0, _ := ret[0].(dynamic.ResourceInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // TableClient indicates an expected call of TableClient.
-func (mr *MockClientGetterMockRecorder) TableClient(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) TableClient(ctx, arg1, namespace, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableClient", reflect.TypeOf((*MockClientGetter)(nil).TableClient), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableClient", reflect.TypeOf((*MockClientGetter)(nil).TableClient), ctx, arg1, namespace, warningHandler)
 }
 
 // TableClientForWatch mocks base method.
-func (m *MockClientGetter) TableClientForWatch(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string, arg3 rest.WarningHandler) (dynamic.ResourceInterface, error) {
+func (m *MockClientGetter) TableClientForWatch(ctx *types.APIRequest, arg1 *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TableClientForWatch", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "TableClientForWatch", ctx, arg1, namespace, warningHandler)
 	ret0, _ := ret[0].(dynamic.ResourceInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // TableClientForWatch indicates an expected call of TableClientForWatch.
-func (mr *MockClientGetterMockRecorder) TableClientForWatch(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientGetterMockRecorder) TableClientForWatch(ctx, arg1, namespace, warningHandler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableClientForWatch", reflect.TypeOf((*MockClientGetter)(nil).TableClientForWatch), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TableClientForWatch", reflect.TypeOf((*MockClientGetter)(nil).TableClientForWatch), ctx, arg1, namespace, warningHandler)
 }
 
 // MockCacheFactory is a mock of CacheFactory interface.
 type MockCacheFactory struct {
 	ctrl     *gomock.Controller
 	recorder *MockCacheFactoryMockRecorder
+	isgomock struct{}
 }
 
 // MockCacheFactoryMockRecorder is the mock recorder for MockCacheFactory.
@@ -263,18 +267,18 @@ func (m *MockCacheFactory) EXPECT() *MockCacheFactoryMockRecorder {
 }
 
 // CacheFor mocks base method.
-func (m *MockCacheFactory) CacheFor(arg0 context.Context, arg1 [][]string, arg2 cache.TransformFunc, arg3 dynamic.ResourceInterface, arg4 schema.GroupVersionKind, arg5, arg6 bool) (factory.Cache, error) {
+func (m *MockCacheFactory) CacheFor(ctx context.Context, fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced, watchable bool) (factory.Cache, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CacheFor", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret := m.ctrl.Call(m, "CacheFor", ctx, fields, transform, client, gvk, namespaced, watchable)
 	ret0, _ := ret[0].(factory.Cache)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CacheFor indicates an expected call of CacheFor.
-func (mr *MockCacheFactoryMockRecorder) CacheFor(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+func (mr *MockCacheFactoryMockRecorder) CacheFor(ctx, fields, transform, client, gvk, namespaced, watchable any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), ctx, fields, transform, client, gvk, namespaced, watchable)
 }
 
 // Reset mocks base method.
@@ -295,6 +299,7 @@ func (mr *MockCacheFactoryMockRecorder) Reset() *gomock.Call {
 type MockSchemaColumnSetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockSchemaColumnSetterMockRecorder
+	isgomock struct{}
 }
 
 // MockSchemaColumnSetterMockRecorder is the mock recorder for MockSchemaColumnSetter.
@@ -315,23 +320,24 @@ func (m *MockSchemaColumnSetter) EXPECT() *MockSchemaColumnSetterMockRecorder {
 }
 
 // SetColumns mocks base method.
-func (m *MockSchemaColumnSetter) SetColumns(arg0 context.Context, arg1 *types.APISchema) error {
+func (m *MockSchemaColumnSetter) SetColumns(ctx context.Context, arg1 *types.APISchema) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetColumns", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetColumns", ctx, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetColumns indicates an expected call of SetColumns.
-func (mr *MockSchemaColumnSetterMockRecorder) SetColumns(arg0, arg1 any) *gomock.Call {
+func (mr *MockSchemaColumnSetterMockRecorder) SetColumns(ctx, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetColumns", reflect.TypeOf((*MockSchemaColumnSetter)(nil).SetColumns), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetColumns", reflect.TypeOf((*MockSchemaColumnSetter)(nil).SetColumns), ctx, arg1)
 }
 
 // MockRelationshipNotifier is a mock of RelationshipNotifier interface.
 type MockRelationshipNotifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockRelationshipNotifierMockRecorder
+	isgomock struct{}
 }
 
 // MockRelationshipNotifierMockRecorder is the mock recorder for MockRelationshipNotifier.
@@ -352,23 +358,24 @@ func (m *MockRelationshipNotifier) EXPECT() *MockRelationshipNotifierMockRecorde
 }
 
 // OnInboundRelationshipChange mocks base method.
-func (m *MockRelationshipNotifier) OnInboundRelationshipChange(arg0 context.Context, arg1 *types.APISchema, arg2 string) <-chan *summary.Relationship {
+func (m *MockRelationshipNotifier) OnInboundRelationshipChange(ctx context.Context, arg1 *types.APISchema, namespace string) <-chan *summary.Relationship {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OnInboundRelationshipChange", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "OnInboundRelationshipChange", ctx, arg1, namespace)
 	ret0, _ := ret[0].(<-chan *summary.Relationship)
 	return ret0
 }
 
 // OnInboundRelationshipChange indicates an expected call of OnInboundRelationshipChange.
-func (mr *MockRelationshipNotifierMockRecorder) OnInboundRelationshipChange(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockRelationshipNotifierMockRecorder) OnInboundRelationshipChange(ctx, arg1, namespace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnInboundRelationshipChange", reflect.TypeOf((*MockRelationshipNotifier)(nil).OnInboundRelationshipChange), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnInboundRelationshipChange", reflect.TypeOf((*MockRelationshipNotifier)(nil).OnInboundRelationshipChange), ctx, arg1, namespace)
 }
 
 // MockTransformBuilder is a mock of TransformBuilder interface.
 type MockTransformBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockTransformBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockTransformBuilderMockRecorder is the mock recorder for MockTransformBuilder.
@@ -389,15 +396,15 @@ func (m *MockTransformBuilder) EXPECT() *MockTransformBuilderMockRecorder {
 }
 
 // GetTransformFunc mocks base method.
-func (m *MockTransformBuilder) GetTransformFunc(arg0 schema.GroupVersionKind) cache.TransformFunc {
+func (m *MockTransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition) cache.TransformFunc {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransformFunc", arg0)
+	ret := m.ctrl.Call(m, "GetTransformFunc", gvk, colDefs)
 	ret0, _ := ret[0].(cache.TransformFunc)
 	return ret0
 }
 
 // GetTransformFunc indicates an expected call of GetTransformFunc.
-func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(arg0 any) *gomock.Call {
+func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(gvk, colDefs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), gvk, colDefs)
 }

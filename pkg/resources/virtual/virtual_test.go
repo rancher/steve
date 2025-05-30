@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/summarycache"
@@ -362,7 +363,7 @@ func TestTransformChain(t *testing.T) {
 			if test.name == "a non-ready cluster" {
 				fmt.Printf("Stop here")
 			}
-			output, err := tb.GetTransformFunc(gvk)(test.input)
+			output, err := tb.GetTransformFunc(gvk, []rescommon.ColumnDefinition{})(test.input)
 			require.Equal(t, test.wantOutput, output)
 			if test.wantError {
 				require.Error(t, err)
