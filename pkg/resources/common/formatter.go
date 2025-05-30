@@ -92,9 +92,12 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 		if !ok {
 			return
 		}
-		accessSet := asl.AccessFor(userInfo)
+		accessSet := accesscontrol.AccessSetFromAPIRequest(request)
 		if accessSet == nil {
-			return
+			accessSet = asl.AccessFor(userInfo)
+			if accessSet == nil {
+				return
+			}
 		}
 		hasUpdate := accessSet.Grants("update", gvr.GroupResource(), resource.APIObject.Namespace(), resource.APIObject.Name())
 		hasDelete := accessSet.Grants("delete", gvr.GroupResource(), resource.APIObject.Namespace(), resource.APIObject.Name())
