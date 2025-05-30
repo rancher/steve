@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func testStoreKeyFunc(obj interface{}) (string, error) {
@@ -693,7 +694,9 @@ func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
 	return dbC, txC
 }
 func SetupStore(t *testing.T, client *MockClient, shouldEncrypt bool) *Store {
-	store, err := NewStore(context.Background(), testStoreObject{}, testStoreKeyFunc, client, shouldEncrypt, "testStoreObject")
+	name := "testStoreObject"
+	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
+	store, err := NewStore(context.Background(), testStoreObject{}, testStoreKeyFunc, client, shouldEncrypt, gvk, name, nil)
 	if err != nil {
 		t.Error(err)
 	}
