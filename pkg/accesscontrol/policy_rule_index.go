@@ -182,28 +182,28 @@ func (p *policyRuleIndex) getRoleBindings(subjectName string) []*rbacv1.RoleBind
 // getRoleRefs gathers rules from roles granted to a given subject through RoleBindings and ClusterRoleBindings
 func (p *policyRuleIndex) getRoleRefs(subjectName string) subjectGrants {
 	crbs := p.getClusterRoleBindings(subjectName)
-	clusterRoleBindings := make([]roleRef, 0, len(crbs))
-	for _, crb := range crbs {
+	clusterRoleBindings := make([]roleRef, len(crbs))
+	for x, crb := range crbs {
 		rules, resourceVersion := p.getRules(All, crb.RoleRef)
-		clusterRoleBindings = append(clusterRoleBindings, roleRef{
+		clusterRoleBindings[x] = roleRef{
 			roleName:        crb.RoleRef.Name,
 			resourceVersion: resourceVersion,
 			rules:           rules,
 			kind:            clusterRoleKind,
-		})
+		}
 	}
 
 	rbs := p.getRoleBindings(subjectName)
-	roleBindings := make([]roleRef, 0, len(rbs))
-	for _, rb := range rbs {
+	roleBindings := make([]roleRef, len(rbs))
+	for x, rb := range rbs {
 		rules, resourceVersion := p.getRules(rb.Namespace, rb.RoleRef)
-		roleBindings = append(roleBindings, roleRef{
+		roleBindings[x] = roleRef{
 			roleName:        rb.RoleRef.Name,
 			namespace:       rb.Namespace,
 			resourceVersion: resourceVersion,
 			rules:           rules,
 			kind:            roleKind,
-		})
+		}
 	}
 
 	return subjectGrants{
