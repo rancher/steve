@@ -56,7 +56,7 @@ type Store struct {
 
 	afterAdd    []func(key string, obj any, tx transaction.Client) error
 	afterUpdate []func(key string, obj any, tx transaction.Client) error
-	afterDelete []func(key string, tx transaction.Client) error
+	afterDelete []func(key string, obj any, tx transaction.Client) error
 }
 
 // Test that Store implements cache.Indexer
@@ -74,6 +74,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 		afterAdd:      []func(key string, obj any, tx transaction.Client) error{},
 		afterUpdate:   []func(key string, obj any, tx transaction.Client) error{},
 		afterDelete:   []func(key string, tx transaction.Client) error{},
+		afterDelete:    []func(key string, obj any, tx transaction.Client) error{},
 	}
 
 	dbName := db.Sanitize(s.name)
@@ -110,14 +111,14 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 /* Core methods */
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
-func (s *Store) deleteByKey(key string) error {
+func (s *Store) deleteByKey(key string, obj any) error {
 	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
 		_, err := tx.Stmt(s.deleteStmt).Exec(key)
 		if err != nil {
 			return &db.QueryError{QueryString: s.deleteQuery, Err: err}
 		}
 
-		err = s.runAfterDelete(key, tx)
+		err = s.runAfterDelete(key, obj, tx)
 		if err != nil {
 			return err
 		}
@@ -206,7 +207,7 @@ func (s *Store) Delete(obj any) error {
 	if err != nil {
 		return err
 	}
-	err = s.deleteByKey(key)
+	err = s.deleteByKey(key, obj)
 	if err != nil {
 		log.Errorf("Error in Store.Delete for type %v: %v", s.name, err)
 		return err
@@ -339,7 +340,7 @@ func (s *Store) RegisterAfterUpdate(f func(key string, obj any, txC transaction.
 }
 
 // RegisterAfterDelete registers a func to be called after each deletion
-func (s *Store) RegisterAfterDelete(f func(key string, txC transaction.Client) error) {
+func (s *Store) RegisterAfterDelete(f func(key string, obj any, txC transaction.Client) error) {
 	s.afterDelete = append(s.afterDelete, f)
 }
 
@@ -366,9 +367,9 @@ func (s *Store) runAfterUpdate(key string, obj any, txC transaction.Client) erro
 }
 
 // runAfterDelete executes functions registered to run after delete event
-func (s *Store) runAfterDelete(key string, txC transaction.Client) error {
+func (s *Store) runAfterDelete(key string, obj any, txC transaction.Client) error {
 	for _, f := range s.afterDelete {
-		err := f(key, txC)
+		err := f(key, obj, txC)
 		if err != nil {
 			return err
 		}

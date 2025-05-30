@@ -226,7 +226,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteIndexFields(key string, _ any, tx transaction.Client) error {
 	args := []any{key}
 
 	_, err := tx.Stmt(l.deleteFieldStmt).Exec(args...)
@@ -236,7 +236,7 @@ func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.Client)
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteLabels(key string, _ any, tx transaction.Client) error {
 	_, err := tx.Stmt(l.deleteLabelsStmt).Exec(key)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
