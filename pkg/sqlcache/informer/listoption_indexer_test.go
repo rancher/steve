@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+	watch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -88,9 +90,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		// create field table
@@ -156,9 +158,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
@@ -188,9 +190,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -228,9 +230,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -272,9 +274,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(2)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(2)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -1815,4 +1817,115 @@ func TestGetField(t *testing.T) {
 			require.Equal(t, test.expectedResult, result)
 		})
 	}
+}
+
+func TestWatchMany(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	loi, err := makeListOptionIndexer(ctx, [][]string{{"metadata", "somefield"}})
+	assert.NoError(t, err)
+
+	startWatcher := func(ctx context.Context) (chan watch.Event, chan error) {
+		errCh := make(chan error, 1)
+		eventsCh := make(chan watch.Event, 100)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{}, eventsCh)
+			errCh <- watchErr
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	waitStopWatcher := func(errCh chan error) error {
+		select {
+		case <-time.After(time.Second * 5):
+			return fmt.Errorf("not finished in time")
+		case err := <-errCh:
+			return err
+		}
+	}
+
+	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
+		timer := time.NewTimer(time.Millisecond * 50)
+		var events []watch.Event
+		for {
+			select {
+			case <-timer.C:
+				return events
+			case ev := <-eventsCh:
+				events = append(events, ev)
+			}
+		}
+	}
+	watcher1, errCh1 := startWatcher(ctx)
+	events := receiveEvents(watcher1)
+	assert.Len(t, events, 0)
+
+	foo := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "foo",
+			},
+		},
+	}
+	fooUpdated := foo.DeepCopy()
+	fooUpdated.SetLabels(map[string]string{
+		"hello": "world",
+	})
+
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+
+	events = receiveEvents(watcher1)
+	assert.Equal(t, []watch.Event{{Type: watch.Added, Object: foo}}, events)
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	watcher2, errCh2 := startWatcher(ctx2)
+
+	err = loi.Update(fooUpdated)
+	assert.NoError(t, err)
+
+	events = receiveEvents(watcher1)
+	assert.Equal(t, []watch.Event{{Type: watch.Modified, Object: fooUpdated}}, events)
+
+	events = receiveEvents(watcher2)
+	assert.Equal(t, []watch.Event{{Type: watch.Modified, Object: fooUpdated}}, events)
+
+	watcher3, errCh3 := startWatcher(ctx)
+
+	cancel2()
+	err = waitStopWatcher(errCh2)
+	assert.NoError(t, err)
+
+	err = loi.Delete(fooUpdated)
+	assert.NoError(t, err)
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	err = loi.Update(fooUpdated)
+	assert.NoError(t, err)
+
+	events = receiveEvents(watcher3)
+	assert.Equal(t, []watch.Event{
+		{Type: watch.Deleted, Object: fooUpdated},
+		{Type: watch.Added, Object: foo},
+		{Type: watch.Modified, Object: fooUpdated},
+	}, events)
+
+	// Verify cancelled watcher don't receive anything anymore
+	events = receiveEvents(watcher2)
+	assert.Len(t, events, 0)
+
+	events = receiveEvents(watcher1)
+	assert.Equal(t, []watch.Event{
+		{Type: watch.Deleted, Object: fooUpdated},
+		{Type: watch.Added, Object: foo},
+		{Type: watch.Modified, Object: fooUpdated},
+	}, events)
+
+	cancel()
+	err = waitStopWatcher(errCh1)
+	assert.NoError(t, err)
+
+	err = waitStopWatcher(errCh3)
+	assert.NoError(t, err)
 }
