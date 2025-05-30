@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/sirupsen/logrus"
 
 	"github.com/rancher/steve/pkg/schema"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
@@ -220,13 +221,24 @@ func convertMetadataFields(request *types.APIRequest, unstr *unstructured.Unstru
 		for _, col := range cols {
 			if col.Type == "date" {
 				index := GetIndexValueFromString(col.Field)
+				if index == -1 {
+					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)
+					return
+				}
+
 				curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
-				if err != nil || !got {
+				if err != nil {
+					logrus.Errorf("failed to get metadata.fields slice from unstr.Object: %s", err.Error())
+				}
+
+				if !got {
+					logrus.Debugf("couldn't find metadata.fields at unstr.Object")
 					return
 				}
 
 				millis, err := strconv.ParseInt(curValue[index].(string), 10, 64)
 				if err != nil {
+					logrus.Errorf("failed to convert timestamp value: %s", err.Error())
 					return
 				}
 
@@ -235,6 +247,7 @@ func convertMetadataFields(request *types.APIRequest, unstr *unstructured.Unstru
 
 				curValue[index] = duration.HumanDuration(dur)
 				if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+					logrus.Errorf("failed to set value back to metadata.fields slice: %s", err.Error())
 					return
 				}
 			}

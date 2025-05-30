@@ -44,6 +44,10 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		if col.Type == "date" {
 			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 				index := rescommon.GetIndexValueFromString(col.Field)
+				if index == -1 {
+					return nil, fmt.Errorf("field index not found at column.Field struct variable: %s", col.Field)
+				}
+
 				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
 				if !got {
 					return obj, nil
