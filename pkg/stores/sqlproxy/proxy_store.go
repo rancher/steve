@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,6 +24,7 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -32,10 +32,12 @@ import (
 
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
@@ -738,27 +740,51 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		return nil, 0, "", err
 	}
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
-	client, err := s.clientGetter.TableAdminClient(apiOp, schema, "", &buffer)
+	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
 	if err != nil {
 		return nil, 0, "", err
 	}
-	gvk := attributes.GVK(schema)
-	fields := getFieldsFromSchema(schema)
+	gvk := attributes.GVK(apiSchema)
+	fields := getFieldsFromSchema(apiSchema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	attrs := attributes.GVK(schema)
-	ns := attributes.Namespaced(schema)
-	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(schema))
+	attrs := attributes.GVK(apiSchema)
+	ns := attributes.Namespaced(apiSchema)
+	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(apiSchema))
 	if err != nil {
 		return nil, 0, "", err
+	}
+	if gvk.Group == "ext.cattle.io" && gvk.Kind == "Token" {
+		// TODO: Check AccessSetAuthorizer
+		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
+		if accessSet == nil || !accessSet.Grants("list", schema.GroupResource{
+			Resource: "*",
+		}, "", "") {
+			// restrict access
+			user, ok := request.UserFrom(apiOp.Request.Context())
+			if !ok {
+				logrus.Debugf("Failed to get user info")
+			} else {
+				username := user.GetName()
+				opts.Filters = append(opts.Filters, sqltypes.OrFilter{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "labels", "cattle.io/userId"},
+							Matches: []string{username},
+							Op:      sqltypes.Eq,
+						},
+					},
+				})
+			}
+		}
 	}
 
 	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
