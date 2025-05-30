@@ -292,7 +292,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterAdd(arg0 any) *gomock.Call {
 }
 
 // RegisterAfterDelete mocks base method.
-func (m *MockStore) RegisterAfterDelete(arg0 func(string, transaction.Client) error) {
+func (m *MockStore) RegisterAfterDelete(arg0 func(string, any, transaction.Client) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDelete", arg0)
 }
