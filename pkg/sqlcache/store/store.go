@@ -74,17 +74,17 @@ var _ cache.Store = (*Store)(nil)
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
 func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
 	s := &Store{
-		ctx:            ctx,
-		name:           name,
+		ctx:                ctx,
+		name:               name,
 		gvk:                gvk,
 		externalUpdateInfo: externalUpdateInfo,
-		typ:            reflect.TypeOf(example),
-		Client:         c,
-		keyFunc:        keyFunc,
-		shouldEncrypt:  shouldEncrypt,
-		afterAdd:       []func(key string, obj any, tx transaction.Client) error{},
-		afterUpdate:    []func(key string, obj any, tx transaction.Client) error{},
-		afterDelete:    []func(key string, obj any, tx transaction.Client) error{},
+		typ:                reflect.TypeOf(example),
+		Client:             c,
+		keyFunc:            keyFunc,
+		shouldEncrypt:      shouldEncrypt,
+		afterAdd:           []func(key string, obj any, tx transaction.Client) error{},
+		afterUpdate:        []func(key string, obj any, tx transaction.Client) error{},
+		afterDelete:        []func(key string, obj any, tx transaction.Client) error{},
 		afterDeleteAll: []func(tx transaction.Client) error{},
 	}
 
