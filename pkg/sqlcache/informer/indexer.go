@@ -73,6 +73,7 @@ type Store interface {
 	RegisterAfterAdd(f func(key string, obj any, tx transaction.Client) error)
 	RegisterAfterUpdate(f func(key string, obj any, tx transaction.Client) error)
 	RegisterAfterDelete(f func(key string, obj any, tx transaction.Client) error)
+	RegisterAfterDeleteAll(f func(tx transaction.Client) error)
 	GetShouldEncrypt() bool
 	GetType() reflect.Type
 }
