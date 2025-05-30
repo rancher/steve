@@ -9,8 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -251,6 +249,8 @@ type Store struct {
 	lock             sync.Mutex
 	columnSetter     SchemaColumnSetter
 	transformBuilder TransformBuilder
+
+	watchers *Watchers
 }
 
 type CacheFactoryInitializer func() (CacheFactory, error)
@@ -268,6 +268,7 @@ func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter Clien
 		notifier:         notifier,
 		columnSetter:     c,
 		transformBuilder: virtual.NewTransformBuilder(scache),
+		watchers:         newWatchers(),
 	}
 
 	if factory == nil {
@@ -477,7 +478,7 @@ func returnErr(err error, c chan watch.Event) {
 // be returned in watch.
 func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, names sets.Set[string]) (chan watch.Event, error) {
 	buffer := &WarningBuffer{}
-	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
+	adminClient, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, "", buffer)
 	if err != nil {
 		return nil, err
 	}
@@ -518,17 +519,44 @@ func (s *Store) WatchNames(apiOp *types.APIRequest, schema *types.APISchema, w t
 // Watch returns a channel of events for a list or resource.
 func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan watch.Event, error) {
 	buffer := &WarningBuffer{}
-	client, err := s.clientGetter.TableClientForWatch(apiOp, schema, apiOp.Namespace, buffer)
+	client, err := s.clientGetter.TableAdminClientForWatch(apiOp, schema, "", buffer)
 	if err != nil {
 		return nil, err
 	}
 	return s.watch(apiOp, schema, w, client)
 }
 
+type Watchers struct {
+	watchers map[string]struct{}
+}
+
+func newWatchers() *Watchers {
+	return &Watchers{
+		watchers: make(map[string]struct{}),
+	}
+}
+
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	result := make(chan watch.Event)
+	// warnings from inside the informer are discarded
+	gvk := attributes.GVK(schema)
+	fields := getFieldsFromSchema(schema)
+	fields = append(fields, getFieldForGVK(gvk)...)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
+	tableClient := &tablelistconvert.Client{ResourceInterface: client}
+	attrs := attributes.GVK(schema)
+	ns := attributes.Namespaced(schema)
+	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(schema))
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(chan watch.Event, 1000)
 	go func() {
-		s.listAndWatch(apiOp, client, schema, w, result)
+		ctx := apiOp.Context()
+		err := inf.ByOptionsLister.Watch(ctx, informer.WatchOptions{}, result)
+		if err != nil {
+			logrus.Error(err)
+		}
 		logrus.Debugf("closing watcher for %s", schema.ID)
 		close(result)
 	}()

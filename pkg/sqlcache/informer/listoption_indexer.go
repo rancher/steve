@@ -10,11 +10,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
@@ -27,6 +30,9 @@ type ListOptionIndexer struct {
 
 	namespaced    bool
 	indexedFields []string
+
+	watchersLock sync.RWMutex
+	watchers     map[*watchKey]chan<- watch.Event
 
 	addFieldsQuery         string
 	deleteFieldsByKeyQuery string
@@ -105,13 +111,17 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 		Indexer:       i,
 		namespaced:    namespaced,
 		indexedFields: indexedFields,
+		watchers:      make(map[*watchKey]chan<- watch.Event),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
+	l.RegisterAfterAdd(l.notifyEventAdded)
 	l.RegisterAfterUpdate(l.addIndexFields)
+	l.RegisterAfterUpdate(l.notifyEventModified)
 	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterDelete(l.deleteFieldsByKey)
 	l.RegisterAfterDelete(l.deleteLabelsByKey)
+	l.RegisterAfterDelete(l.notifyEventDeleted)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
@@ -191,7 +201,56 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	return l, nil
 }
 
+func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error {
+	key := l.addWatcher(eventsCh)
+	<-ctx.Done()
+	l.removeWatcher(key)
+	return nil
+}
+
+type watchKey struct {
+	_ bool // ensure watchKey is NOT zero-sized to get unique pointers
+}
+
+func (l *ListOptionIndexer) addWatcher(eventCh chan<- watch.Event) *watchKey {
+	key := new(watchKey)
+	l.watchersLock.Lock()
+	l.watchers[key] = eventCh
+	l.watchersLock.Unlock()
+	return key
+}
+
+func (l *ListOptionIndexer) removeWatcher(key *watchKey) {
+	l.watchersLock.Lock()
+	delete(l.watchers, key)
+	l.watchersLock.Unlock()
+}
+
 /* Core methods */
+
+func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, tx transaction.Client) error {
+	return l.notifyEvent(watch.Added, obj, tx)
+}
+
+func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx transaction.Client) error {
+	return l.notifyEvent(watch.Modified, obj, tx)
+}
+
+func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx transaction.Client) error {
+	return l.notifyEvent(watch.Deleted, obj, tx)
+}
+
+func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, obj any, tx transaction.Client) error {
+	l.watchersLock.RLock()
+	for _, watcher := range l.watchers {
+		watcher <- watch.Event{
+			Type:   eventType,
+			Object: obj.(runtime.Object),
+		}
+	}
+	l.watchersLock.RUnlock()
+	return nil
+}
 
 // addIndexFields saves sortable/filterable fields into tables
 func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.Client) error {
