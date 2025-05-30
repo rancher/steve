@@ -8,6 +8,10 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 )
 
+// GetIndexValueFromString looks for values between [ ].
+// e.g: $.metadata.fields[2], in this case it would return 2
+// In case it doens't find any value between brackets it
+// returns -1
 func GetIndexValueFromString(pathString string) int {
 	index := -1
 	idxStart := strings.Index(pathString, "[")
@@ -22,6 +26,7 @@ func GetIndexValueFromString(pathString string) int {
 	return index
 }
 
+// GetColumnDefinitions returns ColumnDefinitions from an APISchema
 func GetColumnDefinitions(schema *types.APISchema) []ColumnDefinition {
 	columns := attributes.Columns(schema)
 	if columns == nil {
