@@ -762,7 +762,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	if err != nil {
 		return nil, 0, "", err
 	}
-	if gvk.Group == "ext.cattle.io" && gvk.Kind == "Token" {
+	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
 		// TODO: Check AccessSetAuthorizer
 		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
 		if accessSet == nil || !accessSet.Grants("list", schema.GroupResource{
