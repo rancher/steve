@@ -53,7 +53,11 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					return nil, err
 				}
 
-				duration, err := time.ParseDuration(curValue[index].(string))
+				value, cast := curValue[index].(string)
+				if !cast {
+					return nil, fmt.Errorf("could not cast metadata.fields %d to string", index)
+				}
+				duration, err := rescommon.ParseHumanReadableDuration(value)
 				if err != nil {
 					return nil, err
 				}

@@ -1,8 +1,6 @@
 package common
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 func DefaultTemplate(clientGetter proxy.ClientGetter,
@@ -159,14 +158,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			includeFields(request, unstr)
 			excludeFields(request, unstr)
 			excludeValues(request, unstr)
-
-			u, _ := json.Marshal(unstr)
-			fmt.Println("BEFORE", string(u))
-
 			convertMetadataFields(request, unstr)
-
-			u, _ = json.Marshal(unstr)
-			fmt.Println("AFTER", string(u))
 		}
 
 		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
@@ -239,9 +231,9 @@ func convertMetadataFields(request *types.APIRequest, unstr *unstructured.Unstru
 				}
 
 				timestamp := time.Unix(0, millis*int64(time.Millisecond))
-				duration := time.Since(timestamp)
+				dur := time.Since(timestamp)
 
-				curValue[index] = duration.String()
+				curValue[index] = duration.HumanDuration(dur)
 				if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
 					return
 				}
