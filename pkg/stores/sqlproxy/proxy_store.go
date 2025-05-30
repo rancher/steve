@@ -76,7 +76,7 @@ var (
 		},
 		gvkKey("", "v1", "Namespace"): {
 			{"metadata", "labels", "field.cattle.io/projectId"},
-			{"spec", "displayName"},
+			{"spec", "clusterName"},
 		},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
@@ -197,7 +197,7 @@ var (
 		SourceLabelName:      "field.cattle.io/projectId",
 		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
 		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.displayName",
+		TargetFinalFieldName: "spec.clusterName",
 	}
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
 		schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}: &sqltypes.ExternalGVKUpdates{
@@ -778,9 +778,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	attrs := attributes.GVK(apiSchema)
-	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(apiSchema))
+	ns := attributes.Namespaced(schema)
+	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(schema))
 	if err != nil {
 		return nil, 0, "", err
 	}
