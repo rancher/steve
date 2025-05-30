@@ -62,7 +62,7 @@ func TestAdd(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Add with no DB client errors and an afterUpsert function", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with no DB client errors and an afterAdd function", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 
@@ -76,7 +76,7 @@ func TestAdd(t *testing.T) {
 			})
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, tx transaction.Client) error {
+		store.afterAdd = append(store.afterAdd, func(key string, object any, tx transaction.Client) error {
 			count++
 			return nil
 		})
@@ -86,7 +86,7 @@ func TestAdd(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Add with no DB client errors and an afterUpsert function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Add with no DB client errors and an afterAdd function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 
@@ -99,7 +99,7 @@ func TestAdd(t *testing.T) {
 				}
 			})
 
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
+		store.afterAdd = append(store.afterAdd, func(key string, object any, txC transaction.Client) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Add(testObject)
@@ -184,7 +184,7 @@ func TestUpdate(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Update with no DB client errors and an afterUpsert function", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with no DB client errors and an afterUpdate function", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 
@@ -198,7 +198,7 @@ func TestUpdate(t *testing.T) {
 			})
 
 		var count int
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
+		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC transaction.Client) error {
 			count++
 			return nil
 		})
@@ -208,7 +208,7 @@ func TestUpdate(t *testing.T) {
 	},
 	})
 
-	tests = append(tests, testCase{description: "Update with no DB client errors and an afterUpsert function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
+	tests = append(tests, testCase{description: "Update with no DB client errors and an afterUpdate function that returns error", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)
 
@@ -222,7 +222,7 @@ func TestUpdate(t *testing.T) {
 				}
 			})
 
-		store.afterUpsert = append(store.afterUpsert, func(key string, object any, txC transaction.Client) error {
+		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC transaction.Client) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Update(testObject)

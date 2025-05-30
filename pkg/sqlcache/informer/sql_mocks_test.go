@@ -279,6 +279,18 @@ func (mr *MockStoreMockRecorder) ReadStrings(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings", reflect.TypeOf((*MockStore)(nil).ReadStrings), arg0)
 }
 
+// RegisterAfterAdd mocks base method.
+func (m *MockStore) RegisterAfterAdd(arg0 func(string, any, transaction.Client) error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterAfterAdd", arg0)
+}
+
+// RegisterAfterAdd indicates an expected call of RegisterAfterAdd.
+func (mr *MockStoreMockRecorder) RegisterAfterAdd(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterAdd", reflect.TypeOf((*MockStore)(nil).RegisterAfterAdd), arg0)
+}
+
 // RegisterAfterDelete mocks base method.
 func (m *MockStore) RegisterAfterDelete(arg0 func(string, transaction.Client) error) {
 	m.ctrl.T.Helper()
@@ -291,16 +303,16 @@ func (mr *MockStoreMockRecorder) RegisterAfterDelete(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterDelete", reflect.TypeOf((*MockStore)(nil).RegisterAfterDelete), arg0)
 }
 
-// RegisterAfterUpsert mocks base method.
-func (m *MockStore) RegisterAfterUpsert(arg0 func(string, any, transaction.Client) error) {
+// RegisterAfterUpdate mocks base method.
+func (m *MockStore) RegisterAfterUpdate(arg0 func(string, any, transaction.Client) error) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RegisterAfterUpsert", arg0)
+	m.ctrl.Call(m, "RegisterAfterUpdate", arg0)
 }
 
-// RegisterAfterUpsert indicates an expected call of RegisterAfterUpsert.
-func (mr *MockStoreMockRecorder) RegisterAfterUpsert(arg0 any) *gomock.Call {
+// RegisterAfterUpdate indicates an expected call of RegisterAfterUpdate.
+func (mr *MockStoreMockRecorder) RegisterAfterUpdate(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterUpsert", reflect.TypeOf((*MockStore)(nil).RegisterAfterUpsert), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterUpdate", reflect.TypeOf((*MockStore)(nil).RegisterAfterUpdate), arg0)
 }
 
 // Replace mocks base method.
