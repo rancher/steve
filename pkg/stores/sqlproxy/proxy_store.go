@@ -75,7 +75,9 @@ var (
 			{"reason"},
 		},
 		gvkKey("", "v1", "Namespace"): {
-			{"metadata", "labels", "field.cattle.io/projectId"}},
+			{"metadata", "labels", "field.cattle.io/projectId"},
+			{"spec", "clusterName"},
+		},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
 			{"status", "nodeInfo", "operatingSystem"}},
@@ -188,6 +190,20 @@ var (
 			},
 		},
 	}
+	namespaceProjectLabelDep = sqltypes.ExternalLabelDependency{
+		SourceGVK:            gvkKey("", "v1", "Namespace"),
+		SourceLabelName:      "field.cattle.io/projectId",
+		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
+		TargetKeyFieldName:   "metadata.name",
+		TargetFinalFieldName: "spec.clusterName",
+	}
+	externalGVKDependencies = sqltypes.ExternalGVKDependency{
+		schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}: &sqltypes.ExternalGVKUpdates{
+			AffectedGVK:               schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"},
+			ExternalDependencies:      nil,
+			ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
+		},
+	}
 )
 
 func init() {
@@ -260,7 +276,7 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
+	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
 	Reset() error
 }
 
@@ -342,8 +358,7 @@ func (s *Store) initializeNamespaceCache() error {
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	attrs := attributes.GVK(&nsSchema)
-	nsInformer, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, false, true)
+	nsInformer, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], transformFunc, tableClient, gvk, false, true)
 	if err != nil {
 		return err
 	}

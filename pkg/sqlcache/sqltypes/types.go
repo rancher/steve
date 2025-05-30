@@ -1,5 +1,7 @@
 package sqltypes
 
+import "k8s.io/apimachinery/pkg/runtime/schema"
+
 type Op string
 
 const (
@@ -67,6 +69,36 @@ type SortList struct {
 type Pagination struct {
 	PageSize int
 	Page     int
+}
+
+type ExternalDependency struct {
+	SourceGVK            string
+	SourceFieldName      string
+	TargetGVK            string
+	TargetKeyFieldName   string
+	TargetFinalFieldName string
+}
+
+type ExternalLabelDependency struct {
+	SourceGVK            string
+	SourceLabelName      string
+	TargetGVK            string
+	TargetKeyFieldName   string
+	TargetFinalFieldName string
+}
+
+type ExternalGVKUpdates struct {
+	AffectedGVK               schema.GroupVersionKind
+	ExternalDependencies      []ExternalDependency
+	ExternalLabelDependencies []ExternalLabelDependency
+}
+
+type ExternalGVKDependency map[schema.GroupVersionKind]*ExternalGVKUpdates
+
+type ExternalInfoPacket struct {
+	ExternalDependencies      []ExternalDependency
+	ExternalLabelDependencies []ExternalLabelDependency
+	ExternalGVKDependencies   ExternalGVKDependency
 }
 
 func NewSortList() *SortList {
