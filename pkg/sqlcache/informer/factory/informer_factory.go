@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -44,7 +45,7 @@ type guardedInformer struct {
 	mutex    *sync.Mutex
 }
 
-type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool, watchable bool) (*informer.Informer, error)
+type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool, watchable bool) (*informer.Informer, error)
 
 type Cache struct {
 	informer.ByOptionsLister
@@ -85,7 +86,7 @@ func NewCacheFactory() (*CacheFactory, error) {
 
 // CacheFor returns an informer for given GVK, using sql store indexed with fields, using the specified client. For virtual fields, they must be added by the transform function
 // and specified by fields to be used for later fields.
-func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (Cache, error) {
+func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (Cache, error) {
 	// First of all block Reset() until we are done
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
@@ -121,7 +122,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, transfor
 
 		_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
 		shouldEncrypt := f.encryptAll || encryptResourceAlways
-		i, err := f.newInformer(ctx, client, fields, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable)
+		i, err := f.newInformer(ctx, client, fields, externalUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable)
 		if err != nil {
 			return Cache{}, err
 		}
