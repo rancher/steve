@@ -28,15 +28,19 @@ type ListOptionIndexer struct {
 	namespaced    bool
 	indexedFields []string
 
-	addFieldQuery     string
-	deleteFieldQuery  string
-	upsertLabelsQuery string
-	deleteLabelsQuery string
+	addFieldsQuery         string
+	deleteFieldsByKeyQuery string
+	deleteFieldsQuery      string
+	upsertLabelsQuery      string
+	deleteLabelsByKeyQuery string
+	deleteLabelsQuery      string
 
-	addFieldStmt     *sql.Stmt
-	deleteFieldStmt  *sql.Stmt
-	upsertLabelsStmt *sql.Stmt
-	deleteLabelsStmt *sql.Stmt
+	addFieldsStmt         *sql.Stmt
+	deleteFieldsByKeyStmt *sql.Stmt
+	deleteFieldsStmt      *sql.Stmt
+	upsertLabelsStmt      *sql.Stmt
+	deleteLabelsByKeyStmt *sql.Stmt
+	deleteLabelsStmt      *sql.Stmt
 }
 
 var (
@@ -56,6 +60,7 @@ const (
             %s
 	   )`
 	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
+	deleteFieldsFmt      = `DELETE FROM "%s_fields"`
 
 	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 
@@ -67,8 +72,9 @@ const (
 	)`
 	createLabelsTableIndexFmt = `CREATE INDEX IF NOT EXISTS "%s_labels_index" ON "%s_labels"(label, value)`
 
-	upsertLabelsStmtFmt = `REPLACE INTO "%s_labels"(key, label, value) VALUES (?, ?, ?)`
-	deleteLabelsStmtFmt = `DELETE FROM "%s_labels" WHERE KEY = ?`
+	upsertLabelsStmtFmt      = `REPLACE INTO "%s_labels"(key, label, value) VALUES (?, ?, ?)`
+	deleteLabelsByKeyStmtFmt = `DELETE FROM "%s_labels" WHERE KEY = ?`
+	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
 )
 
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
@@ -104,8 +110,10 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterUpdate(l.addLabels)
-	l.RegisterAfterDelete(l.deleteIndexFields)
-	l.RegisterAfterDelete(l.deleteLabels)
+	l.RegisterAfterDelete(l.deleteFieldsByKey)
+	l.RegisterAfterDelete(l.deleteLabelsByKey)
+	l.RegisterAfterDeleteAll(l.deleteFields)
+	l.RegisterAfterDeleteAll(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
 	for index, field := range indexedFields {
 		column := fmt.Sprintf(`"%s" TEXT`, field)
@@ -159,21 +167,25 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 		return nil, err
 	}
 
-	l.addFieldQuery = fmt.Sprintf(
+	l.addFieldsQuery = fmt.Sprintf(
 		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO UPDATE SET %s`,
 		dbName,
 		strings.Join(columns, ", "),
 		strings.Join(qmarks, ", "),
 		strings.Join(setStatements, ", "),
 	)
-	l.deleteFieldQuery = fmt.Sprintf(`DELETE FROM "%s_fields" WHERE key = ?`, dbName)
+	l.deleteFieldsByKeyQuery = fmt.Sprintf(`DELETE FROM "%s_fields" WHERE key = ?`, dbName)
+	l.deleteFieldsQuery = fmt.Sprintf(deleteFieldsFmt, dbName)
 
-	l.addFieldStmt = l.Prepare(l.addFieldQuery)
-	l.deleteFieldStmt = l.Prepare(l.deleteFieldQuery)
+	l.addFieldsStmt = l.Prepare(l.addFieldsQuery)
+	l.deleteFieldsByKeyStmt = l.Prepare(l.deleteFieldsByKeyQuery)
+	l.deleteFieldsStmt = l.Prepare(l.deleteFieldsQuery)
 
 	l.upsertLabelsQuery = fmt.Sprintf(upsertLabelsStmtFmt, dbName)
+	l.deleteLabelsByKeyQuery = fmt.Sprintf(deleteLabelsByKeyStmtFmt, dbName)
 	l.deleteLabelsQuery = fmt.Sprintf(deleteLabelsStmtFmt, dbName)
 	l.upsertLabelsStmt = l.Prepare(l.upsertLabelsQuery)
+	l.deleteLabelsByKeyStmt = l.Prepare(l.deleteLabelsByKeyQuery)
 	l.deleteLabelsStmt = l.Prepare(l.deleteLabelsQuery)
 
 	return l, nil
@@ -203,9 +215,9 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.C
 		}
 	}
 
-	_, err := tx.Stmt(l.addFieldStmt).Exec(args...)
+	_, err := tx.Stmt(l.addFieldsStmt).Exec(args...)
 	if err != nil {
-		return &db.QueryError{QueryString: l.addFieldQuery, Err: err}
+		return &db.QueryError{QueryString: l.addFieldsQuery, Err: err}
 	}
 	return nil
 }
@@ -226,18 +238,34 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteIndexFields(key string, tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteFieldsByKey(key string, _ any, tx transaction.Client) error {
 	args := []any{key}
 
-	_, err := tx.Stmt(l.deleteFieldStmt).Exec(args...)
+	_, err := tx.Stmt(l.deleteFieldsByKeyStmt).Exec(args...)
 	if err != nil {
-		return &db.QueryError{QueryString: l.deleteFieldQuery, Err: err}
+		return &db.QueryError{QueryString: l.deleteFieldsByKeyQuery, Err: err}
 	}
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabels(key string, tx transaction.Client) error {
-	_, err := tx.Stmt(l.deleteLabelsStmt).Exec(key)
+func (l *ListOptionIndexer) deleteFields(tx transaction.Client) error {
+	_, err := tx.Stmt(l.deleteFieldsStmt).Exec()
+	if err != nil {
+		return &db.QueryError{QueryString: l.deleteFieldsQuery, Err: err}
+	}
+	return nil
+}
+
+func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx transaction.Client) error {
+	_, err := tx.Stmt(l.deleteLabelsByKeyStmt).Exec(key)
+	if err != nil {
+		return &db.QueryError{QueryString: l.deleteLabelsByKeyQuery, Err: err}
+	}
+	return nil
+}
+
+func (l *ListOptionIndexer) deleteLabels(tx transaction.Client) error {
+	_, err := tx.Stmt(l.deleteLabelsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
 	}
