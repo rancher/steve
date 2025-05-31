@@ -946,7 +946,7 @@ func isLabelsFieldList(fields []string) bool {
 
 // toUnstructuredList turns a slice of unstructured objects into an unstructured.UnstructuredList
 func toUnstructuredList(items []any) *unstructured.UnstructuredList {
-	objectItems := make([]map[string]any, len(items))
+	objectItems := make([]any, len(items))
 	result := &unstructured.UnstructuredList{
 		Items:  make([]unstructured.Unstructured, len(items)),
 		Object: map[string]interface{}{"items": objectItems},
