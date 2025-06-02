@@ -770,19 +770,18 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 			// restrict access
 			user, ok := request.UserFrom(apiOp.Request.Context())
 			if !ok {
-				logrus.Debugf("Failed to get user info")
-			} else {
-				username := user.GetName()
-				opts.Filters = append(opts.Filters, sqltypes.OrFilter{
-					Filters: []sqltypes.Filter{
-						{
-							Field:   []string{"metadata", "labels", "cattle.io/userId"},
-							Matches: []string{username},
-							Op:      sqltypes.Eq,
-						},
-					},
-				})
+				return nil, 0, "", errors.New("failed to get user info from the request.Context object")
 			}
+			username := user.GetName()
+			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "labels", "cattle.io/userId"},
+						Matches: []string{username},
+						Op:      sqltypes.Eq,
+					},
+				},
+			})
 		}
 	}
 
