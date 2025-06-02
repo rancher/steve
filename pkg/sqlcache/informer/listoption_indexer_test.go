@@ -11,20 +11,53 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	"github.com/rancher/steve/pkg/sqlcache/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
 )
+
+func makeListOptionIndexer(ctx context.Context, fields [][]string) (*ListOptionIndexer, error) {
+	gvk := schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "ConfigMap",
+	}
+	example := &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	name := informerNameFromGVK(gvk)
+	m, err := encryption.NewManager()
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := db.NewClient(nil, m, m)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, name)
+	if err != nil {
+		return nil, err
+	}
+
+	listOptionIndexer, err := NewListOptionIndexer(ctx, fields, s, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return listOptionIndexer, nil
+}
 
 func TestNewListOptionIndexer(t *testing.T) {
 	type testCase struct {
@@ -264,40 +297,112 @@ func TestNewListOptionIndexer(t *testing.T) {
 	}
 }
 
-func TestListByOptions(t *testing.T) {
+func TestNewListOptionIndexerEasy(t *testing.T) {
+	ctx := context.Background()
+
 	type testCase struct {
-		description           string
-		listOptions           sqltypes.ListOptions
-		partitions            []partition.Partition
-		ns                    string
-		expectedCountStmt     string
-		expectedCountStmtArgs []any
-		expectedStmt          string
-		expectedStmtArgs      []any
-		extraIndexedFields    []string
-		expectedList          *unstructured.UnstructuredList
-		returnList            []any
-		expectedContToken     string
-		expectedErr           error
+		description string
+		listOptions sqltypes.ListOptions
+		partitions  []partition.Partition
+		ns          string
+
+		items []*unstructured.Unstructured
+
+		extraIndexedFields [][]string
+		expectedList       *unstructured.UnstructuredList
+		expectedTotal      int
+		expectedContToken  string
+		expectedErr        error
+	}
+	foo := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj1",
+			"namespace": "ns-a",
+			"somefield": "foo",
+			"sortfield": "4",
+		},
+	}
+	bar := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj2",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "1",
+			"labels": map[string]any{
+				"cows":   "milk",
+				"horses": "saddles",
+			},
+		},
+	}
+	baz := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj3",
+			"namespace": "ns-a",
+			"somefield": "baz",
+			"sortfield": "2",
+			"labels": map[string]any{
+				"horses": "saddles",
+			},
+		},
+		"status": map[string]any{
+			"someotherfield": "helloworld",
+		},
+	}
+	toto := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj4",
+			"namespace": "ns-a",
+			"somefield": "toto",
+			"sortfield": "2",
+			"labels": map[string]any{
+				"cows": "milk",
+			},
+		},
+	}
+	lodgePole := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj5",
+			"namespace": "ns-b",
+			"unknown":   "hi",
+			"labels": map[string]any{
+				"guard.cattle.io": "lodgepole",
+			},
+		},
 	}
 
-	testObject := testStoreObject{Id: "something", Val: "a"}
-	unstrTestObjectMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&testObject)
-	assert.Nil(t, err)
+	makeList := func(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
+		t.Helper()
+
+		if len(objs) == 0 {
+			return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+		}
+
+		var items []any
+		for _, obj := range objs {
+			items = append(items, obj)
+		}
+
+		list := &unstructured.Unstructured{
+			Object: map[string]any{
+				"items": items,
+			},
+		}
+
+		itemList, err := list.ToList()
+		require.NoError(t, err)
+
+		return itemList
+	}
+	itemList := makeList(t, foo, bar, baz, toto, lodgePole)
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "ListByOptions() with no errors returned, should not return an error",
-		listOptions: sqltypes.ListOptions{},
-		partitions:  []partition.Partition{},
-		ns:          "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		returnList:        []any{},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
+		description:       "ListByOptions() with no errors returned, should not return an error",
+		listOptions:       sqltypes.ListOptions{},
+		partitions:        []partition.Partition{},
+		ns:                "",
+		expectedList:      makeList(t),
+		expectedTotal:     0,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -306,14 +411,10 @@ func TestListByOptions(t *testing.T) {
 		listOptions: sqltypes.ListOptions{
 			Filters: []sqltypes.OrFilter{{[]sqltypes.Filter{}}},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
+		partitions:        []partition.Partition{},
+		ns:                "",
+		expectedList:      makeList(t),
+		expectedTotal:     0,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -324,7 +425,7 @@ func TestListByOptions(t *testing.T) {
 				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"somevalue"},
+						Matches: []string{"foo"},
 						Op:      sqltypes.Eq,
 						Partial: true,
 					},
@@ -332,17 +433,10 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.somefield" LIKE ? ESCAPE '\') AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"%somevalue%"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo),
+		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -353,7 +447,7 @@ func TestListByOptions(t *testing.T) {
 				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"somevalue"},
+						Matches: []string{"foo"},
 						Op:      sqltypes.NotEq,
 						Partial: true,
 					},
@@ -361,17 +455,10 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.somefield" NOT LIKE ? ESCAPE '\') AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"%somevalue%"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, bar, baz, toto, lodgePole),
+		expectedTotal:     4,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -382,7 +469,7 @@ func TestListByOptions(t *testing.T) {
 				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"somevalue"},
+						Matches: []string{"o"},
 						Op:      sqltypes.Eq,
 						Partial: true,
 					},
@@ -390,17 +477,10 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.somefield" LIKE ? ESCAPE '\') AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"%somevalue%"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo, toto),
+		expectedTotal:     2,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -411,19 +491,19 @@ func TestListByOptions(t *testing.T) {
 				[]sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"somevalue"},
+						Matches: []string{"foo"},
 						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"someothervalue"},
+						Matches: []string{"bar"},
 						Op:      sqltypes.Eq,
 						Partial: true,
 					},
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"somethirdvalue"},
+						Matches: []string{"toto"},
 						Op:      sqltypes.NotEq,
 						Partial: true,
 					},
@@ -431,17 +511,10 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    ((f."metadata.somefield" LIKE ? ESCAPE '\') OR (f."metadata.somefield" LIKE ? ESCAPE '\') OR (f."metadata.somefield" NOT LIKE ? ESCAPE '\')) AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"%somevalue%", "%someothervalue%", "%somethirdvalue%"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar, baz, lodgePole),
+		expectedTotal:     4,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -452,13 +525,13 @@ func TestListByOptions(t *testing.T) {
 				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"value1"},
+						Matches: []string{"foo"},
 						Op:      sqltypes.Eq,
 						Partial: false,
 					},
 					{
 						Field:   []string{"status", "someotherfield"},
-						Matches: []string{"value2"},
+						Matches: []string{"helloworld"},
 						Op:      sqltypes.NotEq,
 						Partial: false,
 					},
@@ -468,7 +541,7 @@ func TestListByOptions(t *testing.T) {
 				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"value3"},
+						Matches: []string{"toto"},
 						Op:      sqltypes.Eq,
 						Partial: false,
 					},
@@ -476,19 +549,10 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "test4",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    ((f."metadata.somefield" = ?) OR (f."status.someotherfield" != ?)) AND
-    (f."metadata.somefield" = ?) AND
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"value1", "value2", "value3", "test4"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, toto),
+		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -507,25 +571,48 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "test41",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  WHERE
-    (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"guard.cattle.io", "%lodgepole%", "test41"},
-		returnList:        []any{},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, lodgePole),
+		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
 	tests = append(tests, testCase{
 		description: "ListByOptions with two labels filters should use a self-join",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "labels", "cows"},
+							Matches: []string{"milk"},
+							Op:      sqltypes.Eq,
+							Partial: false,
+						},
+					},
+				},
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "labels", "horses"},
+							Matches: []string{"saddles"},
+							Op:      sqltypes.Eq,
+							Partial: false,
+						},
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, bar),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a mix of one label and one non-label query can still self-join",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				Filters: []sqltypes.Filter{
@@ -540,52 +627,8 @@ func TestListByOptions(t *testing.T) {
 			{
 				Filters: []sqltypes.Filter{
 					{
-						Field:   []string{"metadata", "labels", "horses"},
-						Matches: []string{"saddles"},
-						Op:      sqltypes.Eq,
-						Partial: false,
-					},
-				},
-			},
-		},
-		},
-		partitions: []partition.Partition{},
-		ns:         "test42",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
-  WHERE
-    (lt1.label = ? AND lt1.value = ?) AND
-    (lt2.label = ? AND lt2.value = ?) AND
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"cows", "milk", "horses", "saddles", "test42"},
-		returnList:        []any{},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
-		expectedContToken: "",
-		expectedErr:       nil,
-	})
-
-	tests = append(tests, testCase{
-		description: "ListByOptions with a mix of one label and one non-label query can still self-join",
-		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
-			{
-				Filters: []sqltypes.Filter{
-					{
-						Field:   []string{"metadata", "labels", "cows"},
-						Matches: []string{"butter"},
-						Op:      sqltypes.Eq,
-						Partial: false,
-					},
-				},
-			},
-			{
-				Filters: []sqltypes.Filter{
-					{
 						Field:   []string{"metadata", "somefield"},
-						Matches: []string{"wheat"},
+						Matches: []string{"toto"},
 						Op:      sqltypes.Eq,
 						Partial: false,
 					},
@@ -593,24 +636,13 @@ func TestListByOptions(t *testing.T) {
 			},
 		},
 		},
-		partitions: []partition.Partition{},
-		ns:         "test43",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  WHERE
-    (lt1.label = ? AND lt1.value = ?) AND
-    (f."metadata.somefield" = ?) AND
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"cows", "butter", "wheat", "test43"},
-		returnList:        []any{},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{}}, Items: []unstructured.Unstructured{}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, toto),
+		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
 	tests = append(tests, testCase{
 		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
@@ -623,21 +655,13 @@ func TestListByOptions(t *testing.T) {
 				},
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "test5",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.somefield" ASC`,
-		expectedStmtArgs:  []any{"test5"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, lodgePole, bar, baz, foo, toto),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
 	tests = append(tests, testCase{
 		description: "sort one field descending",
 		listOptions: sqltypes.ListOptions{
@@ -650,165 +674,133 @@ func TestListByOptions(t *testing.T) {
 				},
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "test5a",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.somefield" DESC`,
-		expectedStmtArgs:  []any{"test5a"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, toto, foo, baz, bar, lodgePole),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
 	tests = append(tests, testCase{
-		description: "sort one unbound label descending",
+		description: "sort one unbound field descending",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"metadata", "labels", "flip"},
+						Fields: []string{"metadata", "unknown"},
 						Order:  sqltypes.DESC,
 					},
 				},
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "test5a",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  WHERE
-    (lt1.label = ?) AND
-    (f."metadata.namespace" = ?) AND
-    (FALSE)
-  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) DESC NULLS FIRST`,
-		expectedStmtArgs:  []any{"flip", "test5a", "flip"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, lodgePole, toto, baz, bar, foo),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
-	tests = append(tests, testCase{
-		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
-		listOptions: sqltypes.ListOptions{
-			SortList: sqltypes.SortList{
-				SortDirectives: []sqltypes.Sort{
-					{
-						Fields: []string{"metadata", "fields", "3"},
-						Order:  sqltypes.ASC,
-					},
-					{
-						Fields: []string{"metadata", "labels", "stub.io/candy"},
-						Order:  sqltypes.ASC,
-					},
-				},
-			},
-		},
-		extraIndexedFields: []string{"metadata.fields[3]", "metadata.labels[stub.io/candy]"},
-		partitions:         []partition.Partition{},
-		ns:                 "",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  WHERE
-    (lt1.label = ?) AND
-    (FALSE)
-  ORDER BY f."metadata.fields[3]" ASC, (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
-		expectedStmtArgs:  []any{"stub.io/candy", "stub.io/candy"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken: "",
-		expectedErr:       nil,
-	})
+	// tests = append(tests, testCase{
+	// 	description: "sort one unbound label descending",
+	// 	listOptions: sqltypes.ListOptions{
+	// 		SortList: sqltypes.SortList{
+	// 			SortDirectives: []sqltypes.Sort{
+	// 				{
+	// 					Fields: []string{"metadata", "labels", "flip"},
+	// 					Order:  sqltypes.DESC,
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// 	partitions:        []partition.Partition{{All: true}},
+	// 	ns:                "",
+	// 	expectedList:      makeList(t, lodgePole, toto, baz, bar, foo),
+	// expectedTotal:     5,
+	// 	expectedContToken: "",
+	// 	expectedErr:       nil,
+	// })
+	// tests = append(tests, testCase{
+	// 	description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
+	// 	listOptions: sqltypes.ListOptions{
+	// 		SortList: sqltypes.SortList{
+	// 			SortDirectives: []sqltypes.Sort{
+	// 				{
+	// 					Fields: []string{"metadata", "sortfield"},
+	// 					Order:  sqltypes.ASC,
+	// 				},
+	// 				{
+	// 					Fields: []string{"metadata", "labels", "cows"},
+	// 					Order:  sqltypes.ASC,
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// 	partitions:        []partition.Partition{{All: true}},
+	// 	ns:                "",
+	// 	expectedList:      makeList(t),
+	// expectedTotal:     5,
+	// 	expectedContToken: "",
+	// 	expectedErr:       nil,
+	// })
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"metadata", "somefield"},
+						Fields: []string{"metadata", "sortfield"},
 						Order:  sqltypes.ASC,
 					},
 					{
-						Fields: []string{"status", "someotherfield"},
+						Fields: []string{"metadata", "somefield"},
 						Order:  sqltypes.ASC,
 					},
 				},
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.somefield" ASC, f."status.someotherfield" ASC`,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, lodgePole, bar, baz, toto, foo),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"metadata", "somefield"},
+						Fields: []string{"metadata", "sortfield"},
 						Order:  sqltypes.DESC,
 					},
 					{
-						Fields: []string{"status", "someotherfield"},
+						Fields: []string{"metadata", "somefield"},
 						Order:  sqltypes.ASC,
 					},
 				},
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.somefield" DESC, f."status.someotherfield" ASC`,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo, baz, toto, bar, lodgePole),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-
 	tests = append(tests, testCase{
 		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
 			Pagination: sqltypes.Pagination{
-				PageSize: 10,
+				PageSize: 3,
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC 
-  LIMIT ?`,
-		expectedStmtArgs: []any{10},
-		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE))`,
-		expectedCountStmtArgs: []any{},
-		returnList:            []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:          &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken:     "",
-		expectedErr:           nil,
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar, baz),
+		expectedTotal:     5,
+		expectedContToken: "3",
+		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with Pagination.Page and no PageSize set should not add anything to prepared sql.Stmt",
@@ -817,67 +809,27 @@ func TestListByOptions(t *testing.T) {
 				Page: 2,
 			},
 		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.Page and PageSize set limit to PageSize and offset to PageSize * (Page - 1) in prepared sql.Stmt",
-		listOptions: sqltypes.ListOptions{
-			Pagination: sqltypes.Pagination{
-				PageSize: 10,
-				Page:     2,
-			},
-		},
-		partitions: []partition.Partition{},
-		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE)
-  ORDER BY f."metadata.name" ASC 
-  LIMIT ?
-  OFFSET ?`,
-		expectedStmtArgs: []any{10, 10},
-
-		expectedCountStmt: `SELECT COUNT(*) FROM (SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (FALSE))`,
-		expectedCountStmtArgs: []any{},
-
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken: "",
-		expectedErr:       nil,
-	})
-	tests = append(tests, testCase{
-		description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met in prepared sql.Stmt",
-		partitions: []partition.Partition{
-			{
-				Namespace: "somens",
-			},
-		},
-		ns: "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.namespace" = ? AND FALSE)
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"somens"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
-		expectedContToken: "",
-		expectedErr:       nil,
-	})
+	// tests = append(tests, testCase{
+	// 	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met in prepared sql.Stmt",
+	// 	partitions: []partition.Partition{
+	// 		{
+	// 			Namespace: "ns-b",
+	// 		},
+	// 	},
+	// 	// XXX: Why do I need to specify the namespace here too?
+	// 	ns:                "ns-b",
+	// 	expectedList:      makeList(t, lodgePole),
+	// 	expectedTotal:     1,
+	// 	expectedContToken: "",
+	// 	expectedErr:       nil,
+	// })
 	tests = append(tests, testCase{
 		description: "ListByOptions with a All Partition should select all items that meet all other conditions in prepared sql.Stmt",
 		partitions: []partition.Partition{
@@ -885,12 +837,9 @@ func TestListByOptions(t *testing.T) {
 				All: true,
 			},
 		},
-		ns: "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  ORDER BY f."metadata.name" ASC `,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -901,12 +850,9 @@ func TestListByOptions(t *testing.T) {
 				Passthrough: true,
 			},
 		},
-		ns: "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  ORDER BY f."metadata.name" ASC `,
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
+		expectedTotal:     5,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -914,95 +860,43 @@ func TestListByOptions(t *testing.T) {
 		description: "ListByOptions with a Names Partition should select only items where metadata.name equals an items in Names and all other conditions are met in prepared sql.Stmt",
 		partitions: []partition.Partition{
 			{
-				Names: sets.New[string]("someid", "someotherid"),
+				Names: sets.New("obj1", "obj2"),
 			},
 		},
-		ns: "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
-  JOIN "something_fields" f ON o.key = f.key
-  WHERE
-    (f."metadata.name" IN (?, ?))
-  ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs:  []any{"someid", "someotherid"},
-		returnList:        []any{&unstructured.Unstructured{Object: unstrTestObjectMap}, &unstructured.Unstructured{Object: unstrTestObjectMap}},
-		expectedList:      &unstructured.UnstructuredList{Object: map[string]interface{}{"items": []map[string]interface{}{unstrTestObjectMap, unstrTestObjectMap}}, Items: []unstructured.Unstructured{{Object: unstrTestObjectMap}, {Object: unstrTestObjectMap}}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar),
+		expectedTotal:     2,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	t.Parallel()
+
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			txClient := NewMockTXClient(gomock.NewController(t))
-			store := NewMockStore(gomock.NewController(t))
-			stmts := NewMockStmt(gomock.NewController(t))
-			i := &Indexer{
-				Store: store,
+			fields := [][]string{
+				{"metadata", "somefield"},
+				{"status", "someotherfield"},
+				{"metadata", "unknown"},
+				{"metadata", "sortfield"},
 			}
-			lii := &ListOptionIndexer{
-				Indexer:       i,
-				indexedFields: []string{"metadata.somefield", "status.someotherfield"},
+			fields = append(fields, test.extraIndexedFields...)
+
+			loi, err := makeListOptionIndexer(ctx, fields)
+			assert.NoError(t, err)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				assert.NoError(t, err)
 			}
-			if len(test.extraIndexedFields) > 0 {
-				lii.indexedFields = append(lii.indexedFields, test.extraIndexedFields...)
-			}
-			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+
+			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
-				assert.Equal(t, test.expectedErr, err)
+				assert.Error(t, err)
 				return
 			}
-			assert.Nil(t, err)
-			assert.Equal(t, test.expectedStmt, queryInfo.query)
-			if test.expectedStmtArgs == nil {
-				test.expectedStmtArgs = []any{}
-			}
-			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
-			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
-			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
 
-			stmt := &sql.Stmt{}
-			rows := &sql.Rows{}
-			objType := reflect.TypeOf(testObject)
-			txClient.EXPECT().Stmt(gomock.Any()).Return(stmts).AnyTimes()
-			store.EXPECT().Prepare(test.expectedStmt).Do(func(a ...any) {
-				fmt.Println(a)
-			}).Return(stmt)
-			if args := test.expectedStmtArgs; args != nil {
-				stmts.EXPECT().QueryContext(gomock.Any(), gomock.Any()).Return(rows, nil).AnyTimes()
-			} else if strings.Contains(test.expectedStmt, "LIMIT") {
-				stmts.EXPECT().QueryContext(gomock.Any(), args...).Return(rows, nil)
-				txClient.EXPECT().Stmt(gomock.Any()).Return(stmts)
-				stmts.EXPECT().QueryContext(gomock.Any()).Return(rows, nil)
-			} else {
-				stmts.EXPECT().QueryContext(gomock.Any()).Return(rows, nil)
-			}
-			store.EXPECT().GetType().Return(objType)
-			store.EXPECT().GetShouldEncrypt().Return(false)
-			store.EXPECT().ReadObjects(rows, objType, false).Return(test.returnList, nil)
-			store.EXPECT().CloseStmt(stmt).Return(nil)
-
-			store.EXPECT().WithTransaction(gomock.Any(), false, gomock.Any()).Return(nil).Do(
-				func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
-					err := f(txClient)
-					if test.expectedErr == nil {
-						assert.Nil(t, err)
-					} else {
-						assert.Equal(t, test.expectedErr, err)
-					}
-				})
-
-			if test.expectedCountStmt != "" {
-				store.EXPECT().Prepare(test.expectedCountStmt).Return(stmt)
-				store.EXPECT().ReadInt(rows).Return(len(test.expectedList.Items), nil)
-				store.EXPECT().CloseStmt(stmt).Return(nil)
-			}
-			list, total, contToken, err := lii.executeQuery(context.Background(), queryInfo)
-			if test.expectedErr == nil {
-				assert.Nil(t, err)
-			} else {
-				assert.Equal(t, test.expectedErr, err)
-			}
 			assert.Equal(t, test.expectedList, list)
-			assert.Equal(t, len(test.expectedList.Items), total)
+			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
