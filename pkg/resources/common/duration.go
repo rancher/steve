@@ -2,43 +2,34 @@ package common
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
+	"strings"
 	"time"
 )
 
-var humanReadableDurationRe = regexp.MustCompile(
-	`^(?:(?P<days>\d+)d)?` +
-		`(?:(?P<hours>\d+)h)?` +
-		`(?:(?P<minutes>\d+)m)?` +
-		`(?:(?P<seconds>\d+)s)?$`,
-)
-
 func ParseHumanReadableDuration(s string) (time.Duration, error) {
-	matches := humanReadableDurationRe.FindStringSubmatch(s)
-	if matches == nil {
-		return 0, fmt.Errorf("invalid duration: %q", s)
+	var total time.Duration
+	var val int
+	var unit byte
+
+	r := strings.NewReader(s)
+	for r.Len() > 0 {
+		if _, err := fmt.Fscanf(r, "%d%c", &val, &unit); err != nil {
+			return 0, fmt.Errorf("invalid duration in %s: %w", s, err)
+		}
+
+		switch unit {
+		case 'd':
+			total += time.Duration(val) * 24 * time.Hour
+		case 'h':
+			total += time.Duration(val) * time.Hour
+		case 'm':
+			total += time.Duration(val) * time.Minute
+		case 's':
+			total += time.Duration(val) * time.Second
+		default:
+			return 0, fmt.Errorf("invalid duration unit %s in %s", string(unit), s)
+		}
 	}
 
-	var d time.Duration
-	for i, name := range humanReadableDurationRe.SubexpNames() {
-		if i == 0 || matches[i] == "" {
-			continue
-		}
-		val, err := strconv.Atoi(matches[i])
-		if err != nil {
-			return 0, err
-		}
-		switch name {
-		case "days":
-			d += time.Duration(val) * 24 * time.Hour
-		case "hours":
-			d += time.Duration(val) * time.Hour
-		case "minutes":
-			d += time.Duration(val) * time.Minute
-		case "seconds":
-			d += time.Duration(val) * time.Second
-		}
-	}
-	return d, nil
+	return total, nil
 }
