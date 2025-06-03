@@ -776,7 +776,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
 				Filters: []sqltypes.Filter{
 					{
-						Field:   []string{"metadata", "labels", "cattle.io/userId"},
+						Field:   []string{"metadata", "labels", "cattle.io/user-id"},
 						Matches: []string{username},
 						Op:      sqltypes.Eq,
 					},

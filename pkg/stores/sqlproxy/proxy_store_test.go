@@ -694,7 +694,7 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 					{
 						Filters: []sqltypes.Filter{
 							{
-								Field:   []string{"metadata", "labels", "cattle.io/userId"},
+								Field:   []string{"metadata", "labels", "cattle.io/user-id"},
 								Matches: []string{"flip"},
 								Op:      sqltypes.Eq,
 							},
