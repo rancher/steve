@@ -1101,7 +1101,6 @@ func matchFilter(filterName string, filterNamespace string, filterSelector strin
 	if filterSelector != "" {
 		selector, err := labels.Parse(filterSelector)
 		if err != nil {
-			fmt.Println("error parsing selector", err)
 			return false
 		}
 		if !selector.Matches(labels.Set(metadata.GetLabels())) {
