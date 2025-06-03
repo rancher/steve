@@ -14,6 +14,7 @@ import (
 	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -30,11 +31,18 @@ type Informer struct {
 }
 
 type WatchOptions struct {
+	Filter WatchFilter
+}
+
+type WatchFilter struct {
+	ID        string
+	Selector  labels.Selector
+	Namespace string
 }
 
 type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
-	Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error
+	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
