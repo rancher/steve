@@ -14,9 +14,12 @@ import (
 
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/store"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"go.uber.org/mock/gomock"
@@ -28,17 +31,16 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 	clientgotesting "k8s.io/client-go/testing"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder
@@ -769,42 +771,6 @@ func TestReset(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
-}
-
-func TestWatchNamesErrReceive(t *testing.T) {
-	testClientFactory, err := client.NewFactory(&rest.Config{}, false)
-	assert.Nil(t, err)
-
-	fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
-	c = watch.NewFakeWithChanSize(5, true)
-	defer c.Stop()
-	errMsgsToSend := []string{"err1", "err2", "err3"}
-	c.Add(&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "testsecret1"}})
-	for index := range errMsgsToSend {
-		c.Error(&metav1.Status{
-			Message: errMsgsToSend[index],
-		})
-	}
-	c.Add(&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "testsecret2"}})
-	fakeClient.PrependWatchReactor("*", func(action clientgotesting.Action) (handled bool, ret watch.Interface, err error) {
-		return true, c, nil
-	})
-	testStore := Store{
-		clientGetter: &testFactory{Factory: testClientFactory,
-			fakeClient: fakeClient,
-		},
-	}
-	apiSchema := &types.APISchema{Schema: &schemas.Schema{Attributes: map[string]interface{}{"table": "something"}}}
-	wc, err := testStore.WatchNames(&types.APIRequest{Namespace: "", Schema: apiSchema, Request: &http.Request{}}, apiSchema, types.WatchRequest{}, sets.New[string]("testsecret1", "testsecret2"))
-	assert.Nil(t, err)
-
-	eg := errgroup.Group{}
-	eg.Go(func() error { return receiveUntil(wc, 5*time.Second) })
-
-	err = eg.Wait()
-	assert.Nil(t, err)
-
-	assert.Equal(t, 0, len(c.ResultChan()), "Expected all secrets to have been received")
 }
 
 func (t *testFactory) TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
@@ -1555,4 +1521,36 @@ func TestUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func makeListOptionIndexer(ctx context.Context, fields [][]string) (*informer.ListOptionIndexer, error) {
+	gvk := schema2.GroupVersionKind{
+		Group:   "",
+		Version: "",
+		Kind:    "",
+	}
+	example := &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	name := "theName"
+	m, err := encryption.NewManager()
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := db.NewClient(nil, m, m)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, name)
+	if err != nil {
+		return nil, err
+	}
+
+	listOptionIndexer, err := informer.NewListOptionIndexer(ctx, fields, s, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return listOptionIndexer, nil
 }
