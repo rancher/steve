@@ -1076,7 +1076,7 @@ func toUnstructuredList(items []any) *unstructured.UnstructuredList {
 	return result
 }
 
-func matchWatch(filterName string, filterNamespace string, filterSelector string, oldObj any, obj any) bool {
+func matchWatch(filterName string, filterNamespace string, filterSelector labels.Selector, oldObj any, obj any) bool {
 	matchOld := false
 	if oldObj != nil {
 		matchOld = matchFilter(filterName, filterNamespace, filterSelector, oldObj)
@@ -1084,7 +1084,7 @@ func matchWatch(filterName string, filterNamespace string, filterSelector string
 	return matchOld || matchFilter(filterName, filterNamespace, filterSelector, obj)
 }
 
-func matchFilter(filterName string, filterNamespace string, filterSelector string, obj any) bool {
+func matchFilter(filterName string, filterNamespace string, filterSelector labels.Selector, obj any) bool {
 	if obj == nil {
 		return false
 	}
@@ -1098,12 +1098,8 @@ func matchFilter(filterName string, filterNamespace string, filterSelector strin
 	if filterNamespace != "" && filterNamespace != metadata.GetNamespace() {
 		return false
 	}
-	if filterSelector != "" {
-		selector, err := labels.Parse(filterSelector)
-		if err != nil {
-			return false
-		}
-		if !selector.Matches(labels.Set(metadata.GetLabels())) {
+	if filterSelector != nil {
+		if !filterSelector.Matches(labels.Set(metadata.GetLabels())) {
 			return false
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -35,7 +36,7 @@ type WatchOptions struct {
 
 type WatchFilter struct {
 	ID        string
-	Selector  string
+	Selector  labels.Selector
 	Namespace string
 }
 

@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -551,6 +552,14 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		return nil, err
 	}
 
+	var selector labels.Selector
+	if w.Selector != "" {
+		selector, err = labels.Parse(w.Selector)
+		if err != nil {
+			return nil, fmt.Errorf("invalid selector: %w", err)
+		}
+	}
+
 	result := make(chan watch.Event)
 	go func() {
 		ctx := apiOp.Context()
@@ -563,7 +572,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 			Filter: informer.WatchFilter{
 				ID:        w.ID,
 				Namespace: idNamespace,
-				Selector:  w.Selector,
+				Selector:  selector,
 			},
 		}
 		err := inf.ByOptionsLister.Watch(ctx, opts, result)

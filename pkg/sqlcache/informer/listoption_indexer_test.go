@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -1983,6 +1984,9 @@ func TestWatchFilter(t *testing.T) {
 		"app": "bar",
 	})
 
+	appSelector, err := labels.Parse("app=foo")
+	assert.NoError(t, err)
+
 	tests := []struct {
 		name           string
 		filter         WatchFilter
@@ -2007,7 +2011,7 @@ func TestWatchFilter(t *testing.T) {
 		},
 		{
 			name:   "selector filter",
-			filter: WatchFilter{Selector: "app=foo"},
+			filter: WatchFilter{Selector: appSelector},
 			setupStore: func(store cache.Store) error {
 				err := store.Add(foo)
 				if err != nil {
