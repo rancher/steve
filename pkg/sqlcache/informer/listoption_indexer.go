@@ -300,7 +300,8 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				continue
 			}
 
-			if !matchFilter(opts.Filter.ID, opts.Filter.Namespace, opts.Filter.Selector, obj) {
+			filter := opts.Filter
+			if !matchFilter(filter.ID, filter.Namespace, filter.Selector, obj) {
 				continue
 			}
 
