@@ -43,7 +43,7 @@ type ListOptionIndexer struct {
 
 	upsertEventsQuery      string
 	findEventsRowByRVQuery string
-	listEventsQuery        string
+	listEventsAfterQuery   string
 	addFieldsQuery         string
 	deleteFieldsByKeyQuery string
 	deleteFieldsQuery      string
@@ -53,7 +53,7 @@ type ListOptionIndexer struct {
 
 	upsertEventsStmt      *sql.Stmt
 	findEventsRowByRVStmt *sql.Stmt
-	listEventsStmt        *sql.Stmt
+	listEventsAfterStmt   *sql.Stmt
 	addFieldsStmt         *sql.Stmt
 	deleteFieldsByKeyStmt *sql.Stmt
 	deleteFieldsStmt      *sql.Stmt
@@ -82,7 +82,7 @@ const (
                        event BLOB NOT NULL,
                        PRIMARY KEY (type, rv)
           )`
-	listEventsAfterRVFmt = `SELECT type, rv, event
+	listEventsAfterFmt = `SELECT type, rv, event
 	       FROM "%s_events"
 	       WHERE rowid > ?
        `
@@ -219,8 +219,8 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	)
 	l.upsertEventsStmt = l.Prepare(l.upsertEventsQuery)
 
-	l.listEventsQuery = fmt.Sprintf(listEventsAfterRVFmt, dbName)
-	l.listEventsStmt = l.Prepare(l.listEventsQuery)
+	l.listEventsAfterQuery = fmt.Sprintf(listEventsAfterFmt, dbName)
+	l.listEventsAfterStmt = l.Prepare(l.listEventsAfterQuery)
 
 	l.findEventsRowByRVQuery = fmt.Sprintf(findEventsRowByRVFmt, dbName)
 	l.findEventsRowByRVStmt = l.Prepare(l.findEventsRowByRVQuery)
@@ -266,7 +266,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		rowIDRows, err := tx.Stmt(l.findEventsRowByRVStmt).QueryContext(ctx, targetRV)
 		if err != nil {
-			return &db.QueryError{QueryString: l.listEventsQuery, Err: err}
+			return &db.QueryError{QueryString: l.listEventsAfterQuery, Err: err}
 		}
 		if !rowIDRows.Next() && targetRV != latestRV {
 			return fmt.Errorf("resourceversion too old")
@@ -276,9 +276,9 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		rowIDRows.Scan(&rowID)
 
 		// Backfilling previous events from resourceVersion
-		rows, err := tx.Stmt(l.listEventsStmt).QueryContext(ctx, rowID)
+		rows, err := tx.Stmt(l.listEventsAfterStmt).QueryContext(ctx, rowID)
 		if err != nil {
-			return &db.QueryError{QueryString: l.listEventsQuery, Err: err}
+			return &db.QueryError{QueryString: l.listEventsAfterQuery, Err: err}
 		}
 
 		for rows.Next() {
