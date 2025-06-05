@@ -261,7 +261,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 
 	var events []watch.Event
 	var key *watchKey
-	// Even though we're not writing in this transaction, we prevent other write to SQL
+	// Even though we're not writing in this transaction, we prevent other writes to SQL
 	// because we don't want to add more events while we're backfilling events, so we don't miss events
 	err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		rowIDRows, err := tx.Stmt(l.findEventsRowByRVStmt).QueryContext(ctx, targetRV)
