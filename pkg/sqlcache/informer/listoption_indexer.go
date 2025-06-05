@@ -431,8 +431,8 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	l.watchersLock.RUnlock()
 
 	l.latestRVLock.Lock()
-	l.latestRV = latestRV
 	defer l.latestRVLock.Unlock()
+	l.latestRV = latestRV
 	return nil
 }
 
