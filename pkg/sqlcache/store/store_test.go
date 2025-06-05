@@ -725,15 +725,15 @@ func TestAddWithExternalUpdates(t *testing.T) {
 					t.Fail()
 				}
 			}).Times(2)
-		rawStmt := `SELECT DISTINCT f.key, ex2."spec.clusterName" FROM "_v1_Namespace_fields" f
+		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
   JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-  WHERE lt1.label = ? AND f."spec.clusterName" != ex2."spec.clusterName"`
+  WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		results1 := []any{testObject.Id, "field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
-		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.clusterName" = ? WHERE key = ?`
+		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.displayName" = ? WHERE key = ?`
 		c.EXPECT().Prepare(rawStmt2)
 		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 		stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
@@ -808,7 +808,7 @@ func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient) *Store
 		SourceLabelName:      "field.cattle.io/projectId",
 		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
 		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.clusterName",
+		TargetFinalFieldName: "spec.displayName",
 	}
 	namespaceNonLabelDep := sqltypes.ExternalDependency{
 		SourceGVK:            gvkKey("", "v1", "Pods"),
