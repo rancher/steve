@@ -75,6 +75,7 @@ const (
 	strictMatchFmt           = `%s`
 	escapeBackslashDirective = ` ESCAPE '\'` // The leading space is crucial for unit tests only '
 
+	// RV stands for ResourceVersion
 	createEventsTableFmt = `CREATE TABLE "%s_events" (
                        rv TEXT NOT NULL,
                        type TEXT NOT NULL,
