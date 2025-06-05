@@ -730,7 +730,7 @@ func TestAddWithExternalUpdates(t *testing.T) {
   JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
   WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
-		results1 := []any{testObject.Id, "field.cattle.io/projectId"}
+		results1 := []any{"field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.displayName" = ? WHERE key = ?`
@@ -742,7 +742,7 @@ func TestAddWithExternalUpdates(t *testing.T) {
   JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
   WHERE f."spec.projectName" != ex2."spec.projectName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
-		results2 := []any{testObject.Id, "field.cattle.io/fixer"}
+		results2 := []any{"field.cattle.io/fixer"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
 
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)

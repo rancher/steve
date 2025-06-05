@@ -126,11 +126,9 @@ func (s *Store) checkUpdateExternalInfo(key string) error {
 		return nil
 	}
 	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-		if s.externalUpdateInfo != nil {
-			if err := s.updateExternalInfo(tx, key, s.externalUpdateInfo); err != nil {
-				// Just report and ignore errors
-				logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
-			}
+		if err := s.updateExternalInfo(tx, key, s.externalUpdateInfo); err != nil {
+			// Just report and ignore errors
+			logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
 		}
 		return nil
 	})
@@ -151,7 +149,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 			labelDep.TargetFinalFieldName,
 		)
 		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt, key, labelDep.SourceLabelName)
+		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
 		if err != nil {
 			logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
 			continue
@@ -191,7 +189,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		// TODO: Try to fold the two blocks together
 
 		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt, key, nonLabelDep.SourceFieldName)
+		rows, err := s.QueryForRows(s.ctx, getStmt, nonLabelDep.SourceFieldName)
 		if err != nil {
 			logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
 			continue
