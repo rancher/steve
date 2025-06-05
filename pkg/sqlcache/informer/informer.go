@@ -6,6 +6,7 @@ package informer
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
@@ -31,7 +32,8 @@ type Informer struct {
 }
 
 type WatchOptions struct {
-	Filter WatchFilter
+	ResourceVersion string
+	Filter          WatchFilter
 }
 
 type WatchFilter struct {
@@ -63,6 +65,10 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	listWatcher := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			a, err := client.List(ctx, options)
+			// We want the list to be consistent when there are going to be relists
+			sort.SliceStable(a.Items, func(i int, j int) bool {
+				return a.Items[i].GetResourceVersion() < a.Items[j].GetResourceVersion()
+			})
 			return a, err
 		},
 		WatchFunc: watchFunc,

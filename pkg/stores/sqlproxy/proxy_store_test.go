@@ -249,7 +249,7 @@ func TestListByPartitions(t *testing.T) {
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
-			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
 			assert.Equal(t, "", contToken)
 		},
@@ -466,7 +466,7 @@ func TestListByPartitions(t *testing.T) {
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
-			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
 			assert.Equal(t, "", contToken)
 		},
