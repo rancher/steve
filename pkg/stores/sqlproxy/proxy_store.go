@@ -76,7 +76,7 @@ var (
 		},
 		gvkKey("", "v1", "Namespace"): {
 			{"metadata", "labels", "field.cattle.io/projectId"},
-			{"spec", "clusterName"},
+			{"spec", "displayName"},
 		},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
@@ -197,7 +197,7 @@ var (
 		SourceLabelName:      "field.cattle.io/projectId",
 		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
 		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.clusterName",
+		TargetFinalFieldName: "spec.displayName",
 	}
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
 		schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}: &sqltypes.ExternalGVKUpdates{
