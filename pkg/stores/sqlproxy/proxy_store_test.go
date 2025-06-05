@@ -80,7 +80,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "clusterName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(c, nil)
+			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "displayName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(c, nil)
 
 			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
@@ -147,7 +147,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "clusterName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "displayName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
 
 			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf)
 			assert.Nil(t, err)
@@ -650,7 +650,7 @@ func TestReset(t *testing.T) {
 			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "clusterName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nsc2, nil)
+			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "displayName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nsc2, nil)
 			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset()
 			assert.Nil(t, err)
@@ -757,7 +757,7 @@ func TestReset(t *testing.T) {
 			cf.EXPECT().Reset().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "clusterName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
+			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"metadata", "labels", "field.cattle.io/projectId"}, {"spec", "displayName"}}, nil, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset()
 			assert.NotNil(t, err)

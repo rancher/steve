@@ -74,7 +74,7 @@ var (
 		},
 		gvkKey("", "v1", "Namespace"): {
 			{"metadata", "labels", "field.cattle.io/projectId"},
-			{"spec", "clusterName"},
+			{"spec", "displayName"},
 		},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
@@ -154,7 +154,9 @@ var (
 		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Project"): {
-			{"spec", "clusterName"}},
+			{"spec", "displayName"},
+			{"spec", "clusterName"},
+		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
 			{"spec", "rules", "host"},
 			{"spec", "ingressClassName"},
@@ -193,7 +195,7 @@ var (
 		SourceLabelName:      "field.cattle.io/projectId",
 		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
 		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.clusterName",
+		TargetFinalFieldName: "spec.displayName",
 	}
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
 		schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}: &sqltypes.ExternalGVKUpdates{
