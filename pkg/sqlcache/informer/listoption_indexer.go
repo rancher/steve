@@ -68,6 +68,7 @@ var (
 	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 
 	ErrInvalidColumn = errors.New("supplied column is invalid")
+	ErrTooOld        = errors.New("resourceversion too old")
 )
 
 const (
@@ -273,7 +274,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		err := rowIDRow.Scan(&rowID)
 		if errors.Is(err, sql.ErrNoRows) {
 			if targetRV != latestRV {
-				return fmt.Errorf("resourceversion too old")
+				return ErrTooOld
 			}
 		} else if err != nil {
 			return fmt.Errorf("failed scan rowid: %w", err)
