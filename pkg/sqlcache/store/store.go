@@ -85,7 +85,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 		afterAdd:           []func(key string, obj any, tx transaction.Client) error{},
 		afterUpdate:        []func(key string, obj any, tx transaction.Client) error{},
 		afterDelete:        []func(key string, obj any, tx transaction.Client) error{},
-		afterDeleteAll: []func(tx transaction.Client) error{},
+		afterDeleteAll:     []func(tx transaction.Client) error{},
 	}
 
 	dbName := db.Sanitize(s.name)
