@@ -144,11 +144,11 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 		watchers:      make(map[*watchKey]*watcher),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
+	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterAdd(l.notifyEventAdded)
 	l.RegisterAfterUpdate(l.addIndexFields)
-	l.RegisterAfterUpdate(l.notifyEventModified)
-	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterUpdate(l.addLabels)
+	l.RegisterAfterUpdate(l.notifyEventModified)
 	l.RegisterAfterDelete(l.deleteFieldsByKey)
 	l.RegisterAfterDelete(l.deleteLabelsByKey)
 	l.RegisterAfterDelete(l.notifyEventDeleted)
