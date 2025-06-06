@@ -339,6 +339,30 @@ func TestNewListOptionIndexer(t *testing.T) {
 	}
 }
 
+func makeList(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
+	t.Helper()
+
+	if len(objs) == 0 {
+		return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+	}
+
+	var items []any
+	for _, obj := range objs {
+		items = append(items, obj)
+	}
+
+	list := &unstructured.Unstructured{
+		Object: map[string]any{
+			"items": items,
+		},
+	}
+
+	itemList, err := list.ToList()
+	require.NoError(t, err)
+
+	return itemList
+}
+
 func TestNewListOptionIndexerEasy(t *testing.T) {
 	ctx := context.Background()
 
@@ -410,29 +434,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 
-	makeList := func(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
-		t.Helper()
-
-		if len(objs) == 0 {
-			return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
-		}
-
-		var items []any
-		for _, obj := range objs {
-			items = append(items, obj)
-		}
-
-		list := &unstructured.Unstructured{
-			Object: map[string]any{
-				"items": items,
-			},
-		}
-
-		itemList, err := list.ToList()
-		require.NoError(t, err)
-
-		return itemList
-	}
 	itemList := makeList(t, foo, bar, baz, toto, lodgePole)
 
 	var tests []testCase
@@ -740,48 +741,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-	// tests = append(tests, testCase{
-	// 	description: "sort one unbound label descending",
-	// 	listOptions: sqltypes.ListOptions{
-	// 		SortList: sqltypes.SortList{
-	// 			SortDirectives: []sqltypes.Sort{
-	// 				{
-	// 					Fields: []string{"metadata", "labels", "flip"},
-	// 					Order:  sqltypes.DESC,
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// 	partitions:        []partition.Partition{{All: true}},
-	// 	ns:                "",
-	// 	expectedList:      makeList(t, lodgePole, toto, baz, bar, foo),
-	// expectedTotal:     5,
-	// 	expectedContToken: "",
-	// 	expectedErr:       nil,
-	// })
-	// tests = append(tests, testCase{
-	// 	description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
-	// 	listOptions: sqltypes.ListOptions{
-	// 		SortList: sqltypes.SortList{
-	// 			SortDirectives: []sqltypes.Sort{
-	// 				{
-	// 					Fields: []string{"metadata", "sortfield"},
-	// 					Order:  sqltypes.ASC,
-	// 				},
-	// 				{
-	// 					Fields: []string{"metadata", "labels", "cows"},
-	// 					Order:  sqltypes.ASC,
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// 	partitions:        []partition.Partition{{All: true}},
-	// 	ns:                "",
-	// 	expectedList:      makeList(t),
-	// expectedTotal:     5,
-	// 	expectedContToken: "",
-	// 	expectedErr:       nil,
-	// })
 	tests = append(tests, testCase{
 		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{
@@ -856,20 +815,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-	// tests = append(tests, testCase{
-	// 	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met in prepared sql.Stmt",
-	// 	partitions: []partition.Partition{
-	// 		{
-	// 			Namespace: "ns-b",
-	// 		},
-	// 	},
-	// 	// XXX: Why do I need to specify the namespace here too?
-	// 	ns:                "ns-b",
-	// 	expectedList:      makeList(t, lodgePole),
-	// 	expectedTotal:     1,
-	// 	expectedContToken: "",
-	// 	expectedErr:       nil,
-	// })
 	tests = append(tests, testCase{
 		description: "ListByOptions with a All Partition should select all items that meet all other conditions in prepared sql.Stmt",
 		partitions: []partition.Partition{
@@ -909,6 +854,63 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "sort one unbound label descending",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "flip"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
+		expectedTotal:     5,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "sortfield"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "cows"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, lodgePole, bar, toto, baz, foo),
+		expectedTotal:     5,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met in prepared sql.Stmt",
+		partitions: []partition.Partition{
+			{
+				Namespace: "ns-b",
+			},
+		},
+		// XXX: Why do I need to specify the namespace here too?
+		ns:                "ns-b",
+		expectedList:      makeList(t, lodgePole),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+
 	t.Parallel()
 
 	for _, test := range tests {
@@ -1788,7 +1790,7 @@ func TestConstructQuery(t *testing.T) {
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"metadata", "labels", "this"},
+						Fields: []string{"metadata", "labels", "unbound"},
 						Order:  sqltypes.ASC,
 					},
 				},
@@ -1796,14 +1798,30 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `WITH lt1(key, label, value) AS (
+SELECT DISTINCT o1.key, ltx1.label as lt1_label, ltx1.value AS lt1_value FROM something o1
+JOIN something_fields f1 on f1.key = o1.key
+LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
+  WHERE ltx1.label = ?
+
+  UNION ALL
+
+  SELECT DISTINCT o1.key, ? as lt1_label, NULL AS lt1_value FROM something o1
+  JOIN something_fields f1 on f1.key = o1.key
+  LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
+    WHERE
+      o1.key NOT IN (SELECT o2.key FROM something o2
+          JOIN something_fields f2 ON o2.key = f2.key
+          LEFT OUTER JOIN something_labels lt1i2 ON o2.key = lt1i2.key
+          WHERE lt1i2.label = ?)
+)
+SELECT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    (lt1.label = ?) AND
+    (o.key = lt1.key) AND
     (FALSE)
   ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
-		expectedStmtArgs: []any{"this", "this"},
+		expectedStmtArgs: []any{"unbound", "unbound", "unbound", "unbound"},
 		expectedErr:      nil,
 	})
 
@@ -1841,15 +1859,32 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `WITH lt1(key, label, value) AS (
+SELECT DISTINCT o1.key, ltx1.label as lt1_label, ltx1.value AS lt1_value FROM something o1
+JOIN something_fields f1 on f1.key = o1.key
+LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
+  WHERE ltx1.label = ?
+
+  UNION ALL
+
+  SELECT DISTINCT o1.key, ? as lt1_label, NULL AS lt1_value FROM something o1
+  JOIN something_fields f1 on f1.key = o1.key
+  LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
+    WHERE
+      o1.key NOT IN (SELECT o2.key FROM something o2
+          JOIN something_fields f2 ON o2.key = f2.key
+          LEFT OUTER JOIN something_labels lt1i2 ON o2.key = lt1i2.key
+          WHERE lt1i2.label = ?)
+)
+SELECT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
-  LEFT OUTER JOIN "something_labels" lt3 ON o.key = lt3.key
   WHERE
-    ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?) OR (lt3.label = ?)) AND
+    (o.key = lt1.key) AND
+    ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?)) AND
     (FALSE)
-  ORDER BY (CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
-		expectedStmtArgs: []any{"toys", "jamb", "juice", "this", "this"},
+  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
+		expectedStmtArgs: []any{"this", "this", "this", "toys", "jamb", "juice", "this"},
 		expectedErr:      nil,
 	})
 
@@ -1955,7 +1990,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "TestBuildSortClause: empty index list errors",
 		labelName:   "emptyListError",
-		expectedErr: `internal error: no join-table index given for labelName "emptyListError"`,
+		expectedErr: `internal error: no join-table index given for label "emptyListError"`,
 	})
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit ascending",
