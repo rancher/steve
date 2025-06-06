@@ -14,7 +14,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"reflect"
 	"regexp"
 	"strings"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -761,7 +761,7 @@ func TestAddWithOneUpdate(t *testing.T) {
 			JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
 			WHERE f."spec.projectName" != ex2."spec.projectName"`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
-			results2 := []any{testObject.Id, "field.cattle.io/fixer"}
+			results2 := []any{"lego.cattle.io/fields2"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
 
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
@@ -834,7 +834,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 			stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
 
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
-			results2 := []any{testObject.Id, "field.cattle.io/fixer"}
+			results2 := []any{"field.cattle.io/fixer"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
 
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)

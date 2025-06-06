@@ -132,7 +132,7 @@ func (s *Store) checkUpdateExternalInfo(key string) {
 	for _, updateBlock := range []*sqltypes.ExternalGVKUpdates{s.externalUpdateInfo, s.selfUpdateInfo} {
 		if updateBlock != nil {
 			s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-				err = s.updateExternalInfo(tx, key, updateBlock)
+				err := s.updateExternalInfo(tx, key, updateBlock)
 				if err != nil && !isDBError(err) {
 					// Just report and ignore errors
 					logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
@@ -141,7 +141,6 @@ func (s *Store) checkUpdateExternalInfo(key string) {
 			})
 		}
 	}
-	return nil
 }
 
 // This function is called in two different conditions:
