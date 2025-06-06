@@ -49,7 +49,7 @@ func makeListOptionIndexer(ctx context.Context, fields [][]string) (*ListOptionI
 		return nil, err
 	}
 
-	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, name)
+	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, gvk, name, nil)
 	if err != nil {
 		return nil, err
 	}
