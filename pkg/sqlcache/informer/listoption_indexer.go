@@ -285,6 +285,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		if err != nil {
 			return &db.QueryError{QueryString: l.listEventsAfterQuery, Err: err}
 		}
+		defer rows.Close()
 
 		for rows.Next() {
 			var typ, rv string
@@ -316,6 +317,10 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 			})
 		}
 
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
 		for _, event := range events {
 			eventsCh <- event
 		}
@@ -323,9 +328,13 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		key = l.addWatcher(eventsCh, opts.Filter)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
 	<-ctx.Done()
 	l.removeWatcher(key)
-	return err
+	return nil
 }
 
 func toBytes(obj any) []byte {
