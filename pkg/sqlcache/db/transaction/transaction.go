@@ -41,4 +41,5 @@ type Stmt interface {
 	Exec(args ...any) (sql.Result, error)
 	Query(args ...any) (*sql.Rows, error)
 	QueryContext(ctx context.Context, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, args ...any) *sql.Row
 }

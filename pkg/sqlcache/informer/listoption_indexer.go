@@ -264,16 +264,20 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	// Even though we're not writing in this transaction, we prevent other writes to SQL
 	// because we don't want to add more events while we're backfilling events, so we don't miss events
 	err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
-		rowIDRows, err := tx.Stmt(l.findEventsRowByRVStmt).QueryContext(ctx, targetRV)
-		if err != nil {
-			return &db.QueryError{QueryString: l.listEventsAfterQuery, Err: err}
-		}
-		if !rowIDRows.Next() && targetRV != latestRV {
-			return fmt.Errorf("resourceversion too old")
+		rowIDRow := tx.Stmt(l.findEventsRowByRVStmt).QueryRowContext(ctx, targetRV)
+		if err := rowIDRow.Err(); err != nil {
+			return &db.QueryError{QueryString: l.findEventsRowByRVQuery, Err: err}
 		}
 
 		var rowID int
-		rowIDRows.Scan(&rowID)
+		err := rowIDRow.Scan(&rowID)
+		if errors.Is(err, sql.ErrNoRows) {
+			if targetRV != latestRV {
+				return fmt.Errorf("resourceversion too old")
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed scan rowid: %w", err)
+		}
 
 		// Backfilling previous events from resourceVersion
 		rows, err := tx.Stmt(l.listEventsAfterStmt).QueryContext(ctx, rowID)
