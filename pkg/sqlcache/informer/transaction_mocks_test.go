@@ -99,6 +99,25 @@ func (mr *MockStmtMockRecorder) QueryContext(arg0 any, arg1 ...any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryContext", reflect.TypeOf((*MockStmt)(nil).QueryContext), varargs...)
 }
 
+// QueryRowContext mocks base method.
+func (m *MockStmt) QueryRowContext(arg0 context.Context, arg1 ...any) *sql.Row {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
+	ret0, _ := ret[0].(*sql.Row)
+	return ret0
+}
+
+// QueryRowContext indicates an expected call of QueryRowContext.
+func (mr *MockStmtMockRecorder) QueryRowContext(arg0 any, arg1 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRowContext", reflect.TypeOf((*MockStmt)(nil).QueryRowContext), varargs...)
+}
+
 // MockTXClient is a mock of Client interface.
 type MockTXClient struct {
 	ctrl     *gomock.Controller
