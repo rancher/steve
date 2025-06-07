@@ -303,7 +303,7 @@ func (s *Store) Reset() error {
 }
 
 func defaultInitializeCacheFactory() (CacheFactory, error) {
-	informerFactory, err := factory.NewCacheFactory()
+	informerFactory, err := factory.NewCacheFactory(factory.CacheFactoryOptions{})
 	if err != nil {
 		return nil, err
 	}

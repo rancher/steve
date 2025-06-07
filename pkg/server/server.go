@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
@@ -22,6 +23,7 @@ import (
 	"github.com/rancher/steve/pkg/schema/definitions"
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
+	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
@@ -57,6 +59,8 @@ type Server struct {
 	ClusterRegistry string
 	Version         string
 
+	cacheFactory *factory.CacheFactory
+
 	extensionAPIServer ExtensionAPIServer
 
 	authMiddleware      auth.Middleware
@@ -85,6 +89,8 @@ type Options struct {
 	// SQLCache enables the SQLite-based caching mechanism
 	SQLCache bool
 
+	SQLCacheFactoryOptions factory.CacheFactoryOptions
+
 	// ExtensionAPIServer enables an extension API server that will be served
 	// under /ext
 	// If nil, Steve's default http handler for unknown routes will be served.
@@ -97,6 +103,15 @@ type Options struct {
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
 	if opts == nil {
 		opts = &Options{}
+	}
+
+	var cacheFactory *factory.CacheFactory
+	if opts.SQLCache {
+		var err error
+		cacheFactory, err = factory.NewCacheFactory(opts.SQLCacheFactoryOptions)
+		if err != nil {
+			return nil, fmt.Errorf("creating SQL cache factory: %w", err)
+		}
 	}
 
 	server := &Server{
@@ -113,6 +128,7 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		Version:                    opts.ServerVersion,
 		// SQLCache enables the SQLite-based lasso caching mechanism
 		SQLCache:           opts.SQLCache,
+		cacheFactory:       cacheFactory,
 		extensionAPIServer: opts.ExtensionAPIServer,
 	}
 
@@ -187,7 +203,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, nil)
+		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
 		if err != nil {
 			panic(err)
 		}
