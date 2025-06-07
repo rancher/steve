@@ -65,16 +65,33 @@ func (c *client) WithTransaction(ctx context.Context, forWriting bool, f WithTra
 		return err
 	}
 
-	err = f(transaction.NewClient(tx))
-
-	if err != nil {
-		rerr := tx.Rollback()
-		err = errors.Join(err, rerr)
-	} else {
-		cerr := tx.Commit()
-		err = errors.Join(err, cerr)
+	if err = f(transaction.NewClient(tx)); err != nil {
+		rerr := c.rollback(ctx, tx)
+		return errors.Join(err, rerr)
 	}
 
+	err = c.commit(ctx, tx)
+	if err != nil {
+		// When the context.Context given to BeginTx is canceled, then the
+		// Tx is rolled back already, so rolling back again could have failed.
+		return err
+	}
+	return nil
+}
+
+func (c *client) commit(ctx context.Context, tx *sql.Tx) error {
+	err := tx.Commit()
+	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
+		return fmt.Errorf("commit failed due to canceled context")
+	}
+	return err
+}
+
+func (c *client) rollback(ctx context.Context, tx *sql.Tx) error {
+	err := tx.Rollback()
+	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
+		return fmt.Errorf("rollback failed due to canceled context")
+	}
 	return err
 }
 
