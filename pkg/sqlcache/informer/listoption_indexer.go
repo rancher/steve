@@ -114,10 +114,25 @@ const (
 	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
 )
 
+type ListOptionIndexerOptions struct {
+	// Fields is a list of fields within the object that we want indexed for
+	// filtering & sorting. Each field is specified as a slice.
+	//
+	// For example, .metadata.resourceVersion should be specified as []string{"metadata", "resourceVersion"}
+	Fields [][]string
+	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
+	// namespaced
+	IsNamespaced bool
+	// MaximumEventsCount is the maximum number of events we want to keep
+	// in the _events table.
+	//
+	// Zero means never delete events.
+	MaximumEventsCount int
+}
+
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields.
-// Fields are specified as slices (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
-func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, namespaced bool) (*ListOptionIndexer, error) {
+func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]interface{}{})
 	gob.Register([]interface{}{})
@@ -131,16 +146,16 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	for _, f := range defaultIndexedFields {
 		indexedFields = append(indexedFields, f)
 	}
-	if namespaced {
+	if opts.IsNamespaced {
 		indexedFields = append(indexedFields, defaultIndexNamespaced)
 	}
-	for _, f := range fields {
+	for _, f := range opts.Fields {
 		indexedFields = append(indexedFields, toColumnName(f))
 	}
 
 	l := &ListOptionIndexer{
 		Indexer:       i,
-		namespaced:    namespaced,
+		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
 		watchers:      make(map[*watchKey]*watcher),
 	}

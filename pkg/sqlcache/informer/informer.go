@@ -101,7 +101,12 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	if err != nil {
 		return nil, err
 	}
-	loi, err := NewListOptionIndexer(ctx, fields, s, namespaced)
+
+	opts := ListOptionIndexerOptions{
+		Fields:       fields,
+		IsNamespaced: namespaced,
+	}
+	loi, err := NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func makeListOptionIndexer(ctx context.Context, fields [][]string) (*ListOptionIndexer, error) {
+func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
 	gvk := schema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",
@@ -54,7 +54,7 @@ func makeListOptionIndexer(ctx context.Context, fields [][]string) (*ListOptionI
 		return nil, err
 	}
 
-	listOptionIndexer, err := NewListOptionIndexer(ctx, fields, s, true)
+	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		loi, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		loi, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.Nil(t, err)
 		assert.NotNil(t, loi)
 	}})
@@ -136,7 +140,10 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, false)
+		opts := ListOptionIndexerOptions{
+			Fields: fields,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error returned from Begin(), should return an error", test: func(t *testing.T) {
@@ -168,7 +175,10 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, false)
+		opts := ListOptionIndexerOptions{
+			Fields: fields,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Exec() when creating fields table, should return an error", test: func(t *testing.T) {
@@ -209,7 +219,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from create-labels, should return an error", test: func(t *testing.T) {
@@ -254,7 +268,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Commit(), should return an error", test: func(t *testing.T) {
@@ -300,7 +318,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 
@@ -894,7 +916,11 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			}
 			fields = append(fields, test.extraIndexedFields...)
 
-			loi, err := makeListOptionIndexer(ctx, fields)
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, err := makeListOptionIndexer(ctx, opts)
 			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
@@ -1828,7 +1854,11 @@ func TestGetField(t *testing.T) {
 func TestWatchMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	loi, err := makeListOptionIndexer(ctx, [][]string{{"metadata", "somefield"}})
+	opts := ListOptionIndexerOptions{
+		Fields:       [][]string{{"metadata", "somefield"}},
+		IsNamespaced: true,
+	}
+	loi, err := makeListOptionIndexer(ctx, opts)
 	assert.NoError(t, err)
 
 	startWatcher := func(ctx context.Context) (chan watch.Event, chan error) {
@@ -2076,7 +2106,11 @@ func TestWatchFilter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
-			loi, err := makeListOptionIndexer(ctx, [][]string{{"metadata", "somefield"}})
+			opts := ListOptionIndexerOptions{
+				Fields:       [][]string{{"metadata", "somefield"}},
+				IsNamespaced: true,
+			}
+			loi, err := makeListOptionIndexer(ctx, opts)
 			assert.NoError(t, err)
 
 			wCh, errCh := startWatcher(ctx, loi, WatchFilter{
@@ -2166,7 +2200,10 @@ func TestWatchResourceVersion(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	loi, err := makeListOptionIndexer(parentCtx, [][]string{})
+	opts := ListOptionIndexerOptions{
+		IsNamespaced: true,
+	}
+	loi, err := makeListOptionIndexer(parentCtx, opts)
 	assert.NoError(t, err)
 
 	getRV := func(t *testing.T) string {
