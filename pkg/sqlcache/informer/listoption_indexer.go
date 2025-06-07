@@ -35,31 +35,36 @@ type ListOptionIndexer struct {
 	namespaced    bool
 	indexedFields []string
 
+	// maximumEventsCount is how many events to keep. 0 means keep all events.
+	maximumEventsCount int
+
 	latestRVLock sync.RWMutex
 	latestRV     string
 
 	watchersLock sync.RWMutex
 	watchers     map[*watchKey]*watcher
 
-	upsertEventsQuery      string
-	findEventsRowByRVQuery string
-	listEventsAfterQuery   string
-	addFieldsQuery         string
-	deleteFieldsByKeyQuery string
-	deleteFieldsQuery      string
-	upsertLabelsQuery      string
-	deleteLabelsByKeyQuery string
-	deleteLabelsQuery      string
+	upsertEventsQuery        string
+	findEventsRowByRVQuery   string
+	listEventsAfterQuery     string
+	deleteEventsByCountQuery string
+	addFieldsQuery           string
+	deleteFieldsByKeyQuery   string
+	deleteFieldsQuery        string
+	upsertLabelsQuery        string
+	deleteLabelsByKeyQuery   string
+	deleteLabelsQuery        string
 
-	upsertEventsStmt      *sql.Stmt
-	findEventsRowByRVStmt *sql.Stmt
-	listEventsAfterStmt   *sql.Stmt
-	addFieldsStmt         *sql.Stmt
-	deleteFieldsByKeyStmt *sql.Stmt
-	deleteFieldsStmt      *sql.Stmt
-	upsertLabelsStmt      *sql.Stmt
-	deleteLabelsByKeyStmt *sql.Stmt
-	deleteLabelsStmt      *sql.Stmt
+	upsertEventsStmt        *sql.Stmt
+	findEventsRowByRVStmt   *sql.Stmt
+	listEventsAfterStmt     *sql.Stmt
+	deleteEventsByCountStmt *sql.Stmt
+	addFieldsStmt           *sql.Stmt
+	deleteFieldsByKeyStmt   *sql.Stmt
+	deleteFieldsStmt        *sql.Stmt
+	upsertLabelsStmt        *sql.Stmt
+	deleteLabelsByKeyStmt   *sql.Stmt
+	deleteLabelsStmt        *sql.Stmt
 }
 
 var (
@@ -91,6 +96,11 @@ const (
                FROM "%s_events"
                WHERE rv = ?
        `
+	deleteEventsByCountFmt = `DELETE FROM "%s_events"
+	WHERE rowid
+	NOT IN (
+		SELECT rowid FROM "%s_events" ORDER BY rowid DESC LIMIT ?
+	)`
 
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
 			key TEXT NOT NULL PRIMARY KEY,
@@ -154,20 +164,24 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	l := &ListOptionIndexer{
-		Indexer:       i,
-		namespaced:    opts.IsNamespaced,
-		indexedFields: indexedFields,
-		watchers:      make(map[*watchKey]*watcher),
+		Indexer:            i,
+		namespaced:         opts.IsNamespaced,
+		indexedFields:      indexedFields,
+		maximumEventsCount: opts.MaximumEventsCount,
+		watchers:           make(map[*watchKey]*watcher),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
 	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterAdd(l.notifyEventAdded)
+	l.RegisterAfterAdd(l.deleteOldEvents)
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterUpdate(l.notifyEventModified)
+	l.RegisterAfterUpdate(l.deleteOldEvents)
 	l.RegisterAfterDelete(l.deleteFieldsByKey)
 	l.RegisterAfterDelete(l.deleteLabelsByKey)
 	l.RegisterAfterDelete(l.notifyEventDeleted)
+	l.RegisterAfterDelete(l.deleteOldEvents)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
@@ -240,6 +254,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 	l.findEventsRowByRVQuery = fmt.Sprintf(findEventsRowByRVFmt, dbName)
 	l.findEventsRowByRVStmt = l.Prepare(l.findEventsRowByRVQuery)
+
+	l.deleteEventsByCountQuery = fmt.Sprintf(deleteEventsByCountFmt, dbName, dbName)
+	l.deleteEventsByCountStmt = l.Prepare(l.deleteEventsByCountQuery)
 
 	l.addFieldsQuery = fmt.Sprintf(
 		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO UPDATE SET %s`,
@@ -462,6 +479,18 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	l.latestRVLock.Lock()
 	defer l.latestRVLock.Unlock()
 	l.latestRV = latestRV
+	return nil
+}
+
+func (l *ListOptionIndexer) deleteOldEvents(key string, obj any, tx transaction.Client) error {
+	if l.maximumEventsCount == 0 {
+		return nil
+	}
+
+	_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(l.maximumEventsCount)
+	if err != nil {
+		return &db.QueryError{QueryString: l.deleteEventsByCountQuery, Err: err}
+	}
 	return nil
 }
 

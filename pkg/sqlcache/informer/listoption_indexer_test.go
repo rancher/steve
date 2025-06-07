@@ -91,9 +91,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		// create events table
@@ -168,9 +168,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
@@ -203,9 +203,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -248,9 +248,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -297,9 +297,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -2296,5 +2296,156 @@ func TestWatchResourceVersion(t *testing.T) {
 				assert.Equal(t, test.expectedEvents, gotEvents)
 			}
 		})
+	}
+}
+
+func TestWatchGarbageCollection(t *testing.T) {
+	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
+		errCh := make(chan error, 1)
+		eventsCh := make(chan watch.Event, 100)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{ResourceVersion: rv}, eventsCh)
+			errCh <- watchErr
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	waitStopWatcher := func(errCh chan error) error {
+		select {
+		case <-time.After(time.Second * 5):
+			return fmt.Errorf("not finished in time")
+		case err := <-errCh:
+			return err
+		}
+	}
+
+	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
+		timer := time.NewTimer(time.Millisecond * 50)
+		var events []watch.Event
+		for {
+			select {
+			case <-timer.C:
+				return events
+			case ev := <-eventsCh:
+				events = append(events, ev)
+			}
+		}
+	}
+
+	foo := &unstructured.Unstructured{}
+	foo.SetResourceVersion("100")
+	foo.SetName("foo")
+
+	fooUpdated := foo.DeepCopy()
+	fooUpdated.SetResourceVersion("120")
+
+	bar := &unstructured.Unstructured{}
+	bar.SetResourceVersion("150")
+	bar.SetName("bar")
+
+	barNew := &unstructured.Unstructured{}
+	barNew.SetResourceVersion("160")
+	barNew.SetName("bar")
+
+	parentCtx := context.Background()
+
+	opts := ListOptionIndexerOptions{
+		MaximumEventsCount: 2,
+	}
+	loi, err := makeListOptionIndexer(parentCtx, opts)
+	assert.NoError(t, err)
+
+	getRV := func(t *testing.T) string {
+		t.Helper()
+		list, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+		assert.NoError(t, err)
+		return list.GetResourceVersion()
+	}
+
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	rv1 := getRV(t)
+
+	err = loi.Update(fooUpdated)
+	assert.NoError(t, err)
+	rv2 := getRV(t)
+
+	err = loi.Add(bar)
+	assert.NoError(t, err)
+	rv3 := getRV(t)
+
+	err = loi.Delete(bar)
+	assert.NoError(t, err)
+	rv4 := getRV(t)
+
+	for _, rv := range []string{rv1, rv2} {
+		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
+		gotEvents := receiveEvents(watcherCh)
+		err = waitStopWatcher(errCh)
+		assert.Empty(t, gotEvents)
+		assert.ErrorIs(t, err, ErrTooOld)
+	}
+
+	tests := []struct {
+		rv             string
+		expectedEvents []watch.Event
+	}{
+		{
+			rv: rv3,
+			expectedEvents: []watch.Event{
+				{Type: watch.Deleted, Object: bar},
+			},
+		},
+		{
+			rv:             rv4,
+			expectedEvents: nil,
+		},
+	}
+	for _, test := range tests {
+		ctx, cancel := context.WithCancel(parentCtx)
+		watcherCh, errCh := startWatcher(ctx, loi, test.rv)
+		gotEvents := receiveEvents(watcherCh)
+		cancel()
+		err = waitStopWatcher(errCh)
+		assert.Equal(t, test.expectedEvents, gotEvents)
+		assert.NoError(t, err)
+	}
+
+	err = loi.Add(barNew)
+	assert.NoError(t, err)
+	rv5 := getRV(t)
+
+	for _, rv := range []string{rv1, rv2, rv3} {
+		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
+		gotEvents := receiveEvents(watcherCh)
+		err = waitStopWatcher(errCh)
+		assert.Empty(t, gotEvents)
+		assert.ErrorIs(t, err, ErrTooOld)
+	}
+
+	tests = []struct {
+		rv             string
+		expectedEvents []watch.Event
+	}{
+		{
+			rv: rv4,
+			expectedEvents: []watch.Event{
+				{Type: watch.Added, Object: barNew},
+			},
+		},
+		{
+			rv:             rv5,
+			expectedEvents: nil,
+		},
+	}
+	for _, test := range tests {
+		ctx, cancel := context.WithCancel(parentCtx)
+		watcherCh, errCh := startWatcher(ctx, loi, test.rv)
+		gotEvents := receiveEvents(watcherCh)
+		cancel()
+		err = waitStopWatcher(errCh)
+		assert.Equal(t, test.expectedEvents, gotEvents)
+		assert.NoError(t, err)
 	}
 }
