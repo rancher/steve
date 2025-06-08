@@ -32,7 +32,7 @@ require (
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/mock v0.5.0
 	golang.org/x/sync v0.12.0
-	google.golang.org/protobuf v1.35.2
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.2
 	k8s.io/apiextensions-apiserver v0.32.2
