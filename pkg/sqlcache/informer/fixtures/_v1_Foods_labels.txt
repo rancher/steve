@@ -1,0 +1,6 @@
+INSERT INTO _v1_Foods_labels VALUES("lemons","names","meyer|pomelo|citron");
+INSERT INTO _v1_Foods_labels VALUES("limes","names","key|persian");
+INSERT INTO _v1_Foods_labels VALUES("mangoes","names","haden|atulfo|key|kent");
+INSERT INTO _v1_Foods_labels VALUES("plums","names","pluot|prune|santa rosa");
+INSERT INTO _v1_Foods_labels VALUES("eggs","names","robin|chicken|turkey|ostrich|persian");
+
