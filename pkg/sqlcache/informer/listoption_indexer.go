@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -921,10 +922,17 @@ func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
 
 func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []any, error) {
 	opString := ""
+	orConnector := " OR\n    "
+	andConnector := " AND\n    "
+	connector := ""
 	escapeString := ""
 	columnName := toColumnName(filter.Field)
+	var multipleFields []string
 	if err := l.validateColumn(columnName); err != nil {
-		return "", nil, err
+		multipleFields = l.getArrayFields(columnName)
+		if len(multipleFields) == 0 {
+			return "", nil, err
+		}
 	}
 	switch filter.Op {
 	case sqltypes.Eq:
@@ -934,8 +942,11 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		} else {
 			opString = "="
 		}
-		clause := fmt.Sprintf(`f."%s" %s ?%s`, columnName, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		clauseTemplate := fmt.Sprintf(`f."%%s" %s ?%s`, opString, escapeString)
+		if len(multipleFields) > 0 {
+			return repeatInfo(clauseTemplate, multipleFields, formatMatchTarget(filter), orConnector)
+		}
+		return fmt.Sprintf(clauseTemplate, columnName), []any{formatMatchTarget(filter)}, nil
 	case sqltypes.NotEq:
 		if filter.Partial {
 			opString = "NOT LIKE"
@@ -943,16 +954,22 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		} else {
 			opString = "!="
 		}
-		clause := fmt.Sprintf(`f."%s" %s ?%s`, columnName, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		clauseTemplate := fmt.Sprintf(`f."%%s" %s ?%s`, opString, escapeString)
+		if len(multipleFields) > 0 {
+			return repeatInfo(clauseTemplate, multipleFields, formatMatchTarget(filter), andConnector)
+		}
+		return fmt.Sprintf(clauseTemplate, columnName), []any{formatMatchTarget(filter)}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:
 		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
 		if err != nil {
 			return "", nil, err
 		}
-		clause := fmt.Sprintf(`f."%s" %s ?`, columnName, sym)
-		return clause, []any{target}, nil
+		clauseTemplate := fmt.Sprintf(`f."%%s" %s ?`, sym)
+		if len(multipleFields) > 0 {
+			return repeatInfo(clauseTemplate, multipleFields, target, orConnector)
+		}
+		return fmt.Sprintf(clauseTemplate, columnName), []any{target}, nil
 
 	case sqltypes.Exists, sqltypes.NotExists:
 		return "", nil, errors.New("NULL and NOT NULL tests aren't supported for non-label queries")
@@ -965,18 +982,52 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 			target = fmt.Sprintf("(?%s)", strings.Repeat(", ?", len(filter.Matches)-1))
 		}
 		opString = "IN"
+		connector = orConnector
 		if filter.Op == sqltypes.NotIn {
 			opString = "NOT IN"
+			connector = andConnector
 		}
-		clause := fmt.Sprintf(`f."%s" %s %s`, columnName, opString, target)
+		clauseTemplate := fmt.Sprintf(`f."%%s" %s %s`, opString, target)
 		matches := make([]any, len(filter.Matches))
 		for i, match := range filter.Matches {
 			matches[i] = match
 		}
-		return clause, matches, nil
+		if len(multipleFields) > 0 {
+			count := len(multipleFields)
+			clauses := make([]string, count)
+			for i, field := range multipleFields {
+				clauses[i] = fmt.Sprintf(clauseTemplate, field)
+			}
+			terms := slices.Repeat(matches, len(multipleFields))
+			return fmt.Sprintf("%s", strings.Join(clauses, connector)), terms, nil
+		}
+		return fmt.Sprintf(clauseTemplate, columnName), matches, nil
 	}
 
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
+}
+
+func repeatInfo(clauseTemplate string, fieldsList []string, formattedTarget any, connector string) (string, []any, error) {
+	count := len(fieldsList)
+	clauses := make([]string, count)
+	for i, field := range fieldsList {
+		clauses[i] = fmt.Sprintf(clauseTemplate, field)
+	}
+	terms := slices.Repeat([]any{formattedTarget}, count)
+	return strings.Join(clauses, connector), terms, nil
+}
+
+func (l *ListOptionIndexer) getArrayFields(columnName string) []string {
+	indexedRegex := regexp.MustCompile(fmt.Sprintf(`^%s\[\d+\]$`, columnName))
+	// Allow for a weird case where we can have both
+	// `fieldName[1]`, `fieldName[2]`... and also bare `fieldName` - check the explicit array first
+	associatedColumnNames := make([]string, 0, len(l.indexedFields))
+	for _, fieldName := range l.indexedFields {
+		if indexedRegex.MatchString(fieldName) {
+			associatedColumnNames = append(associatedColumnNames, fieldName)
+		}
+	}
+	return associatedColumnNames
 }
 
 func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, dbName string) (string, []any, error) {
