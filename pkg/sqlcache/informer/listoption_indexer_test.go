@@ -2255,8 +2255,8 @@ func TestWatchResourceVersion(t *testing.T) {
 			if test.expectedErr != nil {
 				assert.ErrorIs(t, err, ErrTooOld)
 			} else {
-				assert.Equal(t, test.expectedEvents, gotEvents)
 				assert.NoError(t, err)
+				assert.Equal(t, test.expectedEvents, gotEvents)
 			}
 		})
 	}
