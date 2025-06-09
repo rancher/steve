@@ -606,10 +606,6 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	// There's a 1:1 correspondence between a base table and its _Fields table
 	// but it's possible that a key has no associated labels, so if we're doing a
 	// non-existence test on labels we need to do a LEFT OUTER JOIN
-	distinctModifier := ""
-	if queryUsesLabels {
-		distinctModifier = " DISTINCT"
-	}
 	query := ""
 	params := []any{}
 	whereClauses := []string{}
@@ -625,9 +621,8 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		for _, withName := range withNames {
 			whereClauses = append(whereClauses, fmt.Sprintf("o.key = %s.key", withName))
 		}
-		distinctModifier = ""
 	}
-	query += fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid FROM "%s" o%s`, distinctModifier, dbName, withTablesToSelect)
+	query += fmt.Sprintf(`SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "%s" o%s`, dbName, withTablesToSelect)
 	query += "\n  "
 	query += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)
 	if queryUsesLabels {
