@@ -628,132 +628,69 @@ func TestListByPartitions(t *testing.T) {
 
 func TestListByPartitionWithUserAccess(t *testing.T) {
 	type testCase struct {
-		description string
-		test        func(t *testing.T)
+		description     string
+		accessSetSetter func(accessSet *accesscontrol.AccessSet)
+		orFilters       []sqltypes.OrFilter
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "client ListByPartitions(), with a specified user for a restricted resource should filter for that user",
-		test: func(t *testing.T) {
-			nsi := NewMockCache(gomock.NewController(t))
-			cg := NewMockClientGetter(gomock.NewController(t))
-			cf := NewMockCacheFactory(gomock.NewController(t))
-			ri := NewMockResourceInterface(gomock.NewController(t))
-			bloi := NewMockByOptionsLister(gomock.NewController(t))
-			tb := NewMockTransformBuilder(gomock.NewController(t))
-			inf := &informer.Informer{
-				ByOptionsLister: bloi,
-			}
-			c := factory.Cache{
-				ByOptionsLister: inf,
-			}
-			s := &Store{
-				ctx:              context.Background(),
-				namespaceCache:   nsi,
-				clientGetter:     cg,
-				cacheFactory:     cf,
-				transformBuilder: tb,
-			}
-			var partitions []partition.Partition
-			username := "flip"
-			targetGroup := "ext.cattle.io"
-			targetKind := "Token"
-			accessSet := &accesscontrol.AccessSet{ID: username}
-			accessSet.Add("list",
-				schema2.GroupResource{Group: targetGroup, Resource: "token"},
-				accesscontrol.Access{Namespace: accesscontrol.All, ResourceName: "token"},
-			)
-			apiOpSchemas := &types.APISchemas{}
-			accesscontrol.SetAccessSetAttribute(apiOpSchemas, accessSet)
-			theRequest := &http.Request{
-				URL: &url.URL{},
-			}
-			userInfo := user.DefaultInfo{Name: username, UID: "Id"}
-			requestWithContext := krequest.WithUser(context.Background(), &userInfo)
-			theRequest = theRequest.WithContext(requestWithContext)
-			apiOp := &types.APIRequest{
-				Request: theRequest,
-				Schemas: apiOpSchemas,
-			}
-			theSchema := &types.APISchema{
-				Schema: &schemas.Schema{Attributes: map[string]interface{}{
-					"columns": []common.ColumnDefinition{
-						{
-							Field: "some.field",
-						},
-					},
-					"verbs": []string{"list", "watch"},
-				}},
-			}
-			gvk := schema2.GroupVersionKind{
-				Group: targetGroup,
-				Kind:  targetKind,
-			}
-			opts := &sqltypes.ListOptions{
-				Filters: []sqltypes.OrFilter{
+		description:     "client ListByPartitions(), with a specified user for a restricted resource should filter for that user",
+		accessSetSetter: func(accessSet *accesscontrol.AccessSet) {},
+		orFilters: []sqltypes.OrFilter{
+			{
+				Filters: []sqltypes.Filter{
 					{
-						Filters: []sqltypes.Filter{
-							{
-								Field:   []string{"metadata", "labels", "cattle.io/user-id"},
-								Matches: []string{"flip"},
-								Op:      sqltypes.Eq,
-							},
-						},
+						Field:   []string{"metadata", "labels", "cattle.io/user-id"},
+						Matches: []string{"flip"},
+						Op:      sqltypes.Eq,
 					},
 				},
-				Pagination: sqltypes.Pagination{
-					Page: 1,
-				},
-			}
-			attributes.SetGVK(theSchema, gvk)
-			cg.EXPECT().TableAdminClient(apiOp, theSchema, "", &WarningBuffer{}).Return(ri, nil)
-			cf.EXPECT().CacheFor(context.Background(), [][]string{{"some", "field"}, {"id"}, {"metadata", "state", "name"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(theSchema), attributes.Namespaced(theSchema), true).Return(c, nil)
-			tb.EXPECT().GetTransformFunc(attributes.GVK(theSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-
-			listToReturn := &unstructured.UnstructuredList{
-				Items: make([]unstructured.Unstructured, 0, 0),
-			}
-			bloi.EXPECT().ListByOptions(apiOp.Context(), opts, partitions, "").Return(listToReturn, len(listToReturn.Items), "", nil)
-			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
-			assert.Nil(t, err)
+			},
 		},
 	})
 	tests = append(tests, testCase{
 		description: "client ListByPartitions(), with an admin user for a restricted resource will return all items regardless of user",
-		test: func(t *testing.T) {
-			nsi := NewMockCache(gomock.NewController(t))
-			cg := NewMockClientGetter(gomock.NewController(t))
-			cf := NewMockCacheFactory(gomock.NewController(t))
-			ri := NewMockResourceInterface(gomock.NewController(t))
-			bloi := NewMockByOptionsLister(gomock.NewController(t))
-			tb := NewMockTransformBuilder(gomock.NewController(t))
-			inf := &informer.Informer{
-				ByOptionsLister: bloi,
-			}
-			c := factory.Cache{
-				ByOptionsLister: inf,
-			}
-			s := &Store{
-				ctx:              context.Background(),
-				namespaceCache:   nsi,
-				clientGetter:     cg,
-				cacheFactory:     cf,
-				transformBuilder: tb,
-			}
-			var partitions []partition.Partition
-			username := "flip"
-			targetGroup := "ext.cattle.io"
-			targetKind := "Token"
-			accessSet := &accesscontrol.AccessSet{ID: username}
-			accessSet.Add("list",
-				schema2.GroupResource{Group: targetGroup, Resource: "token"},
-				accesscontrol.Access{Namespace: accesscontrol.All, ResourceName: "token"},
-			)
+		accessSetSetter: func(accessSet *accesscontrol.AccessSet) {
 			// admins also get this access-set
 			accessSet.Add("list",
 				schema2.GroupResource{Group: accesscontrol.All, Resource: accesscontrol.All},
 				accesscontrol.Access{Namespace: accesscontrol.All, ResourceName: accesscontrol.All},
 			)
+		},
+		orFilters: []sqltypes.OrFilter{},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			nsi := NewMockCache(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			c := factory.Cache{
+				ByOptionsLister: inf,
+			}
+			s := &Store{
+				ctx:              context.Background(),
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			var partitions []partition.Partition
+			username := "flip"
+			targetGroup := "ext.cattle.io"
+			targetKind := "Token"
+			accessSet := &accesscontrol.AccessSet{ID: username}
+			accessSet.Add("list",
+				schema2.GroupResource{Group: targetGroup, Resource: "token"},
+				accesscontrol.Access{Namespace: accesscontrol.All, ResourceName: "token"},
+			)
+			test.accessSetSetter(accessSet)
 			apiOpSchemas := &types.APISchemas{}
 			accesscontrol.SetAccessSetAttribute(apiOpSchemas, accessSet)
 			theRequest := &http.Request{
@@ -781,7 +718,7 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 				Kind:  targetKind,
 			}
 			opts := &sqltypes.ListOptions{
-				Filters: []sqltypes.OrFilter{},
+				Filters: test.orFilters,
 				Pagination: sqltypes.Pagination{
 					Page: 1,
 				},
@@ -797,11 +734,7 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			bloi.EXPECT().ListByOptions(apiOp.Context(), opts, partitions, "").Return(listToReturn, len(listToReturn.Items), "", nil)
 			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
 			assert.Nil(t, err)
-		},
-	})
-	t.Parallel()
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) { test.test(t) })
+		})
 	}
 }
 
