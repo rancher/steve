@@ -2199,6 +2199,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	tests := []struct {
 		rv             string
 		expectedEvents []watch.Event
+		expectedErr    error
 	}{
 		{
 			rv: "",
@@ -2237,6 +2238,10 @@ func TestWatchResourceVersion(t *testing.T) {
 			rv:             rv5,
 			expectedEvents: nil,
 		},
+		{
+			rv:          "unknown",
+			expectedErr: ErrTooOld,
+		},
 	}
 
 	for _, test := range tests {
@@ -2245,11 +2250,14 @@ func TestWatchResourceVersion(t *testing.T) {
 			watcherCh, errCh := startWatcher(ctx, loi, test.rv)
 			gotEvents := receiveEvents(watcherCh)
 
-			assert.Equal(t, test.expectedEvents, gotEvents)
-
 			cancel()
 			err := waitStopWatcher(errCh)
-			assert.NoError(t, err)
+			if test.expectedErr != nil {
+				assert.ErrorIs(t, err, ErrTooOld)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.expectedEvents, gotEvents)
+			}
 		})
 	}
 }
