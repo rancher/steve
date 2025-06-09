@@ -13,8 +13,31 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rancher/apiserver/pkg/apierror"
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
+	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	"github.com/rancher/steve/pkg/stores/queryhelper"
+	"github.com/rancher/wrangler/v3/pkg/data"
+	"github.com/rancher/wrangler/v3/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/rancher/steve/pkg/attributes"
+	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/virtual"
+	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,29 +52,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-
-	"github.com/rancher/apiserver/pkg/apierror"
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/sqlcache/informer"
-	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
-	"github.com/rancher/steve/pkg/sqlcache/partition"
-	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
-	"github.com/rancher/steve/pkg/stores/queryhelper"
-	"github.com/rancher/wrangler/v3/pkg/data"
-	"github.com/rancher/wrangler/v3/pkg/kv"
-	"github.com/rancher/wrangler/v3/pkg/schemas"
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
-	"github.com/rancher/wrangler/v3/pkg/summary"
-
-	"github.com/rancher/steve/pkg/attributes"
-	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
-	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/resources/virtual"
-	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
-	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
-	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 )
 
 const (
@@ -767,17 +767,15 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		if accessSet == nil || !accessSet.Grants("list", schema.GroupResource{
 			Resource: "*",
 		}, "", "") {
-			// restrict access
 			user, ok := request.UserFrom(apiOp.Request.Context())
 			if !ok {
-				return nil, 0, "", errors.New("failed to get user info from the request.Context object")
+				return nil, 0, "", apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
 			}
-			username := user.GetName()
 			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
 				Filters: []sqltypes.Filter{
 					{
 						Field:   []string{"metadata", "labels", "cattle.io/user-id"},
-						Matches: []string{username},
+						Matches: []string{user.GetName()},
 						Op:      sqltypes.Eq,
 					},
 				},
