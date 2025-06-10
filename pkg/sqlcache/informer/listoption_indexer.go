@@ -626,14 +626,14 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	query += "\n  "
 	query += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)
 	if queryUsesLabels {
-		for i, orFilter := range lo.Filters {
-			for j, filter := range orFilter.Filters {
+		for _, orFilter := range lo.Filters {
+			for _, filter := range orFilter.Filters {
 				if isLabelFilter(&filter) {
 					labelName := filter.Field[2]
 					_, ok := joinTableIndexByLabelName[labelName]
 					if !ok {
 						// Make the lt index 1-based for readability
-						jtIndex := i + j + 1
+						jtIndex := len(joinTableIndexByLabelName) + 1
 						joinTableIndexByLabelName[labelName] = jtIndex
 						query += "\n  "
 						query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, jtIndex, jtIndex)
