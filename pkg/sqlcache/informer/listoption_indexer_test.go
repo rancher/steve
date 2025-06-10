@@ -373,32 +373,56 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken  string
 		expectedErr        error
 	}
-	foo := map[string]any{
+	obj01_no_labels := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj1",
+			"name":      "obj01_no_labels",
 			"namespace": "ns-a",
 			"somefield": "foo",
-			"sortfield": "4",
+			"sortfield": "400",
 		},
 	}
-	bar := map[string]any{
+	obj02_milk_saddles := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj2",
+			"name":      "obj02_milk_saddles",
 			"namespace": "ns-a",
 			"somefield": "bar",
-			"sortfield": "1",
+			"sortfield": "100",
 			"labels": map[string]any{
 				"cows":   "milk",
 				"horses": "saddles",
 			},
 		},
 	}
-	baz := map[string]any{
+	obj02a_beef_saddles := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj3",
+			"name":      "obj02a_beef_saddles",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "110",
+			"labels": map[string]any{
+				"cows":   "beef",
+				"horses": "saddles",
+			},
+		},
+	}
+	obj02b_milk_shoes := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj02b_milk_shoes",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "105",
+			"labels": map[string]any{
+				"cows":   "milk",
+				"horses": "shoes",
+			},
+		},
+	}
+	obj03_saddles := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj03_saddles",
 			"namespace": "ns-a",
 			"somefield": "baz",
-			"sortfield": "2",
+			"sortfield": "200",
 			"labels": map[string]any{
 				"horses": "saddles",
 			},
@@ -407,20 +431,34 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			"someotherfield": "helloworld",
 		},
 	}
-	toto := map[string]any{
+	obj03a_shoes := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj4",
+			"name":      "obj03a_shoes",
+			"namespace": "ns-a",
+			"somefield": "baz",
+			"sortfield": "210",
+			"labels": map[string]any{
+				"horses": "shoes",
+			},
+		},
+		"status": map[string]any{
+			"someotherfield": "helloworld",
+		},
+	}
+	obj04_milk := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj04_milk",
 			"namespace": "ns-a",
 			"somefield": "toto",
-			"sortfield": "2",
+			"sortfield": "200",
 			"labels": map[string]any{
 				"cows": "milk",
 			},
 		},
 	}
-	lodgePole := map[string]any{
+	obj05__guard_lodgepole := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj5",
+			"name":      "obj05__guard_lodgepole",
 			"namespace": "ns-b",
 			"unknown":   "hi",
 			"labels": map[string]any{
@@ -428,8 +466,18 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			},
 		},
 	}
+	allObjects := []map[string]any{
+		obj01_no_labels,
+		obj02_milk_saddles,
+		obj02a_beef_saddles,
+		obj02b_milk_shoes,
+		obj03_saddles,
+		obj03a_shoes,
+		obj04_milk,
+		obj05__guard_lodgepole,
+	}
 
-	itemList := makeList(t, foo, bar, baz, toto, lodgePole)
+	itemList := makeList(t, allObjects...)
 
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -471,13 +519,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo),
+		expectedList:      makeList(t, obj01_no_labels),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set top NotEq should select where that filter is not true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set to NotEq should select where that filter is not true in prepared sql.Stmt",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -493,8 +541,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, bar, baz, toto, lodgePole),
-		expectedTotal:     4,
+		expectedList:      makeList(t, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj04_milk, obj05__guard_lodgepole),
+		expectedTotal:     7,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -515,7 +563,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, toto),
+		expectedList:      makeList(t, obj01_no_labels, obj04_milk),
 		expectedTotal:     2,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -549,8 +597,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, lodgePole),
-		expectedTotal:     4,
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj05__guard_lodgepole),
+		expectedTotal:     7,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -587,7 +635,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, toto),
+		expectedList:      makeList(t, obj04_milk),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -609,7 +657,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole),
+		expectedList:      makeList(t, obj05__guard_lodgepole),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -642,7 +690,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, bar),
+		expectedList:      makeList(t, obj02_milk_saddles),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -674,7 +722,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, toto),
+		expectedList:      makeList(t, obj04_milk),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -693,8 +741,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, bar, baz, foo, toto),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj05__guard_lodgepole, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj01_no_labels, obj04_milk),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -712,8 +760,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, toto, foo, baz, bar, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj04_milk, obj01_no_labels, obj03a_shoes, obj03_saddles, obj02b_milk_shoes, obj02a_beef_saddles, obj02_milk_saddles, obj05__guard_lodgepole),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -731,8 +779,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, toto, baz, bar, foo),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj05__guard_lodgepole, obj04_milk, obj03a_shoes, obj03_saddles, obj02b_milk_shoes, obj02a_beef_saddles, obj02_milk_saddles, obj01_no_labels),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -754,8 +802,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, bar, baz, toto, foo),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj05__guard_lodgepole, obj02_milk_saddles, obj02b_milk_shoes, obj02a_beef_saddles, obj03_saddles, obj04_milk, obj03a_shoes, obj01_no_labels),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -777,8 +825,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, baz, toto, bar, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj01_no_labels, obj03a_shoes, obj03_saddles, obj04_milk, obj02a_beef_saddles, obj02b_milk_shoes, obj02_milk_saddles, obj05__guard_lodgepole),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -791,8 +839,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "3",
 		expectedErr:       nil,
 	})
@@ -805,8 +853,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -818,8 +866,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			},
 		},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -831,8 +879,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			},
 		},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -840,11 +888,11 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		description: "ListByOptions with a Names Partition should select only items where metadata.name equals an items in Names and all other conditions are met in prepared sql.Stmt",
 		partitions: []partition.Partition{
 			{
-				Names: sets.New("obj1", "obj2"),
+				Names: sets.New("obj01_no_labels", "obj02_milk_saddles"),
 			},
 		},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar),
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles),
 		expectedTotal:     2,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -863,22 +911,22 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj04_milk, obj05__guard_lodgepole),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
+		description: "ListByOptions sorting on two complex fields should sort on the cows-labels-field in ascending order first and then sort on the sortfield field in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"metadata", "sortfield"},
+						Fields: []string{"metadata", "labels", "cows"},
 						Order:  sqltypes.ASC,
 					},
 					{
-						Fields: []string{"metadata", "labels", "cows"},
+						Fields: []string{"metadata", "sortfield"},
 						Order:  sqltypes.ASC,
 					},
 				},
@@ -886,8 +934,41 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, bar, toto, baz, foo),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj02a_beef_saddles, obj02_milk_saddles, obj02b_milk_shoes, obj04_milk, obj05__guard_lodgepole, obj03_saddles, obj03a_shoes, obj01_no_labels),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions sorting on two existing labels, with a filter on one, should sort correctly",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field: []string{"metadata", "labels", "cows"},
+							Op:    sqltypes.Exists,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "cows"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "horses"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj02a_beef_saddles, obj04_milk, obj02b_milk_shoes, obj02_milk_saddles),
+		expectedTotal:     4,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -900,7 +981,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		// XXX: Why do I need to specify the namespace here too?
 		ns:                "ns-b",
-		expectedList:      makeList(t, lodgePole),
+		expectedList:      makeList(t, obj05__guard_lodgepole),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -936,8 +1017,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedTotal, total)
+			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
@@ -973,7 +1054,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (f."metadata.queryField1" IN (?)) AND
@@ -998,7 +1079,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (f."metadata.queryField1" NOT IN (?)) AND
@@ -1518,7 +1599,7 @@ LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
           LEFT OUTER JOIN something_labels lt1i2 ON o2.key = lt1i2.key
           WHERE lt1i2.label = ?)
 )
-SELECT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (o.key = lt1.key) AND
@@ -1579,7 +1660,7 @@ LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
           LEFT OUTER JOIN something_labels lt1i2 ON o2.key = lt1i2.key
           WHERE lt1i2.label = ?)
 )
-SELECT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
   WHERE
