@@ -503,7 +503,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter should select where that filter is true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter should select where that filter is true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -525,7 +525,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set to NotEq should select where that filter is not true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set to NotEq should select where that filter is not true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -547,7 +547,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter with Partial set to true should select where that partial match on that filter's value is true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter with Partial set to true should select where that partial match on that filter's value is true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -569,7 +569,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with multiple filters should select where any of those filters are true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with multiple filters should select where any of those filters are true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -603,7 +603,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with multiple OrFilters set should select where all OrFilters contain one filter that is true in prepared sql.Stmt",
+		description: "ListByOptions with multiple OrFilters set should select where all OrFilters contain one filter that is true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				Filters: []sqltypes.Filter{
@@ -641,7 +641,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with labels filter should select the label in the prepared sql.Stmt",
+		description: "ListByOptions with labels filter should select the label",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				Filters: []sqltypes.Filter{
@@ -728,7 +728,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
+		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -785,7 +785,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
+		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -808,7 +808,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order in prepared sql.Stmt",
+		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -831,7 +831,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
+		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize",
 		listOptions: sqltypes.ListOptions{
 			Pagination: sqltypes.Pagination{
 				PageSize: 3,
@@ -845,7 +845,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.Page and no PageSize set should not add anything to prepared sql.Stmt",
+		description: "ListByOptions with Pagination.Page and no PageSize set should not filter anything",
 		listOptions: sqltypes.ListOptions{
 			Pagination: sqltypes.Pagination{
 				Page: 2,
@@ -859,7 +859,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with a All Partition should select all items that meet all other conditions in prepared sql.Stmt",
+		description: "ListByOptions with a All Partition should select all items that meet all other conditions",
 		partitions: []partition.Partition{
 			{
 				All: true,
@@ -872,7 +872,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with a Passthrough Partition should select all items that meet all other conditions prepared sql.Stmt",
+		description: "ListByOptions with a Passthrough Partition should select all items that meet all other conditions",
 		partitions: []partition.Partition{
 			{
 				Passthrough: true,
@@ -885,7 +885,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with a Names Partition should select only items where metadata.name equals an items in Names and all other conditions are met in prepared sql.Stmt",
+		description: "ListByOptions with a Names Partition should select only items where metadata.name equals an items in Names and all other conditions are met",
 		partitions: []partition.Partition{
 			{
 				Names: sets.New("obj01_no_labels", "obj02_milk_saddles"),
@@ -973,7 +973,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met in prepared sql.Stmt",
+		description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
 		partitions: []partition.Partition{
 			{
 				Namespace: "ns-b",
