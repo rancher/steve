@@ -2190,13 +2190,11 @@ func TestWatchResourceVersion(t *testing.T) {
 		"app": "bar",
 	})
 
-	barNew := &unstructured.Unstructured{}
-	barNew.SetResourceVersion("160")
-	barNew.SetName("bar")
-	barNew.SetNamespace("bar")
-	barNew.SetLabels(map[string]string{
-		"app": "bar",
-	})
+	barDeleted := bar.DeepCopy()
+	barDeleted.SetResourceVersion("160")
+
+	barNew := bar.DeepCopy()
+	barNew.SetResourceVersion("170")
 
 	parentCtx := context.Background()
 
@@ -2225,7 +2223,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	assert.NoError(t, err)
 	rv3 := getRV(t)
 
-	err = loi.Delete(bar)
+	err = loi.Delete(barDeleted)
 	assert.NoError(t, err)
 	rv4 := getRV(t)
 
@@ -2246,7 +2244,7 @@ func TestWatchResourceVersion(t *testing.T) {
 			expectedEvents: []watch.Event{
 				{Type: watch.Modified, Object: fooUpdated},
 				{Type: watch.Added, Object: bar},
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 				{Type: watch.Added, Object: barNew},
 			},
 		},
@@ -2254,14 +2252,14 @@ func TestWatchResourceVersion(t *testing.T) {
 			rv: rv2,
 			expectedEvents: []watch.Event{
 				{Type: watch.Added, Object: bar},
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 				{Type: watch.Added, Object: barNew},
 			},
 		},
 		{
 			rv: rv3,
 			expectedEvents: []watch.Event{
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 				{Type: watch.Added, Object: barNew},
 			},
 		},
@@ -2344,9 +2342,11 @@ func TestWatchGarbageCollection(t *testing.T) {
 	bar.SetResourceVersion("150")
 	bar.SetName("bar")
 
-	barNew := &unstructured.Unstructured{}
-	barNew.SetResourceVersion("160")
-	barNew.SetName("bar")
+	barDeleted := bar.DeepCopy()
+	barDeleted.SetResourceVersion("160")
+
+	barNew := bar.DeepCopy()
+	barNew.SetResourceVersion("170")
 
 	parentCtx := context.Background()
 
@@ -2375,7 +2375,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 	assert.NoError(t, err)
 	rv3 := getRV(t)
 
-	err = loi.Delete(bar)
+	err = loi.Delete(barDeleted)
 	assert.NoError(t, err)
 	rv4 := getRV(t)
 
@@ -2394,7 +2394,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 		{
 			rv: rv3,
 			expectedEvents: []watch.Event{
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 			},
 		},
 		{
@@ -2448,4 +2448,55 @@ func TestWatchGarbageCollection(t *testing.T) {
 		assert.Equal(t, test.expectedEvents, gotEvents)
 		assert.NoError(t, err)
 	}
+}
+
+func TestNonNumberResourceVersion(t *testing.T) {
+	ctx := context.Background()
+
+	opts := ListOptionIndexerOptions{
+		Fields:       [][]string{{"metadata", "somefield"}},
+		IsNamespaced: true,
+	}
+	loi, err := makeListOptionIndexer(ctx, opts)
+	assert.NoError(t, err)
+
+	foo := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "foo",
+			},
+		},
+	}
+	foo.SetResourceVersion("a")
+	foo2 := foo.DeepCopy()
+	foo2.SetResourceVersion("b")
+	foo2.SetLabels(map[string]string{
+		"hello": "world",
+	})
+	bar := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "bar",
+			},
+		},
+	}
+	bar.SetResourceVersion("c")
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	err = loi.Update(foo2)
+	assert.NoError(t, err)
+	err = loi.Add(bar)
+	assert.NoError(t, err)
+
+	expectedUnstructured := &unstructured.Unstructured{
+		Object: map[string]any{
+			"items": []any{bar.Object, foo2.Object},
+		},
+	}
+	expectedList, err := expectedUnstructured.ToList()
+	require.NoError(t, err)
+
+	list, _, _, err := loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedList.Items, list.Items)
 }
