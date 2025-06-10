@@ -6,13 +6,16 @@ package informer
 
 import (
 	"context"
+	"errors"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -67,7 +70,16 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 			a, err := client.List(ctx, options)
 			// We want the list to be consistent when there are going to be relists
 			sort.SliceStable(a.Items, func(i int, j int) bool {
-				return a.Items[i].GetResourceVersion() < a.Items[j].GetResourceVersion()
+				var err error
+				rvI, err1 := strconv.Atoi(a.Items[i].GetResourceVersion())
+				err = errors.Join(err, err1)
+				rvJ, err2 := strconv.Atoi(a.Items[j].GetResourceVersion())
+				err = errors.Join(err, err2)
+				if err != nil {
+					logrus.Debug("ResourceVersion not a number, falling back to string comparison")
+					return a.Items[i].GetResourceVersion() < a.Items[j].GetResourceVersion()
+				}
+				return rvI < rvJ
 			})
 			return a, err
 		},

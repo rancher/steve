@@ -2449,3 +2449,54 @@ func TestWatchGarbageCollection(t *testing.T) {
 		assert.NoError(t, err)
 	}
 }
+
+func TestNonNumberResourceVersion(t *testing.T) {
+	ctx := context.Background()
+
+	opts := ListOptionIndexerOptions{
+		Fields:       [][]string{{"metadata", "somefield"}},
+		IsNamespaced: true,
+	}
+	loi, err := makeListOptionIndexer(ctx, opts)
+	assert.NoError(t, err)
+
+	foo := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "foo",
+			},
+		},
+	}
+	foo.SetResourceVersion("a")
+	foo2 := foo.DeepCopy()
+	foo2.SetResourceVersion("b")
+	foo2.SetLabels(map[string]string{
+		"hello": "world",
+	})
+	bar := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "bar",
+			},
+		},
+	}
+	bar.SetResourceVersion("c")
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	err = loi.Update(foo2)
+	assert.NoError(t, err)
+	err = loi.Add(bar)
+	assert.NoError(t, err)
+
+	expectedUnstructured := &unstructured.Unstructured{
+		Object: map[string]any{
+			"items": []any{bar.Object, foo2.Object},
+		},
+	}
+	expectedList, err := expectedUnstructured.ToList()
+	require.NoError(t, err)
+
+	list, _, _, err := loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedList.Items, list.Items)
+}
