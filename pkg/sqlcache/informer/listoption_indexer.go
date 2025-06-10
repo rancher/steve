@@ -451,13 +451,6 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	}
 
 	latestRV := acc.GetResourceVersion()
-	// Append a -d suffix because the RV might be the same as the previous object
-	// in the following case:
-	// - Add obj1 with RV 100
-	// - Delete obj1 with RV 100
-	if eventType == watch.Deleted {
-		latestRV = latestRV + "-d"
-	}
 	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, toBytes(obj))
 	if err != nil {
 		return &db.QueryError{QueryString: l.upsertEventsQuery, Err: err}

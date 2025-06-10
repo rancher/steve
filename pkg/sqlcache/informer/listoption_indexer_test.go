@@ -2190,13 +2190,11 @@ func TestWatchResourceVersion(t *testing.T) {
 		"app": "bar",
 	})
 
-	barNew := &unstructured.Unstructured{}
-	barNew.SetResourceVersion("160")
-	barNew.SetName("bar")
-	barNew.SetNamespace("bar")
-	barNew.SetLabels(map[string]string{
-		"app": "bar",
-	})
+	barDeleted := bar.DeepCopy()
+	barDeleted.SetResourceVersion("160")
+
+	barNew := bar.DeepCopy()
+	barNew.SetResourceVersion("170")
 
 	parentCtx := context.Background()
 
@@ -2225,7 +2223,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	assert.NoError(t, err)
 	rv3 := getRV(t)
 
-	err = loi.Delete(bar)
+	err = loi.Delete(barDeleted)
 	assert.NoError(t, err)
 	rv4 := getRV(t)
 
@@ -2246,7 +2244,7 @@ func TestWatchResourceVersion(t *testing.T) {
 			expectedEvents: []watch.Event{
 				{Type: watch.Modified, Object: fooUpdated},
 				{Type: watch.Added, Object: bar},
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 				{Type: watch.Added, Object: barNew},
 			},
 		},
@@ -2254,14 +2252,14 @@ func TestWatchResourceVersion(t *testing.T) {
 			rv: rv2,
 			expectedEvents: []watch.Event{
 				{Type: watch.Added, Object: bar},
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 				{Type: watch.Added, Object: barNew},
 			},
 		},
 		{
 			rv: rv3,
 			expectedEvents: []watch.Event{
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 				{Type: watch.Added, Object: barNew},
 			},
 		},
@@ -2344,9 +2342,11 @@ func TestWatchGarbageCollection(t *testing.T) {
 	bar.SetResourceVersion("150")
 	bar.SetName("bar")
 
-	barNew := &unstructured.Unstructured{}
-	barNew.SetResourceVersion("160")
-	barNew.SetName("bar")
+	barDeleted := bar.DeepCopy()
+	barDeleted.SetResourceVersion("160")
+
+	barNew := bar.DeepCopy()
+	barNew.SetResourceVersion("170")
 
 	parentCtx := context.Background()
 
@@ -2375,7 +2375,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 	assert.NoError(t, err)
 	rv3 := getRV(t)
 
-	err = loi.Delete(bar)
+	err = loi.Delete(barDeleted)
 	assert.NoError(t, err)
 	rv4 := getRV(t)
 
@@ -2394,7 +2394,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 		{
 			rv: rv3,
 			expectedEvents: []watch.Event{
-				{Type: watch.Deleted, Object: bar},
+				{Type: watch.Deleted, Object: barDeleted},
 			},
 		},
 		{
