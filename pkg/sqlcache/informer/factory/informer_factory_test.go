@@ -82,6 +82,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -128,6 +129,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return expectedI, nil
 		}
 		f := &CacheFactory{
@@ -171,6 +173,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -211,6 +214,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -260,6 +264,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -308,6 +313,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -364,6 +370,7 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
 			assert.Equal(t, 0, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -401,13 +408,14 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
 			assert.Equal(t, 10, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -425,7 +433,8 @@ func TestCacheFor(t *testing.T) {
 		}()
 		var c Cache
 		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, dynamicClient, expectedGVK, false, true)
+		// CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool)
+		c, err = f.CacheFor(context.Background(), fields, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
@@ -450,13 +459,14 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
 			assert.Equal(t, 10, maxEventsCount)
+			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
@@ -477,7 +487,7 @@ func TestCacheFor(t *testing.T) {
 		}()
 		var c Cache
 		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, dynamicClient, expectedGVK, false, true)
+		c, err = f.CacheFor(context.Background(), fields, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
