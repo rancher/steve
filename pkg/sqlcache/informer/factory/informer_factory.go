@@ -33,6 +33,9 @@ type CacheFactory struct {
 	mutex      sync.RWMutex
 	encryptAll bool
 
+	defaultMaximumEventsCount int
+	perGVKMaximumEventsCount  map[schema.GroupVersionKind]int
+
 	newInformer newInformer
 
 	informers      map[schema.GroupVersionKind]*guardedInformer
@@ -44,7 +47,7 @@ type guardedInformer struct {
 	mutex    *sync.Mutex
 }
 
-type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool, watchable bool) (*informer.Informer, error)
+type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool, watchable bool, maxEventsCount int) (*informer.Informer, error)
 
 type Cache struct {
 	informer.ByOptionsLister
@@ -62,9 +65,25 @@ var defaultEncryptedResourceTypes = map[schema.GroupVersionKind]struct{}{
 	}: {},
 }
 
+type CacheFactoryOptions struct {
+	// DefaultMaximumEventsCount is the maximum number of events to keep in
+	// the events table by default.
+	//
+	// Use PerGVKMaximumEventsCount if you want to set a different value for
+	// a specific GVK.
+	//
+	// A value of 0 means no limits.
+	DefaultMaximumEventsCount int
+	// PerGVKMaximumEventsCount is the maximum number of events to keep in
+	// the events table for specific GVKs.
+	//
+	// A value of 0 means no limits.
+	PerGVKMaximumEventsCount map[schema.GroupVersionKind]int
+}
+
 // NewCacheFactory returns an informer factory instance
 // This is currently called from steve via initial calls to `s.cacheFactory.CacheFor(...)`
-func NewCacheFactory() (*CacheFactory, error) {
+func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 	m, err := encryption.NewManager()
 	if err != nil {
 		return nil, err
@@ -74,10 +93,14 @@ func NewCacheFactory() (*CacheFactory, error) {
 		return nil, err
 	}
 	return &CacheFactory{
-		wg:          wait.Group{},
-		stopCh:      make(chan struct{}),
-		encryptAll:  os.Getenv(EncryptAllEnvVar) == "true",
-		dbClient:    dbClient,
+		wg:         wait.Group{},
+		stopCh:     make(chan struct{}),
+		encryptAll: os.Getenv(EncryptAllEnvVar) == "true",
+		dbClient:   dbClient,
+
+		defaultMaximumEventsCount: opts.DefaultMaximumEventsCount,
+		perGVKMaximumEventsCount:  opts.PerGVKMaximumEventsCount,
+
 		newInformer: informer.NewInformer,
 		informers:   map[schema.GroupVersionKind]*guardedInformer{},
 	}, nil
@@ -121,7 +144,8 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, transfor
 
 		_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
 		shouldEncrypt := f.encryptAll || encryptResourceAlways
-		i, err := f.newInformer(ctx, client, fields, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable)
+		maxEventsCount := f.getMaximumEventsCount(gvk)
+		i, err := f.newInformer(ctx, client, fields, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, maxEventsCount)
 		if err != nil {
 			return Cache{}, err
 		}
@@ -148,6 +172,13 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, transfor
 
 	// At this point the informer is ready, return it
 	return Cache{ByOptionsLister: gi.informer}, nil
+}
+
+func (f *CacheFactory) getMaximumEventsCount(gvk schema.GroupVersionKind) int {
+	if maxCount, ok := f.perGVKMaximumEventsCount[gvk]; ok {
+		return maxCount
+	}
+	return f.defaultMaximumEventsCount
 }
 
 // Reset closes the stopCh which stops any running informers, assigns a new stopCh, resets the GVK-informer cache, and resets

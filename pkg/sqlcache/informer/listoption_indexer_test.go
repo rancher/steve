@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func makeListOptionIndexer(ctx context.Context, fields [][]string) (*ListOptionIndexer, error) {
+func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
 	gvk := schema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",
@@ -54,7 +54,7 @@ func makeListOptionIndexer(ctx context.Context, fields [][]string) (*ListOptionI
 		return nil, err
 	}
 
-	listOptionIndexer, err := NewListOptionIndexer(ctx, fields, s, true)
+	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -91,9 +91,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		// create events table
@@ -115,7 +115,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		loi, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		loi, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.Nil(t, err)
 		assert.NotNil(t, loi)
 	}})
@@ -136,7 +140,10 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, false)
+		opts := ListOptionIndexerOptions{
+			Fields: fields,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error returned from Begin(), should return an error", test: func(t *testing.T) {
@@ -161,14 +168,17 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, false)
+		opts := ListOptionIndexerOptions{
+			Fields: fields,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Exec() when creating fields table, should return an error", test: func(t *testing.T) {
@@ -193,9 +203,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -209,7 +219,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from create-labels, should return an error", test: func(t *testing.T) {
@@ -234,9 +248,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -254,7 +268,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Commit(), should return an error", test: func(t *testing.T) {
@@ -279,9 +297,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -300,7 +318,11 @@ func TestNewListOptionIndexer(t *testing.T) {
 				}
 			})
 
-		_, err := NewListOptionIndexer(context.Background(), fields, store, true)
+		opts := ListOptionIndexerOptions{
+			Fields:       fields,
+			IsNamespaced: true,
+		}
+		_, err := NewListOptionIndexer(context.Background(), store, opts)
 		assert.NotNil(t, err)
 	}})
 
@@ -894,7 +916,11 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			}
 			fields = append(fields, test.extraIndexedFields...)
 
-			loi, err := makeListOptionIndexer(ctx, fields)
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, err := makeListOptionIndexer(ctx, opts)
 			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
@@ -1828,7 +1854,11 @@ func TestGetField(t *testing.T) {
 func TestWatchMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	loi, err := makeListOptionIndexer(ctx, [][]string{{"metadata", "somefield"}})
+	opts := ListOptionIndexerOptions{
+		Fields:       [][]string{{"metadata", "somefield"}},
+		IsNamespaced: true,
+	}
+	loi, err := makeListOptionIndexer(ctx, opts)
 	assert.NoError(t, err)
 
 	startWatcher := func(ctx context.Context) (chan watch.Event, chan error) {
@@ -2076,7 +2106,11 @@ func TestWatchFilter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
-			loi, err := makeListOptionIndexer(ctx, [][]string{{"metadata", "somefield"}})
+			opts := ListOptionIndexerOptions{
+				Fields:       [][]string{{"metadata", "somefield"}},
+				IsNamespaced: true,
+			}
+			loi, err := makeListOptionIndexer(ctx, opts)
 			assert.NoError(t, err)
 
 			wCh, errCh := startWatcher(ctx, loi, WatchFilter{
@@ -2166,7 +2200,10 @@ func TestWatchResourceVersion(t *testing.T) {
 
 	parentCtx := context.Background()
 
-	loi, err := makeListOptionIndexer(parentCtx, [][]string{})
+	opts := ListOptionIndexerOptions{
+		IsNamespaced: true,
+	}
+	loi, err := makeListOptionIndexer(parentCtx, opts)
 	assert.NoError(t, err)
 
 	getRV := func(t *testing.T) string {
@@ -2259,5 +2296,156 @@ func TestWatchResourceVersion(t *testing.T) {
 				assert.Equal(t, test.expectedEvents, gotEvents)
 			}
 		})
+	}
+}
+
+func TestWatchGarbageCollection(t *testing.T) {
+	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
+		errCh := make(chan error, 1)
+		eventsCh := make(chan watch.Event, 100)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{ResourceVersion: rv}, eventsCh)
+			errCh <- watchErr
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	waitStopWatcher := func(errCh chan error) error {
+		select {
+		case <-time.After(time.Second * 5):
+			return fmt.Errorf("not finished in time")
+		case err := <-errCh:
+			return err
+		}
+	}
+
+	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
+		timer := time.NewTimer(time.Millisecond * 50)
+		var events []watch.Event
+		for {
+			select {
+			case <-timer.C:
+				return events
+			case ev := <-eventsCh:
+				events = append(events, ev)
+			}
+		}
+	}
+
+	foo := &unstructured.Unstructured{}
+	foo.SetResourceVersion("100")
+	foo.SetName("foo")
+
+	fooUpdated := foo.DeepCopy()
+	fooUpdated.SetResourceVersion("120")
+
+	bar := &unstructured.Unstructured{}
+	bar.SetResourceVersion("150")
+	bar.SetName("bar")
+
+	barNew := &unstructured.Unstructured{}
+	barNew.SetResourceVersion("160")
+	barNew.SetName("bar")
+
+	parentCtx := context.Background()
+
+	opts := ListOptionIndexerOptions{
+		MaximumEventsCount: 2,
+	}
+	loi, err := makeListOptionIndexer(parentCtx, opts)
+	assert.NoError(t, err)
+
+	getRV := func(t *testing.T) string {
+		t.Helper()
+		list, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+		assert.NoError(t, err)
+		return list.GetResourceVersion()
+	}
+
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	rv1 := getRV(t)
+
+	err = loi.Update(fooUpdated)
+	assert.NoError(t, err)
+	rv2 := getRV(t)
+
+	err = loi.Add(bar)
+	assert.NoError(t, err)
+	rv3 := getRV(t)
+
+	err = loi.Delete(bar)
+	assert.NoError(t, err)
+	rv4 := getRV(t)
+
+	for _, rv := range []string{rv1, rv2} {
+		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
+		gotEvents := receiveEvents(watcherCh)
+		err = waitStopWatcher(errCh)
+		assert.Empty(t, gotEvents)
+		assert.ErrorIs(t, err, ErrTooOld)
+	}
+
+	tests := []struct {
+		rv             string
+		expectedEvents []watch.Event
+	}{
+		{
+			rv: rv3,
+			expectedEvents: []watch.Event{
+				{Type: watch.Deleted, Object: bar},
+			},
+		},
+		{
+			rv:             rv4,
+			expectedEvents: nil,
+		},
+	}
+	for _, test := range tests {
+		ctx, cancel := context.WithCancel(parentCtx)
+		watcherCh, errCh := startWatcher(ctx, loi, test.rv)
+		gotEvents := receiveEvents(watcherCh)
+		cancel()
+		err = waitStopWatcher(errCh)
+		assert.Equal(t, test.expectedEvents, gotEvents)
+		assert.NoError(t, err)
+	}
+
+	err = loi.Add(barNew)
+	assert.NoError(t, err)
+	rv5 := getRV(t)
+
+	for _, rv := range []string{rv1, rv2, rv3} {
+		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
+		gotEvents := receiveEvents(watcherCh)
+		err = waitStopWatcher(errCh)
+		assert.Empty(t, gotEvents)
+		assert.ErrorIs(t, err, ErrTooOld)
+	}
+
+	tests = []struct {
+		rv             string
+		expectedEvents []watch.Event
+	}{
+		{
+			rv: rv4,
+			expectedEvents: []watch.Event{
+				{Type: watch.Added, Object: barNew},
+			},
+		},
+		{
+			rv:             rv5,
+			expectedEvents: nil,
+		},
+	}
+	for _, test := range tests {
+		ctx, cancel := context.WithCancel(parentCtx)
+		watcherCh, errCh := startWatcher(ctx, loi, test.rv)
+		gotEvents := receiveEvents(watcherCh)
+		cancel()
+		err = waitStopWatcher(errCh)
+		assert.Equal(t, test.expectedEvents, gotEvents)
+		assert.NoError(t, err)
 	}
 }

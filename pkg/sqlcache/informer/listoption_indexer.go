@@ -35,31 +35,36 @@ type ListOptionIndexer struct {
 	namespaced    bool
 	indexedFields []string
 
+	// maximumEventsCount is how many events to keep. 0 means keep all events.
+	maximumEventsCount int
+
 	latestRVLock sync.RWMutex
 	latestRV     string
 
 	watchersLock sync.RWMutex
 	watchers     map[*watchKey]*watcher
 
-	upsertEventsQuery      string
-	findEventsRowByRVQuery string
-	listEventsAfterQuery   string
-	addFieldsQuery         string
-	deleteFieldsByKeyQuery string
-	deleteFieldsQuery      string
-	upsertLabelsQuery      string
-	deleteLabelsByKeyQuery string
-	deleteLabelsQuery      string
+	upsertEventsQuery        string
+	findEventsRowByRVQuery   string
+	listEventsAfterQuery     string
+	deleteEventsByCountQuery string
+	addFieldsQuery           string
+	deleteFieldsByKeyQuery   string
+	deleteFieldsQuery        string
+	upsertLabelsQuery        string
+	deleteLabelsByKeyQuery   string
+	deleteLabelsQuery        string
 
-	upsertEventsStmt      *sql.Stmt
-	findEventsRowByRVStmt *sql.Stmt
-	listEventsAfterStmt   *sql.Stmt
-	addFieldsStmt         *sql.Stmt
-	deleteFieldsByKeyStmt *sql.Stmt
-	deleteFieldsStmt      *sql.Stmt
-	upsertLabelsStmt      *sql.Stmt
-	deleteLabelsByKeyStmt *sql.Stmt
-	deleteLabelsStmt      *sql.Stmt
+	upsertEventsStmt        *sql.Stmt
+	findEventsRowByRVStmt   *sql.Stmt
+	listEventsAfterStmt     *sql.Stmt
+	deleteEventsByCountStmt *sql.Stmt
+	addFieldsStmt           *sql.Stmt
+	deleteFieldsByKeyStmt   *sql.Stmt
+	deleteFieldsStmt        *sql.Stmt
+	upsertLabelsStmt        *sql.Stmt
+	deleteLabelsByKeyStmt   *sql.Stmt
+	deleteLabelsStmt        *sql.Stmt
 }
 
 var (
@@ -91,6 +96,11 @@ const (
                FROM "%s_events"
                WHERE rv = ?
        `
+	deleteEventsByCountFmt = `DELETE FROM "%s_events"
+	WHERE rowid
+	NOT IN (
+		SELECT rowid FROM "%s_events" ORDER BY rowid DESC LIMIT ?
+	)`
 
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
 			key TEXT NOT NULL PRIMARY KEY,
@@ -114,10 +124,25 @@ const (
 	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
 )
 
+type ListOptionIndexerOptions struct {
+	// Fields is a list of fields within the object that we want indexed for
+	// filtering & sorting. Each field is specified as a slice.
+	//
+	// For example, .metadata.resourceVersion should be specified as []string{"metadata", "resourceVersion"}
+	Fields [][]string
+	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
+	// namespaced
+	IsNamespaced bool
+	// MaximumEventsCount is the maximum number of events we want to keep
+	// in the _events table.
+	//
+	// Zero means never delete events.
+	MaximumEventsCount int
+}
+
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields.
-// Fields are specified as slices (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
-func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, namespaced bool) (*ListOptionIndexer, error) {
+func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]interface{}{})
 	gob.Register([]interface{}{})
@@ -131,28 +156,32 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 	for _, f := range defaultIndexedFields {
 		indexedFields = append(indexedFields, f)
 	}
-	if namespaced {
+	if opts.IsNamespaced {
 		indexedFields = append(indexedFields, defaultIndexNamespaced)
 	}
-	for _, f := range fields {
+	for _, f := range opts.Fields {
 		indexedFields = append(indexedFields, toColumnName(f))
 	}
 
 	l := &ListOptionIndexer{
-		Indexer:       i,
-		namespaced:    namespaced,
-		indexedFields: indexedFields,
-		watchers:      make(map[*watchKey]*watcher),
+		Indexer:            i,
+		namespaced:         opts.IsNamespaced,
+		indexedFields:      indexedFields,
+		maximumEventsCount: opts.MaximumEventsCount,
+		watchers:           make(map[*watchKey]*watcher),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
 	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterAdd(l.notifyEventAdded)
+	l.RegisterAfterAdd(l.deleteOldEvents)
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterUpdate(l.notifyEventModified)
+	l.RegisterAfterUpdate(l.deleteOldEvents)
 	l.RegisterAfterDelete(l.deleteFieldsByKey)
 	l.RegisterAfterDelete(l.deleteLabelsByKey)
 	l.RegisterAfterDelete(l.notifyEventDeleted)
+	l.RegisterAfterDelete(l.deleteOldEvents)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
@@ -225,6 +254,9 @@ func NewListOptionIndexer(ctx context.Context, fields [][]string, s Store, names
 
 	l.findEventsRowByRVQuery = fmt.Sprintf(findEventsRowByRVFmt, dbName)
 	l.findEventsRowByRVStmt = l.Prepare(l.findEventsRowByRVQuery)
+
+	l.deleteEventsByCountQuery = fmt.Sprintf(deleteEventsByCountFmt, dbName, dbName)
+	l.deleteEventsByCountStmt = l.Prepare(l.deleteEventsByCountQuery)
 
 	l.addFieldsQuery = fmt.Sprintf(
 		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO UPDATE SET %s`,
@@ -447,6 +479,18 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	l.latestRVLock.Lock()
 	defer l.latestRVLock.Unlock()
 	l.latestRV = latestRV
+	return nil
+}
+
+func (l *ListOptionIndexer) deleteOldEvents(key string, obj any, tx transaction.Client) error {
+	if l.maximumEventsCount == 0 {
+		return nil
+	}
+
+	_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(l.maximumEventsCount)
+	if err != nil {
+		return &db.QueryError{QueryString: l.deleteEventsByCountQuery, Err: err}
+	}
 	return nil
 }
 

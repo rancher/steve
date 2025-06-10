@@ -14,12 +14,9 @@ import (
 
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
-	"github.com/rancher/steve/pkg/sqlcache/store"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"go.uber.org/mock/gomock"
@@ -40,7 +37,6 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
 	clientgotesting "k8s.io/client-go/testing"
-	cache "k8s.io/client-go/tools/cache"
 )
 
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder
@@ -1521,36 +1517,4 @@ func TestUpdate(t *testing.T) {
 			}
 		})
 	}
-}
-
-func makeListOptionIndexer(ctx context.Context, fields [][]string) (*informer.ListOptionIndexer, error) {
-	gvk := schema2.GroupVersionKind{
-		Group:   "",
-		Version: "",
-		Kind:    "",
-	}
-	example := &unstructured.Unstructured{}
-	example.SetGroupVersionKind(gvk)
-	name := "theName"
-	m, err := encryption.NewManager()
-	if err != nil {
-		return nil, err
-	}
-
-	db, err := db.NewClient(nil, m, m)
-	if err != nil {
-		return nil, err
-	}
-
-	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, name)
-	if err != nil {
-		return nil, err
-	}
-
-	listOptionIndexer, err := informer.NewListOptionIndexer(ctx, fields, s, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return listOptionIndexer, nil
 }
