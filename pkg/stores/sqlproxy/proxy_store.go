@@ -562,6 +562,8 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 	result := make(chan watch.Event)
 	go func() {
+		defer close(result)
+
 		ctx := apiOp.Context()
 		idNamespace, _ := kv.RSplit(w.ID, "/")
 		if idNamespace == "" {
@@ -578,10 +580,10 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 		err := inf.ByOptionsLister.Watch(ctx, opts, result)
 		if err != nil {
-			logrus.Error(err)
+			returnErr(err, result)
+			return
 		}
 		logrus.Debugf("closing watcher for %s", schema.ID)
-		close(result)
 	}()
 	return result, nil
 }
