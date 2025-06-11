@@ -609,22 +609,24 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	query := ""
 	params := []any{}
 	whereClauses := []string{}
-	withTablesToSelect := ""
+	joinPartsToUse := []string{}
 	if len(unboundSortLabels) > 0 {
-		withParts, withParams, withNames, err := getWithParts(unboundSortLabels, joinTableIndexByLabelName, dbName)
+		withParts, withParams, _, joinParts, err := getWithParts(unboundSortLabels, joinTableIndexByLabelName, dbName, "o")
 		if err != nil {
 			return nil, err
 		}
 		query = "WITH " + strings.Join(withParts, ",\n") + "\n"
 		params = withParams
-		withTablesToSelect = ", " + strings.Join(withNames, ", ")
-		for _, withName := range withNames {
-			whereClauses = append(whereClauses, fmt.Sprintf("o.key = %s.key", withName))
-		}
+		joinPartsToUse = joinParts
 	}
-	query += fmt.Sprintf(`SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "%s" o%s`, dbName, withTablesToSelect)
+	query += fmt.Sprintf(`SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "%s" o`, dbName)
 	query += "\n  "
 	query += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)
+	if len(joinPartsToUse) > 0 {
+		query += "\n  "
+		query += strings.Join(joinPartsToUse, "\n  ")
+	}
+
 	if queryUsesLabels {
 		for _, orFilter := range lo.Filters {
 			for _, filter := range orFilter.Filters {
@@ -734,12 +736,11 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		for _, sortDirective := range lo.SortList.SortDirectives {
 			fields := sortDirective.Fields
 			if isLabelsFieldList(fields) {
-				clause, sortParam, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC)
+				clause, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC)
 				if err != nil {
 					return nil, err
 				}
 				orderByClauses = append(orderByClauses, clause)
-				params = append(params, sortParam)
 			} else {
 				fieldEntry, err := l.getValidFieldEntry("f", fields)
 				if err != nil {
@@ -947,19 +948,18 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 	return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
 }
 
-func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, string, error) {
+func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, error) {
 	ltIndex, err := internLabel(labelName, joinTableIndexByLabelName, -1)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	stmt := fmt.Sprintf(`CASE lt%d.label WHEN ? THEN lt%d.value ELSE NULL END`, ltIndex, ltIndex)
 	dir := "ASC"
 	nullsPosition := "LAST"
 	if !isAsc {
 		dir = "DESC"
 		nullsPosition = "FIRST"
 	}
-	return fmt.Sprintf("(%s) %s NULLS %s", stmt, dir, nullsPosition), labelName, nil
+	return fmt.Sprintf("lt%d.value %s NULLS %s", ltIndex, dir, nullsPosition), nil
 }
 
 func getUnboundSortLabels(lo *sqltypes.ListOptions) []string {
@@ -990,43 +990,28 @@ func getUnboundSortLabels(lo *sqltypes.ListOptions) []string {
 	return slices.Collect(maps.Keys(unboundSortLabels))
 }
 
-func getWithParts(unboundSortLabels []string, joinTableIndexByLabelName map[string]int, dbName string) ([]string, []any, []string, error) {
+func getWithParts(unboundSortLabels []string, joinTableIndexByLabelName map[string]int, dbName string, mainFuncPrefix string) ([]string, []any, []string, []string, error) {
 	numLabels := len(unboundSortLabels)
 	parts := make([]string, numLabels)
-	params := make([]any, 3*numLabels)
+	params := make([]any, numLabels)
 	withNames := make([]string, numLabels)
+	joinParts := make([]string, numLabels)
 	for i, label := range unboundSortLabels {
 		i1 := i + 1
 		idx, err := internLabel(label, joinTableIndexByLabelName, i1)
 		if err != nil {
-			return parts, params, withNames, err
+			return parts, params, withNames, joinParts, err
 		}
-		simpleTemplate := `lt[IDX](key, label, value) AS (
-SELECT DISTINCT o1.key, ltx[IDX].label as lt[IDX]_label, ltx[IDX].value AS lt[IDX]_value FROM [DBNAME] o1
-JOIN [DBNAME]_fields f1 on f1.key = o1.key
-LEFT OUTER JOIN [DBNAME]_labels ltx[IDX] ON f1.key = ltx[IDX].key
-  WHERE ltx[IDX].label = ?
-
-  UNION ALL
-
-  SELECT DISTINCT o1.key, ? as lt[IDX]_label, NULL AS lt[IDX]_value FROM [DBNAME] o1
-  JOIN [DBNAME]_fields f1 on f1.key = o1.key
-  LEFT OUTER JOIN [DBNAME]_labels ltx[IDX] ON f1.key = ltx[IDX].key
-    WHERE
-      o1.key NOT IN (SELECT o2.key FROM [DBNAME] o2
-          JOIN [DBNAME]_fields f2 ON o2.key = f2.key
-          LEFT OUTER JOIN [DBNAME]_labels lt[IDX]i2 ON o2.key = lt[IDX]i2.key
-          WHERE lt[IDX]i2.label = ?)
-)`
-		s1 := strings.ReplaceAll(simpleTemplate, "[IDX]", fmt.Sprintf("%d", idx))
-		parts[i] = strings.ReplaceAll(s1, "[DBNAME]", dbName)
-		params[3*i] = label
-		params[3*i+1] = label
-		params[3*i+2] = label
+		parts[i] = fmt.Sprintf(`lt%d(key, value) AS (
+SELECT key, value FROM "%s_labels"
+  WHERE label = ?
+)`, idx, dbName)
+		params[i] = label
 		withNames[i] = fmt.Sprintf("lt%d", idx)
+		joinParts[i] = fmt.Sprintf("LEFT OUTER JOIN lt%d ON %s.key = lt%d.key", idx, mainFuncPrefix, idx)
 	}
 
-	return parts, params, withNames, nil
+	return parts, params, withNames, joinParts, nil
 }
 
 // if nextNum < 0 return an error message

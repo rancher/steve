@@ -1879,30 +1879,17 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `WITH lt1(key, label, value) AS (
-SELECT DISTINCT o1.key, ltx1.label as lt1_label, ltx1.value AS lt1_value FROM something o1
-JOIN something_fields f1 on f1.key = o1.key
-LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
-  WHERE ltx1.label = ?
-
-  UNION ALL
-
-  SELECT DISTINCT o1.key, ? as lt1_label, NULL AS lt1_value FROM something o1
-  JOIN something_fields f1 on f1.key = o1.key
-  LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
-    WHERE
-      o1.key NOT IN (SELECT o2.key FROM something o2
-          JOIN something_fields f2 ON o2.key = f2.key
-          LEFT OUTER JOIN something_labels lt1i2 ON o2.key = lt1i2.key
-          WHERE lt1i2.label = ?)
+		expectedStmt: `WITH lt1(key, value) AS (
+SELECT key, value FROM "something_labels"
+  WHERE label = ?
 )
-SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN lt1 ON o.key = lt1.key
   WHERE
-    (o.key = lt1.key) AND
     (FALSE)
-  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
-		expectedStmtArgs: []any{"unbound", "unbound", "unbound", "unbound"},
+  ORDER BY lt1.value ASC NULLS LAST`,
+		expectedStmtArgs: []any{"unbound"},
 		expectedErr:      nil,
 	})
 
@@ -1940,32 +1927,19 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `WITH lt1(key, label, value) AS (
-SELECT DISTINCT o1.key, ltx1.label as lt1_label, ltx1.value AS lt1_value FROM something o1
-JOIN something_fields f1 on f1.key = o1.key
-LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
-  WHERE ltx1.label = ?
-
-  UNION ALL
-
-  SELECT DISTINCT o1.key, ? as lt1_label, NULL AS lt1_value FROM something o1
-  JOIN something_fields f1 on f1.key = o1.key
-  LEFT OUTER JOIN something_labels ltx1 ON f1.key = ltx1.key
-    WHERE
-      o1.key NOT IN (SELECT o2.key FROM something o2
-          JOIN something_fields f2 ON o2.key = f2.key
-          LEFT OUTER JOIN something_labels lt1i2 ON o2.key = lt1i2.key
-          WHERE lt1i2.label = ?)
+		expectedStmt: `WITH lt1(key, value) AS (
+SELECT key, value FROM "something_labels"
+  WHERE label = ?
 )
-SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o, lt1
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN lt1 ON o.key = lt1.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
   WHERE
-    (o.key = lt1.key) AND
     ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?)) AND
     (FALSE)
-  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
-		expectedStmtArgs: []any{"this", "this", "this", "toys", "jamb", "juice", "this"},
+  ORDER BY lt1.value ASC NULLS LAST, f."status.queryField2" DESC`,
+		expectedStmtArgs: []any{"this", "toys", "jamb", "juice"},
 		expectedErr:      nil,
 	})
 
@@ -2063,7 +2037,6 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		joinTableIndexByLabelName map[string]int
 		direction                 bool
 		expectedStmt              string
-		expectedParam             string
 		expectedErr               string
 	}
 
@@ -2078,27 +2051,24 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		labelName:                 "testBSL1",
 		joinTableIndexByLabelName: map[string]int{"testBSL1": 3},
 		direction:                 true,
-		expectedStmt:              `(CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST`,
-		expectedParam:             "testBSL1",
+		expectedStmt:              `lt3.value ASC NULLS LAST`,
 	})
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit descending",
 		labelName:                 "testBSL2",
 		joinTableIndexByLabelName: map[string]int{"testBSL2": 4},
 		direction:                 false,
-		expectedStmt:              `(CASE lt4.label WHEN ? THEN lt4.value ELSE NULL END) DESC NULLS FIRST`,
-		expectedParam:             "testBSL2",
+		expectedStmt:              `lt4.value DESC NULLS FIRST`,
 	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			stmt, param, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
+			stmt, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
 			if test.expectedErr != "" {
 				assert.Equal(t, test.expectedErr, err.Error())
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, test.expectedStmt, stmt)
-				assert.Equal(t, test.expectedParam, param)
 			}
 		})
 	}
