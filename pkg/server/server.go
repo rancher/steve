@@ -44,6 +44,8 @@ type ExtensionAPIServer interface {
 	http.Handler
 	// Run configures the API server and make the HTTP handler available
 	Run(ctx context.Context) error
+	// Registered returns a channel that will be close once the registration requests are received from the kube-apiserver.
+	Registered() <-chan struct{}
 }
 
 type Server struct {
@@ -253,7 +255,16 @@ func setup(ctx context.Context, server *Server) error {
 		onSchemasHandler,
 		sf)
 
-	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, server.next, server.router, server.extensionAPIServer)
+	next := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		select {
+		case <-server.extensionAPIServer.Registered():
+			server.next.ServeHTTP(rw, req)
+		default:
+			http.NotFoundHandler().ServeHTTP(rw, req)
+		}
+	})
+
+	apiServer, handler, err := handler.New(server.RESTConfig, sf, server.authMiddleware, next, server.router, server.extensionAPIServer)
 	if err != nil {
 		return err
 	}
