@@ -333,6 +333,6 @@ func getDefinitionName(scheme *runtime.Scheme, replacements map[string]string) f
 	}
 }
 
-func (e *ExtensionAPIServer) Registered() <-chan struct{} {
-	return e.registeredChan
+func (s *ExtensionAPIServer) Registered() <-chan struct{} {
+	return s.registeredChan
 }
