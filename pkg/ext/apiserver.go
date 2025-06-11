@@ -155,12 +155,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 			switch a.GetUser().GetName() {
 			case "system:aggregator", "system:kube-aggregator":
 				once.Do(func() {
-					go func() {
-						time.Sleep(time.Minute * 1)
-
-						close(registered)
-					}()
-					// close(registered)
+					close(registered)
 				})
 			}
 
