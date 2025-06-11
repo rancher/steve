@@ -2,7 +2,6 @@ package client
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/flowcontrol"
 )
 
 type Factory struct {
@@ -219,9 +219,9 @@ func updateConfigFromEnvironment(cfg *rest.Config) {
 	if v := os.Getenv("RANCHER_CLIENT_QPS"); v != "" {
 		qps, err := strconv.ParseFloat(v, 32)
 		if err != nil {
-			log.Printf("steve: configuring client failed to parse RANCHER_CLIENT_QPS: %s", err)
+			logrus.Infof("steve: configuring client failed to parse RANCHER_CLIENT_QPS: %s", err)
 		} else {
-			log.Printf("steve: configuring client.QPS = %v", qps)
+			logrus.Infof("steve: configuring client.QPS = %v", qps)
 			cfg.QPS = float32(qps)
 		}
 	}
@@ -230,10 +230,24 @@ func updateConfigFromEnvironment(cfg *rest.Config) {
 	if v := os.Getenv("RANCHER_CLIENT_BURST"); v != "" {
 		burst, err := strconv.Atoi(v)
 		if err != nil {
-			log.Printf("steve: configuring client failed to parse RANCHER_CLIENT_QPS: %s", err)
+			logrus.Infof("steve: configuring client failed to parse RANCHER_CLIENT_QPS: %s", err)
 		} else {
-			log.Printf("steve: configuring client.Burst = %v", burst)
+			logrus.Infof("steve: configuring client.Burst = %v", burst)
 			cfg.Burst = burst
+		}
+	}
+
+	if v := os.Getenv("RANCHER_CLIENT_SHARED_RATELIMIT"); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			logrus.Infof("steve: configuring client failed to parse RANCHER_CLIENT_SHARED_RATELIMIT: %s", err)
+		} else {
+			if parsed {
+				logrus.Info("steve: configuring client.RateLimiter as shared")
+				// This will prevent new clients being created with the same
+				// top-level QPS/Burst values as the RateLimiter already exists.
+				cfg.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(cfg.QPS, cfg.Burst)
+			}
 		}
 	}
 }
