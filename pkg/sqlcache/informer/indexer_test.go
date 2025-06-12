@@ -58,7 +58,8 @@ func TestNewIndexer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		store.EXPECT().RegisterAfterUpsert(gomock.Any())
+		store.EXPECT().RegisterAfterAdd(gomock.Any())
+		store.EXPECT().RegisterAfterUpdate(gomock.Any())
 		store.EXPECT().Prepare(fmt.Sprintf(deleteIndicesFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listByIndexFmt, storeName, storeName))

@@ -51,16 +51,18 @@ func TestList(t *testing.T) {
 				Schema: &schemas.Schema{},
 			}
 			partitions := make([]partition.Partition, 0)
-			uListToReturn := []unstructured.Unstructured{
-				{
-					Object: map[string]interface{}{
-						"kind": "apple",
-						"metadata": map[string]interface{}{
-							"name":      "fuji",
-							"namespace": "fruitsnamespace",
-						},
-						"data": map[string]interface{}{
-							"color": "pink",
+			uListToReturn := &unstructured.UnstructuredList{
+				Items: []unstructured.Unstructured{
+					{
+						Object: map[string]interface{}{
+							"kind": "apple",
+							"metadata": map[string]interface{}{
+								"name":      "fuji",
+								"namespace": "fruitsnamespace",
+							},
+							"data": map[string]interface{}{
+								"color": "pink",
+							},
 						},
 					},
 				},
@@ -88,7 +90,7 @@ func TestList(t *testing.T) {
 			}
 			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
 			p.EXPECT().Store().Return(us)
-			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, len(uListToReturn), "", nil)
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, len(uListToReturn.Items), "", nil)
 			l, err := s.List(req, schema)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedAPIObjList, l)

@@ -25,8 +25,6 @@ const (
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
-	ChunkSize  int
-	Resume     string
 	Filters    []OrFilter
 	SortList   SortList
 	Pagination Pagination

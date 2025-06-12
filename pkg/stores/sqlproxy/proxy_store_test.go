@@ -9,18 +9,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
+	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+
 	"go.uber.org/mock/gomock"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/apierror"
@@ -28,13 +28,15 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authentication/user"
+	krequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/rest"
@@ -247,7 +249,7 @@ func TestListByPartitions(t *testing.T) {
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
-			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
 			assert.Equal(t, "", contToken)
 		},
@@ -464,7 +466,7 @@ func TestListByPartitions(t *testing.T) {
 			bloi.EXPECT().ListByOptions(req.Context(), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
 			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
-			assert.Equal(t, expectedItems, list)
+			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
 			assert.Equal(t, "", contToken)
 		},
@@ -623,6 +625,118 @@ func TestListByPartitions(t *testing.T) {
 	}
 }
 
+func TestListByPartitionWithUserAccess(t *testing.T) {
+	type testCase struct {
+		description     string
+		accessSetSetter func(accessSet *accesscontrol.AccessSet)
+		orFilters       []sqltypes.OrFilter
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description:     "client ListByPartitions(), with a specified user for a restricted resource should filter for that user",
+		accessSetSetter: func(accessSet *accesscontrol.AccessSet) {},
+		orFilters: []sqltypes.OrFilter{
+			{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "labels", "cattle.io/user-id"},
+						Matches: []string{"flip"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client ListByPartitions(), with an admin user for a restricted resource will return all items regardless of user",
+		accessSetSetter: func(accessSet *accesscontrol.AccessSet) {
+			// admins also get this access-set
+			accessSet.Add("list",
+				schema2.GroupResource{Group: accesscontrol.All, Resource: accesscontrol.All},
+				accesscontrol.Access{Namespace: accesscontrol.All, ResourceName: accesscontrol.All},
+			)
+		},
+		orFilters: []sqltypes.OrFilter{},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			nsi := NewMockCache(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			c := factory.Cache{
+				ByOptionsLister: inf,
+			}
+			s := &Store{
+				ctx:              context.Background(),
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			var partitions []partition.Partition
+			username := "flip"
+			targetGroup := "ext.cattle.io"
+			targetKind := "Token"
+			accessSet := &accesscontrol.AccessSet{ID: username}
+			accessSet.Add("list",
+				schema2.GroupResource{Group: targetGroup, Resource: "token"},
+				accesscontrol.Access{Namespace: accesscontrol.All, ResourceName: "token"},
+			)
+			test.accessSetSetter(accessSet)
+			apiOpSchemas := &types.APISchemas{}
+			accesscontrol.SetAccessSetAttribute(apiOpSchemas, accessSet)
+			theRequest := &http.Request{
+				URL: &url.URL{},
+			}
+			userInfo := user.DefaultInfo{Name: username, UID: "Id"}
+			requestWithContext := krequest.WithUser(context.Background(), &userInfo)
+			theRequest = theRequest.WithContext(requestWithContext)
+			apiOp := &types.APIRequest{
+				Request: theRequest,
+				Schemas: apiOpSchemas,
+			}
+			theSchema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+					"verbs": []string{"list", "watch"},
+				}},
+			}
+			gvk := schema2.GroupVersionKind{
+				Group: targetGroup,
+				Kind:  targetKind,
+			}
+			opts := &sqltypes.ListOptions{
+				Filters: test.orFilters,
+				Pagination: sqltypes.Pagination{
+					Page: 1,
+				},
+			}
+			attributes.SetGVK(theSchema, gvk)
+			cg.EXPECT().TableAdminClient(apiOp, theSchema, "", &WarningBuffer{}).Return(ri, nil)
+			cf.EXPECT().CacheFor(context.Background(), [][]string{{"some", "field"}, {"id"}, {"metadata", "state", "name"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(theSchema), attributes.Namespaced(theSchema), true).Return(c, nil)
+			tb.EXPECT().GetTransformFunc(attributes.GVK(theSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+
+			listToReturn := &unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, 0, 0),
+			}
+			bloi.EXPECT().ListByOptions(apiOp.Context(), opts, partitions, "").Return(listToReturn, len(listToReturn.Items), "", nil)
+			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
+			assert.Nil(t, err)
+		})
+	}
+}
+
 func TestReset(t *testing.T) {
 	type testCase struct {
 		description string
@@ -769,42 +883,6 @@ func TestReset(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
-}
-
-func TestWatchNamesErrReceive(t *testing.T) {
-	testClientFactory, err := client.NewFactory(&rest.Config{}, false)
-	assert.Nil(t, err)
-
-	fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
-	c = watch.NewFakeWithChanSize(5, true)
-	defer c.Stop()
-	errMsgsToSend := []string{"err1", "err2", "err3"}
-	c.Add(&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "testsecret1"}})
-	for index := range errMsgsToSend {
-		c.Error(&metav1.Status{
-			Message: errMsgsToSend[index],
-		})
-	}
-	c.Add(&v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "testsecret2"}})
-	fakeClient.PrependWatchReactor("*", func(action clientgotesting.Action) (handled bool, ret watch.Interface, err error) {
-		return true, c, nil
-	})
-	testStore := Store{
-		clientGetter: &testFactory{Factory: testClientFactory,
-			fakeClient: fakeClient,
-		},
-	}
-	apiSchema := &types.APISchema{Schema: &schemas.Schema{Attributes: map[string]interface{}{"table": "something"}}}
-	wc, err := testStore.WatchNames(&types.APIRequest{Namespace: "", Schema: apiSchema, Request: &http.Request{}}, apiSchema, types.WatchRequest{}, sets.New[string]("testsecret1", "testsecret2"))
-	assert.Nil(t, err)
-
-	eg := errgroup.Group{}
-	eg.Go(func() error { return receiveUntil(wc, 5*time.Second) })
-
-	err = eg.Wait()
-	assert.Nil(t, err)
-
-	assert.Equal(t, 0, len(c.ResultChan()), "Expected all secrets to have been received")
 }
 
 func (t *testFactory) TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {

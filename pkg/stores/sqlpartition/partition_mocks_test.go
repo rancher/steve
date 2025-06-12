@@ -145,10 +145,10 @@ func (mr *MockUnstructuredStoreMockRecorder) Delete(apiOp, schema, id any) *gomo
 }
 
 // ListByPartitions mocks base method.
-func (m *MockUnstructuredStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, int, string, error) {
+func (m *MockUnstructuredStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByPartitions", apiOp, schema, partitions)
-	ret0, _ := ret[0].([]unstructured.Unstructured)
+	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(string)
 	ret3, _ := ret[3].(error)

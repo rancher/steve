@@ -13,10 +13,12 @@ import (
 	context "context"
 	reflect "reflect"
 
+	informer "github.com/rancher/steve/pkg/sqlcache/informer"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	watch "k8s.io/apimachinery/pkg/watch"
 )
 
 // MockByOptionsLister is a mock of ByOptionsLister interface.
@@ -58,4 +60,18 @@ func (m *MockByOptionsLister) ListByOptions(ctx context.Context, lo *sqltypes.Li
 func (mr *MockByOptionsListerMockRecorder) ListByOptions(ctx, lo, partitions, namespace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockByOptionsLister)(nil).ListByOptions), ctx, lo, partitions, namespace)
+}
+
+// Watch mocks base method.
+func (m *MockByOptionsLister) Watch(ctx context.Context, options informer.WatchOptions, eventsCh chan<- watch.Event) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Watch", ctx, options, eventsCh)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Watch indicates an expected call of Watch.
+func (mr *MockByOptionsListerMockRecorder) Watch(ctx, options, eventsCh any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Watch", reflect.TypeOf((*MockByOptionsLister)(nil).Watch), ctx, options, eventsCh)
 }

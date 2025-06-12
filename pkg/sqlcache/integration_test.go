@@ -304,7 +304,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 }
 
 func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFunc cache.TransformFunc) (*factory.Cache, *factory.CacheFactory, error) {
-	cacheFactory, err := factory.NewCacheFactory()
+	cacheFactory, err := factory.NewCacheFactory(factory.CacheFactoryOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make factory: %w", err)
 	}

@@ -21,8 +21,6 @@ import (
 
 const (
 	defaultLimit            = 100000
-	continueParam           = "continue"
-	limitParam              = "limit"
 	filterParam             = "filter"
 	sortParam               = "sort"
 	pageSizeParam           = "pagesize"
@@ -84,11 +82,7 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Fil
 func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOptions, error) {
 	opts := sqltypes.ListOptions{}
 
-	opts.ChunkSize = getLimit(apiOp)
-
 	q := apiOp.Request.URL.Query()
-	cont := q.Get(continueParam)
-	opts.Resume = cont
 
 	filterParams := q[filterParam]
 	filterOpts := []sqltypes.OrFilter{}
@@ -171,18 +165,6 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 	}
 
 	return opts, nil
-}
-
-// getLimit extracts the limit parameter from the request or sets a default of 100000.
-// The default limit can be explicitly disabled by setting it to zero or negative.
-// If the default is accepted, clients must be aware that the list may be incomplete, and use the "continue" token to get the next chunk of results.
-func getLimit(apiOp *types.APIRequest) int {
-	limitString := apiOp.Request.URL.Query().Get(limitParam)
-	limit, err := strconv.Atoi(limitString)
-	if err != nil {
-		limit = defaultLimit
-	}
-	return limit
 }
 
 // splitQuery takes a single-string k8s object accessor and returns its separate fields in a slice.
