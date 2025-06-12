@@ -1855,7 +1855,10 @@ func TestWatchMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	opts := ListOptionIndexerOptions{
-		Fields:       [][]string{{"metadata", "somefield"}},
+		Fields: [][]string{
+			{"metadata", "somefield"},
+			{"spec", "replicas"},
+		},
 		IsNamespaced: true,
 	}
 	loi, err := makeListOptionIndexer(ctx, opts)
@@ -1901,6 +1904,9 @@ func TestWatchMany(t *testing.T) {
 		Object: map[string]any{
 			"metadata": map[string]any{
 				"name": "foo",
+			},
+			"spec": map[string]any{
+				"replicas": int64(1),
 			},
 		},
 	}
