@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
+func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (*ListOptionIndexer, string, error) {
 	gvk := schema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",
@@ -41,25 +42,31 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (
 	name := informerNameFromGVK(gvk)
 	m, err := encryption.NewManager()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	db, err := db.NewClient(nil, m, m)
+	db, dbPath, err := db.NewClient(nil, m, m, true)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, name)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return listOptionIndexer, nil
+	return listOptionIndexer, dbPath, nil
+}
+
+func cleanTempFiles(basePath string) {
+	os.Remove(basePath)
+	os.Remove(basePath + "-shm")
+	os.Remove(basePath + "-wal")
 }
 
 func TestNewListOptionIndexer(t *testing.T) {
@@ -920,7 +927,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, err := makeListOptionIndexer(ctx, opts)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
@@ -1858,7 +1866,8 @@ func TestWatchMany(t *testing.T) {
 		Fields:       [][]string{{"metadata", "somefield"}},
 		IsNamespaced: true,
 	}
-	loi, err := makeListOptionIndexer(ctx, opts)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
 	startWatcher := func(ctx context.Context) (chan watch.Event, chan error) {
@@ -2110,7 +2119,8 @@ func TestWatchFilter(t *testing.T) {
 				Fields:       [][]string{{"metadata", "somefield"}},
 				IsNamespaced: true,
 			}
-			loi, err := makeListOptionIndexer(ctx, opts)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
 			wCh, errCh := startWatcher(ctx, loi, WatchFilter{
@@ -2201,7 +2211,8 @@ func TestWatchResourceVersion(t *testing.T) {
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, err := makeListOptionIndexer(parentCtx, opts)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts)
+	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
 	getRV := func(t *testing.T) string {
@@ -2353,7 +2364,8 @@ func TestWatchGarbageCollection(t *testing.T) {
 	opts := ListOptionIndexerOptions{
 		MaximumEventsCount: 2,
 	}
-	loi, err := makeListOptionIndexer(parentCtx, opts)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts)
+	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
 	getRV := func(t *testing.T) string {
@@ -2457,7 +2469,8 @@ func TestNonNumberResourceVersion(t *testing.T) {
 		Fields:       [][]string{{"metadata", "somefield"}},
 		IsNamespaced: true,
 	}
-	loi, err := makeListOptionIndexer(ctx, opts)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
 	foo := &unstructured.Unstructured{

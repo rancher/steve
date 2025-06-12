@@ -88,7 +88,7 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbClient, err := db.NewClient(nil, m, m)
+	dbClient, _, err := db.NewClient(nil, m, m, false)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func (f *CacheFactory) Reset() error {
 	f.informers = make(map[schema.GroupVersionKind]*guardedInformer)
 
 	// finally, reset the DB connection
-	err := f.dbClient.NewConnection()
+	_, err := f.dbClient.NewConnection(false)
 	if err != nil {
 		return err
 	}
