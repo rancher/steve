@@ -68,6 +68,9 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	listWatcher := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			a, err := client.List(ctx, options)
+			if err != nil {
+				return nil, err
+			}
 			// We want the list to be consistent when there are going to be relists
 			sort.SliceStable(a.Items, func(i int, j int) bool {
 				var err error
