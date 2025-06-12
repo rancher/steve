@@ -23,7 +23,6 @@ import (
 type MockCache struct {
 	ctrl     *gomock.Controller
 	recorder *MockCacheMockRecorder
-	isgomock struct{}
 }
 
 // MockCacheMockRecorder is the mock recorder for MockCache.
@@ -44,9 +43,9 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockCache) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockCache) ListByOptions(arg0 context.Context, arg1 *sqltypes.ListOptions, arg2 []partition.Partition, arg3 string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListByOptions", ctx, lo, partitions, namespace)
+	ret := m.ctrl.Call(m, "ListByOptions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(string)
@@ -55,7 +54,7 @@ func (m *MockCache) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions,
 }
 
 // ListByOptions indicates an expected call of ListByOptions.
-func (mr *MockCacheMockRecorder) ListByOptions(ctx, lo, partitions, namespace any) *gomock.Call {
+func (mr *MockCacheMockRecorder) ListByOptions(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockCache)(nil).ListByOptions), ctx, lo, partitions, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockCache)(nil).ListByOptions), arg0, arg1, arg2, arg3)
 }

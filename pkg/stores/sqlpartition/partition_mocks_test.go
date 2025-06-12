@@ -23,7 +23,6 @@ import (
 type MockPartitioner struct {
 	ctrl     *gomock.Controller
 	recorder *MockPartitionerMockRecorder
-	isgomock struct{}
 }
 
 // MockPartitionerMockRecorder is the mock recorder for MockPartitioner.
@@ -44,18 +43,18 @@ func (m *MockPartitioner) EXPECT() *MockPartitionerMockRecorder {
 }
 
 // All mocks base method.
-func (m *MockPartitioner) All(apiOp *types.APIRequest, schema *types.APISchema, verb, id string) ([]partition.Partition, error) {
+func (m *MockPartitioner) All(arg0 *types.APIRequest, arg1 *types.APISchema, arg2, arg3 string) ([]partition.Partition, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "All", apiOp, schema, verb, id)
+	ret := m.ctrl.Call(m, "All", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].([]partition.Partition)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // All indicates an expected call of All.
-func (mr *MockPartitionerMockRecorder) All(apiOp, schema, verb, id any) *gomock.Call {
+func (mr *MockPartitionerMockRecorder) All(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "All", reflect.TypeOf((*MockPartitioner)(nil).All), apiOp, schema, verb, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "All", reflect.TypeOf((*MockPartitioner)(nil).All), arg0, arg1, arg2, arg3)
 }
 
 // Store mocks base method.
@@ -76,7 +75,6 @@ func (mr *MockPartitionerMockRecorder) Store() *gomock.Call {
 type MockUnstructuredStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockUnstructuredStoreMockRecorder
-	isgomock struct{}
 }
 
 // MockUnstructuredStoreMockRecorder is the mock recorder for MockUnstructuredStore.
@@ -97,9 +95,9 @@ func (m *MockUnstructuredStore) EXPECT() *MockUnstructuredStoreMockRecorder {
 }
 
 // ByID mocks base method.
-func (m *MockUnstructuredStore) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (m *MockUnstructuredStore) ByID(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string) (*unstructured.Unstructured, []types.Warning, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ByID", apiOp, schema, id)
+	ret := m.ctrl.Call(m, "ByID", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*unstructured.Unstructured)
 	ret1, _ := ret[1].([]types.Warning)
 	ret2, _ := ret[2].(error)
@@ -107,15 +105,15 @@ func (m *MockUnstructuredStore) ByID(apiOp *types.APIRequest, schema *types.APIS
 }
 
 // ByID indicates an expected call of ByID.
-func (mr *MockUnstructuredStoreMockRecorder) ByID(apiOp, schema, id any) *gomock.Call {
+func (mr *MockUnstructuredStoreMockRecorder) ByID(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByID", reflect.TypeOf((*MockUnstructuredStore)(nil).ByID), apiOp, schema, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByID", reflect.TypeOf((*MockUnstructuredStore)(nil).ByID), arg0, arg1, arg2)
 }
 
 // Create mocks base method.
-func (m *MockUnstructuredStore) Create(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
+func (m *MockUnstructuredStore) Create(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", apiOp, schema, data)
+	ret := m.ctrl.Call(m, "Create", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*unstructured.Unstructured)
 	ret1, _ := ret[1].([]types.Warning)
 	ret2, _ := ret[2].(error)
@@ -123,15 +121,15 @@ func (m *MockUnstructuredStore) Create(apiOp *types.APIRequest, schema *types.AP
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockUnstructuredStoreMockRecorder) Create(apiOp, schema, data any) *gomock.Call {
+func (mr *MockUnstructuredStoreMockRecorder) Create(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUnstructuredStore)(nil).Create), apiOp, schema, data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUnstructuredStore)(nil).Create), arg0, arg1, arg2)
 }
 
 // Delete mocks base method.
-func (m *MockUnstructuredStore) Delete(apiOp *types.APIRequest, schema *types.APISchema, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (m *MockUnstructuredStore) Delete(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 string) (*unstructured.Unstructured, []types.Warning, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", apiOp, schema, id)
+	ret := m.ctrl.Call(m, "Delete", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*unstructured.Unstructured)
 	ret1, _ := ret[1].([]types.Warning)
 	ret2, _ := ret[2].(error)
@@ -139,15 +137,15 @@ func (m *MockUnstructuredStore) Delete(apiOp *types.APIRequest, schema *types.AP
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockUnstructuredStoreMockRecorder) Delete(apiOp, schema, id any) *gomock.Call {
+func (mr *MockUnstructuredStoreMockRecorder) Delete(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockUnstructuredStore)(nil).Delete), apiOp, schema, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockUnstructuredStore)(nil).Delete), arg0, arg1, arg2)
 }
 
 // ListByPartitions mocks base method.
-func (m *MockUnstructuredStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockUnstructuredStore) ListByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListByPartitions", apiOp, schema, partitions)
+	ret := m.ctrl.Call(m, "ListByPartitions", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(string)
@@ -156,15 +154,15 @@ func (m *MockUnstructuredStore) ListByPartitions(apiOp *types.APIRequest, schema
 }
 
 // ListByPartitions indicates an expected call of ListByPartitions.
-func (mr *MockUnstructuredStoreMockRecorder) ListByPartitions(apiOp, schema, partitions any) *gomock.Call {
+func (mr *MockUnstructuredStoreMockRecorder) ListByPartitions(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPartitions", reflect.TypeOf((*MockUnstructuredStore)(nil).ListByPartitions), apiOp, schema, partitions)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByPartitions", reflect.TypeOf((*MockUnstructuredStore)(nil).ListByPartitions), arg0, arg1, arg2)
 }
 
 // Update mocks base method.
-func (m *MockUnstructuredStore) Update(apiOp *types.APIRequest, schema *types.APISchema, data types.APIObject, id string) (*unstructured.Unstructured, []types.Warning, error) {
+func (m *MockUnstructuredStore) Update(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 types.APIObject, arg3 string) (*unstructured.Unstructured, []types.Warning, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", apiOp, schema, data, id)
+	ret := m.ctrl.Call(m, "Update", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*unstructured.Unstructured)
 	ret1, _ := ret[1].([]types.Warning)
 	ret2, _ := ret[2].(error)
@@ -172,22 +170,22 @@ func (m *MockUnstructuredStore) Update(apiOp *types.APIRequest, schema *types.AP
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockUnstructuredStoreMockRecorder) Update(apiOp, schema, data, id any) *gomock.Call {
+func (mr *MockUnstructuredStoreMockRecorder) Update(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUnstructuredStore)(nil).Update), apiOp, schema, data, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUnstructuredStore)(nil).Update), arg0, arg1, arg2, arg3)
 }
 
 // WatchByPartitions mocks base method.
-func (m *MockUnstructuredStore) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISchema, wr types.WatchRequest, partitions []partition.Partition) (chan watch.Event, error) {
+func (m *MockUnstructuredStore) WatchByPartitions(arg0 *types.APIRequest, arg1 *types.APISchema, arg2 types.WatchRequest, arg3 []partition.Partition) (chan watch.Event, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WatchByPartitions", apiOp, schema, wr, partitions)
+	ret := m.ctrl.Call(m, "WatchByPartitions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(chan watch.Event)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // WatchByPartitions indicates an expected call of WatchByPartitions.
-func (mr *MockUnstructuredStoreMockRecorder) WatchByPartitions(apiOp, schema, wr, partitions any) *gomock.Call {
+func (mr *MockUnstructuredStoreMockRecorder) WatchByPartitions(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchByPartitions", reflect.TypeOf((*MockUnstructuredStore)(nil).WatchByPartitions), apiOp, schema, wr, partitions)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WatchByPartitions", reflect.TypeOf((*MockUnstructuredStore)(nil).WatchByPartitions), arg0, arg1, arg2, arg3)
 }

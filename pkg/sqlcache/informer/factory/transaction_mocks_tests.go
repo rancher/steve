@@ -21,7 +21,6 @@ import (
 type MockTXClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockTXClientMockRecorder
-	isgomock struct{}
 }
 
 // MockTXClientMockRecorder is the mock recorder for MockTXClient.
@@ -42,10 +41,10 @@ func (m *MockTXClient) EXPECT() *MockTXClientMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockTXClient) Exec(query string, args ...any) (sql.Result, error) {
+func (m *MockTXClient) Exec(arg0 string, arg1 ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{query}
-	for _, a := range args {
+	varargs := []any{arg0}
+	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
@@ -55,22 +54,22 @@ func (m *MockTXClient) Exec(query string, args ...any) (sql.Result, error) {
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockTXClientMockRecorder) Exec(query any, args ...any) *gomock.Call {
+func (mr *MockTXClientMockRecorder) Exec(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{query}, args...)
+	varargs := append([]any{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockTXClient)(nil).Exec), varargs...)
 }
 
 // Stmt mocks base method.
-func (m *MockTXClient) Stmt(stmt *sql.Stmt) transaction.Stmt {
+func (m *MockTXClient) Stmt(arg0 *sql.Stmt) transaction.Stmt {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stmt", stmt)
+	ret := m.ctrl.Call(m, "Stmt", arg0)
 	ret0, _ := ret[0].(transaction.Stmt)
 	return ret0
 }
 
 // Stmt indicates an expected call of Stmt.
-func (mr *MockTXClientMockRecorder) Stmt(stmt any) *gomock.Call {
+func (mr *MockTXClientMockRecorder) Stmt(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stmt", reflect.TypeOf((*MockTXClient)(nil).Stmt), stmt)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stmt", reflect.TypeOf((*MockTXClient)(nil).Stmt), arg0)
 }

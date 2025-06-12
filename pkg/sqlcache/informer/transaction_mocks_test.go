@@ -22,7 +22,6 @@ import (
 type MockStmt struct {
 	ctrl     *gomock.Controller
 	recorder *MockStmtMockRecorder
-	isgomock struct{}
 }
 
 // MockStmtMockRecorder is the mock recorder for MockStmt.
@@ -43,10 +42,10 @@ func (m *MockStmt) EXPECT() *MockStmtMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockStmt) Exec(args ...any) (sql.Result, error) {
+func (m *MockStmt) Exec(arg0 ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range args {
+	for _, a := range arg0 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
@@ -56,16 +55,16 @@ func (m *MockStmt) Exec(args ...any) (sql.Result, error) {
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockStmtMockRecorder) Exec(args ...any) *gomock.Call {
+func (mr *MockStmtMockRecorder) Exec(arg0 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockStmt)(nil).Exec), args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockStmt)(nil).Exec), arg0...)
 }
 
 // Query mocks base method.
-func (m *MockStmt) Query(args ...any) (*sql.Rows, error) {
+func (m *MockStmt) Query(arg0 ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range args {
+	for _, a := range arg0 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Query", varargs...)
@@ -75,16 +74,16 @@ func (m *MockStmt) Query(args ...any) (*sql.Rows, error) {
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockStmtMockRecorder) Query(args ...any) *gomock.Call {
+func (mr *MockStmtMockRecorder) Query(arg0 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockStmt)(nil).Query), args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockStmt)(nil).Query), arg0...)
 }
 
 // QueryContext mocks base method.
-func (m *MockStmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error) {
+func (m *MockStmt) QueryContext(arg0 context.Context, arg1 ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx}
-	for _, a := range args {
+	varargs := []any{arg0}
+	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryContext", varargs...)
@@ -94,17 +93,17 @@ func (m *MockStmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, er
 }
 
 // QueryContext indicates an expected call of QueryContext.
-func (mr *MockStmtMockRecorder) QueryContext(ctx any, args ...any) *gomock.Call {
+func (mr *MockStmtMockRecorder) QueryContext(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx}, args...)
+	varargs := append([]any{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryContext", reflect.TypeOf((*MockStmt)(nil).QueryContext), varargs...)
 }
 
 // QueryRowContext mocks base method.
-func (m *MockStmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
+func (m *MockStmt) QueryRowContext(arg0 context.Context, arg1 ...any) *sql.Row {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx}
-	for _, a := range args {
+	varargs := []any{arg0}
+	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
@@ -113,9 +112,9 @@ func (m *MockStmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
 }
 
 // QueryRowContext indicates an expected call of QueryRowContext.
-func (mr *MockStmtMockRecorder) QueryRowContext(ctx any, args ...any) *gomock.Call {
+func (mr *MockStmtMockRecorder) QueryRowContext(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx}, args...)
+	varargs := append([]any{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRowContext", reflect.TypeOf((*MockStmt)(nil).QueryRowContext), varargs...)
 }
 
@@ -123,7 +122,6 @@ func (mr *MockStmtMockRecorder) QueryRowContext(ctx any, args ...any) *gomock.Ca
 type MockTXClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockTXClientMockRecorder
-	isgomock struct{}
 }
 
 // MockTXClientMockRecorder is the mock recorder for MockTXClient.
@@ -144,10 +142,10 @@ func (m *MockTXClient) EXPECT() *MockTXClientMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockTXClient) Exec(query string, args ...any) (sql.Result, error) {
+func (m *MockTXClient) Exec(arg0 string, arg1 ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{query}
-	for _, a := range args {
+	varargs := []any{arg0}
+	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
@@ -157,22 +155,22 @@ func (m *MockTXClient) Exec(query string, args ...any) (sql.Result, error) {
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockTXClientMockRecorder) Exec(query any, args ...any) *gomock.Call {
+func (mr *MockTXClientMockRecorder) Exec(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{query}, args...)
+	varargs := append([]any{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockTXClient)(nil).Exec), varargs...)
 }
 
 // Stmt mocks base method.
-func (m *MockTXClient) Stmt(stmt *sql.Stmt) transaction.Stmt {
+func (m *MockTXClient) Stmt(arg0 *sql.Stmt) transaction.Stmt {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stmt", stmt)
+	ret := m.ctrl.Call(m, "Stmt", arg0)
 	ret0, _ := ret[0].(transaction.Stmt)
 	return ret0
 }
 
 // Stmt indicates an expected call of Stmt.
-func (mr *MockTXClientMockRecorder) Stmt(stmt any) *gomock.Call {
+func (mr *MockTXClientMockRecorder) Stmt(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stmt", reflect.TypeOf((*MockTXClient)(nil).Stmt), stmt)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stmt", reflect.TypeOf((*MockTXClient)(nil).Stmt), arg0)
 }
