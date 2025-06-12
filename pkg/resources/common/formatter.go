@@ -2,6 +2,7 @@ package common
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -142,6 +143,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			delete(resource.Links, "patch")
 		}
 
+		gvk := attributes.GVK(request.Schema)
 		if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
 			// with the sql cache, these were already added by the indexer. However, the sql cache
 			// is only used for lists, so we need to re-add here for get/watch
@@ -159,7 +161,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			includeFields(request, unstr)
 			excludeFields(request, unstr)
 			excludeValues(request, unstr)
-			convertMetadataFields(request, unstr)
+			convertMetadataFields(request, gvk, unstr)
 		}
 
 		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
@@ -215,11 +217,12 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 	}
 }
 
-func convertMetadataFields(request *types.APIRequest, unstr *unstructured.Unstructured) {
+func convertMetadataFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured) {
 	if request.Schema != nil {
 		cols := GetColumnDefinitions(request.Schema)
 		for _, col := range cols {
-			if col.Type == "date" {
+			gvkDateFields, gvkFound := DateFieldsByGVKBuiltins[gvk]
+			if col.Type == "date" || (gvkFound && slices.Contains(gvkDateFields, col.Name)) {
 				index := GetIndexValueFromString(col.Field)
 				if index == -1 {
 					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)

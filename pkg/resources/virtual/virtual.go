@@ -4,6 +4,7 @@ package virtual
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
@@ -41,7 +42,8 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 
 	// Detecting if we need to convert date fields
 	for _, col := range columns {
-		if col.Type == "date" {
+		gvkDateFields, gvkFound := rescommon.DateFieldsByGVKBuiltins[gvk]
+		if col.Type == "date" || (gvkFound && slices.Contains(gvkDateFields, col.Name)) {
 			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 				index := rescommon.GetIndexValueFromString(col.Field)
 				if index == -1 {
