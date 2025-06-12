@@ -146,7 +146,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			delete(resource.Links, "patch")
 		}
 
-		gvk := attributes.GVK(request.Schema)
+		gvk := attributes.GVK(resource.Schema)
 		if unstr, ok := resource.APIObject.Object.(*unstructured.Unstructured); ok {
 			// with the sql cache, these were already added by the indexer. However, the sql cache
 			// is only used for lists, so we need to re-add here for get/watch

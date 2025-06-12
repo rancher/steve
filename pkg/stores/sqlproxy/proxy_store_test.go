@@ -725,7 +725,7 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			attributes.SetGVK(theSchema, gvk)
 			cg.EXPECT().TableAdminClient(apiOp, theSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{"some", "field"}, {"id"}, {"metadata", "state", "name"}}, gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(theSchema), attributes.Namespaced(theSchema), true).Return(c, nil)
-			tb.EXPECT().GetTransformFunc(attributes.GVK(theSchema)).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			tb.EXPECT().GetTransformFunc(attributes.GVK(theSchema), gomock.Any()).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
 			listToReturn := &unstructured.UnstructuredList{
 				Items: make([]unstructured.Unstructured, 0, 0),
