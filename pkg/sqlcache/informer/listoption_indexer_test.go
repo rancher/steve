@@ -949,6 +949,216 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 	}
 }
 
+func TestUserDefinedExtractFunction(t *testing.T) {
+	makeObj := func(name string, barSeparatedHosts string) map[string]any {
+		h1 := map[string]any{
+			"metadata": map[string]any{
+				"name": name,
+			},
+			"spec": map[string]any{
+				"rules": map[string]any{
+					"host": barSeparatedHosts,
+				},
+			},
+		}
+		return h1
+	}
+	ctx := context.Background()
+
+	type testCase struct {
+		description string
+		listOptions sqltypes.ListOptions
+		partitions  []partition.Partition
+		ns          string
+
+		items []*unstructured.Unstructured
+
+		extraIndexedFields [][]string
+		expectedList       *unstructured.UnstructuredList
+		expectedTotal      int
+		expectedContToken  string
+		expectedErr        error
+	}
+
+	obj01 := makeObj("obj01", "dogs|horses|humans")
+	obj02 := makeObj("obj02", "dogs|cats|fish")
+	obj03 := makeObj("obj03", "camels|clowns|zebras")
+	obj04 := makeObj("obj04", "aardvarks|harps|zyphyrs")
+	allObjects := []map[string]any{obj01, obj02, obj03, obj04}
+	makeList := func(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
+		t.Helper()
+
+		if len(objs) == 0 {
+			return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+		}
+
+		var items []any
+		for _, obj := range objs {
+			items = append(items, obj)
+		}
+
+		list := &unstructured.Unstructured{
+			Object: map[string]any{
+				"items": items,
+			},
+		}
+
+		itemList, err := list.ToList()
+		require.NoError(t, err)
+
+		return itemList
+	}
+	itemList := makeList(t, allObjects...)
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "find dogs in the first substring",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"spec", "rules", "0", "host"},
+						Matches: []string{"dogs"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj01, obj02),
+		expectedTotal:     2,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "extractBarredValue on item 0 should work",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "rules", "0", "host"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj04, obj03, obj01, obj02),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "extractBarredValue on item 1 should work",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "rules", "1", "host"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj02, obj03, obj04, obj01),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "extractBarredValue on item 2 should work",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "rules", "2", "host"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj02, obj01, obj03, obj04),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "extractBarredValue on item 3 should fall back to default sorting",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "rules", "3", "host"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "extractBarredValue on item -2 should result in a compile error",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "rules", "-2", "host"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:  []partition.Partition{{All: true}},
+		ns:          "",
+		expectedErr: errors.New("column is invalid [spec.rules.-2.host]: supplied column is invalid"),
+	})
+	t.Parallel()
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			fields := [][]string{
+				{"spec", "rules", "host"},
+			}
+			fields = append(fields, test.extraIndexedFields...)
+
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+			defer cleanTempFiles(dbPath)
+			assert.NoError(t, err)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				assert.NoError(t, err)
+			}
+
+			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			if test.expectedErr != nil {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedList, list)
+			assert.Equal(t, test.expectedTotal, total)
+			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
 		description           string
@@ -1374,6 +1584,87 @@ func TestConstructQuery(t *testing.T) {
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
+		description: "TestConstructQuery: uses the extractBarredValue custom function for penultimate indexer",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"spec", "containers", "3", "image"},
+						Matches: []string{"nginx-happy"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (extractBarredValue(f."spec.containers.image", "3") = ?) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"nginx-happy"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: uses the extractBarredValue custom function for penultimate indexer when sorting",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "containers", "16", "image"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (FALSE)
+  ORDER BY extractBarredValue(f."spec.containers.image", "16") ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: uses the extractBarredValue custom function for penultimate indexer when both filtering and sorting",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"spec", "containers", "3", "image"},
+							Matches: []string{"nginx-happy"},
+							Op:      sqltypes.Eq,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "containers", "16", "image"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (extractBarredValue(f."spec.containers.image", "3") = ?) AND
+    (FALSE)
+  ORDER BY extractBarredValue(f."spec.containers.image", "16") ASC`,
+		expectedStmtArgs: []any{"nginx-happy"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
 		description: "multiple filters with a positive label test and a negative non-label test still outer-join",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
@@ -1573,7 +1864,7 @@ func TestConstructQuery(t *testing.T) {
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.queryField1", "status.queryField2"},
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "spec.containers.image"},
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
