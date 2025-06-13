@@ -1858,6 +1858,7 @@ func TestWatchMany(t *testing.T) {
 		Fields: [][]string{
 			{"metadata", "somefield"},
 			{"spec", "replicas"},
+			{"spec", "minReplicas"},
 		},
 		IsNamespaced: true,
 	}
@@ -1906,7 +1907,8 @@ func TestWatchMany(t *testing.T) {
 				"name": "foo",
 			},
 			"spec": map[string]any{
-				"replicas": int64(1),
+				"replicas":    int64(1),
+				"minReplicas": float64(1.0),
 			},
 		},
 	}

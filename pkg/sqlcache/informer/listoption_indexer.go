@@ -499,7 +499,7 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.C
 		switch typedValue := value.(type) {
 		case nil:
 			args = append(args, "")
-		case int, bool, string, int64:
+		case int, bool, string, int64, float64:
 			args = append(args, fmt.Sprint(typedValue))
 		case []string:
 			args = append(args, strings.Join(typedValue, "|"))
