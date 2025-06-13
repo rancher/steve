@@ -757,11 +757,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	gvk := attributes.GVK(apiSchema)
 	fields := getFieldsFromSchema(apiSchema)
 	fields = append(fields, getFieldForGVK(gvk)...)
-<<<<<<< HEAD
 	cols := common.GetColumnDefinitions(apiSchema)
-=======
-	cols := common.GetColumnDefinitions(schema)
->>>>>>> 4cf3eb6 (added timestamp convertion to metadata.fields)
 
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}

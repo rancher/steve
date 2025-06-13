@@ -220,6 +220,10 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 	}
 }
 
+// convertMetadataFields updates metadata timestamp fields to ensure they remain fresh and human-readable when sent back
+// to the client. Internally, fields are stored as Unix timestamps; on each request, we calculate the elapsed time since
+// those timestamps by subtracting them from time.Now(), then format the resulting duration into a human-friendly string.
+// This prevents cached durations (e.g. “2d” - 2 days) from becoming stale over time.
 func convertMetadataFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured) {
 	if request.Schema != nil {
 		cols := GetColumnDefinitions(request.Schema)

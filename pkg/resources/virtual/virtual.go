@@ -16,6 +16,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+var now = time.Now()
+
 // TransformBuilder builds transform functions for specified GVKs through GetTransformFunc
 type TransformBuilder struct {
 	defaultFields *common.DefaultFields
@@ -38,7 +40,6 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
 	}
-	converters = append(converters, t.defaultFields.TransformCommon)
 
 	// Detecting if we need to convert date fields
 	for _, col := range columns {
@@ -68,7 +69,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					return nil, err
 				}
 
-				curValue[index] = fmt.Sprintf("%d", time.Now().Add(-duration).UnixMilli())
+				curValue[index] = fmt.Sprintf("%d", now.Add(-duration).UnixMilli())
 				if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
 					return nil, err
 				}
@@ -77,6 +78,8 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 			})
 		}
 	}
+
+	converters = append(converters, t.defaultFields.TransformCommon)
 
 	return func(raw interface{}) (interface{}, error) {
 		obj, isSignal, err := common.GetUnstructured(raw)

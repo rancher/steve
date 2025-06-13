@@ -10,20 +10,21 @@ import (
 
 // GetIndexValueFromString looks for values between [ ].
 // e.g: $.metadata.fields[2], in this case it would return 2
-// In case it doens't find any value between brackets it
-// returns -1
+// In case it doesn't find any value between brackets it returns -1
 func GetIndexValueFromString(pathString string) int {
-	index := -1
 	idxStart := strings.Index(pathString, "[")
-	idxEnd := strings.Index(pathString, "]")
-	if idxStart > 0 {
-		idx, err := strconv.Atoi(pathString[idxStart+1 : idxEnd])
-		if err != nil {
-			return index
-		}
-		index = idx
+	if idxStart == -1 {
+		return -1
 	}
-	return index
+	idxEnd := strings.Index(pathString[idxStart+1:], "]")
+	if idxEnd == -1 {
+		return -1
+	}
+	idx, err := strconv.Atoi(pathString[idxStart+1 : idxStart+1+idxEnd])
+	if err != nil {
+		return -1
+	}
+	return idx
 }
 
 // GetColumnDefinitions returns ColumnDefinitions from an APISchema
