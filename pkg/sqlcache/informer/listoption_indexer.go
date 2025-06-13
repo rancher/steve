@@ -68,9 +68,10 @@ type ListOptionIndexer struct {
 }
 
 var (
-	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
-	defaultIndexNamespaced = "metadata.namespace"
-	subfieldRegex          = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
+	defaultIndexedFields    = []string{"metadata.name", "metadata.creationTimestamp"}
+	defaultIndexNamespaced  = "metadata.namespace"
+	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
+	containsNonNumericRegex = regexp.MustCompile(`\D`)
 
 	ErrInvalidColumn = errors.New("supplied column is invalid")
 	ErrTooOld        = errors.New("resourceversion too old")
@@ -725,15 +726,15 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				orderByClauses = append(orderByClauses, clause)
 				params = append(params, sortParam)
 			} else {
-				columnName := toColumnName(fields)
-				if err := l.validateColumn(columnName); err != nil {
+				fieldEntry, err := l.getValidFieldEntry("f", fields)
+				if err != nil {
 					return queryInfo, err
 				}
 				direction := "ASC"
 				if sortDirective.Order == sqltypes.DESC {
 					direction = "DESC"
 				}
-				orderByClauses = append(orderByClauses, fmt.Sprintf(`f."%s" %s`, columnName, direction))
+				orderByClauses = append(orderByClauses, fmt.Sprintf("%s %s", fieldEntry, direction))
 			}
 		}
 		query += "\n  ORDER BY "
@@ -852,6 +853,49 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 		}
 	}
 	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
+}
+
+// Suppose the query access something like 'spec.containers[3].image' but only
+// spec.containers.image is specified in the index.  If `spec.containers` is
+// an array, then spec.containers.image is a pseudo-array of |-separated strings,
+// and we can use our custom registered extractBarredValue function to extract the
+// desired substring.
+//
+// The index can appear anywhere in the list of fields after the first entry,
+// but we always end up with a |-separated list of substrings. Most of the time
+// the index will be the second-last entry, but we lose nothing allowing for any
+// position.
+// Indices are 0-based.
+
+func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
+	columnName := toColumnName(fields)
+	err := l.validateColumn(columnName)
+	if err == nil {
+		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
+	}
+	if len(fields) <= 2 {
+		return "", err
+	}
+	idx := -1
+	for i := len(fields) - 1; i > 0; i-- {
+		if !containsNonNumericRegex.MatchString(fields[i]) {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		// We don't have an index onto a valid field
+		return "", err
+	}
+	indexField := fields[idx]
+	// fields[len(fields):] gives empty array
+	otherFields := append(fields[0:idx], fields[idx+1:]...)
+	leadingColumnName := toColumnName(otherFields)
+	if l.validateColumn(leadingColumnName) != nil {
+		// We have an index, but not onto a valid field
+		return "", err
+	}
+	return fmt.Sprintf(`extractBarredValue(%s."%s", "%s")`, prefix, leadingColumnName, indexField), nil
 }
 
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
@@ -973,8 +1017,8 @@ func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
 func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []any, error) {
 	opString := ""
 	escapeString := ""
-	columnName := toColumnName(filter.Field)
-	if err := l.validateColumn(columnName); err != nil {
+	fieldEntry, err := l.getValidFieldEntry("f", filter.Field)
+	if err != nil {
 		return "", nil, err
 	}
 	switch filter.Op {
@@ -985,7 +1029,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		} else {
 			opString = "="
 		}
-		clause := fmt.Sprintf(`f."%s" %s ?%s`, columnName, opString, escapeString)
+		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
 		return clause, []any{formatMatchTarget(filter)}, nil
 	case sqltypes.NotEq:
 		if filter.Partial {
@@ -994,7 +1038,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		} else {
 			opString = "!="
 		}
-		clause := fmt.Sprintf(`f."%s" %s ?%s`, columnName, opString, escapeString)
+		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
 		return clause, []any{formatMatchTarget(filter)}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:
@@ -1002,7 +1046,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		if err != nil {
 			return "", nil, err
 		}
-		clause := fmt.Sprintf(`f."%s" %s ?`, columnName, sym)
+		clause := fmt.Sprintf("%s %s ?", fieldEntry, sym)
 		return clause, []any{target}, nil
 
 	case sqltypes.Exists, sqltypes.NotExists:
@@ -1019,7 +1063,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []an
 		if filter.Op == sqltypes.NotIn {
 			opString = "NOT IN"
 		}
-		clause := fmt.Sprintf(`f."%s" %s %s`, columnName, opString, target)
+		clause := fmt.Sprintf("%s %s %s", fieldEntry, opString, target)
 		matches := make([]any, len(filter.Matches))
 		for i, match := range filter.Matches {
 			matches[i] = match

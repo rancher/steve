@@ -43,7 +43,7 @@ func TestNewClient(t *testing.T) {
 			encryptor: e,
 			decryptor: d,
 		}
-		client, err := NewClient(c, e, d)
+		client, _, err := NewClient(c, e, d, false)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedClient, client)
 	},
@@ -527,7 +527,7 @@ func TestNewConnection(t *testing.T) {
 		client := SetupClient(t, c, e, d)
 		c.EXPECT().Close().Return(nil)
 
-		err := client.NewConnection()
+		dbPath, err := client.NewConnection(true)
 		assert.Nil(t, err)
 
 		// Create a transaction to ensure that the file is written to disk.
@@ -536,10 +536,10 @@ func TestNewConnection(t *testing.T) {
 		})
 		assert.NoError(t, err)
 
-		assert.FileExists(t, InformerObjectCacheDBPath)
-		assertFileHasPermissions(t, InformerObjectCacheDBPath, 0600)
+		assert.FileExists(t, dbPath)
+		assertFileHasPermissions(t, dbPath, 0600)
 
-		err = os.Remove(InformerObjectCacheDBPath)
+		err = os.Remove(dbPath)
 		if err != nil {
 			assert.Fail(t, "could not remove object cache path after test")
 		}
@@ -581,7 +581,8 @@ func SetupMockRows(t *testing.T) *MockRows {
 }
 
 func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) Client {
-	c, _ := NewClient(connection, encryptor, decryptor)
+	// No need to specify temp dir for this client because the connection is mocked
+	c, _, _ := NewClient(connection, encryptor, decryptor, false)
 	return c
 }
 
