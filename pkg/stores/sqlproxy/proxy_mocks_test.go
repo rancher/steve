@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
+	common "github.com/rancher/steve/pkg/resources/common"
 	factory "github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -389,15 +390,15 @@ func (m *MockTransformBuilder) EXPECT() *MockTransformBuilderMockRecorder {
 }
 
 // GetTransformFunc mocks base method.
-func (m *MockTransformBuilder) GetTransformFunc(arg0 schema.GroupVersionKind) cache.TransformFunc {
+func (m *MockTransformBuilder) GetTransformFunc(arg0 schema.GroupVersionKind, arg1 []common.ColumnDefinition) cache.TransformFunc {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransformFunc", arg0)
+	ret := m.ctrl.Call(m, "GetTransformFunc", arg0, arg1)
 	ret0, _ := ret[0].(cache.TransformFunc)
 	return ret0
 }
 
 // GetTransformFunc indicates an expected call of GetTransformFunc.
-func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(arg0 any) *gomock.Call {
+func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), arg0, arg1)
 }
