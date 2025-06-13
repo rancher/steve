@@ -248,7 +248,7 @@ func convertMetadataFields(request *types.APIRequest, gvk schema2.GroupVersionKi
 
 				millis, err := strconv.ParseInt(curValue[index].(string), 10, 64)
 				if err != nil {
-					logrus.Errorf("failed to convert timestamp value: %s", err.Error())
+					logrus.Warnf("failed to convert timestamp value: %s", err.Error())
 					return
 				}
 
