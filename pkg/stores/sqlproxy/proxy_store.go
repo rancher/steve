@@ -780,7 +780,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	attrs := attributes.GVK(apiSchema)
 	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(apiSchema))
+	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], transformFunc, tableClient, attrs, ns, controllerschema.IsListWatchable(apiSchema))
 	if err != nil {
 		return nil, 0, "", err
 	}
