@@ -2362,6 +2362,309 @@ func TestSortList(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "sort metadata.fields[1]",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+							"fields": []string{
+								"a1",
+								"position3", // this is where we expect to see this block after sorting
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+							"fields": []string{
+								"a2",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+							"fields": []string{
+								"a3",
+								"position2",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				Fields: [][]string{{"metadata", "fields", "1"}},
+				Orders: []SortOrder{ASC},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+							"fields": []string{
+								"a2",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+							"fields": []string{
+								"a3",
+								"position2",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+							"fields": []string{
+								"a1",
+								"position3",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sort metadata.fields[1] reverse order",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+							"fields": []string{
+								"a1",
+								"position3", // this is where we expect to see this block after sorting, but in reverse
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+							"fields": []string{
+								"a2",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+							"fields": []string{
+								"a3",
+								"position2",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				Fields: [][]string{{"metadata", "fields", "1"}},
+				Orders: []SortOrder{DESC},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+							"fields": []string{
+								"a1",
+								"position3",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+							"fields": []string{
+								"a3",
+								"position2",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+							"fields": []string{
+								"a2",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sort metadata.fields[1], preserve ties",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+							"fields": []string{
+								"a1",
+								"position3", // this is where we expect to see this block after sorting
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+							"fields": []string{
+								"a2",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+							"fields": []string{
+								"a3",
+								"position1", // but should be second
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+			},
+			sort: Sort{
+				Fields: [][]string{{"metadata", "fields", "1"}},
+				Orders: []SortOrder{ASC},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "honeycrisp",
+							"fields": []string{
+								"a2",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "granny-smith",
+							"fields": []string{
+								"a3",
+								"position1",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "green",
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+							"fields": []string{
+								"a1",
+								"position3",
+							},
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
