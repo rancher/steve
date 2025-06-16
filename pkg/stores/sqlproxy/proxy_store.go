@@ -240,7 +240,7 @@ type RelationshipNotifier interface {
 }
 
 type TransformBuilder interface {
-	GetTransformFunc(gvk schema.GroupVersionKind) cache.TransformFunc
+	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition) cache.TransformFunc
 }
 
 type Store struct {
@@ -335,9 +335,10 @@ func (s *Store) initializeNamespaceCache() error {
 
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
+	cols := common.GetColumnDefinitions(&nsSchema)
 
 	// get the type-specific transform func
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
@@ -545,7 +546,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	gvk := attributes.GVK(schema)
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(gvk)...)
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, nil)
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	attrs := attributes.GVK(schema)
 	ns := attributes.Namespaced(schema)
@@ -756,7 +757,9 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	gvk := attributes.GVK(apiSchema)
 	fields := getFieldsFromSchema(apiSchema)
 	fields = append(fields, getFieldForGVK(gvk)...)
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk)
+	cols := common.GetColumnDefinitions(apiSchema)
+
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	attrs := attributes.GVK(apiSchema)
 	ns := attributes.Namespaced(apiSchema)

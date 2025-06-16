@@ -1,11 +1,12 @@
-package virtual_test
+package virtual
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/rancher/steve/pkg/resources/virtual"
+	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/v3/pkg/summary"
@@ -16,11 +17,14 @@ import (
 )
 
 func TestTransformChain(t *testing.T) {
+	now = func() time.Time { return time.Date(1992, 9, 2, 0, 0, 0, 0, time.UTC) }()
+	noColumns := []rescommon.ColumnDefinition{}
 	tests := []struct {
 		name             string
 		input            any
 		hasSummary       *summary.SummarizedObject
 		hasRelationships []summarycache.Relationship
+		columns          []rescommon.ColumnDefinition
 		wantOutput       any
 		wantError        bool
 	}{
@@ -65,6 +69,7 @@ func TestTransformChain(t *testing.T) {
 					"id": "old-id",
 				},
 			},
+			columns: noColumns,
 			wantOutput: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "test.cattle.io/v1",
@@ -87,6 +92,131 @@ func TestTransformChain(t *testing.T) {
 								"fromType":    "TestResource",
 								"rel":         "uses",
 							},
+						},
+					},
+					"id":  "test-ns/testobj",
+					"_id": "old-id",
+				},
+			},
+		},
+		{
+			name: "CRD metadata.fields has a date field - should convert to timestamp",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "testobj",
+						Namespace: "test-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "test.cattle.io/v1",
+						Kind:       "TestResource",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "success",
+					Transitioning: false,
+					Error:         false,
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "test.cattle.io/v1",
+					"kind":       "TestResource",
+					"metadata": map[string]interface{}{
+						"name":      "testobj",
+						"namespace": "test-ns",
+						"fields":    []interface{}{"1d"},
+					},
+					"id": "old-id",
+				},
+			},
+			columns: []rescommon.ColumnDefinition{
+				{
+					Field: "metadata.fields[0]",
+					TableColumnDefinition: v1.TableColumnDefinition{
+						Name: "Age",
+						Type: "date",
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "test.cattle.io/v1",
+					"kind":       "TestResource",
+					"metadata": map[string]interface{}{
+						"name":          "testobj",
+						"namespace":     "test-ns",
+						"relationships": []any(nil),
+						"state": map[string]interface{}{
+							"name":          "success",
+							"error":         false,
+							"transitioning": false,
+							"message":       "",
+						},
+						"fields": []interface{}{
+							fmt.Sprintf("%d", now.Add(-24*time.Hour).UnixMilli()),
+						},
+					},
+					"id":  "test-ns/testobj",
+					"_id": "old-id",
+				},
+			},
+		},
+		{
+			name: "built-in type metadata.fields has a date field - should convert to timestamp",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "testobj",
+						Namespace: "test-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "success",
+					Transitioning: false,
+					Error:         false,
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"name":      "testobj",
+						"namespace": "test-ns",
+						"fields":    []interface{}{"1d"},
+					},
+					"id": "old-id",
+				},
+			},
+			columns: []rescommon.ColumnDefinition{
+				{
+					TableColumnDefinition: v1.TableColumnDefinition{
+						Name: "Age",
+					},
+					Field: "metadata.fields[0]",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"name":          "testobj",
+						"namespace":     "test-ns",
+						"relationships": []any(nil),
+						"state": map[string]interface{}{
+							"name":          "success",
+							"error":         false,
+							"transitioning": false,
+							"message":       "",
+						},
+						"fields": []interface{}{
+							fmt.Sprintf("%d", now.Add(-24*time.Hour).UnixMilli()),
 						},
 					},
 					"id":  "test-ns/testobj",
@@ -118,6 +248,7 @@ func TestTransformChain(t *testing.T) {
 					"type": "Gorniplatz",
 				},
 			},
+			columns: noColumns,
 			wantOutput: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "/v1",
@@ -162,6 +293,7 @@ func TestTransformChain(t *testing.T) {
 					"type": "Gorniplatz",
 				},
 			},
+			columns: noColumns,
 			wantOutput: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "palau.io/v1",
@@ -218,6 +350,7 @@ func TestTransformChain(t *testing.T) {
 					},
 				},
 			},
+			columns: noColumns,
 			wantOutput: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "management.cattle.io/v3",
@@ -302,6 +435,7 @@ func TestTransformChain(t *testing.T) {
 					},
 				},
 			},
+			columns: noColumns,
 			wantOutput: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "management.cattle.io/v3",
@@ -346,13 +480,14 @@ func TestTransformChain(t *testing.T) {
 			},
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fakeCache := common.FakeSummaryCache{
 				SummarizedObject: test.hasSummary,
 				Relationships:    test.hasRelationships,
 			}
-			tb := virtual.NewTransformBuilder(&fakeCache)
+			tb := NewTransformBuilder(&fakeCache)
 			raw, isSignal, err := common.GetUnstructured(test.input)
 			require.False(t, isSignal)
 			require.Nil(t, err)
@@ -362,7 +497,7 @@ func TestTransformChain(t *testing.T) {
 			if test.name == "a non-ready cluster" {
 				fmt.Printf("Stop here")
 			}
-			output, err := tb.GetTransformFunc(gvk)(test.input)
+			output, err := tb.GetTransformFunc(gvk, test.columns)(test.input)
 			require.Equal(t, test.wantOutput, output)
 			if test.wantError {
 				require.Error(t, err)
