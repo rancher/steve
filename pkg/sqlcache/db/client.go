@@ -29,6 +29,8 @@ import (
 
 const (
 	// InformerObjectCacheDBPath is where SQLite's object database file will be stored relative to process running steve
+	// It's given in two parts because the root is used as the suffix for the tempfile, and then we'll add a ".db" after it.
+	// In non-test mode, we can append the ".db" extension right here.
 	InformerObjectCacheDBPathRoot = "informer_object_cache"
 	InformerObjectCacheDBPath     = InformerObjectCacheDBPathRoot + ".db"
 
