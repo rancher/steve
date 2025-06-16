@@ -187,17 +187,18 @@ func (mr *MockStoreMockRecorder) ListKeys() *gomock.Call {
 }
 
 // NewConnection mocks base method.
-func (m *MockStore) NewConnection() error {
+func (m *MockStore) NewConnection(arg0 bool) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewConnection")
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "NewConnection", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // NewConnection indicates an expected call of NewConnection.
-func (mr *MockStoreMockRecorder) NewConnection() *gomock.Call {
+func (mr *MockStoreMockRecorder) NewConnection(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockStore)(nil).NewConnection))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockStore)(nil).NewConnection), arg0)
 }
 
 // Prepare mocks base method.

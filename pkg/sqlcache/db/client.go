@@ -8,11 +8,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/gob"
 	"fmt"
 	"io/fs"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 
 	"errors"
@@ -21,11 +24,15 @@ import (
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
 )
 
 const (
 	// InformerObjectCacheDBPath is where SQLite's object database file will be stored relative to process running steve
-	InformerObjectCacheDBPath = "informer_object_cache.db"
+	// It's given in two parts because the root is used as the suffix for the tempfile, and then we'll add a ".db" after it.
+	// In non-test mode, we can append the ".db" extension right here.
+	InformerObjectCacheDBPathRoot = "informer_object_cache"
+	InformerObjectCacheDBPath     = InformerObjectCacheDBPathRoot + ".db"
 
 	informerObjectCachePerms fs.FileMode = 0o600
 )
@@ -40,7 +47,7 @@ type Client interface {
 	ReadInt(rows Rows) (int, error)
 	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable Closable) error
-	NewConnection() error
+	NewConnection(isTemp bool) (string, error)
 }
 
 // WithTransaction runs f within a transaction.
@@ -155,22 +162,22 @@ type Decryptor interface {
 	Decrypt([]byte, []byte, uint32) ([]byte, error)
 }
 
-// NewClient returns a client. If the given connection is nil then a default one will be created.
-func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor) (Client, error) {
+// NewClient returns a client and the path to the database. If the given connection is nil then a default one will be created.
+func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool) (Client, string, error) {
 	client := &client{
 		encryptor: encryptor,
 		decryptor: decryptor,
 	}
 	if c != nil {
 		client.conn = c
-		return client, nil
+		return client, "", nil
 	}
-	err := client.NewConnection()
+	dbPath, err := client.NewConnection(useTempDir)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return client, nil
+	return client, dbPath, nil
 }
 
 // Prepare prepares the given string into a sql statement on the client's connection.
@@ -353,27 +360,43 @@ func closeRowsOnError(rows Rows, err error) error {
 
 // NewConnection checks for currently existing connection, closes one if it exists, removes any relevant db files, and opens a new connection which subsequently
 // creates new files.
-func (c *client) NewConnection() error {
+func (c *client) NewConnection(useTempDir bool) (string, error) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 	if c.conn != nil {
 		err := c.conn.Close()
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
-	err := os.RemoveAll(InformerObjectCacheDBPath)
-	if err != nil {
-		return err
+	if !useTempDir {
+		err := os.RemoveAll(InformerObjectCacheDBPath)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	// Set the permissions in advance, because we can't control them if
 	// the file is created by a sql.Open call instead.
-	if err := touchFile(InformerObjectCacheDBPath, informerObjectCachePerms); err != nil {
-		return nil
+	var dbPath string
+	if useTempDir {
+		dir := os.TempDir()
+		f, err := os.CreateTemp(dir, InformerObjectCacheDBPathRoot)
+		if err != nil {
+			return "", err
+		}
+		path := f.Name()
+		dbPath = path + ".db"
+		f.Close()
+		os.Remove(path)
+	} else {
+		dbPath = InformerObjectCacheDBPath
+	}
+	if err := touchFile(dbPath, informerObjectCachePerms); err != nil {
+		return dbPath, nil
 	}
 
-	sqlDB, err := sql.Open("sqlite", "file:"+InformerObjectCacheDBPath+"?"+
+	sqlDB, err := sql.Open("sqlite", "file:"+dbPath+"?"+
 		// open SQLite file in read-write mode, creating it if it does not exist
 		"mode=rwc&"+
 		// use the WAL journal mode for consistency and efficiency
@@ -390,11 +413,45 @@ func (c *client) NewConnection() error {
 		// of BeginTx
 		"_txlock=immediate")
 	if err != nil {
-		return err
+		return dbPath, err
 	}
-
+	sqlite.RegisterDeterministicScalarFunction(
+		"extractBarredValue",
+		2,
+		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			var arg1 string
+			var arg2 int
+			switch argTyped := args[0].(type) {
+			case string:
+				arg1 = argTyped
+			case []byte:
+				arg1 = string(argTyped)
+			default:
+				return nil, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
+			}
+			var err error
+			switch argTyped := args[1].(type) {
+			case int:
+				arg2 = argTyped
+			case string:
+				arg2, err = strconv.Atoi(argTyped)
+			case []byte:
+				arg2, err = strconv.Atoi(string(argTyped))
+			default:
+				return nil, fmt.Errorf("unsupported type for arg2: expected an int, got: %T", args[0])
+			}
+			if err != nil {
+				return nil, fmt.Errorf("problem with arg2: %w", err)
+			}
+			parts := strings.Split(arg1, "|")
+			if arg2 >= len(parts) || arg2 < 0 {
+				return "", nil
+			}
+			return parts[arg2], nil
+		},
+	)
 	c.conn = sqlDB
-	return nil
+	return dbPath, nil
 }
 
 // This acts like "touch" for both existing files and non-existing files.

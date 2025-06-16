@@ -57,17 +57,18 @@ func (mr *MockClientMockRecorder) CloseStmt(arg0 any) *gomock.Call {
 }
 
 // NewConnection mocks base method.
-func (m *MockClient) NewConnection() error {
+func (m *MockClient) NewConnection(arg0 bool) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewConnection")
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "NewConnection", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // NewConnection indicates an expected call of NewConnection.
-func (mr *MockClientMockRecorder) NewConnection() *gomock.Call {
+func (mr *MockClientMockRecorder) NewConnection(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockClient)(nil).NewConnection))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewConnection", reflect.TypeOf((*MockClient)(nil).NewConnection), arg0)
 }
 
 // Prepare mocks base method.
