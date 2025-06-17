@@ -20,11 +20,11 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Install mockgen
-      run: go install go.uber.org/mock/mockgen@v0.4.0
+      run: go install go.uber.org/mock/mockgen@v0.5.2
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@2226d7cb06a077cd73e56eedd38eecad18e5d837 # v6.5.0
       with:
-        version: v1.63.4
+        version: v1.64.8
     - name: Install env-test
       run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
     - name: Build

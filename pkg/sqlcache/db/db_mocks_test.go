@@ -21,6 +21,7 @@ import (
 type MockRows struct {
 	ctrl     *gomock.Controller
 	recorder *MockRowsMockRecorder
+	isgomock struct{}
 }
 
 // MockRowsMockRecorder is the mock recorder for MockRows.
@@ -83,10 +84,10 @@ func (mr *MockRowsMockRecorder) Next() *gomock.Call {
 }
 
 // Scan mocks base method.
-func (m *MockRows) Scan(arg0 ...any) error {
+func (m *MockRows) Scan(dest ...any) error {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range dest {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Scan", varargs...)
@@ -95,15 +96,16 @@ func (m *MockRows) Scan(arg0 ...any) error {
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockRowsMockRecorder) Scan(arg0 ...any) *gomock.Call {
+func (mr *MockRowsMockRecorder) Scan(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockRows)(nil).Scan), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockRows)(nil).Scan), dest...)
 }
 
 // MockConnection is a mock of Connection interface.
 type MockConnection struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnectionMockRecorder
+	isgomock struct{}
 }
 
 // MockConnectionMockRecorder is the mock recorder for MockConnection.
@@ -124,18 +126,18 @@ func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 }
 
 // BeginTx mocks base method.
-func (m *MockConnection) BeginTx(arg0 context.Context, arg1 *sql.TxOptions) (*sql.Tx, error) {
+func (m *MockConnection) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTx", arg0, arg1)
+	ret := m.ctrl.Call(m, "BeginTx", ctx, opts)
 	ret0, _ := ret[0].(*sql.Tx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BeginTx indicates an expected call of BeginTx.
-func (mr *MockConnectionMockRecorder) BeginTx(arg0, arg1 any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) BeginTx(ctx, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockConnection)(nil).BeginTx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockConnection)(nil).BeginTx), ctx, opts)
 }
 
 // Close mocks base method.
@@ -153,10 +155,10 @@ func (mr *MockConnectionMockRecorder) Close() *gomock.Call {
 }
 
 // Exec mocks base method.
-func (m *MockConnection) Exec(arg0 string, arg1 ...any) (sql.Result, error) {
+func (m *MockConnection) Exec(query string, args ...any) (sql.Result, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{query}
+	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
@@ -166,31 +168,32 @@ func (m *MockConnection) Exec(arg0 string, arg1 ...any) (sql.Result, error) {
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockConnectionMockRecorder) Exec(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) Exec(query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockConnection)(nil).Exec), varargs...)
 }
 
 // Prepare mocks base method.
-func (m *MockConnection) Prepare(arg0 string) (*sql.Stmt, error) {
+func (m *MockConnection) Prepare(query string) (*sql.Stmt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Prepare", arg0)
+	ret := m.ctrl.Call(m, "Prepare", query)
 	ret0, _ := ret[0].(*sql.Stmt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Prepare indicates an expected call of Prepare.
-func (mr *MockConnectionMockRecorder) Prepare(arg0 any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) Prepare(query any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockConnection)(nil).Prepare), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockConnection)(nil).Prepare), query)
 }
 
 // MockEncryptor is a mock of Encryptor interface.
 type MockEncryptor struct {
 	ctrl     *gomock.Controller
 	recorder *MockEncryptorMockRecorder
+	isgomock struct{}
 }
 
 // MockEncryptorMockRecorder is the mock recorder for MockEncryptor.
@@ -231,6 +234,7 @@ func (mr *MockEncryptorMockRecorder) Encrypt(arg0 any) *gomock.Call {
 type MockDecryptor struct {
 	ctrl     *gomock.Controller
 	recorder *MockDecryptorMockRecorder
+	isgomock struct{}
 }
 
 // MockDecryptorMockRecorder is the mock recorder for MockDecryptor.

@@ -155,7 +155,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, transfor
 				// expected, continue without logging
 				return
 			}
-			cache.DefaultWatchErrorHandler(r, err)
+			cache.DefaultWatchErrorHandler(ctx, r, err)
 		})
 		if err != nil {
 			return Cache{}, err
