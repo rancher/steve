@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/clusters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
@@ -92,10 +93,14 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		}
 		// Conversions are run in this loop:
 		for _, f := range converters {
-			obj, err = f(obj)
+			transformed, err := f(obj)
 			if err != nil {
-				return nil, err
+				// If we return an error here, the upstream k8s library will retry a transform, and we don't want that,
+				// as it's likely to loop forever and the server will hang.
+				// Instead, log this error and try the remaining transform functions
+				logrus.Errorf("error in transform: %v", err)
 			}
+			obj = transformed
 		}
 		return obj, nil
 	}
