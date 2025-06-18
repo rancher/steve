@@ -2,6 +2,8 @@ package clustercache
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary/client"
 	"github.com/rancher/wrangler/v3/pkg/summary/informer"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -125,6 +128,11 @@ func (h *clusterCache) addResourceEventHandler(gvk schema2.GroupVersionKind, inf
 }
 
 func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
+	now := time.Now()
+	defer func() {
+		logrus.Debugf("steve: clusterCache.OnSchemas took %v", time.Since(now))
+	}()
+
 	h.Lock()
 	defer h.Unlock()
 
@@ -162,7 +170,6 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 
 		logrus.Infof("Watching metadata for %s", w.gvk)
 		h.addResourceEventHandler(w.gvk, w.informer)
-		go w.informer.Run(w.ctx.Done())
 	}
 
 	for gvk, w := range h.watchers {
@@ -173,18 +180,29 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 		}
 	}
 
+	logrus.Debugf("steve: clusterCache.OnSchemas requires %v watchers", len(toWait))
+
+	limiter := limiterFromEnvironment()
 	for _, w := range toWait {
-		ctx, cancel := context.WithTimeout(w.ctx, 15*time.Minute)
-		if !cache.WaitForCacheSync(ctx.Done(), w.informer.HasSynced) {
-			logrus.Errorf("failed to sync cache for %v", w.gvk)
+		limiter.Go(func() error {
+			go func() {
+				w.informer.Run(w.ctx.Done())
+			}()
+
+			ctx, cancel := context.WithTimeout(w.ctx, 15*time.Minute)
+			if !cache.WaitForCacheSync(ctx.Done(), w.informer.HasSynced) {
+				logrus.Errorf("failed to sync cache for %v", w.gvk)
+				cancel()
+				w.cancel()
+				delete(h.watchers, w.gvk)
+			}
 			cancel()
-			w.cancel()
-			delete(h.watchers, w.gvk)
-		}
-		cancel()
+
+			return nil
+		})
 	}
 
-	return nil
+	return limiter.Wait()
 }
 
 func (h *clusterCache) Get(gvk schema2.GroupVersionKind, namespace, name string) (interface{}, bool, error) {
@@ -296,4 +314,19 @@ func callAll(handlers []interface{}, gvr schema2.GroupVersionKind, key string, o
 	}
 
 	return obj, merr.NewErrors(errs...)
+}
+
+func limiterFromEnvironment() *errgroup.Group {
+	g := &errgroup.Group{}
+	if v := os.Getenv("RANCHER_CACHE_CLIENT_LIMIT"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			logrus.Infof("steve: configuring cache client failed to parse RANCHER_CACHE_CLIENT_LIMIT: %s", err)
+		} else {
+			logrus.Debugf("steve: configuring client cache limiter: %v", parsed)
+			g.SetLimit(parsed)
+		}
+	}
+
+	return g
 }
