@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParseHumanDuration(t *testing.T) {
+func TestParseHumanReadableDuration(t *testing.T) {
 	testCases := []struct {
 		name        string
 		input       string
@@ -63,7 +63,7 @@ func TestParseHumanDuration(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := ParseHumanReadableDuration(tc.input)
+			output, err := ParseTimestampOrHumanReadableDuration(tc.input)
 			if tc.expectedErr {
 				assert.Error(t, err)
 			} else {
@@ -71,4 +71,8 @@ func TestParseHumanDuration(t *testing.T) {
 			}
 		})
 	}
+
+	// Testing timestamp parsing separately
+	_, err := ParseTimestampOrHumanReadableDuration("2024-02-12T15:19:21Z")
+	assert.NoError(t, err)
 }

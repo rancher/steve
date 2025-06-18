@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/clusters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
@@ -64,9 +65,11 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 				if !cast {
 					return nil, fmt.Errorf("could not cast metadata.fields %d to string", index)
 				}
-				duration, err := rescommon.ParseHumanReadableDuration(value)
+
+				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
 				if err != nil {
-					return nil, err
+					logrus.Errorf("parse timestamp %s, failed with error: %s", value, err)
+					return obj, nil
 				}
 
 				curValue[index] = fmt.Sprintf("%d", now.Add(-duration).UnixMilli())

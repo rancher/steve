@@ -247,29 +247,37 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 
 				curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
 				if err != nil {
-					logrus.Errorf("failed to get metadata.fields slice from unstr.Object: %s", err.Error())
+					logrus.Warnf("failed to get metadata.fields slice from unstr.Object: %s", err.Error())
+					return
 				}
 
 				if !got {
-					logrus.Debugf("couldn't find metadata.fields at unstr.Object")
+					logrus.Warnf("couldn't find metadata.fields at unstr.Object")
 					return
 				}
 
 				timeValue, ok := curValue[index].(string)
 				if !ok {
-					logrus.Debugf("time field isn't a string")
+					logrus.Warnf("time field isn't a string")
 					return
 				}
+
 				millis, err := strconv.ParseInt(timeValue, 10, 64)
 				if err != nil {
-					logrus.Warnf("failed to convert timestamp value: %s", err.Error())
+					logrus.Warnf("convert timestamp value: %s failed with error: %s", timeValue, err.Error())
 					return
 				}
 
 				timestamp := time.Unix(0, millis*int64(time.Millisecond))
 				dur := time.Since(timestamp)
 
-				curValue[index] = duration.HumanDuration(dur)
+				humanDuration := duration.HumanDuration(dur)
+				if humanDuration == "<invalid>" {
+					logrus.Warnf("couldn't convert value %d into human duration for column %s", int64(dur), col.Name)
+					return
+				}
+
+				curValue[index] = humanDuration
 				if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
 					logrus.Errorf("failed to set value back to metadata.fields slice: %s", err.Error())
 					return
