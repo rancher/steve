@@ -2,6 +2,9 @@ package clustercache
 
 import (
 	"context"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary/client"
 	"github.com/rancher/wrangler/v3/pkg/summary/informer"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -133,6 +137,7 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 		toWait []*watcher
 	)
 
+	rateLimited, limiter := rateLimiterFromEnvironment()
 	for _, id := range schemas.IDs() {
 		schema := schemas.Schema(id)
 		if !validSchema(schema) {
@@ -162,7 +167,15 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 
 		logrus.Infof("Watching metadata for %s", w.gvk)
 		h.addResourceEventHandler(w.gvk, w.informer)
-		go w.informer.Run(w.ctx.Done())
+		go func() {
+			if rateLimited {
+				logrus.Debug("steve: client cache rate-limiting enabled")
+				if err := limiter.Wait(ctx); err != nil {
+					logrus.Errorf("error waiting to query")
+				}
+			}
+			w.informer.Run(w.ctx.Done())
+		}()
 	}
 
 	for gvk, w := range h.watchers {
@@ -296,4 +309,34 @@ func callAll(handlers []interface{}, gvr schema2.GroupVersionKind, key string, o
 	}
 
 	return obj, merr.NewErrors(errs...)
+}
+
+func rateLimiterFromEnvironment() (bool, *rate.Limiter) {
+	rateLimited := strings.ToLower(os.Getenv("RANCHER_CACHE_RATELIMIT")) == "true"
+	if !rateLimited {
+		return false, nil
+	}
+
+	var qps float32 = 10000.0
+	if v := os.Getenv("RANCHER_CACHE_CLIENT_QPS"); v != "" {
+		parsed, err := strconv.ParseFloat(v, 32)
+		if err != nil {
+			logrus.Infof("steve: configuring client failed to parse RANCHER_CACHE_CLIENT_QPS: %s", err)
+		} else {
+			qps = float32(parsed)
+		}
+	}
+
+	burst := 100
+	if v := os.Getenv("RANCHER_CACHE_CLIENT_BURST"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			logrus.Infof("steve: configuring cache client failed to parse RANCHER_CACHE_CLIENT_BURST: %s", err)
+		} else {
+			burst = parsed
+		}
+	}
+
+	logrus.Infof("steve: configuring client cache QPS = %v, burst = %v, ratelimiting = %v", qps, burst, rateLimited)
+	return rateLimited, rate.NewLimiter(rate.Limit(qps), burst)
 }
