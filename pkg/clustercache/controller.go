@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary/client"
 	"github.com/rancher/wrangler/v3/pkg/summary/informer"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -183,7 +184,7 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 
 	limiter := limiterFromEnvironment()
 	for _, w := range toWait {
-		limiter.Execute(w.ctx, func(ctx context.Context) error {
+		limiter.Go(func() error {
 			go func() {
 				w.informer.Run(w.ctx.Done())
 			}()
@@ -315,18 +316,17 @@ func callAll(handlers []interface{}, gvr schema2.GroupVersionKind, key string, o
 	return obj, merr.NewErrors(errs...)
 }
 
-func limiterFromEnvironment() *Limiter {
-	var limit int = 100
+func limiterFromEnvironment() *errgroup.Group {
+	g := &errgroup.Group{}
 	if v := os.Getenv("RANCHER_CACHE_CLIENT_LIMIT"); v != "" {
 		parsed, err := strconv.Atoi(v)
 		if err != nil {
 			logrus.Infof("steve: configuring cache client failed to parse RANCHER_CACHE_CLIENT_LIMIT: %s", err)
 		} else {
-			limit = parsed
+			logrus.Debugf("steve: configuring client cache limiter: %v", parsed)
+			g.SetLimit(parsed)
 		}
 	}
 
-	logrus.Debugf("steve: configuring client cache limiter: %v", limit)
-
-	return NewLimiter(limit)
+	return g
 }
