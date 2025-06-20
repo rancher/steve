@@ -21,6 +21,7 @@ import (
 type MockAccessSetLookup struct {
 	ctrl     *gomock.Controller
 	recorder *MockAccessSetLookupMockRecorder
+	isgomock struct{}
 }
 
 // MockAccessSetLookupMockRecorder is the mock recorder for MockAccessSetLookup.
@@ -55,13 +56,13 @@ func (mr *MockAccessSetLookupMockRecorder) AccessFor(arg0 any) *gomock.Call {
 }
 
 // PurgeUserData mocks base method.
-func (m *MockAccessSetLookup) PurgeUserData(arg0 string) {
+func (m *MockAccessSetLookup) PurgeUserData(id string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "PurgeUserData", arg0)
+	m.ctrl.Call(m, "PurgeUserData", id)
 }
 
 // PurgeUserData indicates an expected call of PurgeUserData.
-func (mr *MockAccessSetLookupMockRecorder) PurgeUserData(arg0 any) *gomock.Call {
+func (mr *MockAccessSetLookupMockRecorder) PurgeUserData(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PurgeUserData", reflect.TypeOf((*MockAccessSetLookup)(nil).PurgeUserData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PurgeUserData", reflect.TypeOf((*MockAccessSetLookup)(nil).PurgeUserData), id)
 }

@@ -413,3 +413,16 @@ func (m *mockInformer) SetTransform(handler cache.TransformFunc) error {
 	m.transformFunc = handler
 	return m.setTranformErr
 }
+func (m *mockInformer) RunWithContext(ctx context.Context) {}
+
+func (m *mockInformer) SetWatchErrorHandlerWithContext(handler cache.WatchErrorHandlerWithContext) error {
+
+	return nil
+
+}
+
+func (m *mockInformer) AddEventHandlerWithOptions(handler cache.ResourceEventHandler, options cache.HandlerOptions) (cache.ResourceEventHandlerRegistration, error) {
+
+	return nil, nil
+
+}
