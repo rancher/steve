@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -85,6 +84,8 @@ func TestClusterCacheRateLimitingNotEnabled(t *testing.T) {
 	// (list and watch).
 	// This configures the test-server to rate-limit responses.
 	requestCount := len(testSchema) * 2
+	// The cache spawns a Go routine that makes 2 requests for each schema
+	// (list and watch).
 	tstSrv := startTestServer(t, rate.NewLimiter(rate.Limit(1000),
 		requestCount-2), &errorCount)
 
@@ -111,18 +112,12 @@ func TestClusterCacheRateLimitingEnabled(t *testing.T) {
 	var errorCount int32
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	t.Setenv("RANCHER_CACHE_RATELIMIT", "true")
-	t.Setenv("RANCHER_CACHE_CLIENT_QPS", "10000")
+	t.Setenv("RANCHER_CACHE_CLIENT_LIMIT", "3")
 	requestCount := len(testSchema) * 2
-
-	// This configures the cache-client burst to less than the number of
-	// requests we'll make.
-	t.Setenv("RANCHER_CACHE_CLIENT_BURST", strconv.Itoa(requestCount-4))
-
-	// The cache makes spawns a Go routine that makes 2 requests for each schema
+	// The cache spawns a Go routine that makes 2 requests for each schema
 	// (list and watch).
 	tstSrv := startTestServer(t, rate.NewLimiter(rate.Limit(1000),
-		requestCount), &errorCount)
+		requestCount-2), &errorCount)
 
 	sf := schema.NewCollection(ctx, &types.APISchemas{}, fakeAccessSetLookup{})
 	sf.Reset(testSchema)
@@ -170,7 +165,7 @@ func startTestServer(t *testing.T, rl *rate.Limiter, errors *int32) *httptest.Se
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		watched := values.Get("watch") == "true"
-		t.Logf("Faking response to %s %v", r.URL.Path, watched)
+		t.Logf("Faking response to %s watch=%v", r.URL.Path, watched)
 
 		if !rl.Allow() {
 			w.WriteHeader(http.StatusTooManyRequests)
