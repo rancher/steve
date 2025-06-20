@@ -348,8 +348,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		partitions  []partition.Partition
 		ns          string
 
-		items []*unstructured.Unstructured
-
 		extraIndexedFields [][]string
 		expectedList       *unstructured.UnstructuredList
 		expectedTotal      int
