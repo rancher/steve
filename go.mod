@@ -23,14 +23,14 @@ require (
 	github.com/rancher/apiserver v0.6.3
 	github.com/rancher/dynamiclistener v0.7.0-rc1
 	github.com/rancher/kubernetes-provider-detector v0.1.5
-	github.com/rancher/lasso v0.2.3-rc1
+	github.com/rancher/lasso v0.2.3-rc3
 	github.com/rancher/norman v0.6.1
 	github.com/rancher/remotedialer v0.4.5-rc.2
 	github.com/rancher/wrangler/v3 v3.2.2-rc.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.5
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 	golang.org/x/sync v0.13.0
 	google.golang.org/protobuf v1.36.5
 	gopkg.in/yaml.v3 v3.0.1
