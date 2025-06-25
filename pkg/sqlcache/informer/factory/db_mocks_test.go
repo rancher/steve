@@ -151,6 +151,21 @@ func (mr *MockClientMockRecorder) ReadStrings(rows any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings", reflect.TypeOf((*MockClient)(nil).ReadStrings), rows)
 }
 
+// ReadStrings2 mocks base method.
+func (m *MockClient) ReadStrings2(rows db.Rows) ([][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadStrings2", rows)
+	ret0, _ := ret[0].([][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadStrings2 indicates an expected call of ReadStrings2.
+func (mr *MockClientMockRecorder) ReadStrings2(rows any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings2", reflect.TypeOf((*MockClient)(nil).ReadStrings2), rows)
+}
+
 // Upsert mocks base method.
 func (m *MockClient) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
 	m.ctrl.T.Helper()

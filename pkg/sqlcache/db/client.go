@@ -44,6 +44,7 @@ type Client interface {
 	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
+	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
 	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable Closable) error
@@ -251,6 +252,34 @@ func (c *client) ReadStrings(rows Rows) ([]string, error) {
 		}
 
 		result = append(result, key)
+	}
+	err := rows.Err()
+	if err != nil {
+		return nil, closeRowsOnError(rows, err)
+	}
+
+	err = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ReadStrings2 scans the given rows into pairs of strings, and then returns the strings as a slice.
+func (c *client) ReadStrings2(rows Rows) ([][]string, error) {
+	c.connLock.RLock()
+	defer c.connLock.RUnlock()
+
+	var result [][]string
+	for rows.Next() {
+		var key1, key2 string
+		err := rows.Scan(&key1, &key2)
+		if err != nil {
+			return nil, closeRowsOnError(rows, err)
+		}
+
+		result = append(result, []string{key1, key2})
 	}
 	err := rows.Err()
 	if err != nil {
