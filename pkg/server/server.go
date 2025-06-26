@@ -63,7 +63,8 @@ type Server struct {
 
 	cacheFactory *factory.CacheFactory
 
-	extensionAPIServer ExtensionAPIServer
+	extensionAPIServer            ExtensionAPIServer
+	SkipWaitForExtensionAPIServer bool
 
 	authMiddleware      auth.Middleware
 	controllers         *Controllers
@@ -100,6 +101,9 @@ type Options struct {
 	// In most cases, you'll want to use [github.com/rancher/steve/pkg/ext.NewExtensionAPIServer]
 	// to create an ExtensionAPIServer.
 	ExtensionAPIServer ExtensionAPIServer
+
+	// SkipWaitForExtensionAPIServer allows serving requests despite the ExtensionAPIServer may not have been registered yet.
+	SkipWaitForExtensionAPIServer bool
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -129,9 +133,10 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
 		// SQLCache enables the SQLite-based lasso caching mechanism
-		SQLCache:           opts.SQLCache,
-		cacheFactory:       cacheFactory,
-		extensionAPIServer: opts.ExtensionAPIServer,
+		SQLCache:                      opts.SQLCache,
+		cacheFactory:                  cacheFactory,
+		extensionAPIServer:            opts.ExtensionAPIServer,
+		SkipWaitForExtensionAPIServer: opts.SkipWaitForExtensionAPIServer,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -256,6 +261,11 @@ func setup(ctx context.Context, server *Server) error {
 		sf)
 
 	next := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if server.extensionAPIServer == nil || server.SkipWaitForExtensionAPIServer {
+			server.next.ServeHTTP(rw, req)
+			return
+		}
+
 		select {
 		case <-server.extensionAPIServer.Registered():
 			server.next.ServeHTTP(rw, req)
