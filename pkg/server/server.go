@@ -270,7 +270,7 @@ func setup(ctx context.Context, server *Server) error {
 		case <-server.extensionAPIServer.Registered():
 			server.next.ServeHTTP(rw, req)
 		default:
-			http.NotFoundHandler().ServeHTTP(rw, req)
+			http.Error(rw, "API Aggregation not ready", http.StatusServiceUnavailable)
 		}
 	})
 
