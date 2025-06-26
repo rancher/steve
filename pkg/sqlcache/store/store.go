@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
@@ -44,6 +45,7 @@ type Store struct {
 	gvk                schema.GroupVersionKind
 	name               string
 	externalUpdateInfo *sqltypes.ExternalGVKUpdates
+	selfUpdateInfo     *sqltypes.ExternalGVKUpdates
 	typ                reflect.Type
 	keyFunc            cache.KeyFunc
 	shouldEncrypt      bool
@@ -72,12 +74,13 @@ type Store struct {
 var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
-func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
+func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
 	s := &Store{
 		ctx:                ctx,
 		name:               name,
 		gvk:                gvk,
 		externalUpdateInfo: externalUpdateInfo,
+		selfUpdateInfo:     selfUpdateInfo,
 		typ:                reflect.TypeOf(example),
 		Client:             c,
 		keyFunc:            keyFunc,
@@ -121,18 +124,36 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	return s, nil
 }
 
-func (s *Store) checkUpdateExternalInfo(key string) error {
-	if s.externalUpdateInfo == nil {
-		return nil
-	}
-	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-		if err := s.updateExternalInfo(tx, key, s.externalUpdateInfo); err != nil {
-			// Just report and ignore errors
-			logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
-		}
-		return nil
-	})
+func isDBError(e error) bool {
+	return strings.Contains(e.Error(), "SQL logic error: no such table:")
 }
+
+func (s *Store) checkUpdateExternalInfo(key string) {
+	for _, updateBlock := range []*sqltypes.ExternalGVKUpdates{s.externalUpdateInfo, s.selfUpdateInfo} {
+		if updateBlock != nil {
+			s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+				err := s.updateExternalInfo(tx, key, updateBlock)
+				if err != nil && !isDBError(err) {
+					// Just report and ignore errors
+					logrus.Errorf("Error updating external info %v: %s", s.externalUpdateInfo, err)
+				}
+				return nil
+			})
+		}
+	}
+}
+
+// This function is called in two different conditions:
+// Let's say resource B has a field X that we want to copy into resource A
+// When a B is upserted, we update any A's that depend on it
+// When an A is upserted, we check to see if any B's have that info
+// The `key` argument here can belong to either an A or a B, depending on which resource is being updated.
+// So it's only used in debug messages.
+// The SELECT queries are more generic -- find *all* the instances of A that have a connection to B,
+// ignoring any cases where A.X == B.X, as there's no need to update those.
+//
+// Some code later on in the function verifies that we aren't overwriting a non-empty value
+// with the empty string. I assume this is never desired.
 
 func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
@@ -151,7 +172,9 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		getStmt := s.Prepare(rawGetStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
 		if err != nil {
-			logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			if !isDBError(err) {
+				logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			}
 			continue
 		}
 		result, err := s.ReadStrings2(rows)
@@ -165,6 +188,10 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
+			ignoreUpdate, err := s.overrideCheck(labelDep.TargetFinalFieldName, labelDep.SourceGVK, sourceKey, finalTargetValue)
+			if ignoreUpdate || err != nil {
+				continue
+			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
@@ -191,7 +218,9 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		getStmt := s.Prepare(rawGetStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, nonLabelDep.SourceFieldName)
 		if err != nil {
-			logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			if !isDBError(err) {
+				logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
+			}
 			continue
 		}
 		result, err := s.ReadStrings2(rows)
@@ -205,6 +234,10 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
+			ignoreUpdate, err := s.overrideCheck(nonLabelDep.TargetFinalFieldName, nonLabelDep.SourceGVK, sourceKey, finalTargetValue)
+			if ignoreUpdate || err != nil {
+				continue
+			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
@@ -213,10 +246,44 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
 			}
+			logrus.Debugf("QQQ: non-label-Updated %s[%s].%s to %s",
+				nonLabelDep.SourceGVK,
+				sourceKey,
+				nonLabelDep.TargetFinalFieldName,
+				finalTargetValue)
 		}
 	}
 	return nil
 
+}
+
+// If the new value will change a non-empty current value, return [true, error:nil]
+func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetValue string) (bool, error) {
+	rawGetValueStmt := fmt.Sprintf(`SELECT f."%s" FROM  "%s_fields" f WHERE f.key = ?`,
+		finalFieldName, sourceGVK)
+	getValueStmt := s.Prepare(rawGetValueStmt)
+	rows, err := s.QueryForRows(s.ctx, getValueStmt, sourceKey)
+	if err != nil {
+		logrus.Debugf("Checking the field, got error %s", err)
+		return false, err
+	}
+	results, err := s.ReadStrings(rows)
+	if err != nil {
+		logrus.Infof("Checking the field for table %s, key %s, got error %s", sourceGVK, sourceKey, err)
+		return false, err
+	}
+	if len(results) == 1 {
+		currentValue := results[0]
+		if len(currentValue) > 0 && len(finalTargetValue) == 0 {
+			logrus.Debugf("Don't override %s key %s, field %s=%s with an empty string",
+				sourceGVK,
+				sourceKey,
+				finalFieldName,
+				currentValue)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
@@ -282,7 +349,8 @@ func (s *Store) Add(obj any) error {
 		log.Errorf("Error in Store.Add for type %v: %v", s.name, err)
 		return err
 	}
-	return s.checkUpdateExternalInfo(key)
+	s.checkUpdateExternalInfo(key)
+	return nil
 }
 
 // Update saves an obj, or updates it if it exists in this Store
@@ -309,7 +377,8 @@ func (s *Store) Update(obj any) error {
 		log.Errorf("Error in Store.Update for type %v: %v", s.name, err)
 		return err
 	}
-	return s.checkUpdateExternalInfo(key)
+	s.checkUpdateExternalInfo(key)
+	return nil
 }
 
 // Delete deletes the given object, if it exists in this Store
