@@ -98,9 +98,10 @@ const (
                WHERE rv = ?
        `
 	deleteEventsByCountFmt = `DELETE FROM "%s_events"
-	WHERE rowid
-	NOT IN (
-		SELECT rowid FROM "%s_events" ORDER BY rowid DESC LIMIT ?
+	WHERE rowid < (
+	    SELECT MIN(rowid) FROM (
+	        SELECT rowid FROM "%s_events" ORDER BY rowid DESC LIMIT ?
+	    ) q
 	)`
 
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
