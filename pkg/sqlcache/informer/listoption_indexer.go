@@ -1014,7 +1014,7 @@ SELECT key, value FROM "%s_labels"
 	return parts, params, withNames, joinParts, nil
 }
 
-// if nextNum < 0 return an error message
+// if nextNum <= 0 return an error message
 func internLabel(labelName string, joinTableIndexByLabelName map[string]int, nextNum int) (int, error) {
 	i, ok := joinTableIndexByLabelName[labelName]
 	if ok {
