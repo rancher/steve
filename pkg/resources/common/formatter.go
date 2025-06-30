@@ -96,15 +96,22 @@ func formatter(summarycache *summarycache.SummaryCache, asl accesscontrol.Access
 		if accessSet == nil {
 			return
 		}
+		hasGet := accessSet.Grants("get", gvr.GroupResource(), resource.APIObject.Namespace(), resource.APIObject.Name())
 		hasUpdate := accessSet.Grants("update", gvr.GroupResource(), resource.APIObject.Namespace(), resource.APIObject.Name())
 		hasDelete := accessSet.Grants("delete", gvr.GroupResource(), resource.APIObject.Namespace(), resource.APIObject.Name())
 		hasPatch := accessSet.Grants("patch", gvr.GroupResource(), resource.APIObject.Namespace(), resource.APIObject.Name())
 
 		selfLink := selfLink(gvr, meta)
-
 		u := request.URLBuilder.RelativeToRoot(selfLink)
 		resource.Links["view"] = u
 
+		if hasGet {
+			if attributes.DisallowMethods(resource.Schema)[http.MethodGet] {
+				resource.Links["view"] = "blocked"
+			}
+		} else {
+			delete(resource.Links, "view")
+		}
 		if hasUpdate {
 			if attributes.DisallowMethods(resource.Schema)[http.MethodPut] {
 				resource.Links["update"] = "blocked"
