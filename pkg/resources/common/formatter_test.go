@@ -646,6 +646,75 @@ func Test_formatterLinks(t *testing.T) {
 		wantLinks    map[string]string
 	}{
 		{
+			name:    "get permission granted",
+			hasUser: true,
+			permissions: &permissions{
+				hasGet: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
+			},
+		},
+		{
+			name:    "get permission granted, but disallowed in schema",
+			hasUser: true,
+			permissions: &permissions{
+				hasGet: true,
+			},
+			schema: &types.APISchema{
+				Schema: &schemas.Schema{
+					ID: "example",
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"resource": "pods",
+						"disallowMethods": map[string]bool{
+							http.MethodGet: true,
+						},
+					},
+				},
+			},
+			apiObject: types.APIObject{
+				ID: "example",
+				Object: &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "example-pod",
+						Namespace: "example-ns",
+					},
+				},
+			},
+			currentLinks: map[string]string{
+				"default": "defaultVal",
+			},
+			wantLinks: map[string]string{
+				"default": "defaultVal",
+				"view":    "blocked",
+			},
+		},
+		{
 			name: "no schema",
 			currentLinks: map[string]string{
 				"default": "defaultVal",
@@ -781,7 +850,6 @@ func Test_formatterLinks(t *testing.T) {
 			},
 			wantLinks: map[string]string{
 				"default": "defaultVal",
-				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
 		{
@@ -817,7 +885,6 @@ func Test_formatterLinks(t *testing.T) {
 			wantLinks: map[string]string{
 				"default": "defaultVal",
 				"update":  "../v1/namespaces/example-ns/pods/example-pod",
-				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
 		{
@@ -853,7 +920,6 @@ func Test_formatterLinks(t *testing.T) {
 			wantLinks: map[string]string{
 				"default": "defaultVal",
 				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
-				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
 		{
@@ -891,7 +957,6 @@ func Test_formatterLinks(t *testing.T) {
 				"default": "defaultVal",
 				"update":  "../v1/namespaces/example-ns/pods/example-pod",
 				"remove":  "../v1/namespaces/example-ns/pods/example-pod",
-				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
 		{
@@ -933,7 +998,6 @@ func Test_formatterLinks(t *testing.T) {
 				"default": "defaultVal",
 				"update":  "blocked",
 				"remove":  "blocked",
-				"view":    "/api/v1/namespaces/example-ns/pods/example-pod",
 			},
 		},
 		{
@@ -969,7 +1033,6 @@ func Test_formatterLinks(t *testing.T) {
 			wantLinks: map[string]string{
 				"default": "defaultVal",
 				"patch":   "/v1/apps.deployments/example-ns/example-deployment",
-				"view":    "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
 			},
 		},
 		{
@@ -1008,7 +1071,6 @@ func Test_formatterLinks(t *testing.T) {
 			wantLinks: map[string]string{
 				"default": "defaultVal",
 				"patch":   "blocked",
-				"view":    "/apis/apps/v1/namespaces/example-ns/deployments/example-deployment",
 			},
 		},
 	}
@@ -1028,6 +1090,12 @@ func Test_formatterLinks(t *testing.T) {
 				meta, err := meta.Accessor(test.apiObject.Object)
 				accessSet := accesscontrol.AccessSet{}
 				require.NoError(t, err)
+				if test.permissions.hasGet {
+					accessSet.Add("get", gvr.GroupResource(), accesscontrol.Access{
+						Namespace:    meta.GetNamespace(),
+						ResourceName: meta.GetName(),
+					})
+				}
 				if test.permissions.hasUpdate {
 					accessSet.Add("update", gvr.GroupResource(), accesscontrol.Access{
 						Namespace:    meta.GetNamespace(),
