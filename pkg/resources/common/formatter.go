@@ -291,7 +291,7 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 }
 
 func isDuration(value string) (time.Duration, bool) {
-	d, err := time.ParseDuration(value)
+	d, err := ParseTimestampOrHumanReadableDuration(value)
 	return d, err == nil
 }
 
