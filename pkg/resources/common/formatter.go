@@ -262,14 +262,17 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 					return
 				}
 
-				millis, err := strconv.ParseInt(timeValue, 10, 64)
-				if err != nil {
-					logrus.Warnf("convert timestamp value: %s failed with error: %s", timeValue, err.Error())
-					return
-				}
+				dur, ok := isDuration(timeValue)
+				if !ok {
+					millis, err := strconv.ParseInt(timeValue, 10, 64)
+					if err != nil {
+						logrus.Warnf("convert timestamp value: %s failed with error: %s", timeValue, err.Error())
+						return
+					}
 
-				timestamp := time.Unix(0, millis*int64(time.Millisecond))
-				dur := time.Since(timestamp)
+					timestamp := time.Unix(0, millis*int64(time.Millisecond))
+					dur = time.Since(timestamp)
+				}
 
 				humanDuration := duration.HumanDuration(dur)
 				if humanDuration == "<invalid>" {
@@ -285,6 +288,11 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 			}
 		}
 	}
+}
+
+func isDuration(value string) (time.Duration, bool) {
+	d, err := ParseTimestampOrHumanReadableDuration(value)
+	return d, err == nil
 }
 
 func excludeValues(request *types.APIRequest, unstr *unstructured.Unstructured) {

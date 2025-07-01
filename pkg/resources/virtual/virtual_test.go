@@ -17,7 +17,7 @@ import (
 )
 
 func TestTransformChain(t *testing.T) {
-	now = func() time.Time { return time.Date(1992, 9, 2, 0, 0, 0, 0, time.UTC) }()
+	now = func() time.Time { return time.Date(1992, 9, 2, 0, 0, 0, 0, time.UTC) }
 	noColumns := []rescommon.ColumnDefinition{}
 	tests := []struct {
 		name             string
@@ -154,7 +154,7 @@ func TestTransformChain(t *testing.T) {
 							"message":       "",
 						},
 						"fields": []interface{}{
-							fmt.Sprintf("%d", now.Add(-24*time.Hour).UnixMilli()),
+							fmt.Sprintf("%d", now().Add(-24*time.Hour).UnixMilli()),
 						},
 					},
 					"id":  "test-ns/testobj",
@@ -216,7 +216,7 @@ func TestTransformChain(t *testing.T) {
 							"message":       "",
 						},
 						"fields": []interface{}{
-							fmt.Sprintf("%d", now.Add(-24*time.Hour).UnixMilli()),
+							fmt.Sprintf("%d", now().Add(-24*time.Hour).UnixMilli()),
 						},
 					},
 					"id":  "test-ns/testobj",
