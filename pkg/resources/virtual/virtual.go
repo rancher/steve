@@ -11,13 +11,14 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/clusters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 )
 
-var now = time.Now()
+var now = time.Now
 
 // TransformBuilder builds transform functions for specified GVKs through GetTransformFunc
 type TransformBuilder struct {
@@ -72,7 +73,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					return obj, nil
 				}
 
-				curValue[index] = fmt.Sprintf("%d", now.Add(-duration).UnixMilli())
+				curValue[index] = fmt.Sprintf("%d", now().Add(-duration).UnixMilli())
 				if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
 					return nil, err
 				}
