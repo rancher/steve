@@ -781,6 +781,129 @@ func TestAddWithOneUpdate(t *testing.T) {
 		})
 	}
 }
+func TestAddWithExternalUpdates(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+	testObject := testStoreObject{Id: "testStoreObject", Val: "a"}
+	var tests []testCase
+	tests = append(tests, testCase{description: "Add with no DB client errors", test: func(t *testing.T) {
+		c, txC := SetupMockDB(t)
+		stmts := NewMockStmt(gomock.NewController(t))
+		store := SetupStoreWithExternalDependencies(t, c, true, false)
+
+		c.EXPECT().Upsert(txC, store.upsertStmt, "testStoreObject", testObject, store.shouldEncrypt).Return(nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			}).Times(2)
+		rawStmt := `select distinct lt1.key, ex2."spec.clusterName"
+         from "_v1_Namespace_fields" f left outer join "_v1_Namespace_labels" lt1 join "management.cattle.io_v3_Project_fields" ex2
+         where ex2.key = ?
+              and f."spec.clusterName" != ex2."spec.clusterName"
+              and lt1.label = ? and lt1.value = ex2."metadata.name"`
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
+		results1 := []any{testObject.Id, "field.cattle.io/projectId"}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
+		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
+		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.clusterName" = ? WHERE key = ?`
+		c.EXPECT().Prepare(rawStmt2)
+		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
+		stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
+
+		rawStmt3 := `select f.key, ex2."spec.projectName"
+         from "_v1_Pods_fields" f join "provisioner.cattle.io_v3_Cluster_fields" ex2
+         where ex2.key = ?
+              and f."spec.projectName" != ex2."spec.projectName"
+              and f."field.cattle.io/fixer" = ex2."metadata.name"`
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
+		results2 := []any{testObject.Id, "field.cattle.io/fixer"}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
+
+		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
+		rawStmt4 := `UPDATE "_v1_Pods_fields" SET "spec.projectName" = ? WHERE key = ?`
+		c.EXPECT().Prepare(rawStmt4)
+		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
+		stmts.EXPECT().Exec("moose2", "lego.cattle.io/fields2")
+
+		err := store.Add(testObject)
+		assert.Nil(t, err)
+	},
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			test.test(t)
+		})
+	}
+}
+
+func TestAddWithSelfUpdates(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+	testObject := testStoreObject{Id: "testStoreObject", Val: "a"}
+	var tests []testCase
+	tests = append(tests, testCase{description: "Add with no DB client errors", test: func(t *testing.T) {
+		c, txC := SetupMockDB(t)
+		stmts := NewMockStmt(gomock.NewController(t))
+		store := SetupStoreWithExternalDependencies(t, c, false, true)
+
+		c.EXPECT().Upsert(txC, store.upsertStmt, "testStoreObject", testObject, store.shouldEncrypt).Return(nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(txC)
+				if err != nil {
+					t.Fail()
+				}
+			}).Times(2)
+		rawStmt := `select distinct lt1.key, ex2."spec.clusterName"
+         from "_v1_Namespace_fields" f left outer join "_v1_Namespace_labels" lt1 join "management.cattle.io_v3_Project_fields" ex2
+         where ex2.key = ?
+              and f."spec.clusterName" != ex2."spec.clusterName"
+              and lt1.label = ? and lt1.value = ex2."metadata.name"`
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
+		results1 := []any{testObject.Id, "field.cattle.io/projectId"}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
+		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
+		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.clusterName" = ? WHERE key = ?`
+		c.EXPECT().Prepare(rawStmt2)
+		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
+		stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
+
+		rawStmt3 := `select f.key, ex2."spec.projectName"
+         from "_v1_Pods_fields" f join "provisioner.cattle.io_v3_Cluster_fields" ex2
+         where ex2.key = ?
+              and f."spec.projectName" != ex2."spec.projectName"
+              and f."field.cattle.io/fixer" = ex2."metadata.name"`
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
+		results2 := []any{testObject.Id, "field.cattle.io/fixer"}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
+
+		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
+		rawStmt4 := `UPDATE "_v1_Pods_fields" SET "spec.projectName" = ? WHERE key = ?`
+		c.EXPECT().Prepare(rawStmt4)
+		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
+		stmts.EXPECT().Exec("moose2", "lego.cattle.io/fields2")
+
+		err := store.Add(testObject)
+		assert.Nil(t, err)
+	},
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			test.test(t)
+		})
+	}
+}
 
 func TestAddWithBothUpdates(t *testing.T) {
 	type testCase struct {
@@ -819,7 +942,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 					}
 				})
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
-			results1 := "field.cattle.io/projectId"
+			results1 := []any{testObject.Id, "field.cattle.io/projectId"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results1)
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
@@ -834,7 +957,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 			stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
 
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
-			results2 := []any{"field.cattle.io/fixer"}
+			results2 := []any{testObject.Id, "field.cattle.io/fixer"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), results2)
 
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)

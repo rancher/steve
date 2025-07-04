@@ -286,6 +286,8 @@ func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetV
 	return false, nil
 }
 
+/* Core methods */
+
 // deleteByKey deletes the object associated with key, if it exists in this Store
 func (s *Store) deleteByKey(key string, obj any) error {
 	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
