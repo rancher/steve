@@ -203,7 +203,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		}
 	}
 	for _, nonLabelDep := range externalUpdateInfo.ExternalDependencies {
-		rawGetStmt := fmt.Sprintf(`SELECT f.key, ex2."%s"
+		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s"
  FROM "%s_fields" f JOIN "%s_fields" ex2 ON f."%s" = ex2."%s"
  WHERE f."%s" != ex2."%s"`,
 			nonLabelDep.TargetFinalFieldName,
@@ -216,7 +216,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		// TODO: Try to fold the two blocks together
 
 		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt, nonLabelDep.SourceFieldName)
+		rows, err := s.QueryForRows(s.ctx, getStmt)
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, &db.QueryError{QueryString: rawGetStmt, Err: err})
@@ -285,6 +285,8 @@ func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetV
 	}
 	return false, nil
 }
+
+/* Core methods */
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
 func (s *Store) deleteByKey(key string, obj any) error {
