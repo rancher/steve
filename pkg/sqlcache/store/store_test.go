@@ -14,7 +14,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"reflect"
 	"regexp"
 	"strings"
@@ -1034,47 +1033,6 @@ func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient, update
 		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
 		TargetKeyFieldName:   "metadata.name",
 		TargetFinalFieldName: "spec.displayName",
-	}
-	namespaceNonLabelDep := sqltypes.ExternalDependency{
-		SourceGVK:            gvkKey("", "v1", "Pods"),
-		SourceFieldName:      "field.cattle.io/fixer",
-		TargetGVK:            gvkKey("provisioner.cattle.io", "v3", "Cluster"),
-		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.projectName",
-	}
-	updateInfo := sqltypes.ExternalGVKUpdates{
-		AffectedGVK:               schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
-		ExternalDependencies:      []sqltypes.ExternalDependency{namespaceNonLabelDep},
-		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
-	}
-	externalUpdateInfo := &updateInfo
-	selfUpdateInfo := &updateInfo
-	if !updateExternal {
-		externalUpdateInfo = nil
-	}
-	if !updateSelf {
-		selfUpdateInfo = nil
-	}
-	store, err := NewStore(context.Background(), testStoreObject{}, testStoreKeyFunc, client, false, gvk, name, externalUpdateInfo, selfUpdateInfo)
-	if err != nil {
-		t.Error(err)
-	}
-	return store
-}
-
-func gvkKey(group, version, kind string) string {
-	return group + "_" + version + "_" + kind
-}
-
-func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient, updateExternal bool, updateSelf bool) *Store {
-	name := "testStoreObject"
-	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
-	namespaceProjectLabelDep := sqltypes.ExternalLabelDependency{
-		SourceGVK:            gvkKey("", "v1", "Namespace"),
-		SourceLabelName:      "field.cattle.io/projectId",
-		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
-		TargetKeyFieldName:   "metadata.name",
-		TargetFinalFieldName: "spec.clusterName",
 	}
 	namespaceNonLabelDep := sqltypes.ExternalDependency{
 		SourceGVK:            gvkKey("", "v1", "Pods"),
