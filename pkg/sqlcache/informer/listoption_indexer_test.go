@@ -1680,7 +1680,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
@@ -1703,7 +1703,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
@@ -1736,7 +1736,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
