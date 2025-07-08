@@ -339,6 +339,30 @@ func TestNewListOptionIndexer(t *testing.T) {
 	}
 }
 
+func makeList(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
+	t.Helper()
+
+	if len(objs) == 0 {
+		return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+	}
+
+	var items []any
+	for _, obj := range objs {
+		items = append(items, obj)
+	}
+
+	list := &unstructured.Unstructured{
+		Object: map[string]any{
+			"items": items,
+		},
+	}
+
+	itemList, err := list.ToList()
+	require.NoError(t, err)
+
+	return itemList
+}
+
 func TestNewListOptionIndexerEasy(t *testing.T) {
 	ctx := context.Background()
 
@@ -354,32 +378,56 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken  string
 		expectedErr        error
 	}
-	foo := map[string]any{
+	obj01_no_labels := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj1",
+			"name":      "obj01_no_labels",
 			"namespace": "ns-a",
 			"somefield": "foo",
-			"sortfield": "4",
+			"sortfield": "400",
 		},
 	}
-	bar := map[string]any{
+	obj02_milk_saddles := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj2",
+			"name":      "obj02_milk_saddles",
 			"namespace": "ns-a",
 			"somefield": "bar",
-			"sortfield": "1",
+			"sortfield": "100",
 			"labels": map[string]any{
 				"cows":   "milk",
 				"horses": "saddles",
 			},
 		},
 	}
-	baz := map[string]any{
+	obj02a_beef_saddles := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj3",
+			"name":      "obj02a_beef_saddles",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "110",
+			"labels": map[string]any{
+				"cows":   "beef",
+				"horses": "saddles",
+			},
+		},
+	}
+	obj02b_milk_shoes := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj02b_milk_shoes",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "105",
+			"labels": map[string]any{
+				"cows":   "milk",
+				"horses": "shoes",
+			},
+		},
+	}
+	obj03_saddles := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj03_saddles",
 			"namespace": "ns-a",
 			"somefield": "baz",
-			"sortfield": "2",
+			"sortfield": "200",
 			"labels": map[string]any{
 				"horses": "saddles",
 			},
@@ -388,20 +436,34 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			"someotherfield": "helloworld",
 		},
 	}
-	toto := map[string]any{
+	obj03a_shoes := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj4",
+			"name":      "obj03a_shoes",
+			"namespace": "ns-a",
+			"somefield": "baz",
+			"sortfield": "210",
+			"labels": map[string]any{
+				"horses": "shoes",
+			},
+		},
+		"status": map[string]any{
+			"someotherfield": "helloworld",
+		},
+	}
+	obj04_milk := map[string]any{
+		"metadata": map[string]any{
+			"name":      "obj04_milk",
 			"namespace": "ns-a",
 			"somefield": "toto",
-			"sortfield": "2",
+			"sortfield": "200",
 			"labels": map[string]any{
 				"cows": "milk",
 			},
 		},
 	}
-	lodgePole := map[string]any{
+	obj05__guard_lodgepole := map[string]any{
 		"metadata": map[string]any{
-			"name":      "obj5",
+			"name":      "obj05__guard_lodgepole",
 			"namespace": "ns-b",
 			"unknown":   "hi",
 			"labels": map[string]any{
@@ -409,31 +471,18 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			},
 		},
 	}
-
-	makeList := func(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
-		t.Helper()
-
-		if len(objs) == 0 {
-			return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
-		}
-
-		var items []any
-		for _, obj := range objs {
-			items = append(items, obj)
-		}
-
-		list := &unstructured.Unstructured{
-			Object: map[string]any{
-				"items": items,
-			},
-		}
-
-		itemList, err := list.ToList()
-		require.NoError(t, err)
-
-		return itemList
+	allObjects := []map[string]any{
+		obj01_no_labels,
+		obj02_milk_saddles,
+		obj02a_beef_saddles,
+		obj02b_milk_shoes,
+		obj03_saddles,
+		obj03a_shoes,
+		obj04_milk,
+		obj05__guard_lodgepole,
 	}
-	itemList := makeList(t, foo, bar, baz, toto, lodgePole)
+
+	itemList := makeList(t, allObjects...)
 
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -459,7 +508,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter should select where that filter is true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter should select where that filter is true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -475,13 +524,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo),
+		expectedList:      makeList(t, obj01_no_labels),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set top NotEq should select where that filter is not true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter with Op set to NotEq should select where that filter is not true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -497,13 +546,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, bar, baz, toto, lodgePole),
-		expectedTotal:     4,
+		expectedList:      makeList(t, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj04_milk, obj05__guard_lodgepole),
+		expectedTotal:     7,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with 1 filter with Partial set to true should select where that partial match on that filter's value is true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with 1 filter with Partial set to true should select where that partial match on that filter's value is true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -519,13 +568,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, toto),
+		expectedList:      makeList(t, obj01_no_labels, obj04_milk),
 		expectedTotal:     2,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with 1 OrFilter set with multiple filters should select where any of those filters are true in prepared sql.Stmt",
+		description: "ListByOptions with 1 OrFilter set with multiple filters should select where any of those filters are true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -553,13 +602,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, lodgePole),
-		expectedTotal:     4,
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj05__guard_lodgepole),
+		expectedTotal:     7,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with multiple OrFilters set should select where all OrFilters contain one filter that is true in prepared sql.Stmt",
+		description: "ListByOptions with multiple OrFilters set should select where all OrFilters contain one filter that is true",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				Filters: []sqltypes.Filter{
@@ -591,13 +640,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, toto),
+		expectedList:      makeList(t, obj04_milk),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with labels filter should select the label in the prepared sql.Stmt",
+		description: "ListByOptions with labels filter should select the label",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				Filters: []sqltypes.Filter{
@@ -613,7 +662,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole),
+		expectedList:      makeList(t, obj05__guard_lodgepole),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -646,7 +695,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, bar),
+		expectedList:      makeList(t, obj02_milk_saddles),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
@@ -678,13 +727,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, toto),
+		expectedList:      makeList(t, obj04_milk),
 		expectedTotal:     1,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order in prepared sql.Stmt",
+		description: "ListByOptions with only one Sort.Field set should sort on that field only, in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -697,8 +746,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, bar, baz, foo, toto),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj05__guard_lodgepole, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj01_no_labels, obj04_milk),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -716,8 +765,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, toto, foo, baz, bar, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj04_milk, obj01_no_labels, obj03a_shoes, obj03_saddles, obj02b_milk_shoes, obj02a_beef_saddles, obj02_milk_saddles, obj05__guard_lodgepole),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
@@ -735,55 +784,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, toto, baz, bar, foo),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj05__guard_lodgepole, obj04_milk, obj03a_shoes, obj03_saddles, obj02b_milk_shoes, obj02a_beef_saddles, obj02_milk_saddles, obj01_no_labels),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-	// tests = append(tests, testCase{
-	// 	description: "sort one unbound label descending",
-	// 	listOptions: sqltypes.ListOptions{
-	// 		SortList: sqltypes.SortList{
-	// 			SortDirectives: []sqltypes.Sort{
-	// 				{
-	// 					Fields: []string{"metadata", "labels", "flip"},
-	// 					Order:  sqltypes.DESC,
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// 	partitions:        []partition.Partition{{All: true}},
-	// 	ns:                "",
-	// 	expectedList:      makeList(t, lodgePole, toto, baz, bar, foo),
-	// expectedTotal:     5,
-	// 	expectedContToken: "",
-	// 	expectedErr:       nil,
-	// })
-	// tests = append(tests, testCase{
-	// 	description: "ListByOptions sorting on two complex fields should sort on the first field in ascending order first and then sort on the second labels field in ascending order in prepared sql.Stmt",
-	// 	listOptions: sqltypes.ListOptions{
-	// 		SortList: sqltypes.SortList{
-	// 			SortDirectives: []sqltypes.Sort{
-	// 				{
-	// 					Fields: []string{"metadata", "sortfield"},
-	// 					Order:  sqltypes.ASC,
-	// 				},
-	// 				{
-	// 					Fields: []string{"metadata", "labels", "cows"},
-	// 					Order:  sqltypes.ASC,
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// 	partitions:        []partition.Partition{{All: true}},
-	// 	ns:                "",
-	// 	expectedList:      makeList(t),
-	// expectedTotal:     5,
-	// 	expectedContToken: "",
-	// 	expectedErr:       nil,
-	// })
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order in prepared sql.Stmt",
+		description: "ListByOptions sorting on two fields should sort on the first field in ascending order first and then sort on the second field in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -800,13 +807,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, lodgePole, bar, baz, toto, foo),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj05__guard_lodgepole, obj02_milk_saddles, obj02b_milk_shoes, obj02a_beef_saddles, obj03_saddles, obj04_milk, obj03a_shoes, obj01_no_labels),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order in prepared sql.Stmt",
+		description: "ListByOptions sorting on two fields should sort on the first field in descending order first and then sort on the second field in ascending order",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -823,13 +830,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, baz, toto, bar, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj01_no_labels, obj03a_shoes, obj03_saddles, obj04_milk, obj02a_beef_saddles, obj02b_milk_shoes, obj02_milk_saddles, obj05__guard_lodgepole),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize in prepared sql.Stmt",
+		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize",
 		listOptions: sqltypes.ListOptions{
 			Pagination: sqltypes.Pagination{
 				PageSize: 3,
@@ -837,13 +844,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz),
-		expectedTotal:     5,
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "3",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with Pagination.Page and no PageSize set should not add anything to prepared sql.Stmt",
+		description: "ListByOptions with Pagination.Page and no PageSize set should not filter anything",
 		listOptions: sqltypes.ListOptions{
 			Pagination: sqltypes.Pagination{
 				Page: 2,
@@ -851,64 +858,140 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 		partitions:        []partition.Partition{{All: true}},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-	// tests = append(tests, testCase{
-	// 	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met in prepared sql.Stmt",
-	// 	partitions: []partition.Partition{
-	// 		{
-	// 			Namespace: "ns-b",
-	// 		},
-	// 	},
-	// 	// XXX: Why do I need to specify the namespace here too?
-	// 	ns:                "ns-b",
-	// 	expectedList:      makeList(t, lodgePole),
-	// 	expectedTotal:     1,
-	// 	expectedContToken: "",
-	// 	expectedErr:       nil,
-	// })
 	tests = append(tests, testCase{
-		description: "ListByOptions with a All Partition should select all items that meet all other conditions in prepared sql.Stmt",
+		description: "ListByOptions with a All Partition should select all items that meet all other conditions",
 		partitions: []partition.Partition{
 			{
 				All: true,
 			},
 		},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with a Passthrough Partition should select all items that meet all other conditions prepared sql.Stmt",
+		description: "ListByOptions with a Passthrough Partition should select all items that meet all other conditions",
 		partitions: []partition.Partition{
 			{
 				Passthrough: true,
 			},
 		},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar, baz, toto, lodgePole),
-		expectedTotal:     5,
+		expectedList:      makeList(t, allObjects...),
+		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with a Names Partition should select only items where metadata.name equals an items in Names and all other conditions are met in prepared sql.Stmt",
+		description: "ListByOptions with a Names Partition should select only items where metadata.name equals an items in Names and all other conditions are met",
 		partitions: []partition.Partition{
 			{
-				Names: sets.New("obj1", "obj2"),
+				Names: sets.New("obj01_no_labels", "obj02_milk_saddles"),
 			},
 		},
 		ns:                "",
-		expectedList:      makeList(t, foo, bar),
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles),
 		expectedTotal:     2,
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "sort one unbound label descending",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "flip"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj03_saddles, obj03a_shoes, obj04_milk, obj05__guard_lodgepole),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions sorting on two complex fields should sort on the cows-labels-field in ascending order first and then sort on the sortfield field in ascending order",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "cows"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "sortfield"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj02a_beef_saddles, obj02_milk_saddles, obj02b_milk_shoes, obj04_milk, obj05__guard_lodgepole, obj03_saddles, obj03a_shoes, obj01_no_labels),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions sorting on two existing labels, with a filter on one, should sort correctly",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field: []string{"metadata", "labels", "cows"},
+							Op:    sqltypes.Exists,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "cows"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "labels", "horses"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj02a_beef_saddles, obj04_milk, obj02b_milk_shoes, obj02_milk_saddles),
+		expectedTotal:     4,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
+		partitions: []partition.Partition{
+			{
+				Namespace: "ns-b",
+			},
+		},
+		// XXX: Why do I need to specify the namespace here too?
+		ns:                "ns-b",
+		expectedList:      makeList(t, obj05__guard_lodgepole),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+
 	t.Parallel()
 
 	for _, test := range tests {
@@ -940,8 +1023,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedTotal, total)
+			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
@@ -1187,7 +1270,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (f."metadata.queryField1" IN (?)) AND
@@ -1212,7 +1295,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (f."metadata.queryField1" NOT IN (?)) AND
@@ -1597,7 +1680,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
@@ -1620,7 +1703,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
@@ -1653,7 +1736,7 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
@@ -1788,7 +1871,7 @@ func TestConstructQuery(t *testing.T) {
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"metadata", "labels", "this"},
+						Fields: []string{"metadata", "labels", "unbound"},
 						Order:  sqltypes.ASC,
 					},
 				},
@@ -1796,14 +1879,17 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `WITH lt1(key, value) AS (
+SELECT key, value FROM "something_labels"
+  WHERE label = ?
+)
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN lt1 ON o.key = lt1.key
   WHERE
-    (lt1.label = ?) AND
     (FALSE)
-  ORDER BY (CASE lt1.label WHEN ? THEN lt1.value ELSE NULL END) ASC NULLS LAST`,
-		expectedStmtArgs: []any{"this", "this"},
+  ORDER BY lt1.value ASC NULLS LAST`,
+		expectedStmtArgs: []any{"unbound"},
 		expectedErr:      nil,
 	})
 
@@ -1841,15 +1927,19 @@ func TestConstructQuery(t *testing.T) {
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `WITH lt1(key, value) AS (
+SELECT key, value FROM "something_labels"
+  WHERE label = ?
+)
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN lt1 ON o.key = lt1.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
-  LEFT OUTER JOIN "something_labels" lt3 ON o.key = lt3.key
   WHERE
-    ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?) OR (lt3.label = ?)) AND
+    ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?)) AND
     (FALSE)
-  ORDER BY (CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST, f."status.queryField2" DESC`,
-		expectedStmtArgs: []any{"toys", "jamb", "juice", "this", "this"},
+  ORDER BY lt1.value ASC NULLS LAST, f."status.queryField2" DESC`,
+		expectedStmtArgs: []any{"this", "toys", "jamb", "juice"},
 		expectedErr:      nil,
 	})
 
@@ -1947,7 +2037,6 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		joinTableIndexByLabelName map[string]int
 		direction                 bool
 		expectedStmt              string
-		expectedParam             string
 		expectedErr               string
 	}
 
@@ -1955,34 +2044,31 @@ func TestBuildSortLabelsClause(t *testing.T) {
 	tests = append(tests, testCase{
 		description: "TestBuildSortClause: empty index list errors",
 		labelName:   "emptyListError",
-		expectedErr: `internal error: no join-table index given for labelName "emptyListError"`,
+		expectedErr: `internal error: no join-table index given for label "emptyListError"`,
 	})
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit ascending",
 		labelName:                 "testBSL1",
 		joinTableIndexByLabelName: map[string]int{"testBSL1": 3},
 		direction:                 true,
-		expectedStmt:              `(CASE lt3.label WHEN ? THEN lt3.value ELSE NULL END) ASC NULLS LAST`,
-		expectedParam:             "testBSL1",
+		expectedStmt:              `lt3.value ASC NULLS LAST`,
 	})
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit descending",
 		labelName:                 "testBSL2",
 		joinTableIndexByLabelName: map[string]int{"testBSL2": 4},
 		direction:                 false,
-		expectedStmt:              `(CASE lt4.label WHEN ? THEN lt4.value ELSE NULL END) DESC NULLS FIRST`,
-		expectedParam:             "testBSL2",
+		expectedStmt:              `lt4.value DESC NULLS FIRST`,
 	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			stmt, param, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
+			stmt, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
 			if test.expectedErr != "" {
 				assert.Equal(t, test.expectedErr, err.Error())
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, test.expectedStmt, stmt)
-				assert.Equal(t, test.expectedParam, param)
 			}
 		})
 	}

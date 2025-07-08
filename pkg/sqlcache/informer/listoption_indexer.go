@@ -7,8 +7,10 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -594,7 +596,7 @@ type QueryInfo struct {
 }
 
 func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
-	ensureSortLabelsAreSelected(lo)
+	unboundSortLabels := getUnboundSortLabels(lo)
 	queryInfo := &QueryInfo{}
 	queryUsesLabels := hasLabelFilter(lo.Filters)
 	joinTableIndexByLabelName := make(map[string]int)
@@ -604,22 +606,36 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	// There's a 1:1 correspondence between a base table and its _Fields table
 	// but it's possible that a key has no associated labels, so if we're doing a
 	// non-existence test on labels we need to do a LEFT OUTER JOIN
-	distinctModifier := ""
-	if queryUsesLabels {
-		distinctModifier = " DISTINCT"
+	query := ""
+	params := []any{}
+	whereClauses := []string{}
+	joinPartsToUse := []string{}
+	if len(unboundSortLabels) > 0 {
+		withParts, withParams, _, joinParts, err := getWithParts(unboundSortLabels, joinTableIndexByLabelName, dbName, "o")
+		if err != nil {
+			return nil, err
+		}
+		query = "WITH " + strings.Join(withParts, ",\n") + "\n"
+		params = withParams
+		joinPartsToUse = joinParts
 	}
-	query := fmt.Sprintf(`SELECT%s o.object, o.objectnonce, o.dekid FROM "%s" o`, distinctModifier, dbName)
+	query += fmt.Sprintf(`SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "%s" o`, dbName)
 	query += "\n  "
 	query += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)
+	if len(joinPartsToUse) > 0 {
+		query += "\n  "
+		query += strings.Join(joinPartsToUse, "\n  ")
+	}
+
 	if queryUsesLabels {
-		for i, orFilter := range lo.Filters {
-			for j, filter := range orFilter.Filters {
+		for _, orFilter := range lo.Filters {
+			for _, filter := range orFilter.Filters {
 				if isLabelFilter(&filter) {
 					labelName := filter.Field[2]
 					_, ok := joinTableIndexByLabelName[labelName]
 					if !ok {
 						// Make the lt index 1-based for readability
-						jtIndex := i + j + 1
+						jtIndex := len(joinTableIndexByLabelName) + 1
 						joinTableIndexByLabelName[labelName] = jtIndex
 						query += "\n  "
 						query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON o.key = lt%d.key`, dbName, jtIndex, jtIndex)
@@ -628,10 +644,8 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 			}
 		}
 	}
-	params := []any{}
 
 	// 2- Filtering: WHERE clauses (from lo.Filters)
-	whereClauses := []string{}
 	for _, orFilters := range lo.Filters {
 		orClause, orParams, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName)
 		if err != nil {
@@ -669,8 +683,10 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				names := thisPartition.Names
 
 				if len(names) == 0 {
-					// degenerate case, there will be no results
-					singlePartitionClauses = append(singlePartitionClauses, "FALSE")
+					if len(singlePartitionClauses) == 0 {
+						// degenerate case, there will be no results
+						singlePartitionClauses = append(singlePartitionClauses, "FALSE")
+					}
 				} else {
 					singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`f."metadata.name" IN (?%s)`, strings.Repeat(", ?", len(thisPartition.Names)-1)))
 					// sort for reproducibility
@@ -720,12 +736,11 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		for _, sortDirective := range lo.SortList.SortDirectives {
 			fields := sortDirective.Fields
 			if isLabelsFieldList(fields) {
-				clause, sortParam, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC)
+				clause, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC)
 				if err != nil {
 					return nil, err
 				}
 				orderByClauses = append(orderByClauses, clause)
-				params = append(params, sortParam)
 			} else {
 				fieldEntry, err := l.getValidFieldEntry("f", fields)
 				if err != nil {
@@ -909,9 +924,10 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 
 	for _, filter := range orFilters.Filters {
 		if isLabelFilter(&filter) {
-			index, ok := joinTableIndexByLabelName[filter.Field[2]]
-			if !ok {
-				return "", nil, fmt.Errorf("internal error: no index for label name %s", filter.Field[2])
+			var index int
+			index, err = internLabel(filter.Field[2], joinTableIndexByLabelName, -1)
+			if err != nil {
+				return "", nil, err
 			}
 			newClause, newParams, err = l.getLabelFilter(index, filter, dbName)
 		} else {
@@ -932,32 +948,24 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 	return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
 }
 
-func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, string, error) {
-	ltIndex, ok := joinTableIndexByLabelName[labelName]
-	if !ok {
-		return "", "", fmt.Errorf(`internal error: no join-table index given for labelName "%s"`, labelName)
+func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, error) {
+	ltIndex, err := internLabel(labelName, joinTableIndexByLabelName, -1)
+	if err != nil {
+		return "", err
 	}
-	stmt := fmt.Sprintf(`CASE lt%d.label WHEN ? THEN lt%d.value ELSE NULL END`, ltIndex, ltIndex)
 	dir := "ASC"
 	nullsPosition := "LAST"
 	if !isAsc {
 		dir = "DESC"
 		nullsPosition = "FIRST"
 	}
-	return fmt.Sprintf("(%s) %s NULLS %s", stmt, dir, nullsPosition), labelName, nil
+	return fmt.Sprintf("lt%d.value %s NULLS %s", ltIndex, dir, nullsPosition), nil
 }
 
-// If the user tries to sort on a particular label without mentioning it in a query,
-// it turns out that the sort-directive is ignored. It could be that the sqlite engine
-// is doing some kind of optimization on the `select distinct`, but verifying an otherwise
-// unreferenced label exists solves this problem.
-// And it's better to do this by modifying the ListOptions object.
-// There are no thread-safety issues in doing this because the ListOptions object is
-// created in Store.ListByPartitions, and that ends up calling ListOptionIndexer.ConstructQuery.
-// No other goroutines access this object.
-func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
-	if len(lo.SortList.SortDirectives) == 0 {
-		return
+func getUnboundSortLabels(lo *sqltypes.ListOptions) []string {
+	numSortDirectives := len(lo.SortList.SortDirectives)
+	if numSortDirectives == 0 {
+		return make([]string, 0)
 	}
 	unboundSortLabels := make(map[string]bool)
 	for _, sortDirective := range lo.SortList.SortDirectives {
@@ -966,45 +974,57 @@ func ensureSortLabelsAreSelected(lo *sqltypes.ListOptions) {
 			unboundSortLabels[fields[2]] = true
 		}
 	}
-	if len(unboundSortLabels) == 0 {
-		return
-	}
-	// If we have sort directives but no filters, add an exists-filter for each label.
-	if lo.Filters == nil || len(lo.Filters) == 0 {
-		lo.Filters = make([]sqltypes.OrFilter, 1)
-		lo.Filters[0].Filters = make([]sqltypes.Filter, len(unboundSortLabels))
-		i := 0
-		for labelName := range unboundSortLabels {
-			lo.Filters[0].Filters[i] = sqltypes.Filter{
-				Field: []string{"metadata", "labels", labelName},
-				Op:    sqltypes.Exists,
-			}
-			i++
-		}
-		return
-	}
-	// The gotcha is we have to bind the labels for each set of orFilters, so copy them each time
-	for i, orFilters := range lo.Filters {
-		copyUnboundSortLabels := make(map[string]bool, len(unboundSortLabels))
-		for k, v := range unboundSortLabels {
-			copyUnboundSortLabels[k] = v
-		}
-		for _, filter := range orFilters.Filters {
-			if isLabelFilter(&filter) {
-				copyUnboundSortLabels[filter.Field[2]] = false
-			}
-		}
-		// Now for any labels that are still true, add another where clause
-		for labelName, needsBinding := range copyUnboundSortLabels {
-			if needsBinding {
-				// `orFilters` is a copy of lo.Filters[i], so reference the original.
-				lo.Filters[i].Filters = append(lo.Filters[i].Filters, sqltypes.Filter{
-					Field: []string{"metadata", "labels", labelName},
-					Op:    sqltypes.Exists,
-				})
+	if lo.Filters != nil {
+		for _, andFilter := range lo.Filters {
+			for _, orFilter := range andFilter.Filters {
+				if isLabelFilter(&orFilter) {
+					switch orFilter.Op {
+					case sqltypes.In, sqltypes.Eq, sqltypes.Gt, sqltypes.Lt, sqltypes.Exists:
+						delete(unboundSortLabels, orFilter.Field[2])
+						// other ops don't necessarily select a label
+					}
+				}
 			}
 		}
 	}
+	return slices.Collect(maps.Keys(unboundSortLabels))
+}
+
+func getWithParts(unboundSortLabels []string, joinTableIndexByLabelName map[string]int, dbName string, mainFuncPrefix string) ([]string, []any, []string, []string, error) {
+	numLabels := len(unboundSortLabels)
+	parts := make([]string, numLabels)
+	params := make([]any, numLabels)
+	withNames := make([]string, numLabels)
+	joinParts := make([]string, numLabels)
+	for i, label := range unboundSortLabels {
+		i1 := i + 1
+		idx, err := internLabel(label, joinTableIndexByLabelName, i1)
+		if err != nil {
+			return parts, params, withNames, joinParts, err
+		}
+		parts[i] = fmt.Sprintf(`lt%d(key, value) AS (
+SELECT key, value FROM "%s_labels"
+  WHERE label = ?
+)`, idx, dbName)
+		params[i] = label
+		withNames[i] = fmt.Sprintf("lt%d", idx)
+		joinParts[i] = fmt.Sprintf("LEFT OUTER JOIN lt%d ON %s.key = lt%d.key", idx, mainFuncPrefix, idx)
+	}
+
+	return parts, params, withNames, joinParts, nil
+}
+
+// if nextNum <= 0 return an error message
+func internLabel(labelName string, joinTableIndexByLabelName map[string]int, nextNum int) (int, error) {
+	i, ok := joinTableIndexByLabelName[labelName]
+	if ok {
+		return i, nil
+	}
+	if nextNum <= 0 {
+		return -1, fmt.Errorf("internal error: no join-table index given for label \"%s\"", labelName)
+	}
+	joinTableIndexByLabelName[labelName] = nextNum
+	return nextNum, nil
 }
 
 // Possible ops from the k8s parser:
