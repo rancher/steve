@@ -89,6 +89,9 @@ var (
 			{"spec", "nodeName"}},
 		gvkKey("", "v1", "ReplicationController"): {
 			{"spec", "template", "spec", "containers", "image"}},
+		gvkKey("", "v1", "Secret"): {
+			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
+		},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
 			{"spec", "type"},
