@@ -683,10 +683,8 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				names := thisPartition.Names
 
 				if len(names) == 0 {
-					if len(singlePartitionClauses) == 0 {
-						// degenerate case, there will be no results
-						singlePartitionClauses = append(singlePartitionClauses, "FALSE")
-					}
+					// degenerate case, there will be no results
+					singlePartitionClauses = append(singlePartitionClauses, "FALSE")
 				} else {
 					singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`f."metadata.name" IN (?%s)`, strings.Repeat(", ?", len(thisPartition.Names)-1)))
 					// sort for reproducibility
