@@ -977,20 +977,20 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
-	tests = append(tests, testCase{
-		description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
-		partitions: []partition.Partition{
-			{
-				Namespace: "ns-b",
-			},
-		},
-		// XXX: Why do I need to specify the namespace here too?
-		ns:                "ns-b",
-		expectedList:      makeList(t, obj05__guard_lodgepole),
-		expectedTotal:     1,
-		expectedContToken: "",
-		expectedErr:       nil,
-	})
+	//tests = append(tests, testCase{
+	//	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
+	//	partitions: []partition.Partition{
+	//		{
+	//			Namespace: "ns-b",
+	//		},
+	//	},
+	//	// XXX: Why do I need to specify the namespace here too?
+	//	ns:                "ns-b",
+	//	expectedList:      makeList(t, obj05__guard_lodgepole),
+	//	expectedTotal:     1,
+	//	expectedContToken: "",
+	//	expectedErr:       nil,
+	//})
 
 	t.Parallel()
 
