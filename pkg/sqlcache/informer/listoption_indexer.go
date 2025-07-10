@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -36,9 +37,6 @@ type ListOptionIndexer struct {
 
 	namespaced    bool
 	indexedFields []string
-
-	// maximumEventsCount is how many events to keep. 0 means keep all events.
-	maximumEventsCount int
 
 	latestRVLock sync.RWMutex
 	latestRV     string
@@ -137,11 +135,10 @@ type ListOptionIndexerOptions struct {
 	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
 	// namespaced
 	IsNamespaced bool
-	// MaximumEventsCount is the maximum number of events we want to keep
-	// in the _events table.
-	//
-	// Zero means never delete events.
-	MaximumEventsCount int
+	// GCInterval is how often to run the garbage collection
+	GCInterval time.Duration
+	// GCKeepCount is how many events to keep in _events table when gc runs
+	GCKeepCount int
 }
 
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
@@ -168,24 +165,20 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	l := &ListOptionIndexer{
-		Indexer:            i,
-		namespaced:         opts.IsNamespaced,
-		indexedFields:      indexedFields,
-		maximumEventsCount: opts.MaximumEventsCount,
-		watchers:           make(map[*watchKey]*watcher),
+		Indexer:       i,
+		namespaced:    opts.IsNamespaced,
+		indexedFields: indexedFields,
+		watchers:      make(map[*watchKey]*watcher),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
 	l.RegisterAfterAdd(l.addLabels)
 	l.RegisterAfterAdd(l.notifyEventAdded)
-	l.RegisterAfterAdd(l.deleteOldEvents)
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterUpdate(l.notifyEventModified)
-	l.RegisterAfterUpdate(l.deleteOldEvents)
 	l.RegisterAfterDelete(l.deleteFieldsByKey)
 	l.RegisterAfterDelete(l.deleteLabelsByKey)
 	l.RegisterAfterDelete(l.notifyEventDeleted)
-	l.RegisterAfterDelete(l.deleteOldEvents)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
 	columnDefs := make([]string, len(indexedFields))
@@ -284,6 +277,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.upsertLabelsStmt = l.Prepare(l.upsertLabelsQuery)
 	l.deleteLabelsByKeyStmt = l.Prepare(l.deleteLabelsByKeyQuery)
 	l.deleteLabelsStmt = l.Prepare(l.deleteLabelsQuery)
+
+	go l.runGC(ctx, opts.GCInterval, opts.GCKeepCount)
 
 	return l, nil
 }
@@ -478,18 +473,6 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	l.latestRVLock.Lock()
 	defer l.latestRVLock.Unlock()
 	l.latestRV = latestRV
-	return nil
-}
-
-func (l *ListOptionIndexer) deleteOldEvents(key string, obj any, tx transaction.Client) error {
-	if l.maximumEventsCount == 0 {
-		return nil
-	}
-
-	_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(l.maximumEventsCount)
-	if err != nil {
-		return &db.QueryError{QueryString: l.deleteEventsByCountQuery, Err: err}
-	}
 	return nil
 }
 
@@ -1380,4 +1363,33 @@ func matchFilter(filterName string, filterNamespace string, filterSelector label
 		}
 	}
 	return true
+}
+
+func (l *ListOptionIndexer) runGC(ctx context.Context, interval time.Duration, keepCount int) {
+	if interval == 0 || keepCount == 0 {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	logrus.Infof("Started SQL cache garbage collection for %s (interval=%s, keep=%d)", l.GetName(), interval, keepCount)
+
+	for {
+		select {
+		case <-ticker.C:
+			err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
+				_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(keepCount)
+				if err != nil {
+					return &db.QueryError{QueryString: l.deleteEventsByCountQuery, Err: err}
+				}
+				return nil
+			})
+			if err != nil {
+				logrus.Errorf("garbage collection for %s: %v", l.GetName(), err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }

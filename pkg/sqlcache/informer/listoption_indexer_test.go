@@ -98,9 +98,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		// create events table
@@ -175,9 +175,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
@@ -210,9 +210,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -255,9 +255,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -304,9 +304,9 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
 		// end NewIndexer() logic
 
-		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(4)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(4)
+		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -2745,7 +2745,8 @@ func TestWatchGarbageCollection(t *testing.T) {
 	parentCtx := context.Background()
 
 	opts := ListOptionIndexerOptions{
-		MaximumEventsCount: 2,
+		GCInterval:  40 * time.Millisecond,
+		GCKeepCount: 2,
 	}
 	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts)
 	defer cleanTempFiles(dbPath)
@@ -2773,6 +2774,9 @@ func TestWatchGarbageCollection(t *testing.T) {
 	err = loi.Delete(barDeleted)
 	assert.NoError(t, err)
 	rv4 := getRV(t)
+
+	// Make sure GC runs
+	time.Sleep(2 * opts.GCInterval)
 
 	for _, rv := range []string{rv1, rv2} {
 		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
@@ -2810,6 +2814,9 @@ func TestWatchGarbageCollection(t *testing.T) {
 	err = loi.Add(barNew)
 	assert.NoError(t, err)
 	rv5 := getRV(t)
+
+	// Make sure GC runs
+	time.Sleep(2 * opts.GCInterval)
 
 	for _, rv := range []string{rv1, rv2, rv3} {
 		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
