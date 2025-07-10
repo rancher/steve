@@ -246,7 +246,7 @@ func getInfo(obj interface{}) (name string, namespace string, revision int, summ
 		return "", "", 0, summaryResult, false
 	}
 
-	summaryResult = summary.Summarize(r)
+	summaryResult = summary.Summarize(r, false)
 	return meta.GetName(), meta.GetNamespace(), revision, summaryResult, true
 }
 

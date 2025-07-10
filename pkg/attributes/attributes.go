@@ -20,6 +20,14 @@ func SetNamespaced(s *types.APISchema, value bool) {
 	setVal(s, "namespaced", value)
 }
 
+func SetHasObservedGeneration(s *types.APISchema, value bool) {
+	setVal(s, "hasObservedGeneration", value)
+}
+
+func HasObservedGeneration(s *types.APISchema) bool {
+	return convert.ToBool(s.Attributes["hasObservedGeneration"])
+}
+
 func str(s *types.APISchema, key string) string {
 	return convert.ToString(s.Attributes[key])
 }

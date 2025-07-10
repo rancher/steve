@@ -84,7 +84,7 @@ func normalizeConditions(raw *unstructured.Unstructured) {
 	for _, condition := range obj.Slice("status", "conditions") {
 		var summary wranglerSummary.Summary
 		for _, summarizer := range wranglerSummary.ConditionSummarizers {
-			summary = summarizer(obj, []wranglerSummary.Condition{{Object: condition}}, summary)
+			summary = summarizer(obj, []wranglerSummary.Condition{{Object: condition}}, summary, false)
 		}
 		condition.Set("error", summary.Error)
 		condition.Set("transitioning", summary.Transitioning)
