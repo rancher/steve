@@ -146,9 +146,9 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 	// actually create the informer
 	if gi.informer == nil {
 		start := time.Now()
-		log.Debugf("CacheFor STARTS creating informer for %v", gvk)
+		log.Infof("CacheFor STARTS creating informer for %v", gvk)
 		defer func() {
-			log.Debugf("CacheFor IS DONE creating informer for %v (took %v)", gvk, time.Now().Sub(start))
+			log.Infof("CacheFor IS DONE creating informer for %v (took %v)", gvk, time.Now().Sub(start))
 		}()
 
 		_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
