@@ -206,16 +206,18 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return &db.QueryError{QueryString: createEventsTableFmt, Err: err}
 		}
 
-		_, err = tx.Exec(fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", ")))
+		createFieldsTableQuery := fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", "))
+		_, err = tx.Exec(createFieldsTableQuery)
 		if err != nil {
-			return err
+			return &db.QueryError{QueryString: createFieldsTableQuery, Err: err}
 		}
 
 		for index, field := range indexedFields {
 			// create index for field
-			_, err = tx.Exec(fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field))
+			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
+			_, err = tx.Exec(createFieldsIndexQuery)
 			if err != nil {
-				return err
+				return &db.QueryError{QueryString: createFieldsIndexQuery, Err: err}
 			}
 
 			// format field into column for prepared statement
@@ -817,7 +819,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		}
 		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
 		if err != nil {
-			return err
+			return fmt.Errorf("read objects: %w", err)
 		}
 
 		total = len(items)
