@@ -8,14 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -152,8 +150,8 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 		if err != nil {
 			return opts, err
 		}
-		if projOrNSFilters == nil {
-			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
+		if len(projOrNSFilters) == 0 {
+			return opts, nil
 		}
 		if op == sqltypes.NotEq {
 			for _, filter := range projOrNSFilters {
@@ -182,7 +180,7 @@ func splitQuery(query string) []string {
 }
 
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sqltypes.Op, namespaceInformer Cache) ([]sqltypes.Filter, error) {
-	var filters []sqltypes.Filter
+	filters := []sqltypes.Filter{}
 	for _, pn := range strings.Split(projOrNS, ",") {
 		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &sqltypes.ListOptions{
 			Filters: []sqltypes.OrFilter{
@@ -203,7 +201,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sql
 			},
 		}, []partition.Partition{{Passthrough: true}}, "")
 		if err != nil {
-			return filters, err
+			return nil, err
 		}
 		for _, item := range uList.Items {
 			filters = append(filters, sqltypes.Filter{
