@@ -59,7 +59,7 @@ func TestCacheFor(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and stopCh not closed, should return no error and should call Informer.Run(). A subsequent call to CacheFor() should return same informer", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and ctx not canceled, should return no error and should call Informer.Run(). A subsequent call to CacheFor() should return same informer", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -87,15 +87,15 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
-			// this function ensures that stopCh is open for the duration of this test but if part of a longer process it will be closed eventually
+			// this function ensures that ctx is open for the duration of this test but if part of a longer process it will be closed eventually
 			time.Sleep(5 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -108,7 +108,7 @@ func TestCacheFor(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, c, c2)
 	}})
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning false, and stopCh not closed, should call Run() and return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning false, and ctx not canceled, should call Run() and return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -134,21 +134,21 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(1 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var err error
 		_, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.NotNil(t, err)
 		time.Sleep(2 * time.Second)
 	}})
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and stopCh closed, should not call Run() more than once and not return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and ctx is canceled, should not call Run() more than once and not return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -178,12 +178,12 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
+		f.cancel()
 
-		close(f.stopCh)
 		var c Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
@@ -219,15 +219,15 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  true,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -269,15 +269,15 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  false,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -318,15 +318,15 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  false,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -336,7 +336,7 @@ func TestCacheFor(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}})
 
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, stopCh not closed, and transform func should return no error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, ctx not canceled, and transform func should return no error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -375,15 +375,15 @@ func TestCacheFor(t *testing.T) {
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
-			// this function ensures that stopCh is open for the duration of this test but if part of a longer process it will be closed eventually
+			// this function ensures that ctx is not canceled for the duration of this test but if part of a longer process it will be closed eventually
 			time.Sleep(5 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -421,15 +421,15 @@ func TestCacheFor(t *testing.T) {
 		f := &CacheFactory{
 			defaultMaximumEventsCount: 10,
 			dbClient:                  dbClient,
-			stopCh:                    make(chan struct{}),
 			newInformer:               testNewInformer,
 			encryptAll:                true,
 			informers:                 map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -475,15 +475,15 @@ func TestCacheFor(t *testing.T) {
 				expectedGVK: 10,
 			},
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  true,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
