@@ -148,6 +148,15 @@ var (
 			{"status", "connected"},
 			{"status", "provider"},
 		},
+		gvkKey("management.cattle.io", "v3", "ClusterRoleTemplateBinding"): {
+			{"clusterName"},
+			{"userName"},
+			{"userPrincipalName"},
+		},
+		gvkKey("management.cattle.io", "v3", "GlobalRoleBinding"): {
+			{"userName"},
+			{"userPrincipalName"},
+		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
 			{"status", "nodeName"}},
 		gvkKey("management.cattle.io", "v3", "NodePool"): {
@@ -157,6 +166,13 @@ var (
 		gvkKey("management.cattle.io", "v3", "Project"): {
 			{"spec", "clusterName"},
 			{"spec", "displayName"},
+		},
+		gvkKey("management.cattle.io", "v3", "ProjectRoleTemplateBinding"): {
+			{"userName"},
+			{"userPrincipalName"},
+		},
+		gvkKey("management.cattle.io", "v3", "RoleTemplate"): {
+			{"context"},
 		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
 			{"spec", "rules", "host"},
