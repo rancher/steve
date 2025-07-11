@@ -63,6 +63,13 @@ type Client interface {
 //
 // The transaction is committed if f returns nil, otherwise it is rolled back.
 func (c *client) WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error {
+	if err := c.withTransaction(ctx, forWriting, f); err != nil {
+		return fmt.Errorf("transaction: %w", err)
+	}
+	return nil
+}
+
+func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error {
 	c.connLock.RLock()
 	// note: this assumes _txlock=immediate in the connection string, see NewConnection
 	tx, err := c.conn.BeginTx(ctx, &sql.TxOptions{
@@ -70,7 +77,7 @@ func (c *client) WithTransaction(ctx context.Context, forWriting bool, f WithTra
 	})
 	c.connLock.RUnlock()
 	if err != nil {
-		return err
+		return fmt.Errorf("begin tx: %w", err)
 	}
 
 	if err = f(transaction.NewClient(tx)); err != nil {

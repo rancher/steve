@@ -2,10 +2,12 @@ package cli
 
 import (
 	"context"
+	"time"
 
 	steveauth "github.com/rancher/steve/pkg/auth"
 	authcli "github.com/rancher/steve/pkg/auth/cli"
 	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/ui"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/ratelimit"
@@ -52,6 +54,10 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 		AuthMiddleware: auth,
 		Next:           ui.New(c.UIPath),
 		SQLCache:       sqlCache,
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+		},
 	})
 }
 

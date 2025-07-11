@@ -317,7 +317,7 @@ func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if err := s.cacheFactory.Reset(); err != nil {
-		return err
+		return fmt.Errorf("reset: %w", err)
 	}
 
 	if err := s.initializeNamespaceCache(); err != nil {
@@ -784,7 +784,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	ns := attributes.Namespaced(apiSchema)
 	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))
 	if err != nil {
-		return nil, 0, "", err
+		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
 	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
 		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
@@ -814,7 +814,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		if errors.Is(err, informer.ErrInvalidColumn) {
 			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
-		return nil, 0, "", err
+		return nil, 0, "", fmt.Errorf("listbyoptions %v: %w", gvk, err)
 	}
 
 	return list, total, continueToken, nil

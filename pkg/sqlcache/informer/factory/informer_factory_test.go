@@ -59,7 +59,7 @@ func TestCacheFor(t *testing.T) {
 
 	var tests []testCase
 
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and stopCh not closed, should return no error and should call Informer.Run(). A subsequent call to CacheFor() should return same informer", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and ctx not canceled, should return no error and should call Informer.Run(). A subsequent call to CacheFor() should return same informer", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -75,27 +75,27 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
-			// this function ensures that stopCh is open for the duration of this test but if part of a longer process it will be closed eventually
+			// this function ensures that ctx is open for the duration of this test but if part of a longer process it will be closed eventually
 			time.Sleep(5 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -108,7 +108,7 @@ func TestCacheFor(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, c, c2)
 	}})
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning false, and stopCh not closed, should call Run() and return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning false, and ctx not canceled, should call Run() and return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -122,33 +122,33 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return expectedI, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(1 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var err error
 		_, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.NotNil(t, err)
 		time.Sleep(2 * time.Second)
 	}})
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and stopCh closed, should not call Run() more than once and not return an error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, and ctx is canceled, should not call Run() more than once and not return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -166,24 +166,24 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
+		f.cancel()
 
-		close(f.stopCh)
 		var c Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
@@ -207,27 +207,27 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  true,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -257,27 +257,27 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  false,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -306,27 +306,27 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  false,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -336,7 +336,7 @@ func TestCacheFor(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}})
 
-	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, stopCh not closed, and transform func should return no error", test: func(t *testing.T) {
+	tests = append(tests, testCase{description: "CacheFor() with no errors returned, HasSync returning true, ctx not canceled, and transform func should return no error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
@@ -355,7 +355,7 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			// we can't test func == func, so instead we check if the output was as expected
 			input := "someinput"
 			ouput, err := transform(input)
@@ -369,21 +369,21 @@ func TestCacheFor(t *testing.T) {
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, false, shouldEncrypt)
-			assert.Equal(t, 0, maxEventsCount)
+			assert.Equal(t, 0, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
-			// this function ensures that stopCh is open for the duration of this test but if part of a longer process it will be closed eventually
+			// this function ensures that ctx is not canceled for the duration of this test but if part of a longer process it will be closed eventually
 			time.Sleep(5 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
@@ -408,85 +408,34 @@ func TestCacheFor(t *testing.T) {
 		expectedC := Cache{
 			ByOptionsLister: i,
 		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
 			assert.Equal(t, expectedGVK, gvk)
 			assert.Equal(t, db, dbClient)
 			assert.Equal(t, true, shouldEncrypt)
-			assert.Equal(t, 10, maxEventsCount)
+			assert.Equal(t, 5*time.Second, gcInterval)
+			assert.Equal(t, 10, gcKeepCount)
 			assert.Nil(t, externalUpdateInfo)
 			return i, nil
 		}
 		f := &CacheFactory{
-			defaultMaximumEventsCount: 10,
-			dbClient:                  dbClient,
-			stopCh:                    make(chan struct{}),
-			newInformer:               testNewInformer,
-			encryptAll:                true,
-			informers:                 map[schema.GroupVersionKind]*guardedInformer{},
-		}
-
-		go func() {
-			time.Sleep(10 * time.Second)
-			close(f.stopCh)
-		}()
-		var c Cache
-		var err error
-		// CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool)
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
-		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
-		time.Sleep(1 * time.Second)
-	}})
-	tests = append(tests, testCase{description: "CacheFor() with per GVK maximum events count", test: func(t *testing.T) {
-		dbClient := NewMockClient(gomock.NewController(t))
-		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
-		fields := [][]string{{"something"}}
-		expectedGVK := schema.GroupVersionKind{
-			Group:   "management.cattle.io",
-			Version: "v3",
-			Kind:    "Token",
-		}
-		sii := NewMockSharedIndexInformer(gomock.NewController(t))
-		sii.EXPECT().HasSynced().Return(true)
-		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
-		sii.EXPECT().SetWatchErrorHandler(gomock.Any())
-		i := &informer.Informer{
-			// need to set this so Run function is not nil
-			SharedIndexInformer: sii,
-		}
-		expectedC := Cache{
-			ByOptionsLister: i,
-		}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt, namespaced bool, watchable bool, maxEventsCount int) (*informer.Informer, error) {
-			assert.Equal(t, client, dynamicClient)
-			assert.Equal(t, fields, fields)
-			assert.Equal(t, expectedGVK, gvk)
-			assert.Equal(t, db, dbClient)
-			assert.Equal(t, true, shouldEncrypt)
-			assert.Equal(t, 10, maxEventsCount)
-			assert.Nil(t, externalUpdateInfo)
-			return i, nil
-		}
-		f := &CacheFactory{
-			defaultMaximumEventsCount: 5,
-			perGVKMaximumEventsCount: map[schema.GroupVersionKind]int{
-				expectedGVK: 10,
-			},
+			gcInterval:  5 * time.Second,
+			gcKeepCount: 10,
 			dbClient:    dbClient,
-			stopCh:      make(chan struct{}),
 			newInformer: testNewInformer,
 			encryptAll:  true,
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			close(f.stopCh)
+			f.cancel()
 		}()
 		var c Cache
 		var err error
+		// CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool)
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
