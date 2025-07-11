@@ -172,7 +172,8 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			excludeValues(request, unstr)
 
 			if options.InSQLMode {
-				convertMetadataTimestampFields(request, gvk, unstr)
+				isCRD := attributes.IsCRD(resource.Schema)
+				convertMetadataTimestampFields(request, gvk, unstr, isCRD)
 			}
 		}
 
@@ -233,12 +234,15 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 // to the client. Internally, fields are stored as Unix timestamps; on each request, we calculate the elapsed time since
 // those timestamps by subtracting them from time.Now(), then format the resulting duration into a human-friendly string.
 // This prevents cached durations (e.g. “2d” - 2 days) from becoming stale over time.
-func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured) {
+func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured, isCRD bool) {
 	if request.Schema != nil {
 		cols := GetColumnDefinitions(request.Schema)
 		for _, col := range cols {
-			gvkDateFields, gvkFound := DateFieldsByGVKBuiltins[gvk]
-			if col.Type == "date" || (gvkFound && slices.Contains(gvkDateFields, col.Name)) {
+			gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
+
+			hasCRDDateField := isCRD && col.Type == "date"
+			hasGVKDateFieldMapping := gvkFound && slices.Contains(gvkDateFields, col.Name)
+			if hasCRDDateField || hasGVKDateFieldMapping {
 				index := GetIndexValueFromString(col.Field)
 				if index == -1 {
 					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)

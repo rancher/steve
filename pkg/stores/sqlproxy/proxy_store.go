@@ -262,7 +262,7 @@ type RelationshipNotifier interface {
 }
 
 type TransformBuilder interface {
-	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition) cache.TransformFunc
+	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool) cache.TransformFunc
 }
 
 type Store struct {
@@ -360,7 +360,7 @@ func (s *Store) initializeNamespaceCache() error {
 	cols := common.GetColumnDefinitions(&nsSchema)
 
 	// get the type-specific transform func
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema))
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
@@ -568,7 +568,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	fields := getFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	cols := common.GetColumnDefinitions(schema)
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(schema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(schema)
 	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(schema))
@@ -780,7 +780,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	fields = append(fields, getFieldForGVK(gvk)...)
 	cols := common.GetColumnDefinitions(apiSchema)
 
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols)
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
 	inf, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))

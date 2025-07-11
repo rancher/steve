@@ -35,7 +35,7 @@ func NewTransformBuilder(cache common.SummaryCache) *TransformBuilder {
 }
 
 // GetTransformFunc returns the func to transform a raw object into a fixed object, if needed
-func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition) cache.TransformFunc {
+func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool) cache.TransformFunc {
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
 	if gvk.Kind == "Event" && gvk.Group == "" && gvk.Version == "v1" {
 		converters = append(converters, events.TransformEventObject)
@@ -45,8 +45,10 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 
 	// Detecting if we need to convert date fields
 	for _, col := range columns {
-		gvkDateFields, gvkFound := rescommon.DateFieldsByGVKBuiltins[gvk]
-		if col.Type == "date" || (gvkFound && slices.Contains(gvkDateFields, col.Name)) {
+		gvkDateFields, gvkFound := rescommon.DateFieldsByGVK[gvk]
+		hasCRDDate := isCRD && col.Type == "date"
+		hasBuiltInDate := gvkFound && slices.Contains(gvkDateFields, col.Name)
+		if hasCRDDate || hasBuiltInDate {
 			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 				index := rescommon.GetIndexValueFromString(col.Field)
 				if index == -1 {

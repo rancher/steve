@@ -25,6 +25,7 @@ func TestTransformChain(t *testing.T) {
 		hasSummary       *summary.SummarizedObject
 		hasRelationships []summarycache.Relationship
 		columns          []rescommon.ColumnDefinition
+		isCRD            bool
 		wantOutput       any
 		wantError        bool
 	}{
@@ -130,6 +131,7 @@ func TestTransformChain(t *testing.T) {
 					"id": "old-id",
 				},
 			},
+			isCRD: true,
 			columns: []rescommon.ColumnDefinition{
 				{
 					Field: "metadata.fields[0]",
@@ -217,6 +219,69 @@ func TestTransformChain(t *testing.T) {
 						},
 						"fields": []interface{}{
 							fmt.Sprintf("%d", now().Add(-24*time.Hour).UnixMilli()),
+						},
+					},
+					"id":  "test-ns/testobj",
+					"_id": "old-id",
+				},
+			},
+		},
+		{
+			name: "built-in type metadata.fields has a date field - should NOT convert to timestamp",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "testobj",
+						Namespace: "test-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "apiextensions.k8s.io/v1",
+						Kind:       "CustomResourceDefinition",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "success",
+					Transitioning: false,
+					Error:         false,
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name":      "testobj",
+						"namespace": "test-ns",
+						"fields":    []interface{}{"2025-07-03T18:54:57Z"},
+					},
+					"id": "old-id",
+				},
+			},
+			columns: []rescommon.ColumnDefinition{
+				{
+					TableColumnDefinition: v1.TableColumnDefinition{
+						Name: "Created At",
+						Type: "date",
+					},
+					Field: "metadata.fields[0]",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apiextensions.k8s.io/v1",
+					"kind":       "CustomResourceDefinition",
+					"metadata": map[string]interface{}{
+						"name":          "testobj",
+						"namespace":     "test-ns",
+						"relationships": []any(nil),
+						"state": map[string]interface{}{
+							"name":          "success",
+							"error":         false,
+							"transitioning": false,
+							"message":       "",
+						},
+						"fields": []interface{}{
+							"2025-07-03T18:54:57Z",
 						},
 					},
 					"id":  "test-ns/testobj",
@@ -497,7 +562,7 @@ func TestTransformChain(t *testing.T) {
 			if test.name == "a non-ready cluster" {
 				fmt.Printf("Stop here")
 			}
-			output, err := tb.GetTransformFunc(gvk, test.columns)(test.input)
+			output, err := tb.GetTransformFunc(gvk, test.columns, test.isCRD)(test.input)
 			require.Equal(t, test.wantOutput, output)
 			if test.wantError {
 				require.Error(t, err)
