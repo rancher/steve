@@ -61,7 +61,7 @@ func (i *IntegrationSuite) TearDownSuite() {
 }
 
 func (i *IntegrationSuite) TestSQLCacheFilters() {
-	fields := [][]string{{"metadata", "annotations", "somekey"}}
+	fields := [][]string{{"id"}, {"metadata", "annotations", "somekey"}}
 	require := i.Require()
 	configMapWithAnnotations := func(name string, annotations map[string]string) v1.ConfigMap {
 		return v1.ConfigMap{

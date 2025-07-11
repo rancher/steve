@@ -2590,7 +2590,6 @@ func TestWatchResourceVersion(t *testing.T) {
 	bar.SetName("bar")
 	bar.SetNamespace("bar")
 	bar.Object["id"] = "bar/bar"
-	//foo.SetId("bar/bar")
 	bar.SetLabels(map[string]string{
 		"app": "bar",
 	})
@@ -2880,6 +2879,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 			"metadata": map[string]any{
 				"name": "foo",
 			},
+			"id": "/foo",
 		},
 	}
 	foo.SetResourceVersion("a")
@@ -2893,6 +2893,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 			"metadata": map[string]any{
 				"name": "bar",
 			},
+			"id": "/bar",
 		},
 	}
 	bar.SetResourceVersion("c")
