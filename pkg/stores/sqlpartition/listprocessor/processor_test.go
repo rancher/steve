@@ -152,25 +152,14 @@ func TestParseQuery(t *testing.T) {
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If projectsornamespaces is not empty" +
-			" and nsc does not return namespaces, an error should be returned.",
+			" and nsc does not return namespaces, it should return an empty filter array",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
-			Filters: []sqltypes.OrFilter{
-				{
-					Filters: []sqltypes.Filter{
-						{
-							Field:   []string{"metadata", "namespace"},
-							Matches: []string{"ns1"},
-							Op:      sqltypes.Eq,
-							Partial: false,
-						},
-					},
-				},
-			},
+			Filters: []sqltypes.OrFilter{},
 			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},

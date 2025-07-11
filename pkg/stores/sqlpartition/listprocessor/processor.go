@@ -4,6 +4,7 @@ package listprocessor
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -152,8 +153,9 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 		if err != nil {
 			return opts, err
 		}
-		if projOrNSFilters == nil {
-			return opts, apierror.NewAPIError(validation.NotFound, fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
+		if len(projOrNSFilters) == 0 {
+			return opts, apierror.NewAPIError(validation.ErrorCode{Code: "No Data", Status: http.StatusNoContent},
+				fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
 		}
 		if op == sqltypes.NotEq {
 			for _, filter := range projOrNSFilters {
@@ -182,7 +184,7 @@ func splitQuery(query string) []string {
 }
 
 func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sqltypes.Op, namespaceInformer Cache) ([]sqltypes.Filter, error) {
-	var filters []sqltypes.Filter
+	filters := []sqltypes.Filter{}
 	for _, pn := range strings.Split(projOrNS, ",") {
 		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &sqltypes.ListOptions{
 			Filters: []sqltypes.OrFilter{
