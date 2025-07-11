@@ -71,6 +71,7 @@ func forVersion(group, kind string, version v1.CustomResourceDefinitionVersion, 
 	if schema == nil {
 		return
 	}
+	attributes.MarkCRD(schema)
 	if len(versionColumns) > 0 {
 		attributes.SetColumns(schema, versionColumns)
 	}

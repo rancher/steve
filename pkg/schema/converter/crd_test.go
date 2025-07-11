@@ -167,6 +167,7 @@ func TestAddCustomResources(t *testing.T) {
 					Schema: &wranglerSchema.Schema{
 						ID: "testgroup.v1.testresource",
 						Attributes: map[string]interface{}{
+							"crd": true,
 							"columns": []table.Column{
 								{
 									Name:   "TestColumn",
