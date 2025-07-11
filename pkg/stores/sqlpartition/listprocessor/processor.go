@@ -154,7 +154,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 			return opts, err
 		}
 		if len(projOrNSFilters) == 0 {
-			return opts, apierror.NewAPIError(validation.ErrorCode{"No Data", http.StatusNoContent},
+			return opts, apierror.NewAPIError(validation.ErrorCode{Code: "No Data", Status: http.StatusNoContent},
 				fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
 		}
 		if op == sqltypes.NotEq {
