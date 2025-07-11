@@ -54,6 +54,15 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 	if err != nil {
 		return nil, "", err
 	}
+	if opts.IsNamespaced {
+		// Can't use slices.Compare because []string doesn't implement comparable
+		idEntry := []string{"id"}
+		if opts.Fields == nil {
+			opts.Fields = [][]string{idEntry}
+		} else {
+			opts.Fields = append(opts.Fields, idEntry)
+		}
+	}
 
 	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
@@ -2727,6 +2736,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	foo.SetResourceVersion("100")
 	foo.SetName("foo")
 	foo.SetNamespace("foo")
+	foo.Object["id"] = "foo/foo"
 	foo.SetLabels(map[string]string{
 		"app": "foo",
 	})
@@ -2741,6 +2751,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	bar.SetResourceVersion("150")
 	bar.SetName("bar")
 	bar.SetNamespace("bar")
+	bar.Object["id"] = "bar/bar"
 	bar.SetLabels(map[string]string{
 		"app": "bar",
 	})
@@ -3030,6 +3041,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 			"metadata": map[string]any{
 				"name": "foo",
 			},
+			"id": "/foo",
 		},
 	}
 	foo.SetResourceVersion("a")
@@ -3043,6 +3055,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 			"metadata": map[string]any{
 				"name": "bar",
 			},
+			"id": "/bar",
 		},
 	}
 	bar.SetResourceVersion("c")
@@ -3062,6 +3075,6 @@ func TestNonNumberResourceVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	list, _, _, err := loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedList.Items, list.Items)
 }
