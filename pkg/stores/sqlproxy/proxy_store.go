@@ -783,6 +783,13 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
+		var apiError *apierror.APIError
+		if errors.As(err, &apiError) {
+			if apiError.Code.Status == http.StatusNoContent {
+				return &unstructured.UnstructuredList{}, 0, "", nil
+			}
+		}
+
 		return nil, 0, "", err
 	}
 	// warnings from inside the informer are discarded
