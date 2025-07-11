@@ -4,16 +4,19 @@ package listprocessor
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
+	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -151,7 +154,8 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 			return opts, err
 		}
 		if len(projOrNSFilters) == 0 {
-			return opts, nil
+			return opts, apierror.NewAPIError(validation.ErrorCode{"No Data", http.StatusNoContent},
+				fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
 		}
 		if op == sqltypes.NotEq {
 			for _, filter := range projOrNSFilters {
@@ -201,7 +205,7 @@ func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sql
 			},
 		}, []partition.Partition{{Passthrough: true}}, "")
 		if err != nil {
-			return nil, err
+			return filters, err
 		}
 		for _, item := range uList.Items {
 			filters = append(filters, sqltypes.Filter{

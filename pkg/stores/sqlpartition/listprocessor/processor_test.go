@@ -164,7 +164,7 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		errExpected: false,
+		errExpected: true,
 		setupNSCache: func() Cache {
 			list := &unstructured.UnstructuredList{
 				Items: []unstructured.Unstructured{},
