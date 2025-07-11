@@ -160,6 +160,7 @@ func TestToSchemas(t *testing.T) {
 						ID:         "testgroup.v1.testresource",
 						PluralName: "TestGroup.v1.testResources",
 						Attributes: map[string]interface{}{
+							"crd":        true,
 							"group":      "TestGroup",
 							"version":    "v1",
 							"kind":       "TestResource",
