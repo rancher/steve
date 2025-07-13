@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/gob"
 	"fmt"
 	"io/fs"
 	"os"
@@ -21,6 +20,8 @@ import (
 	"errors"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/rancher/steve/pkg/sqlcache/encoding"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
@@ -226,11 +227,12 @@ func (c *client) ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([
 		if err != nil {
 			return nil, closeRowsOnError(rows, err)
 		}
-		singleResult, err := fromBytes(data, typ)
+		var uns unstructured.Unstructured
+		err = fromBytes(data, &uns)
 		if err != nil {
 			return nil, closeRowsOnError(rows, err)
 		}
-		result = append(result, singleResult.Elem().Interface())
+		result = append(result, &uns)
 	}
 	err := rows.Err()
 	if err != nil {
@@ -367,21 +369,20 @@ func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj a
 // toBytes encodes an object to a byte slice
 func toBytes(obj any) []byte {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	enc := encoding.NewEncoder(encoding.EncodingFromEnv(), &buf)
 	err := enc.Encode(obj)
 	if err != nil {
-		panic(fmt.Errorf("error while gobbing object: %w", err))
+		panic(fmt.Errorf("encoding object: %w", err))
 	}
 	bb := buf.Bytes()
 	return bb
 }
 
 // fromBytes decodes an object from a byte slice
-func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
-	dec := gob.NewDecoder(bytes.NewReader(buf))
-	singleResult := reflect.New(typ)
-	err := dec.DecodeValue(singleResult)
-	return singleResult, err
+func fromBytes(buf sql.RawBytes, v any) error {
+	dec := encoding.NewDecoder(encoding.EncodingFromEnv(), bytes.NewReader(buf))
+	err := dec.Decode(v)
+	return err
 }
 
 // closeRowsOnError closes the sql.Rows object and wraps errors if needed

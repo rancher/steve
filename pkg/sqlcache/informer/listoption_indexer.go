@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"maps"
-	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -18,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/rancher/steve/pkg/sqlcache/encoding"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -144,10 +143,6 @@ type ListOptionIndexerOptions struct {
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields.
 func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
-	// necessary in order to gob/ungob unstructured.Unstructured objects
-	gob.Register(map[string]interface{}{})
-	gob.Register([]interface{}{})
-
 	i, err := NewIndexer(ctx, cache.Indexers{}, s)
 	if err != nil {
 		return nil, err
@@ -328,15 +323,10 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				return fmt.Errorf("scanning event row: %w", err)
 			}
 
-			example := &unstructured.Unstructured{}
-			val, err := fromBytes(buf, reflect.TypeOf(example))
+			obj := &unstructured.Unstructured{}
+			err = fromBytes(buf, obj)
 			if err != nil {
 				return fmt.Errorf("decoding event object: %w", err)
-			}
-
-			obj, ok := val.Elem().Interface().(runtime.Object)
-			if !ok {
-				continue
 			}
 
 			filter := opts.Filter
@@ -346,7 +336,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 
 			events = append(events, watch.Event{
 				Type:   watch.EventType(typ),
-				Object: val.Elem().Interface().(runtime.Object),
+				Object: obj,
 			})
 		}
 
@@ -370,9 +360,10 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	return nil
 }
 
+// toBytes encodes an object to a byte slice
 func toBytes(obj any) []byte {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	enc := encoding.NewEncoder(encoding.EncodingFromEnv(), &buf)
 	err := enc.Encode(obj)
 	if err != nil {
 		panic(fmt.Errorf("error while gobbing object: %w", err))
@@ -381,11 +372,11 @@ func toBytes(obj any) []byte {
 	return bb
 }
 
-func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
-	dec := gob.NewDecoder(bytes.NewReader(buf))
-	singleResult := reflect.New(typ)
-	err := dec.DecodeValue(singleResult)
-	return singleResult, err
+// fromBytes decodes an object from a byte slice
+func fromBytes(buf sql.RawBytes, v any) error {
+	dec := encoding.NewDecoder(encoding.EncodingFromEnv(), bytes.NewReader(buf))
+	err := dec.Decode(v)
+	return err
 }
 
 type watchKey struct {
