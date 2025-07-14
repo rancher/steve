@@ -44,6 +44,20 @@ func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 	return m.recorder
 }
 
+// GetLatestResourceVersion mocks base method.
+func (m *MockByOptionsLister) GetLatestResourceVersion() []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestResourceVersion")
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetLatestResourceVersion indicates an expected call of GetLatestResourceVersion.
+func (mr *MockByOptionsListerMockRecorder) GetLatestResourceVersion() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestResourceVersion", reflect.TypeOf((*MockByOptionsLister)(nil).GetLatestResourceVersion))
+}
+
 // ListByOptions mocks base method.
 func (m *MockByOptionsLister) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
 	m.ctrl.T.Helper()
