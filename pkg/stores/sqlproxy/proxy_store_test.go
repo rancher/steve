@@ -260,6 +260,7 @@ func TestListByPartitions(t *testing.T) {
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			tb := NewMockTransformBuilder(gomock.NewController(t))
+			ri := NewMockResourceInterface(gomock.NewController(t))
 
 			s := &Store{
 				ctx:              context.Background(),
@@ -313,6 +314,9 @@ func TestListByPartitions(t *testing.T) {
 			copy(listToReturn.Items, expectedItems)
 
 			nsi.EXPECT().ListByOptions(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, 0, "", fmt.Errorf("error")).Times(2)
+			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any()).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			cf.EXPECT().CacheFor(context.Background(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(schema), attributes.Namespaced(schema), true)
 			_, err := listprocessor.ParseQuery(req, nsi)
 			assert.NotNil(t, err)
 
