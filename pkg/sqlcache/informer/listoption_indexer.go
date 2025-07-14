@@ -87,9 +87,11 @@ const (
                        rv TEXT NOT NULL,
                        type TEXT NOT NULL,
                        event BLOB NOT NULL,
+                       eventnonce BLOB,
+	               dekid BLOB,
                        PRIMARY KEY (type, rv)
           )`
-	listEventsAfterFmt = `SELECT type, rv, event
+	listEventsAfterFmt = `SELECT type, rv, event, eventnonce, dekid
 	       FROM "%s_events"
 	       WHERE rowid > ?
        `
@@ -243,7 +245,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	l.upsertEventsQuery = fmt.Sprintf(
-		`REPLACE INTO "%s_events"(rv, type, event) VALUES (?, ?, ?)`,
+		`REPLACE INTO "%s_events"(rv, type, event, eventnonce, dekid) VALUES (?, ?, ?, ?, ?)`,
 		dbName,
 	)
 	l.upsertEventsStmt = l.Prepare(l.upsertEventsQuery)
@@ -321,9 +323,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		defer rows.Close()
 
 		for rows.Next() {
-			var typ, rv string
-			var buf sql.RawBytes
-			err := rows.Scan(&typ, &rv, &buf)
+			typ, buf, err := l.decryptScanEvent(rows)
 			if err != nil {
 				return fmt.Errorf("scanning event row: %w", err)
 			}
@@ -368,6 +368,24 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	<-ctx.Done()
 	l.removeWatcher(key)
 	return nil
+}
+
+func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows) (watch.EventType, []byte, error) {
+	var typ, rv string
+	var event, eventNonce sql.RawBytes
+	var kid uint32
+	err := rows.Scan(&typ, &rv, &event, &eventNonce, &kid)
+	if err != nil {
+		return watch.Error, nil, err
+	}
+	if l.Decryptor() != nil && l.GetShouldEncrypt() {
+		decryptedData, err := l.Decryptor().Decrypt(event, eventNonce, kid)
+		if err != nil {
+			return watch.Error, nil, err
+		}
+		return watch.EventType(typ), decryptedData, nil
+	}
+	return watch.EventType(typ), event, nil
 }
 
 func toBytes(obj any) []byte {
@@ -452,9 +470,10 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	}
 
 	latestRV := acc.GetResourceVersion()
-	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, toBytes(obj))
+
+	err = l.upsertEvent(tx, eventType, latestRV, obj)
 	if err != nil {
-		return &db.QueryError{QueryString: l.upsertEventsQuery, Err: err}
+		return err
 	}
 
 	l.watchersLock.RLock()
@@ -474,6 +493,26 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	defer l.latestRVLock.Unlock()
 	l.latestRV = latestRV
 	return nil
+}
+
+func (l *ListOptionIndexer) upsertEvent(tx transaction.Client, eventType watch.EventType, latestRV string, obj any) error {
+	objBytes := toBytes(obj)
+	var dataNonce []byte
+	var err error
+	var kid uint32
+	if l.Encryptor() != nil && l.GetShouldEncrypt() {
+		objBytes, dataNonce, kid, err = l.Encryptor().Encrypt(objBytes)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, objBytes, dataNonce, kid)
+	if err != nil {
+		return &db.QueryError{QueryString: l.upsertEventsQuery, Err: err}
+	}
+
+	return err
 }
 
 // addIndexFields saves sortable/filterable fields into tables

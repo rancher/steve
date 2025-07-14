@@ -31,7 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (*ListOptionIndexer, string, error) {
+func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, shouldEncrypt bool) (*ListOptionIndexer, string, error) {
 	gvk := schema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",
@@ -50,7 +50,7 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions) (
 		return nil, "", err
 	}
 
-	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, false, gvk, name, nil, nil)
+	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1008,7 +1008,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -1218,7 +1218,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -2234,6 +2234,93 @@ func TestGetField(t *testing.T) {
 	}
 }
 
+func TestWatchEncryption(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	opts := ListOptionIndexerOptions{
+		Fields: [][]string{
+			{"metadata", "somefield"},
+			{"spec", "replicas"},
+			{"spec", "minReplicas"},
+		},
+		IsNamespaced: true,
+	}
+	// shouldEncrypt = true to ensure we can write + read from encrypted events
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, true)
+	defer cleanTempFiles(dbPath)
+	assert.NoError(t, err)
+
+	foo := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "foo",
+			},
+			"spec": map[string]any{
+				"replicas": int64(1),
+			},
+		},
+	}
+	foo.SetResourceVersion("100")
+	foo2 := foo.DeepCopy()
+	foo2.SetResourceVersion("120")
+
+	startWatcher := func(ctx context.Context) (chan watch.Event, chan error) {
+		errCh := make(chan error, 1)
+		eventsCh := make(chan watch.Event, 100)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{
+				// Make a watch request to this specific resource version to be sure we go get from SQL database
+				ResourceVersion: "100",
+			}, eventsCh)
+			errCh <- watchErr
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	waitStopWatcher := func(errCh chan error) error {
+		select {
+		case <-time.After(time.Second * 5):
+			return fmt.Errorf("not finished in time")
+		case err := <-errCh:
+			return err
+		}
+	}
+
+	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
+		timer := time.NewTimer(time.Millisecond * 50)
+		var events []watch.Event
+		for {
+			select {
+			case <-timer.C:
+				return events
+			case ev := <-eventsCh:
+				events = append(events, ev)
+			}
+		}
+	}
+
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	err = loi.Update(foo2)
+	assert.NoError(t, err)
+
+	watcher1, errCh1 := startWatcher(ctx)
+	events := receiveEvents(watcher1)
+	assert.Len(t, events, 1)
+	assert.Equal(t, []watch.Event{
+		{
+			Type:   watch.Modified,
+			Object: foo2,
+		},
+	}, events)
+
+	cancel()
+
+	err = waitStopWatcher(errCh1)
+	assert.NoError(t, err)
+}
+
 func TestWatchMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -2245,7 +2332,7 @@ func TestWatchMany(t *testing.T) {
 		},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -2502,7 +2589,7 @@ func TestWatchFilter(t *testing.T) {
 				Fields:       [][]string{{"metadata", "somefield"}},
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -2594,7 +2681,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -2748,7 +2835,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 		GCInterval:  40 * time.Millisecond,
 		GCKeepCount: 2,
 	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -2859,7 +2946,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 		Fields:       [][]string{{"metadata", "somefield"}},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
