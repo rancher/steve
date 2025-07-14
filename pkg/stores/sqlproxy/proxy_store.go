@@ -781,17 +781,6 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
-	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
-	if err != nil {
-		var apiError *apierror.APIError
-		if errors.As(err, &apiError) {
-			if apiError.Code.Status == http.StatusNoContent {
-				return &unstructured.UnstructuredList{}, 0, "", nil
-			}
-		}
-
-		return nil, 0, "", err
-	}
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
 	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
@@ -810,6 +799,23 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
+
+	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
+	if err != nil {
+		var apiError *apierror.APIError
+		if errors.As(err, &apiError) {
+			if apiError.Code.Status == http.StatusNoContent {
+				list := &unstructured.UnstructuredList{}
+				resourceVersion := inf.ByOptionsLister.GetLatestResourceVersion()
+				if len(resourceVersion) > 0 {
+					list.SetResourceVersion(resourceVersion[0])
+				}
+				return list, 0, "", nil
+			}
+		}
+		return nil, 0, "", err
+	}
+
 	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
 		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
 		// See https://github.com/rancher/rancher/blob/7266e5e624f0d610c76ab0af33e30f5b72e11f61/pkg/ext/stores/tokens/tokens.go#L1186C2-L1195C3
