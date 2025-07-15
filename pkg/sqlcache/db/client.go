@@ -49,6 +49,8 @@ type Client interface {
 	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable Closable) error
 	NewConnection(isTemp bool) (string, error)
+	Encryptor() Encryptor
+	Decryptor() Decryptor
 }
 
 // WithTransaction runs f within a transaction.
@@ -362,6 +364,14 @@ func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj a
 
 	_, err = tx.Stmt(stmt).Exec(key, objBytes, dataNonce, kid)
 	return err
+}
+
+func (c *client) Encryptor() Encryptor {
+	return c.encryptor
+}
+
+func (c *client) Decryptor() Decryptor {
+	return c.decryptor
 }
 
 // toBytes encodes an object to a byte slice

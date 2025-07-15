@@ -141,6 +141,34 @@ func (mr *MockClientMockRecorder) CloseStmt(closable any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockClient)(nil).CloseStmt), closable)
 }
 
+// Decryptor mocks base method.
+func (m *MockClient) Decryptor() db.Decryptor {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Decryptor")
+	ret0, _ := ret[0].(db.Decryptor)
+	return ret0
+}
+
+// Decryptor indicates an expected call of Decryptor.
+func (mr *MockClientMockRecorder) Decryptor() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Decryptor", reflect.TypeOf((*MockClient)(nil).Decryptor))
+}
+
+// Encryptor mocks base method.
+func (m *MockClient) Encryptor() db.Encryptor {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Encryptor")
+	ret0, _ := ret[0].(db.Encryptor)
+	return ret0
+}
+
+// Encryptor indicates an expected call of Encryptor.
+func (mr *MockClientMockRecorder) Encryptor() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Encryptor", reflect.TypeOf((*MockClient)(nil).Encryptor))
+}
+
 // NewConnection mocks base method.
 func (m *MockClient) NewConnection(isTemp bool) (string, error) {
 	m.ctrl.T.Helper()
