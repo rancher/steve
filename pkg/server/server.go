@@ -237,9 +237,6 @@ func setup(ctx context.Context, server *Server) error {
 			if err := ccache.OnSchemas(schemas); err != nil {
 				return err
 			}
-			if err := s.Reset(); err != nil {
-				return err
-			}
 			return nil
 		}
 	} else {
