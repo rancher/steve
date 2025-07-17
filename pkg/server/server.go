@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/aggregation"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
@@ -29,6 +30,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 )
 
@@ -210,7 +212,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
+		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
 		if err != nil {
 			panic(err)
 		}
@@ -219,7 +221,7 @@ func setup(ctx context.Context, server *Server) error {
 			proxy.NewUnformatterStore(
 				proxy.NewWatchRefresh(
 					sqlpartition.NewStore(
-						s,
+						sqlStore,
 						asl,
 					),
 					asl,
@@ -237,8 +239,21 @@ func setup(ctx context.Context, server *Server) error {
 			if err := ccache.OnSchemas(schemas); err != nil {
 				return err
 			}
-			if err := s.Reset(); err != nil {
-				return err
+			for _, id := range schemas.IDs() {
+				theSchema := schemas.Schema(id)
+				if theSchema != nil {
+					gvk := attributes.GVK(theSchema)
+					if gvk.String() == "/v1, Kind=Namespace" {
+						// There should never be a reason for the namespace schema to change
+						// In fact probably any schema in the empty-string group should be ignored.
+						continue
+					}
+					if server.cacheFactory.ResetGVK(gvk) {
+						if err := sqlStore.DeleteTablesForGVK(gvk); err != nil {
+							logrus.Errorf("failed to delete tables for gvk %s: %v", gvk, err)
+						}
+					}
+				}
 			}
 			return nil
 		}

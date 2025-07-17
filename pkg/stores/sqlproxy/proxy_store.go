@@ -299,7 +299,12 @@ type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
 	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
+	DeleteTablesForGVK(gvk schema.GroupVersionKind) error
 	Reset() error
+}
+
+func (s *Store) DeleteTablesForGVK(gvk schema.GroupVersionKind) error {
+	return s.cacheFactory.DeleteTablesForGVK(gvk)
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.

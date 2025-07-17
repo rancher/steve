@@ -281,6 +281,20 @@ func (mr *MockCacheFactoryMockRecorder) CacheFor(ctx, fields, externalUpdateInfo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
 }
 
+// DeleteTablesForGVK mocks base method.
+func (m *MockCacheFactory) DeleteTablesForGVK(gvk schema.GroupVersionKind) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTablesForGVK", gvk)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTablesForGVK indicates an expected call of DeleteTablesForGVK.
+func (mr *MockCacheFactoryMockRecorder) DeleteTablesForGVK(gvk any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTablesForGVK", reflect.TypeOf((*MockCacheFactory)(nil).DeleteTablesForGVK), gvk)
+}
+
 // Reset mocks base method.
 func (m *MockCacheFactory) Reset() error {
 	m.ctrl.T.Helper()

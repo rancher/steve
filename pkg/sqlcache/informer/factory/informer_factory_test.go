@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -440,6 +441,47 @@ func TestCacheFor(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
+	}})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) { test.test(t) })
+	}
+}
+
+func TestDeleteTablesForGVK(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{description: "tables get deleted", test: func(t *testing.T) {
+		dbClient := NewMockClient(gomock.NewController(t))
+		client := NewMockTXClient(gomock.NewController(t))
+
+		gvk := schema.GroupVersionKind{Group: "coconuts.io", Version: "v2", Kind: "Lemon"}
+		tableName := "coconuts.io_v2_Lemon"
+		dropTableTemplate := `DROP TABLE IF EXISTS "%s%s"`
+
+		client.EXPECT().Exec(fmt.Sprintf(dropTableTemplate, tableName, "_labels")).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(dropTableTemplate, tableName, "_indices")).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(dropTableTemplate, tableName, "_events")).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(dropTableTemplate, tableName, "_fields")).Return(nil, nil)
+		client.EXPECT().Exec(fmt.Sprintf(dropTableTemplate, tableName, "")).Return(nil, nil)
+
+		dbClient.EXPECT().WithTransaction(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				err := f(client)
+				if err != nil {
+					t.Fail()
+				}
+			})
+		f := &CacheFactory{
+			dbClient: dbClient,
+		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
+		err := f.DeleteTablesForGVK(gvk)
+		assert.Nil(t, err)
 	}})
 	t.Parallel()
 	for _, test := range tests {
