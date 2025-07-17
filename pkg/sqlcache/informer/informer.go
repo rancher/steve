@@ -48,6 +48,7 @@ type WatchFilter struct {
 type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
+	GetLatestResourceVersion() []string
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes

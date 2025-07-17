@@ -285,6 +285,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	return l, nil
 }
 
+func (l *ListOptionIndexer) GetLatestResourceVersion() []string {
+	var latestRV []string
+
+	l.latestRVLock.RLock()
+	latestRV = []string{l.latestRV}
+	l.latestRVLock.RUnlock()
+
+	return latestRV
+}
+
 func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error {
 	l.latestRVLock.RLock()
 	latestRV := l.latestRV
