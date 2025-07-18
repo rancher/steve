@@ -19,6 +19,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sapimachineryschema "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	apiv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
@@ -31,23 +32,26 @@ var (
 	}
 )
 
-type SchemasHandlerFunc func(schemas *schema2.Collection) error
+type SchemasHandlerFunc func(schemas *schema2.Collection, schemasToReset *schema2.Collection) error
 
-func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection) error {
-	return s(schemas)
+func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection, schemasToReset *schema2.Collection) error {
+	return s(schemas, schemasToReset)
 }
 
 type handler struct {
 	sync.Mutex
 
-	ctx     context.Context
-	toSync  int32
-	schemas *schema2.Collection
-	client  discovery.DiscoveryInterface
-	cols    *common.DynamicColumns
-	crd     apiextcontrollerv1.CustomResourceDefinitionClient
-	ssar    authorizationv1client.SelfSubjectAccessReviewInterface
-	handler SchemasHandlerFunc
+	ctx            context.Context
+	toSync         int32
+	schemas        *schema2.Collection
+	dbschemas        *schema2.Collection
+	client         discovery.DiscoveryInterface
+	cols           *common.DynamicColumns
+	crd            apiextcontrollerv1.CustomResourceDefinitionClient
+	ssar           authorizationv1client.SelfSubjectAccessReviewInterface
+	handler        SchemasHandlerFunc
+	changedIDs     map[k8sapimachineryschema.GroupVersionKind]bool
+	initializedAll bool
 }
 
 func Register(ctx context.Context,
@@ -57,20 +61,31 @@ func Register(ctx context.Context,
 	apiService v1.APIServiceController,
 	ssar authorizationv1client.SelfSubjectAccessReviewInterface,
 	schemasHandler SchemasHandlerFunc,
-	schemas *schema2.Collection) {
+	schemas *schema2.Collection,
+	dbschemas *schema2.Collection,
+	useSQLCache bool) {
 
 	h := &handler{
-		ctx:     ctx,
-		cols:    cols,
-		client:  discovery,
-		schemas: schemas,
-		handler: schemasHandler,
-		crd:     crd,
-		ssar:    ssar,
+		ctx:            ctx,
+		cols:           cols,
+		client:         discovery,
+		schemas:        schemas,
+		dbschemas:        dbschemas,
+		handler:        schemasHandler,
+		crd:            crd,
+		ssar:           ssar,
+		changedIDs:     make(map[k8sapimachineryschema.GroupVersionKind]bool),
+		initializedAll: false,
 	}
 
-	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
-	crd.OnChange(ctx, "schema", h.OnChangeCRD)
+	if useSQLCache {
+		apiService.OnChange(ctx, "schema", h.OnChangeAPIServiceWithSQLCache)
+		crd.OnChange(ctx, "schema", h.OnChangeCRDWithSQLCache)
+	} else {
+		apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
+		crd.OnChange(ctx, "schema", h.OnChangeCRD)
+	}
+	h.queueRefresh()
 }
 
 func (h *handler) OnChangeCRD(key string, crd *apiextv1.CustomResourceDefinition) (*apiextv1.CustomResourceDefinition, error) {
@@ -83,12 +98,41 @@ func (h *handler) OnChangeAPIService(key string, api *apiv1.APIService) (*apiv1.
 	return api, nil
 }
 
+func (h *handler) OnChangeCRDWithSQLCache(key string, crd *apiextv1.CustomResourceDefinition) (*apiextv1.CustomResourceDefinition, error) {
+	spec := crd.Spec
+	group := spec.Group
+	kind := spec.Names.Kind
+	h.Lock()
+	for _, version := range spec.Versions {
+		h.changedIDs[k8sapimachineryschema.GroupVersionKind{Group: group, Version: version.Name, Kind: kind}] = true
+	}
+	h.Unlock()
+	h.queueRefresh()
+	return crd, nil
+}
+
+func (h *handler) OnChangeAPIServiceWithSQLCache(key string, api *apiv1.APIService) (*apiv1.APIService, error) {
+	h.queueRefresh()
+	return api, nil
+}
+
 func (h *handler) queueRefresh() {
 	atomic.StoreInt32(&h.toSync, 1)
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		if err := h.refreshAll(h.ctx); err != nil {
+		var err error
+		if !h.initializedAll {
+			h.initializedAll = true
+			err = h.refreshAll(h.ctx)
+		} else {
+			h.Lock()
+			changedIDs := h.changedIDs
+			h.changedIDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
+			h.Unlock()
+			err = h.refreshChangedSchemas(h.ctx, changedIDs)
+		}
+		if err != nil {
 			logrus.Errorf("failed to sync schemas: %v", err)
 			atomic.StoreInt32(&h.toSync, 1)
 		}
@@ -188,8 +232,61 @@ func (h *handler) refreshAll(ctx context.Context) error {
 	}
 
 	h.schemas.Reset(filteredSchemas)
+	h.dbschemas.Reset(filteredSchemas)
 	if h.handler != nil {
-		return h.handler.OnSchemas(h.schemas)
+		return h.handler.OnSchemas(h.schemas, h.dbschemas)
+	}
+
+	return nil
+}
+
+func (h *handler) refreshChangedSchemas(ctx context.Context, changedGVKs map[k8sapimachineryschema.GroupVersionKind]bool) error {
+	h.Lock()
+	defer h.Unlock()
+
+	if !h.needToSync() {
+		return nil
+	}
+
+	schemas, err := converter.ToSchemas(h.crd, h.client)
+	if err != nil {
+		return err
+	}
+
+	filteredSchemas := map[string]*types.APISchema{}
+	schemasForDBReset := map[string]*types.APISchema{}
+	for _, schema := range schemas {
+		if IsListWatchable(schema) {
+			if preferredTypeExists(schema, schemas) {
+				continue
+			}
+			if ok, err := h.allowed(ctx, schema); err != nil {
+				return err
+			} else if !ok {
+				continue
+			}
+		}
+
+		gvk := attributes.GVK(schema)
+		if gvk.Kind != "" {
+			gvr := attributes.GVR(schema)
+			schema.ID = converter.GVKToSchemaID(gvk)
+			schema.PluralName = converter.GVRToPluralName(gvr)
+		}
+		filteredSchemas[schema.ID] = schema
+		if changedGVKs[gvk] {
+			schemasForDBReset[schema.ID] = schema
+		}
+	}
+
+	if err := h.getColumns(h.ctx, filteredSchemas); err != nil {
+		return err
+	}
+
+	h.schemas.Reset(filteredSchemas)
+	h.dbschemas.Reset(schemasForDBReset)
+	if h.handler != nil {
+		return h.handler.OnSchemas(h.schemas, h.dbschemas)
 	}
 
 	return nil
