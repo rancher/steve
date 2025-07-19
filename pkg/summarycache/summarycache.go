@@ -106,7 +106,21 @@ func (s *SummaryCache) SummaryAndRelationship(obj runtime.Object) (*summary.Summ
 	defer s.RUnlock()
 
 	key := toKey(obj)
-	summarized := summary.Summarized(obj)
+
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	schemaID := converter.GVKToSchemaID(gvk)
+	schema := s.schemas.Schema(schemaID)
+
+	hasObservedGeneration := false
+	if schema != nil {
+		if schema.Attributes != nil {
+			hasObservedGeneration = attributes.HasObservedGeneration(schema)
+		}
+	}
+	opts := &summary.SummarizeOptions{
+		HasObservedGeneration: hasObservedGeneration,
+	}
+	summarized := summary.Summarized(obj, opts)
 
 	relObjs, err := s.cache.ByIndex(relationshipIndex, key)
 	if err != nil {
@@ -183,7 +197,7 @@ func (s *SummaryCache) toRel(ns string, rel *summary.Relationship) Relationship 
 			FromID:   id,
 			FromType: converter.GVKToSchemaID(runtimeschema.FromAPIVersionAndKind(rel.APIVersion, rel.Kind)),
 			Rel:      rel.Type,
-		}, obj)
+		}, obj, s.schemas)
 	}
 
 	toNS := ""
@@ -197,10 +211,10 @@ func (s *SummaryCache) toRel(ns string, rel *summary.Relationship) Relationship 
 		Rel:         rel.Type,
 		ToNamespace: toNS,
 		Selector:    toSelector(rel.Selector),
-	}, obj)
+	}, obj, s.schemas)
 }
 
-func addObject(rel Relationship, obj interface{}) Relationship {
+func addObject(rel Relationship, obj interface{}, schemas *schema.Collection) Relationship {
 	if obj == nil {
 		return rel
 	}
@@ -210,7 +224,20 @@ func addObject(rel Relationship, obj interface{}) Relationship {
 		return rel
 	}
 
-	summarized := summary.Summarized(ro)
+	gvk := ro.GetObjectKind().GroupVersionKind()
+	schemaID := converter.GVKToSchemaID(gvk)
+	schema := schemas.Schema(schemaID)
+
+	hasObservedGeneration := false
+	if schema != nil {
+		if schema.Attributes != nil {
+			hasObservedGeneration = attributes.HasObservedGeneration(schema)
+		}
+	}
+	opts := &summary.SummarizeOptions{
+		HasObservedGeneration: hasObservedGeneration,
+	}
+	summarized := summary.Summarized(ro, opts)
 	rel.State = summarized.State
 	rel.Error = summarized.Error
 	rel.Message = strings.Join(summarized.Message, "; ")
@@ -265,9 +292,24 @@ func (s *SummaryCache) Change(newObj, oldObj runtime.Object) {
 }
 
 func (s *SummaryCache) process(obj runtime.Object) (*summary.SummarizedObject, []*summary.Relationship) {
+
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	schemaID := converter.GVKToSchemaID(gvk)
+	schema := s.schemas.Schema(schemaID)
+
+	hasObservedGeneration := false
+	if schema != nil {
+		if schema.Attributes != nil {
+			hasObservedGeneration = attributes.HasObservedGeneration(schema)
+		}
+	}
+	opts := &summary.SummarizeOptions{
+		HasObservedGeneration: hasObservedGeneration,
+	}
+
 	var (
 		rels    []*summary.Relationship
-		summary = summary.Summarized(obj)
+		summary = summary.Summarized(obj, opts)
 	)
 
 	for _, rel := range summary.Relationships {
