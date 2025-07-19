@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sync"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/aggregation"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
@@ -29,6 +32,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 )
 
@@ -194,6 +198,9 @@ func setup(ctx context.Context, server *Server) error {
 	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
 	server.ClusterCache = ccache
 	sf := schema.NewCollection(ctx, server.BaseSchemas, asl)
+	// This is a second schema-collection used to keep track of which database tables
+	// need to be updated
+	dbsf := schema.NewCollection(ctx, server.BaseSchemas, asl)
 
 	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
 		return err
@@ -210,7 +217,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
+		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
 		if err != nil {
 			panic(err)
 		}
@@ -219,7 +226,7 @@ func setup(ctx context.Context, server *Server) error {
 			proxy.NewUnformatterStore(
 				proxy.NewWatchRefresh(
 					sqlpartition.NewStore(
-						s,
+						sqlStore,
 						asl,
 					),
 					asl,
@@ -232,13 +239,46 @@ func setup(ctx context.Context, server *Server) error {
 		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
 			sf.AddTemplate(template)
 		}
+		fieldsForSchema := make(map[string][][]string)
+		var fieldsLock sync.Mutex
 
-		onSchemasHandler = func(schemas *schema.Collection) error {
-			if err := ccache.OnSchemas(schemas); err != nil {
+		onSchemasHandler = func(allSchemas *schema.Collection, schemasToReset *schema.Collection) error {
+			if err := ccache.OnSchemas(allSchemas, nil); err != nil {
 				return err
 			}
-			if err := s.Reset(); err != nil {
-				return err
+			for _, id := range schemasToReset.IDs() {
+				theSchema := schemasToReset.Schema(id)
+				if theSchema != nil {
+					if func() bool {
+						// Use a closure to wrap access to the fields hash in a mutex
+						// Since this function is called from a goroutine that fires every
+						// 500 msec there might be contention
+						currentFieldsForSchema := sqlproxy.GetFieldsFromSchema(theSchema)
+						fieldsLock.Lock()
+						defer fieldsLock.Unlock()
+						fields, ok := fieldsForSchema[id]
+						// slices.EqualFunc() treats nils like zero-length arrays
+						if ok && slices.EqualFunc(fields, currentFieldsForSchema,
+							func(s1, s2 []string) bool {
+								return slices.Equal(s1, s2)
+							}) {
+							// We have a DB informer for this GVK and no schema fields have changed,
+							// so there's nothing to update in the SQL store
+							return true
+						}
+						fieldsForSchema[id] = currentFieldsForSchema
+						return false
+					}() {
+						// No change in the schema fields, so continue
+						continue
+					}
+					gvk := attributes.GVK(theSchema)
+					if server.cacheFactory.ResetGVK(gvk) {
+						if err := sqlStore.DeleteTablesForGVK(gvk); err != nil {
+							logrus.Errorf("failed to delete tables for gvk %s: %v", gvk, err)
+						}
+					}
+				}
 			}
 			return nil
 		}
@@ -246,7 +286,9 @@ func setup(ctx context.Context, server *Server) error {
 		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache(), common.TemplateOptions{InSQLMode: false}) {
 			sf.AddTemplate(template)
 		}
-		onSchemasHandler = ccache.OnSchemas
+		onSchemasHandler = func(allSchemas *schema.Collection, _ *schema.Collection) error {
+			return ccache.OnSchemas(allSchemas, nil)
+		}
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
@@ -258,7 +300,9 @@ func setup(ctx context.Context, server *Server) error {
 		server.controllers.API.APIService(),
 		server.controllers.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
 		onSchemasHandler,
-		sf)
+		sf,
+		dbsf,
+		server.SQLCache)
 
 	next := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if server.extensionAPIServer == nil || server.SkipWaitForExtensionAPIServer {

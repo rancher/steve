@@ -12,9 +12,11 @@ import (
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -104,6 +106,52 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 		newInformer: informer.NewInformer,
 		informers:   map[schema.GroupVersionKind]*guardedInformer{},
 	}, nil
+}
+
+// return true and will need to have its database tables deleted
+// return false otherwise
+func (f *CacheFactory) ResetGVK(gvk schema.GroupVersionKind) bool {
+	f.informersMutex.Lock()
+	defer f.informersMutex.Unlock()
+	gi, ok := f.informers[gvk]
+	if !ok {
+		return false
+	}
+	i := gi.informer
+	if i != nil {
+		// It's possible that at the end of this function `f.informers[gvk]` will no longer be reachable,
+		// so the GV will also clear `f.informers[gvk].watchErrorHandler`, but in case that doesn't happen
+		// set it to a no-op.
+		// TODO: Put in a debug stmt to see if it does get deleted.
+		i.SetWatchErrorHandler(func(*cache.Reflector, error) {
+			// Do nothing - there is no k8s.io/client_go.sharedIndexInformer#ClearWatchErrorHandler
+		})
+	}
+	delete(f.informers, gvk)
+	// TODO: Delete all the tables because their schemas might have changed
+	return true
+}
+
+func (f *CacheFactory) DeleteTablesForGVK(gvk schema.GroupVersionKind) error {
+	dbName := informerNameFromGVK(gvk)
+	suffixes := []string{"_labels", "_indices", "_events", "_fields", ""}
+	dropTableTemplate := `DROP TABLE IF EXISTS "%s%s"`
+	err := f.dbClient.WithTransaction(f.ctx, true, func(tx transaction.Client) error {
+		for _, suffix := range suffixes {
+			dropTableStmt := fmt.Sprintf(dropTableTemplate, dbName, suffix)
+			_, err := tx.Exec(dropTableStmt)
+			logrus.Debugf("QQQ: dropped table %s%s => err %v", dbName, suffix, err)
+			if err != nil {
+				return &db.QueryError{QueryString: dropTableStmt, Err: err}
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+func informerNameFromGVK(gvk schema.GroupVersionKind) string {
+	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
 }
 
 // CacheFor returns an informer for given GVK, using sql store indexed with fields, using the specified client. For virtual fields, they must be added by the transform function

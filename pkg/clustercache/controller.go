@@ -30,7 +30,7 @@ type ClusterCache interface {
 	OnAdd(ctx context.Context, handler Handler)
 	OnRemove(ctx context.Context, handler Handler)
 	OnChange(ctx context.Context, handler ChangeHandler)
-	OnSchemas(schemas *schema.Collection) error
+	OnSchemas(schemas *schema.Collection, unused *schema.Collection) error
 }
 
 type event struct {
@@ -124,7 +124,7 @@ func (h *clusterCache) addResourceEventHandler(gvk schema2.GroupVersionKind, inf
 	})
 }
 
-func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
+func (h *clusterCache) OnSchemas(schemas *schema.Collection, _ *schema.Collection) error {
 	h.Lock()
 	defer h.Unlock()
 
