@@ -144,22 +144,32 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 		s = s.DeepCopy()
 		attributes.SetAccess(s, verbAccess)
 
+		addUniqueMethod := func(method string, methods *[]string, methodSet map[string]struct{}) {
+			if _, exists := methodSet[method]; !exists {
+				*methods = append(*methods, method)
+				methodSet[method] = struct{}{}
+			}
+		}
+
+		collectionMethodsSet := map[string]struct{}{}
+		resourceMethodsSet := map[string]struct{}{}
+
 		if verbAccess.AnyVerb("list", "get") {
-			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodGet))
-			s.CollectionMethods = append(s.CollectionMethods, allowed(http.MethodGet))
+			addUniqueMethod(allowed(http.MethodGet), &s.ResourceMethods, resourceMethodsSet)
+			addUniqueMethod(allowed(http.MethodGet), &s.CollectionMethods, collectionMethodsSet)
 		}
 		if verbAccess.AnyVerb("delete") {
-			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodDelete))
+			addUniqueMethod(allowed(http.MethodDelete), &s.ResourceMethods, resourceMethodsSet)
 		}
 		if verbAccess.AnyVerb("update") {
-			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPut))
-			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPatch))
+			addUniqueMethod(allowed(http.MethodPut), &s.ResourceMethods, resourceMethodsSet)
+			addUniqueMethod(allowed(http.MethodPatch), &s.ResourceMethods, resourceMethodsSet)
 		}
 		if verbAccess.AnyVerb("create") {
-			s.CollectionMethods = append(s.CollectionMethods, allowed(http.MethodPost))
+			addUniqueMethod(allowed(http.MethodPost), &s.CollectionMethods, collectionMethodsSet)
 		}
 		if verbAccess.AnyVerb("patch") {
-			s.ResourceMethods = append(s.ResourceMethods, allowed(http.MethodPatch))
+			addUniqueMethod(allowed(http.MethodPatch), &s.ResourceMethods, resourceMethodsSet)
 		}
 
 		if len(s.CollectionMethods) == 0 && len(s.ResourceMethods) == 0 {
