@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -108,8 +107,10 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 	}, nil
 }
 
-// return true and will need to have its database tables deleted
-// return false otherwise
+// return false if there's no informer for the specified GVK
+// Otherwise clear its' watch-handler, remove the informer, and return `true`
+//
+//	so the caller knows it needs to finish re-watching the GVK
 func (f *CacheFactory) ResetGVK(gvk schema.GroupVersionKind) bool {
 	f.informersMutex.Lock()
 	defer f.informersMutex.Unlock()
@@ -119,16 +120,11 @@ func (f *CacheFactory) ResetGVK(gvk schema.GroupVersionKind) bool {
 	}
 	i := gi.informer
 	if i != nil {
-		// It's possible that at the end of this function `f.informers[gvk]` will no longer be reachable,
-		// so the GV will also clear `f.informers[gvk].watchErrorHandler`, but in case that doesn't happen
-		// set it to a no-op.
-		// TODO: Put in a debug stmt to see if it does get deleted.
-		i.SetWatchErrorHandler(func(*cache.Reflector, error) {
-			// Do nothing - there is no k8s.io/client_go.sharedIndexInformer#ClearWatchErrorHandler
-		})
+		// There's no need to set `i.SetWatchErrorHandler` to `func(...) { /* NOOP */`
+		// because the `i.handler` field will never be consulted again because `i` is
+		// going to become unreachable
+		delete(f.informers, gvk)
 	}
-	delete(f.informers, gvk)
-	// TODO: Delete all the tables because their schemas might have changed
 	return true
 }
 
@@ -140,7 +136,6 @@ func (f *CacheFactory) DeleteTablesForGVK(gvk schema.GroupVersionKind) error {
 		for _, suffix := range suffixes {
 			dropTableStmt := fmt.Sprintf(dropTableTemplate, dbName, suffix)
 			_, err := tx.Exec(dropTableStmt)
-			logrus.Debugf("QQQ: dropped table %s%s => err %v", dbName, suffix, err)
 			if err != nil {
 				return &db.QueryError{QueryString: dropTableStmt, Err: err}
 			}

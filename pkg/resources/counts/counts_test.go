@@ -273,7 +273,7 @@ func (f *fakeClusterCache) OnChange(ctx context.Context, handler clustercache.Ch
 	f.changeHandler = handler
 }
 
-func (f *fakeClusterCache) OnSchemas(schemas *schema.Collection, *schema.Collection) error {
+func (f *fakeClusterCache) OnSchemas(schemas *schema.Collection, unusedSchemas *schema.Collection) error {
 	return nil
 }
 
