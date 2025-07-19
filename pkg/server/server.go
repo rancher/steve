@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sync"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
@@ -237,6 +239,8 @@ func setup(ctx context.Context, server *Server) error {
 		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
 			sf.AddTemplate(template)
 		}
+		fieldsForSchema := make(map[string][][]string)
+		var fieldsLock sync.Mutex
 
 		onSchemasHandler = func(allSchemas *schema.Collection, schemasToReset *schema.Collection) error {
 			if err := ccache.OnSchemas(allSchemas, nil); err != nil {
@@ -245,6 +249,29 @@ func setup(ctx context.Context, server *Server) error {
 			for _, id := range schemasToReset.IDs() {
 				theSchema := schemasToReset.Schema(id)
 				if theSchema != nil {
+					if func() bool {
+						// Use a closure to wrap access to the fields hash in a mutex
+						// Since this function is called from a goroutine that fires every
+						// 500 msec there might be contention
+						currentFieldsForSchema := sqlproxy.GetFieldsFromSchema(theSchema)
+						fieldsLock.Lock()
+						defer fieldsLock.Unlock()
+						fields, ok := fieldsForSchema[id]
+						// slices.EqualFunc() treats nils like zero-length arrays
+						if ok && slices.EqualFunc(fields, currentFieldsForSchema,
+							func(s1, s2 []string) bool {
+								return slices.Equal(s1, s2)
+							}) {
+							// We have a DB informer for this GVK and no schema fields have changed,
+							// so there's nothing to update in the SQL store
+							return true
+						}
+						fieldsForSchema[id] = currentFieldsForSchema
+						return false
+					}() {
+						// No change in the schema fields, so continue
+						continue
+					}
 					gvk := attributes.GVK(theSchema)
 					if server.cacheFactory.ResetGVK(gvk) {
 						if err := sqlStore.DeleteTablesForGVK(gvk); err != nil {

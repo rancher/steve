@@ -374,7 +374,7 @@ func (s *Store) initializeNamespaceCache() error {
 
 	gvk := attributes.GVK(&nsSchema)
 	// get fields from schema's columns
-	fields := getFieldsFromSchema(&nsSchema)
+	fields := GetFieldsFromSchema(&nsSchema)
 
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
@@ -408,9 +408,9 @@ func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
 
-// getFieldsFromSchema converts object field names from types.APISchema's format into steve's
+// GetFieldsFromSchema converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
-func getFieldsFromSchema(schema *types.APISchema) [][]string {
+func GetFieldsFromSchema(schema *types.APISchema) [][]string {
 	var fields [][]string
 	columns := attributes.Columns(schema)
 	if columns == nil {
@@ -586,7 +586,7 @@ func newWatchers() *Watchers {
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
 	// warnings from inside the informer are discarded
 	gvk := attributes.GVK(schema)
-	fields := getFieldsFromSchema(schema)
+	fields := GetFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	cols := common.GetColumnDefinitions(schema)
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(schema))
@@ -793,7 +793,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return nil, 0, "", err
 	}
 	gvk := attributes.GVK(apiSchema)
-	fields := getFieldsFromSchema(apiSchema)
+	fields := GetFieldsFromSchema(apiSchema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	cols := common.GetColumnDefinitions(apiSchema)
 

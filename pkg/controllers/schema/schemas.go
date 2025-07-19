@@ -44,7 +44,7 @@ type handler struct {
 	ctx            context.Context
 	toSync         int32
 	schemas        *schema2.Collection
-	dbschemas        *schema2.Collection
+	dbschemas      *schema2.Collection
 	client         discovery.DiscoveryInterface
 	cols           *common.DynamicColumns
 	crd            apiextcontrollerv1.CustomResourceDefinitionClient
@@ -70,7 +70,7 @@ func Register(ctx context.Context,
 		cols:           cols,
 		client:         discovery,
 		schemas:        schemas,
-		dbschemas:        dbschemas,
+		dbschemas:      dbschemas,
 		handler:        schemasHandler,
 		crd:            crd,
 		ssar:           ssar,
