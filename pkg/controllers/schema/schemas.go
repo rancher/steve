@@ -47,7 +47,7 @@ type handler struct {
 	dbschemas      *schema2.Collection
 	client         discovery.DiscoveryInterface
 	cols           *common.DynamicColumns
-	crd            apiextcontrollerv1.CustomResourceDefinitionClient
+	crdClient      apiextcontrollerv1.CustomResourceDefinitionClient
 	ssar           authorizationv1client.SelfSubjectAccessReviewInterface
 	handler        SchemasHandlerFunc
 	changedIDs     map[k8sapimachineryschema.GroupVersionKind]bool
@@ -72,7 +72,7 @@ func Register(ctx context.Context,
 		schemas:        schemas,
 		dbschemas:      dbschemas,
 		handler:        schemasHandler,
-		crd:            crd,
+		crdClient:      crd,
 		ssar:           ssar,
 		changedIDs:     make(map[k8sapimachineryschema.GroupVersionKind]bool),
 		initializedAll: false,
@@ -124,13 +124,13 @@ func (h *handler) queueRefresh() {
 		var err error
 		if !h.initializedAll {
 			h.initializedAll = true
-			err = h.refreshAll(h.ctx)
+			err = h.refreshAll(h.ctx, nil)
 		} else {
 			h.Lock()
 			changedIDs := h.changedIDs
 			h.changedIDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
 			h.Unlock()
-			err = h.refreshChangedSchemas(h.ctx, changedIDs)
+			err = h.refreshAll(h.ctx, changedIDs)
 		}
 		if err != nil {
 			logrus.Errorf("failed to sync schemas: %v", err)
@@ -192,7 +192,7 @@ func (h *handler) getColumns(ctx context.Context, schemas map[string]*types.APIS
 	return eg.Wait()
 }
 
-func (h *handler) refreshAll(ctx context.Context) error {
+func (h *handler) refreshAll(ctx context.Context, changedGVKs map[k8sapimachineryschema.GroupVersionKind]bool) error {
 	h.Lock()
 	defer h.Unlock()
 
@@ -200,55 +200,7 @@ func (h *handler) refreshAll(ctx context.Context) error {
 		return nil
 	}
 
-	schemas, err := converter.ToSchemas(h.crd, h.client)
-	if err != nil {
-		return err
-	}
-
-	filteredSchemas := map[string]*types.APISchema{}
-	for _, schema := range schemas {
-		if IsListWatchable(schema) {
-			if preferredTypeExists(schema, schemas) {
-				continue
-			}
-			if ok, err := h.allowed(ctx, schema); err != nil {
-				return err
-			} else if !ok {
-				continue
-			}
-		}
-
-		gvk := attributes.GVK(schema)
-		if gvk.Kind != "" {
-			gvr := attributes.GVR(schema)
-			schema.ID = converter.GVKToSchemaID(gvk)
-			schema.PluralName = converter.GVRToPluralName(gvr)
-		}
-		filteredSchemas[schema.ID] = schema
-	}
-
-	if err := h.getColumns(h.ctx, filteredSchemas); err != nil {
-		return err
-	}
-
-	h.schemas.Reset(filteredSchemas)
-	h.dbschemas.Reset(filteredSchemas)
-	if h.handler != nil {
-		return h.handler.OnSchemas(h.schemas, h.dbschemas)
-	}
-
-	return nil
-}
-
-func (h *handler) refreshChangedSchemas(ctx context.Context, changedGVKs map[k8sapimachineryschema.GroupVersionKind]bool) error {
-	h.Lock()
-	defer h.Unlock()
-
-	if !h.needToSync() {
-		return nil
-	}
-
-	schemas, err := converter.ToSchemas(h.crd, h.client)
+	schemas, err := converter.ToSchemas(h.crdClient, h.client)
 	if err != nil {
 		return err
 	}
@@ -275,6 +227,7 @@ func (h *handler) refreshChangedSchemas(ctx context.Context, changedGVKs map[k8s
 		}
 		filteredSchemas[schema.ID] = schema
 		if changedGVKs[gvk] {
+			// nil[x] is always false if the first-time runner called this
 			schemasForDBReset[schema.ID] = schema
 		}
 	}
@@ -284,7 +237,11 @@ func (h *handler) refreshChangedSchemas(ctx context.Context, changedGVKs map[k8s
 	}
 
 	h.schemas.Reset(filteredSchemas)
-	h.dbschemas.Reset(schemasForDBReset)
+	if changedGVKs == nil {
+		h.dbschemas.Reset(filteredSchemas)
+	} else {
+		h.dbschemas.Reset(schemasForDBReset)
+	}
 	if h.handler != nil {
 		return h.handler.OnSchemas(h.schemas, h.dbschemas)
 	}
