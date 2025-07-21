@@ -147,7 +147,7 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 			continue
 		}
 
-		summaryInformer := informer.NewFilteredSummaryInformer(h.summaryClient, gvr, metav1.NamespaceAll, 2*time.Hour,
+		summaryInformer := informer.NewFilteredSummaryInformer(h.summaryClient, gvr, schema.Schema, metav1.NamespaceAll, 2*time.Hour,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, nil)
 		ctx, cancel := context.WithCancel(h.ctx)
 		w := &watcher{
