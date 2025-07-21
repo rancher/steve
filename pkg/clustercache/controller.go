@@ -124,14 +124,21 @@ func (h *clusterCache) addResourceEventHandler(gvk schema2.GroupVersionKind, inf
 	})
 }
 
-func (h *clusterCache) OnSchemas(schemas *schema.Collection, _ *schema.Collection) error {
+func (h *clusterCache) OnSchemas(allSchemas *schema.Collection, changedSchemas *schema.Collection) error {
 	h.Lock()
 	defer h.Unlock()
 
 	var (
 		gvks   = map[schema2.GroupVersionKind]bool{}
 		toWait []*watcher
+		schemas *schema.Collection
 	)
+
+	if changedSchemas != nil {
+		schemas = changedSchemas
+	} else {
+		schemas = allSchemas
+	}
 
 	for _, id := range schemas.IDs() {
 		schema := schemas.Schema(id)
@@ -165,11 +172,13 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection, _ *schema.Collectio
 		go w.informer.Run(w.ctx.Done())
 	}
 
-	for gvk, w := range h.watchers {
-		if !gvks[gvk] {
-			logrus.Infof("Stopping metadata watch on %s", gvk)
-			w.cancel()
-			delete(h.watchers, gvk)
+	if changedSchemas == nil {
+		for gvk, w := range h.watchers {
+			if !gvks[gvk] {
+				logrus.Infof("Stopping metadata watch on %s", gvk)
+				w.cancel()
+				delete(h.watchers, gvk)
+			}
 		}
 	}
 

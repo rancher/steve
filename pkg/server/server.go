@@ -243,7 +243,7 @@ func setup(ctx context.Context, server *Server) error {
 		var fieldsLock sync.Mutex
 
 		onSchemasHandler = func(allSchemas *schema.Collection, schemasToReset *schema.Collection) error {
-			if err := ccache.OnSchemas(allSchemas, nil); err != nil {
+			if err := ccache.OnSchemas(allSchemas, schemasToReset); err != nil {
 				return err
 			}
 			for _, id := range schemasToReset.IDs() {

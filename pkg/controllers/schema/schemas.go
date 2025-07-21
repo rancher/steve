@@ -232,6 +232,7 @@ func (h *handler) refreshAll(ctx context.Context, changedGVKs map[k8sapimachiner
 		}
 	}
 
+	// This method has a side effect of setting `h.cols` based on the schemas we pass in.
 	if err := h.getColumns(h.ctx, filteredSchemas); err != nil {
 		return err
 	}
