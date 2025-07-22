@@ -1,15 +1,16 @@
 package db
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"sync"
 )
-
-type Encoding int
 
 func init() {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
@@ -24,17 +25,73 @@ type encoding interface {
 	Decode(io.Reader, any) error
 }
 
-type gobEncoding struct{}
+type gobEncoding struct {
+	writeLock, readLock sync.Mutex
+	writeBuf, readBuf   bytes.Buffer
+	encoder             *gob.Encoder
+	decoder             *gob.Decoder
+	seenTypes           map[reflect.Type]struct{}
+}
 
-func (g gobEncoding) Encode(w io.Writer, obj any) error {
-	if err := gob.NewEncoder(w).Encode(obj); err != nil {
+func (g *gobEncoding) Encode(w io.Writer, obj any) error {
+	g.writeLock.Lock()
+	defer g.writeLock.Unlock()
+
+	if g.encoder == nil {
+		g.encoder = gob.NewEncoder(&g.writeBuf)
+	}
+
+	g.writeBuf.Reset()
+	if err := g.encoder.Encode(obj); err != nil {
 		return err
+	}
+
+	if err := g.registerTypeIfNeeded(obj); err != nil {
+		return err
+	}
+
+	_, err := g.writeBuf.WriteTo(w)
+	return err
+}
+
+// registerTypeIfNeeded prevents future decoding errors by running Decode right after the first Encode for an object type
+// This is needed when reusing a gob.Encoder, as it assumes the receiving end of those messages is always the same gob.Decoder.
+// Due to this assumption, it applies some optimizations, like avoiding sending complete type's information (needed for decoding) if it already did it before.
+// This means the first object for each type encoded by a gob.Encoder will have a bigger payload, but more importantly,
+// the decoding will fail if this is not the first object being decoded later. This function forces that to prevent this from happening.
+func (g *gobEncoding) registerTypeIfNeeded(obj any) error {
+	if g.seenTypes == nil {
+		g.seenTypes = make(map[reflect.Type]struct{})
+	}
+
+	typ := reflect.TypeOf(obj)
+	if _, ok := g.seenTypes[typ]; !ok {
+		g.seenTypes[typ] = struct{}{}
+		// Consume the current write buffer and re-generate it (will produce a smaller version)
+		newObj := reflect.New(typ).Interface()
+		if err := g.Decode(bytes.NewReader(g.writeBuf.Bytes()), newObj); err != nil {
+			return fmt.Errorf("could not decode %T: %w", obj, err)
+		}
+
+		g.writeBuf.Reset()
+		return g.encoder.Encode(obj)
 	}
 	return nil
 }
 
-func (g gobEncoding) Decode(r io.Reader, into any) error {
-	return gob.NewDecoder(r).Decode(into)
+func (g *gobEncoding) Decode(r io.Reader, into any) error {
+	g.readLock.Lock()
+	defer g.readLock.Unlock()
+
+	if g.decoder == nil {
+		g.decoder = gob.NewDecoder(&g.readBuf)
+	}
+
+	g.readBuf.Reset()
+	if _, err := g.readBuf.ReadFrom(r); err != nil {
+		return err
+	}
+	return g.decoder.Decode(into)
 }
 
 type jsonEncoding struct {
