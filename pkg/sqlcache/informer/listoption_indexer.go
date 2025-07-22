@@ -806,7 +806,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		if err != nil {
 			return &db.QueryError{QueryString: queryInfo.query, Err: err}
 		}
-		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
+		items, err = l.ReadObjects(rows, l.GetType())
 		if err != nil {
 			return fmt.Errorf("read objects: %w", err)
 		}

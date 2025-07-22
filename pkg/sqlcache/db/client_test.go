@@ -126,7 +126,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		items, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		items, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.Nil(t, err)
 		assert.Equal(t, 1, len(items))
 	},
@@ -146,7 +146,7 @@ func TestQueryObjects(t *testing.T) {
 		d.EXPECT().Decrypt(toBytes(testObject), toBytes(testObject), keyId).Return(nil, fmt.Errorf("error"))
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		_, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.NotNil(t, err)
 	},
 	})
@@ -159,7 +159,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Scan(gomock.Any()).Return(fmt.Errorf("error"))
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		_, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.NotNil(t, err)
 	},
 	})
@@ -179,7 +179,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(fmt.Errorf("error"))
 		client := SetupClient(t, c, e, d)
-		_, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.NotNil(t, err)
 	},
 	})
@@ -192,7 +192,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		items, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		items, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(items))
 	},
