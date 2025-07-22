@@ -182,7 +182,7 @@ func (i *Indexer) Index(indexName string, obj any) (result []any, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return i.ReadObjects(rows, i.GetType(), i.GetShouldEncrypt())
+	return i.ReadObjects(rows, i.GetType())
 }
 
 func (i *Indexer) dropIndices(tx db.TxClient) error {
@@ -197,7 +197,7 @@ func (i *Indexer) ByIndex(indexName, indexedValue string) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return i.ReadObjects(rows, i.GetType(), i.GetShouldEncrypt())
+	return i.ReadObjects(rows, i.GetType())
 }
 
 // IndexKeys returns a list of the Store keys of the objects whose indexed values in the given index include the given indexed value

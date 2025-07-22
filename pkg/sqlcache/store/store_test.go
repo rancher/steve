@@ -401,7 +401,7 @@ func TestList(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.listStmt).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return([]any{}, nil)
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return([]any{}, nil)
 		items := store.List()
 		assert.Len(t, items, 0)
 	},
@@ -412,7 +412,7 @@ func TestList(t *testing.T) {
 		fakeItemsToReturn := []any{"something1", 2, false}
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.listStmt).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return(fakeItemsToReturn, nil)
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return(fakeItemsToReturn, nil)
 		items := store.List()
 		assert.Equal(t, fakeItemsToReturn, items)
 	},
@@ -422,7 +422,7 @@ func TestList(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.listStmt).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return(nil, fmt.Errorf("error"))
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return(nil, fmt.Errorf("error"))
 		defer func() {
 			recover()
 		}()
@@ -488,7 +488,7 @@ func TestGet(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.getStmt, testObject.Id).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return([]any{testObject}, nil)
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return([]any{testObject}, nil)
 		item, exists, err := store.Get(testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, item, testObject)
@@ -500,7 +500,7 @@ func TestGet(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.getStmt, testObject.Id).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return([]any{}, nil)
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return([]any{}, nil)
 		item, exists, err := store.Get(testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, item, nil)
@@ -512,7 +512,7 @@ func TestGet(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.getStmt, testObject.Id).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return(nil, fmt.Errorf("error"))
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return(nil, fmt.Errorf("error"))
 		_, _, err := store.Get(testObject)
 		assert.NotNil(t, err)
 	},
@@ -538,7 +538,7 @@ func TestGetByKey(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.getStmt, testObject.Id).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return([]any{testObject}, nil)
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return([]any{testObject}, nil)
 		item, exists, err := store.GetByKey(testObject.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, item, testObject)
@@ -550,7 +550,7 @@ func TestGetByKey(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.getStmt, testObject.Id).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return([]any{}, nil)
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return([]any{}, nil)
 		item, exists, err := store.GetByKey(testObject.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, nil, item)
@@ -562,7 +562,7 @@ func TestGetByKey(t *testing.T) {
 		store := SetupStore(t, c, shouldEncrypt)
 		r := &sql.Rows{}
 		c.EXPECT().QueryForRows(context.Background(), store.getStmt, testObject.Id).Return(r, nil)
-		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject), store.shouldEncrypt).Return(nil, fmt.Errorf("error"))
+		c.EXPECT().ReadObjects(r, reflect.TypeOf(testObject)).Return(nil, fmt.Errorf("error"))
 		_, _, err := store.GetByKey(testObject.Id)
 		assert.NotNil(t, err)
 	},
@@ -1019,7 +1019,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 					t.Fail()
 				}
 			})
-		for _ = range 2 {
+		for range 2 {
 			c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 				func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 					err := f(txC)

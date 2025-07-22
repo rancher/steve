@@ -40,7 +40,7 @@ type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
 	Prepare(stmt string) Stmt
 	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error)
-	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
+	ReadObjects(rows Rows, typ reflect.Type) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
@@ -208,7 +208,7 @@ func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Ro
 
 // ReadObjects Scans the given rows, performs any necessary decryption, converts the data to objects of the given type,
 // and returns a slice of those objects.
-func (c *client) ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error) {
+func (c *client) ReadObjects(rows Rows, typ reflect.Type) ([]any, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 

@@ -298,7 +298,7 @@ func (s *Store) GetByKey(key string) (item any, exists bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	result, err := s.ReadObjects(rows, s.typ, s.shouldEncrypt)
+	result, err := s.ReadObjects(rows, s.typ)
 	if err != nil {
 		return nil, false, err
 	}
@@ -385,7 +385,7 @@ func (s *Store) List() []any {
 	if err != nil {
 		panic(err)
 	}
-	result, err := s.ReadObjects(rows, s.typ, s.shouldEncrypt)
+	result, err := s.ReadObjects(rows, s.typ)
 	if err != nil {
 		panic(fmt.Errorf("error in Store.List: %w", err))
 	}
