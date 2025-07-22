@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -11,8 +12,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Mocks for this test are generated with the following command.
@@ -40,6 +45,7 @@ func TestNewClient(t *testing.T) {
 			conn:      c,
 			encryptor: e,
 			decryptor: d,
+			encoding:  defaultEncoding,
 		}
 		client, _, err := NewClient(c, e, d, false)
 		assert.Nil(t, err)
@@ -97,8 +103,9 @@ func TestQueryObjects(t *testing.T) {
 
 	var tests []testCase
 
-	testObject := testStoreObject{Id: "something", Val: "a"}
+	testObject := &testStoreObject{Id: "something", Val: "a"}
 	var keyId uint32 = math.MaxUint32
+	fmt.Println(reflect.TypeOf(testObject).Name())
 
 	// Tests with shouldEncryptSet to false
 	tests = append(tests, testCase{description: "Query objects, with one row, and no errors", test: func(t *testing.T) {
@@ -450,10 +457,9 @@ func TestUpsert(t *testing.T) {
 	})
 	tests = append(tests, testCase{description: "Upsert() with no errors and shouldEncrypt false", test: func(t *testing.T) {
 		c := SetupMockConnection(t)
-		d := SetupMockDecryptor(t)
-		e := SetupMockEncryptor(t)
 
-		client := SetupClient(t, c, e, d)
+		// nil encryptor/decryptor
+		client := SetupClient(t, c, nil, nil)
 		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
 		var testByteValue []byte
@@ -615,4 +621,74 @@ func assertFileHasPermissions(t *testing.T, fname string, wantPerms fs.FileMode)
 	assert.Equal(t, wantPerms.String(), info.Mode().Perm().String())
 
 	return true
+}
+
+func toBytes(obj any) []byte {
+	var buf bytes.Buffer
+	if err := defaultEncoding.Encode(&buf, obj); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
+}
+
+func Test_client_serialization(t *testing.T) {
+	testObject := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "test",
+			Annotations: map[string]string{"annotation": "test"},
+			Labels:      map[string]string{"label": "test"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:  "test",
+				Image: "testimage",
+				VolumeMounts: []corev1.VolumeMount{{
+					Name:      "test",
+					MountPath: "/test",
+				}},
+			}},
+			Volumes: []corev1.Volume{{
+				Name: "test",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			}},
+		},
+	}
+	tests := []struct {
+		name     string
+		encoding Encoding
+	}{
+		{name: "gob", encoding: GobEncoding},
+		{name: "json", encoding: JSONEncoding},
+		{name: "json+gzip", encoding: GzippedJSONEncoding},
+		{name: "gob+gzip", encoding: GzippedGobEncoding},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cm, err := encryption.NewManager()
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := &client{
+				encryptor: cm, decryptor: cm,
+			}
+			WithEncoding(tt.encoding)(c)
+			serialized, err := c.Serialize(testObject, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			deserialized, err := c.Deserialize(serialized, reflect.TypeOf(testObject))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := deserialized.(*corev1.Pod)
+			if !ok {
+				t.Errorf("deserialized object is not *corev1.Pod")
+			} else if diff := cmp.Diff(testObject, got); diff != "" {
+				t.Errorf("Deserialize(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
 }

@@ -12,10 +12,36 @@ import (
 	"sync"
 )
 
+type Encoding int
+
+const (
+	GobEncoding Encoding = iota
+	JSONEncoding
+	GzippedGobEncoding
+	GzippedJSONEncoding
+)
+
+var defaultEncoding encoding = &gobEncoding{}
+
 func init() {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]any{})
 	gob.Register([]any{})
+}
+
+func WithEncoding(encoding Encoding) ClientOption {
+	return func(c *client) {
+		switch encoding {
+		case GobEncoding:
+			c.encoding = &gobEncoding{}
+		case JSONEncoding:
+			c.encoding = jsonEncoding{}
+		case GzippedGobEncoding:
+			c.encoding = gzipped(&gobEncoding{})
+		case GzippedJSONEncoding:
+			c.encoding = gzipped(jsonEncoding{})
+		}
+	}
 }
 
 type encoding interface {
