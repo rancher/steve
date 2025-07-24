@@ -34,8 +34,8 @@ var (
 
 type SchemasHandlerFunc func(schemas *schema2.Collection, changedSchemas map[string]*types.APISchema, deletedSomething bool) error
 
-func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection, changedSchemas map[string]*types.APISchema, deletedSomething bool) error {
-	return s(schemas, changedSchemas, deletedSomething)
+func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection, changedSchemas map[string]*types.APISchema, forceChange bool) error {
+	return s(schemas, changedSchemas, forceChange)
 }
 
 type handler struct {
@@ -50,6 +50,7 @@ type handler struct {
 	ssar         authorizationv1client.SelfSubjectAccessReviewInterface
 	handler      SchemasHandlerFunc
 	changedIDs   map[k8sapimachineryschema.GroupVersionKind]bool
+	createdCRDs  map[k8sapimachineryschema.GroupVersionKind]bool
 	deletedCRDs  map[k8sapimachineryschema.GroupVersionKind]bool
 	gvksFromKeys map[string][]k8sapimachineryschema.GroupVersionKind
 }
@@ -73,6 +74,7 @@ func Register(ctx context.Context,
 		ssar:         ssar,
 		changedIDs:   make(map[k8sapimachineryschema.GroupVersionKind]bool),
 		gvksFromKeys: make(map[string][]k8sapimachineryschema.GroupVersionKind),
+		createdCRDs:  make(map[k8sapimachineryschema.GroupVersionKind]bool),
 		deletedCRDs:  make(map[k8sapimachineryschema.GroupVersionKind]bool),
 	}
 
@@ -110,6 +112,10 @@ func (h *handler) OnChangeCRD(key string, crd *apiextv1.CustomResourceDefinition
 		gvk := k8sapimachineryschema.GroupVersionKind{Group: group, Version: version.Name, Kind: kind}
 		gvkList[i] = gvk
 		h.changedIDs[gvk] = true
+		_, ok := h.gvksFromKeys[key]
+		if !ok {
+			h.createdCRDs[gvk] = true
+		}
 	}
 	h.gvksFromKeys[key] = gvkList
 	h.queueRefresh()
@@ -128,10 +134,15 @@ func (h *handler) queueRefresh() {
 		time.Sleep(500 * time.Millisecond)
 		var err error
 		var changedIDs map[k8sapimachineryschema.GroupVersionKind]bool
-		var deletedIDs map[k8sapimachineryschema.GroupVersionKind]bool
+		var deletedCRDs map[k8sapimachineryschema.GroupVersionKind]bool
+		var createdCRDs map[k8sapimachineryschema.GroupVersionKind]bool
 		h.Lock()
+		if len(h.createdCRDs) > 0 {
+			createdCRDs = h.createdCRDs
+			h.createdCRDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
+		}
 		if len(h.deletedCRDs) > 0 {
-			deletedIDs = h.deletedCRDs
+			deletedCRDs = h.deletedCRDs
 			h.deletedCRDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
 		}
 		if len(h.changedIDs) > 0 {
@@ -139,8 +150,8 @@ func (h *handler) queueRefresh() {
 			h.changedIDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
 		}
 		h.Unlock()
-		if len(changedIDs) > 0 || len(deletedIDs) > 0 {
-			err = h.refreshAll(h.ctx, changedIDs, len(deletedIDs) > 0)
+		if len(changedIDs) > 0 || len(deletedCRDs) > 0 || len(createdCRDs) > 0 {
+			err = h.refreshAll(h.ctx, changedIDs, len(deletedCRDs) > 0 || len(createdCRDs) > 0)
 		}
 		if err != nil {
 			logrus.Errorf("failed to sync schemas: %v", err)
@@ -202,7 +213,7 @@ func (h *handler) getColumns(ctx context.Context, schemas map[string]*types.APIS
 	return eg.Wait()
 }
 
-func (h *handler) refreshAll(ctx context.Context, changedGVKs map[k8sapimachineryschema.GroupVersionKind]bool, deletedSomething bool) error {
+func (h *handler) refreshAll(ctx context.Context, changedGVKs map[k8sapimachineryschema.GroupVersionKind]bool, forceChange bool) error {
 	h.Lock()
 	defer h.Unlock()
 
@@ -248,7 +259,7 @@ func (h *handler) refreshAll(ctx context.Context, changedGVKs map[k8sapimachiner
 
 	h.schemas.Reset(filteredSchemas)
 	if h.handler != nil {
-		return h.handler.OnSchemas(h.schemas, changedSchemasByID, deletedSomething)
+		return h.handler.OnSchemas(h.schemas, changedSchemasByID, forceChange)
 	}
 
 	return nil
