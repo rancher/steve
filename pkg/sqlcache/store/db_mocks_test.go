@@ -140,6 +140,20 @@ func (mr *MockClientMockRecorder) Decryptor() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Decryptor", reflect.TypeOf((*MockClient)(nil).Decryptor))
 }
 
+// Deserialize mocks base method.
+func (m *MockClient) Deserialize(arg0 db.SerializedObject, arg1 any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Deserialize", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Deserialize indicates an expected call of Deserialize.
+func (mr *MockClientMockRecorder) Deserialize(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockClient)(nil).Deserialize), arg0, arg1)
+}
+
 // Encryptor mocks base method.
 func (m *MockClient) Encryptor() db.Encryptor {
 	m.ctrl.T.Helper()
@@ -263,18 +277,33 @@ func (mr *MockClientMockRecorder) ReadStrings2(rows any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings2", reflect.TypeOf((*MockClient)(nil).ReadStrings2), rows)
 }
 
-// Upsert mocks base method.
-func (m *MockClient) Upsert(tx db.TxClient, stmt db.Stmt, key string, obj any, shouldEncrypt bool) error {
+// Serialize mocks base method.
+func (m *MockClient) Serialize(obj any, encrypt bool) (db.SerializedObject, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj, shouldEncrypt)
+	ret := m.ctrl.Call(m, "Serialize", obj, encrypt)
+	ret0, _ := ret[0].(db.SerializedObject)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Serialize indicates an expected call of Serialize.
+func (mr *MockClientMockRecorder) Serialize(obj, encrypt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serialize", reflect.TypeOf((*MockClient)(nil).Serialize), obj, encrypt)
+}
+
+// Upsert mocks base method.
+func (m *MockClient) Upsert(tx db.TxClient, stmt db.Stmt, key string, obj db.SerializedObject) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upsert indicates an expected call of Upsert.
-func (mr *MockClientMockRecorder) Upsert(tx, stmt, key, obj, shouldEncrypt any) *gomock.Call {
+func (mr *MockClientMockRecorder) Upsert(tx, stmt, key, obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockClient)(nil).Upsert), tx, stmt, key, obj, shouldEncrypt)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockClient)(nil).Upsert), tx, stmt, key, obj)
 }
 
 // WithTransaction mocks base method.

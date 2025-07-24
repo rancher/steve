@@ -403,8 +403,10 @@ func TestUpsert(t *testing.T) {
 
 	var tests []testCase
 
-	testObject := testStoreObject{Id: "something", Val: "a"}
-	var keyID uint32 = 5
+	testObjectBytes := []byte("objbytes")
+	testNonce := []byte("nonce")
+	keyID := uint32(5)
+	serialized := SerializedObject{Bytes: testObjectBytes, Nonce: testNonce, KeyID: keyID}
 
 	// Tests with shouldEncryptSet to true
 	tests = append(tests, testCase{description: "Upsert() with no errors", test: func(t *testing.T) {
@@ -415,27 +417,10 @@ func TestUpsert(t *testing.T) {
 		client := SetupClient(t, c, e, d)
 		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
-		testObjBytes := toBytes(testObject)
-		testByteValue := []byte("something")
-		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
 		txC.EXPECT().Stmt(stmt).Return(stmt)
-		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, nil)
-		err := client.Upsert(txC, stmt, "somekey", testObject, true)
-		assert.Nil(t, err)
-	},
-	})
-	tests = append(tests, testCase{description: "Upsert() with Encrypt() error", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-
-		client := SetupClient(t, c, e, d)
-		txC := NewMockTxClient(gomock.NewController(t))
-		sqlStmt := &stmt{}
-		testObjBytes := toBytes(testObject)
-		e.EXPECT().Encrypt(testObjBytes).Return(nil, nil, uint32(0), fmt.Errorf("error"))
-		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
-		assert.NotNil(t, err)
+		stmt.EXPECT().Exec("somekey", testObjectBytes, testNonce, keyID).Return(nil, nil)
+		err := client.Upsert(txC, stmt, "somekey", serialized)
+		assert.NoError(t, err)
 	},
 	})
 	tests = append(tests, testCase{description: "Upsert() with StmtExec() error", test: func(t *testing.T) {
@@ -446,28 +431,11 @@ func TestUpsert(t *testing.T) {
 		client := SetupClient(t, c, e, d)
 		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
-		testObjBytes := toBytes(testObject)
-		testByteValue := []byte("something")
-		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
 		txC.EXPECT().Stmt(stmt).Return(stmt)
-		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, fmt.Errorf("error"))
-		err := client.Upsert(txC, stmt, "somekey", testObject, true)
-		assert.NotNil(t, err)
-	},
-	})
-	tests = append(tests, testCase{description: "Upsert() with no errors and shouldEncrypt false", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
+		stmt.EXPECT().Exec("somekey", testObjectBytes, testNonce, keyID).Return(nil, fmt.Errorf("error"))
 
-		// nil encryptor/decryptor
-		client := SetupClient(t, c, nil, nil)
-		txC := NewMockTxClient(gomock.NewController(t))
-		stmt := NewMockStmt(gomock.NewController(t))
-		var testByteValue []byte
-		testObjBytes := toBytes(testObject)
-		txC.EXPECT().Stmt(stmt).Return(stmt)
-		stmt.EXPECT().Exec("somekey", testObjBytes, testByteValue, uint32(0)).Return(nil, nil)
-		err := client.Upsert(txC, stmt, "somekey", testObject, false)
-		assert.Nil(t, err)
+		err := client.Upsert(txC, stmt, "somekey", serialized)
+		assert.Error(t, err)
 	},
 	})
 	t.Parallel()
@@ -679,14 +647,11 @@ func Test_client_serialization(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			deserialized, err := c.Deserialize(serialized, reflect.TypeOf(testObject))
-			if err != nil {
+			var dest *corev1.Pod
+			if err := c.Deserialize(serialized, &dest); err != nil {
 				t.Fatal(err)
 			}
-			got, ok := deserialized.(*corev1.Pod)
-			if !ok {
-				t.Errorf("deserialized object is not *corev1.Pod")
-			} else if diff := cmp.Diff(testObject, got); diff != "" {
+			if diff := cmp.Diff(testObject, dest); diff != "" {
 				t.Errorf("Deserialize(...): -want, +got:\n%s", diff)
 			}
 		})

@@ -83,6 +83,20 @@ func (mr *MockStoreMockRecorder) Delete(obj any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStore)(nil).Delete), obj)
 }
 
+// Deserialize mocks base method.
+func (m *MockStore) Deserialize(arg0 db.SerializedObject, arg1 any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Deserialize", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Deserialize indicates an expected call of Deserialize.
+func (mr *MockStoreMockRecorder) Deserialize(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockStore)(nil).Deserialize), arg0, arg1)
+}
+
 // DropAll mocks base method.
 func (m *MockStore) DropAll(ctx context.Context) error {
 	m.ctrl.T.Helper()
@@ -410,6 +424,21 @@ func (mr *MockStoreMockRecorder) Resync() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resync", reflect.TypeOf((*MockStore)(nil).Resync))
 }
 
+// Serialize mocks base method.
+func (m *MockStore) Serialize(obj any, encrypt bool) (db.SerializedObject, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Serialize", obj, encrypt)
+	ret0, _ := ret[0].(db.SerializedObject)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Serialize indicates an expected call of Serialize.
+func (mr *MockStoreMockRecorder) Serialize(obj, encrypt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serialize", reflect.TypeOf((*MockStore)(nil).Serialize), obj, encrypt)
+}
+
 // Update mocks base method.
 func (m *MockStore) Update(obj any) error {
 	m.ctrl.T.Helper()
@@ -425,17 +454,17 @@ func (mr *MockStoreMockRecorder) Update(obj any) *gomock.Call {
 }
 
 // Upsert mocks base method.
-func (m *MockStore) Upsert(tx db.TxClient, stmt db.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (m *MockStore) Upsert(tx db.TxClient, stmt db.Stmt, key string, obj db.SerializedObject) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj, shouldEncrypt)
+	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upsert indicates an expected call of Upsert.
-func (mr *MockStoreMockRecorder) Upsert(tx, stmt, key, obj, shouldEncrypt any) *gomock.Call {
+func (mr *MockStoreMockRecorder) Upsert(tx, stmt, key, obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockStore)(nil).Upsert), tx, stmt, key, obj, shouldEncrypt)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockStore)(nil).Upsert), tx, stmt, key, obj)
 }
 
 // WithTransaction mocks base method.
