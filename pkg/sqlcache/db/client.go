@@ -42,7 +42,7 @@ type Client interface {
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
-	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
+	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj SerializedObject) error
 	CloseStmt(closable Closable) error
 	NewConnection(isTemp bool) (string, error)
 	Serialize(obj any, encrypt bool) (SerializedObject, error)
@@ -391,14 +391,10 @@ func (c *client) Deserialize(serialized SerializedObject, dest any) error {
 	return c.encoding.Decode(bytes.NewReader(data), dest)
 }
 
-// Upsert executes an upsert statement encrypting arguments if necessary
+// Upsert executes an upsert statement
 // note the statement should have 4 parameters: key, objBytes, dataNonce, kid
-func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, encrypt bool) error {
-	serialized, err := c.serialize(obj, encrypt)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Stmt(stmt).Exec(key, serialized.Bytes, serialized.Nonce, serialized.KeyID)
+func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, serialized SerializedObject) error {
+	_, err := tx.Stmt(stmt).Exec(key, serialized.Bytes, serialized.Nonce, serialized.KeyID)
 	return err
 }
 
