@@ -55,20 +55,6 @@ func (mr *MockStoreMockRecorder) Add(obj any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockStore)(nil).Add), obj)
 }
 
-// Decryptor mocks base method.
-func (m *MockStore) Decryptor() db.Decryptor {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Decryptor")
-	ret0, _ := ret[0].(db.Decryptor)
-	return ret0
-}
-
-// Decryptor indicates an expected call of Decryptor.
-func (mr *MockStoreMockRecorder) Decryptor() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Decryptor", reflect.TypeOf((*MockStore)(nil).Decryptor))
-}
-
 // Delete mocks base method.
 func (m *MockStore) Delete(obj any) error {
 	m.ctrl.T.Helper()
@@ -109,20 +95,6 @@ func (m *MockStore) DropAll(ctx context.Context) error {
 func (mr *MockStoreMockRecorder) DropAll(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropAll", reflect.TypeOf((*MockStore)(nil).DropAll), ctx)
-}
-
-// Encryptor mocks base method.
-func (m *MockStore) Encryptor() db.Encryptor {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Encryptor")
-	ret0, _ := ret[0].(db.Encryptor)
-	return ret0
-}
-
-// Encryptor indicates an expected call of Encryptor.
-func (mr *MockStoreMockRecorder) Encryptor() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Encryptor", reflect.TypeOf((*MockStore)(nil).Encryptor))
 }
 
 // Get mocks base method.

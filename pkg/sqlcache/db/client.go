@@ -48,8 +48,6 @@ type Client interface {
 	NewConnection(isTemp bool) (string, error)
 	Serialize(obj any, encrypt bool) (SerializedObject, error)
 	Deserialize(SerializedObject, any) error
-	Encryptor() Encryptor
-	Decryptor() Decryptor
 }
 
 // WithTransaction runs f within a transaction.
@@ -353,7 +351,7 @@ func (c *client) Serialize(obj any, encrypt bool) (SerializedObject, error) {
 	if c.encryptor == nil {
 		return SerializedObject{}, fmt.Errorf("cannot encrypt object object without encryptor")
 	}
-	data, nonce, kid, err := c.Encryptor().Encrypt(buf.Bytes())
+	data, nonce, kid, err := c.encryptor.Encrypt(buf.Bytes())
 	if err != nil {
 		return SerializedObject{}, err
 	}
@@ -381,14 +379,6 @@ func (c *client) Deserialize(serialized SerializedObject, dest any) error {
 func (c *client) Upsert(tx TxClient, stmt Stmt, key string, serialized SerializedObject) error {
 	_, err := tx.Stmt(stmt).Exec(key, serialized.Bytes, serialized.Nonce, serialized.KeyID)
 	return err
-}
-
-func (c *client) Encryptor() Encryptor {
-	return c.encryptor
-}
-
-func (c *client) Decryptor() Decryptor {
-	return c.decryptor
 }
 
 // closeRowsOnError closes the sql.Rows object and wraps errors if needed

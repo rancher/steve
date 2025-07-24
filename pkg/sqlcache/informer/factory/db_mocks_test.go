@@ -42,20 +42,6 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
-// Decryptor mocks base method.
-func (m *MockClient) Decryptor() db.Decryptor {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Decryptor")
-	ret0, _ := ret[0].(db.Decryptor)
-	return ret0
-}
-
-// Decryptor indicates an expected call of Decryptor.
-func (mr *MockClientMockRecorder) Decryptor() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Decryptor", reflect.TypeOf((*MockClient)(nil).Decryptor))
-}
-
 // Deserialize mocks base method.
 func (m *MockClient) Deserialize(arg0 db.SerializedObject, arg1 any) error {
 	m.ctrl.T.Helper()
@@ -68,20 +54,6 @@ func (m *MockClient) Deserialize(arg0 db.SerializedObject, arg1 any) error {
 func (mr *MockClientMockRecorder) Deserialize(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockClient)(nil).Deserialize), arg0, arg1)
-}
-
-// Encryptor mocks base method.
-func (m *MockClient) Encryptor() db.Encryptor {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Encryptor")
-	ret0, _ := ret[0].(db.Encryptor)
-	return ret0
-}
-
-// Encryptor indicates an expected call of Encryptor.
-func (mr *MockClientMockRecorder) Encryptor() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Encryptor", reflect.TypeOf((*MockClient)(nil).Encryptor))
 }
 
 // NewConnection mocks base method.
