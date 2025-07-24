@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -27,6 +28,11 @@ func init() {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]any{})
 	gob.Register([]any{})
+
+	// Allow using JSON encoding during development
+	if enc := os.Getenv("CATTLE_SQL_CACHE_ENCODING"); enc == "json" {
+		defaultEncoding = &jsonEncoding{}
+	}
 }
 
 func WithEncoding(encoding Encoding) ClientOption {
