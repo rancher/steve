@@ -66,7 +66,7 @@ func TestNewProxyStore(t *testing.T) {
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "NewProxyStore() with no errors returned should returned no errors. Should initialize and assign" +
+		description: "NewProxyStore() with no errors returned should return no errors. Should initialize and assign" +
 			" a namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
@@ -85,7 +85,7 @@ func TestNewProxyStore(t *testing.T) {
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}}, gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(c, nil)
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -95,7 +95,24 @@ func TestNewProxyStore(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "NewProxyStore() with schema column setter SetColumns() error returned should return not return and error" +
+		description: "NewProxyStore() with no errors returned and no namespace cache should return no errors but should not initialize and assign" +
+			" a namespace cache.",
+		test: func(t *testing.T) {
+			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
+			cg := NewMockClientGetter(gomock.NewController(t))
+			rn := NewMockRelationshipNotifier(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, false)
+			assert.Nil(t, err)
+			assert.Equal(t, scc, s.columnSetter)
+			assert.Equal(t, cg, s.clientGetter)
+			assert.Equal(t, rn, s.notifier)
+			assert.Equal(t, s.cacheFactory, cf)
+			assert.Nil(t, s.namespaceCache)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "NewProxyStore() with schema column setter SetColumns() error returned should return an error" +
 			" and not set namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
@@ -106,7 +123,7 @@ func TestNewProxyStore(t *testing.T) {
 			nsSchema := baseNSSchema
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(fmt.Errorf("error"))
 
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -116,7 +133,7 @@ func TestNewProxyStore(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "NewProxyStore() with client getter TableAdminClient() error returned should return not return and error" +
+		description: "NewProxyStore() with client getter TableAdminClient() error should return error" +
 			" and not set namespace cache.",
 		test: func(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
@@ -128,7 +145,7 @@ func TestNewProxyStore(t *testing.T) {
 			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -152,7 +169,7 @@ func TestNewProxyStore(t *testing.T) {
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}}, gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(factory.Cache{}, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -174,7 +191,7 @@ func TestListByPartitions(t *testing.T) {
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "client ListByPartitions() with no errors returned should returned no errors. Should pass fields" +
+		description: "client ListByPartitions() with no errors returned should return no errors. Should pass fields" +
 			" from schema.",
 		test: func(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
@@ -325,7 +342,7 @@ func TestListByPartitions(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "client ListByPartitions() with no errors returned should returned no errors. Should pass fields" +
+		description: "client ListByPartitions() with no errors returned should return no errors. Should pass fields" +
 			" from schema.",
 		test: func(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
@@ -475,7 +492,7 @@ func TestListByPartitions(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "client ListByPartitions() with CacheFor() error returned should returned an errors. Should pass fields",
+		description: "client ListByPartitions() with CacheFor() error returned should return an errors. Should pass fields",
 		test: func(t *testing.T) {
 			nsi := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
@@ -747,7 +764,7 @@ func TestReset(t *testing.T) {
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "client Reset() with no errors returned should returned no errors.",
+		description: "client Reset() with no errors returned should return no errors.",
 		test: func(t *testing.T) {
 			nsc := NewMockCache(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))

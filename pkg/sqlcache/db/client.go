@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/sirupsen/logrus"
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
@@ -416,9 +417,12 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 		}
 	}
 	if !useTempDir {
-		err := os.RemoveAll(InformerObjectCacheDBPath)
-		if err != nil {
-			return "", err
+		for _, suffix := range []string{"", "-shm", "-wal"} {
+			f := InformerObjectCacheDBPath + suffix
+			err := os.RemoveAll(f)
+			if err != nil {
+				logrus.Errorf("error removing existing db file %s: %v", f, err)
+			}
 		}
 	}
 
