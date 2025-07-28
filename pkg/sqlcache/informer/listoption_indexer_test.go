@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -53,6 +54,15 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
 	if err != nil {
 		return nil, "", err
+	}
+	if opts.IsNamespaced {
+		// Can't use slices.Compare because []string doesn't implement comparable
+		idEntry := []string{"id"}
+		if opts.Fields == nil {
+			opts.Fields = [][]string{idEntry}
+		} else {
+			opts.Fields = append(opts.Fields, idEntry)
+		}
 	}
 
 	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
@@ -112,6 +122,10 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createDoubleFieldsIndexFmt, id, "metadata.namespace", "metadata.name", id, "metadata.namespace", "metadata.name")).Return(nil, nil)
+
+		//createFieldsIndexQuery := fmt.Sprintf(createDoubleFieldsIndexFmt,
+		//	dbName, mdn, mdns, dbName, mdn, mdns)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableIndexFmt, id, id)).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
@@ -266,6 +280,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createDoubleFieldsIndexFmt, id, "metadata.namespace", "metadata.name", id, "metadata.namespace", "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, fmt.Errorf("error"))
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
@@ -315,6 +330,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, fields[0][0], id, fields[0][0])).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createDoubleFieldsIndexFmt, id, "metadata.namespace", "metadata.name", id, "metadata.namespace", "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableIndexFmt, id, id)).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
@@ -1028,6 +1044,144 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
+}
+
+func makePseudoRandomList(size int) *unstructured.UnstructuredList {
+	numLength := 1 + int(math.Floor(math.Log10(float64(size))))
+	name_template := fmt.Sprintf("n%%0%dd", numLength)
+	// Make a predictable but randomish list of numbers
+	// item 0: ns0, n0
+	// item 23: ns0, n1
+	// item 46: ns0, n2
+	// At some point the index will be set back to the start
+	// the ns value goes up every <ns_delta> hits
+	// the name_val is the index, and i provides the name-value as we walk through the array.
+	// Use any size, as long as both name_delta (23) and ns_delta (17) are relatively prime to it.
+	// This assures that every index in the array will be initialized to an actual object
+	name_val := 0
+	name_delta := 23 // space the names out in runs of 23
+
+	ns_val := 0
+	ns_block := 0
+	ns_delta := 17 // so only 17 namespaces
+	namespace_template := "ns%02d"
+
+	items := make([]unstructured.Unstructured, size)
+	for i := range size {
+		nv := fmt.Sprintf(name_template, i)
+		nsv := fmt.Sprintf(namespace_template, ns_block)
+		obj := unstructured.Unstructured{
+			Object: map[string]any{
+				"metadata": map[string]any{
+					"name":      nv,
+					"namespace": nsv,
+				},
+				"id": nv + "/" + nsv,
+			},
+		}
+		items[name_val] = obj
+		name_val += name_delta
+		if name_val >= size {
+			name_val -= size
+		}
+		ns_val += ns_delta
+		if ns_val >= size {
+			ns_val -= size
+			ns_block += 1
+		}
+	}
+	ulist := &unstructured.UnstructuredList{
+		Items: items,
+	}
+	gvk := schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "ConfigMap",
+	}
+	ulist.SetGroupVersionKind(gvk)
+	return ulist
+}
+
+func verifyListIsSorted(b *testing.B, list *unstructured.UnstructuredList, size int) {
+	for i := range size - 1 {
+		curr := list.Items[i]
+		next := list.Items[i+1]
+		if curr.GetNamespace() == next.GetNamespace() {
+			assert.Less(b, curr.GetName(), next.GetName())
+		} else {
+			assert.Less(b, curr.GetNamespace(), next.GetNamespace())
+		}
+	}
+}
+func BenchmarkNamespaceNameList(b *testing.B) {
+	// At 50,000,000 this starts to get very slow
+	size := 10000
+	itemList := makePseudoRandomList(size)
+	ctx := context.Background()
+	opts := ListOptionIndexerOptions{
+		IsNamespaced: true,
+	}
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+	defer cleanTempFiles(dbPath)
+	assert.NoError(b, err)
+	for _, item := range itemList.Items {
+		err = loi.Add(&item)
+		assert.NoError(b, err)
+	}
+	b.Run(fmt.Sprintf("sort-%d with explicit namespace/name", size), func(b *testing.B) {
+		listOptions := sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "namespace"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		}
+		partitions := []partition.Partition{{All: true}}
+		ns := ""
+		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
+		if err != nil {
+			b.Fatal("error getting data", err)
+		}
+		if total != size {
+			b.Errorf("expecting %d items, got %d", size, total)
+		}
+		if len(list.Items) != size {
+			b.Errorf("expecting %d items, got %d", size, len(list.Items))
+		}
+		//verifyListIsSorted(b, list, size)
+	})
+	b.Run(fmt.Sprintf("sort-%d with explicit id", size), func(b *testing.B) {
+		listOptions := sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"id"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		}
+		partitions := []partition.Partition{{All: true}}
+		ns := ""
+		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
+		if err != nil {
+			b.Fatal("error getting data", err)
+		}
+		if total != size {
+			b.Errorf("expecting %d items, got %d", size, total)
+		}
+		if len(list.Items) != size {
+			b.Errorf("expecting %d items, got %d", size, len(list.Items))
+		}
+		//verifyListIsSorted(b, list, size)
+	})
 }
 
 func TestUserDefinedExtractFunction(t *testing.T) {
@@ -2987,6 +3141,6 @@ func TestNonNumberResourceVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	list, _, _, err := loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedList.Items, list.Items)
 }

@@ -110,8 +110,9 @@ const (
 			key TEXT NOT NULL PRIMARY KEY,
             %s
 	   )`
-	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
-	deleteFieldsFmt      = `DELETE FROM "%s_fields"`
+	createFieldsIndexFmt       = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
+	createDoubleFieldsIndexFmt = `CREATE INDEX "%s_%s_%s_index" ON "%s_fields"("%s","%s")`
+	deleteFieldsFmt            = `DELETE FROM "%s_fields"`
 
 	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 
@@ -229,8 +230,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		if slices.Contains(indexedFields, "metadata.name") && slices.Contains(indexedFields, "metadata.namespace") {
 			mdn := "metadata.name"
 			mdns := "metadata.namespace"
-			createFieldsIndexQuery := fmt.Sprintf(`CREATE INDEX "%s_%s_%s_index" ON "%s_fields"("%s", "%s")`,
-				dbName, mdn, mdns, dbName, mdn, mdns)
+			// createDoubleFieldsIndexFmt = `CREATE INDEX "%s_%s_%s_index" ON "%s_fields"("%s","%s")`
+			createFieldsIndexQuery := fmt.Sprintf(createDoubleFieldsIndexFmt,
+				dbName, mdns, mdn, dbName, mdns, mdn)
 			_, err = tx.Exec(createFieldsIndexQuery)
 			if err != nil {
 				return &db.QueryError{QueryString: createFieldsIndexQuery, Err: err}
