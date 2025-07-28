@@ -226,6 +226,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
 			setStatements[index] = setStatement
 		}
+		if slices.Contains(indexedFields, "metadata.name") && slices.Contains(indexedFields, "metadata.namespace") {
+			mdn := "metadata.name"
+			mdns := "metadata.namespace"
+			createFieldsIndexQuery := fmt.Sprintf(`CREATE INDEX "%s_%s_%s_index" ON "%s_fields"("%s", "%s")`,
+				dbName, mdn, mdns, dbName, mdn, mdns)
+			_, err = tx.Exec(createFieldsIndexQuery)
+			if err != nil {
+				return &db.QueryError{QueryString: createFieldsIndexQuery, Err: err}
+			}
+		}
 		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
 		_, err = tx.Exec(createLabelsTableQuery)
 		if err != nil {
