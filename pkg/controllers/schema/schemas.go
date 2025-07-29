@@ -150,8 +150,9 @@ func (h *handler) queueRefresh() {
 			h.changedIDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
 		}
 		h.Unlock()
-		if len(changedIDs) > 0 || len(deletedCRDs) > 0 || len(createdCRDs) > 0 {
-			err = h.refreshAll(h.ctx, changedIDs, len(deletedCRDs) > 0 || len(createdCRDs) > 0)
+		crdNumCountChanged := len(deletedCRDs) > 0 || len(createdCRDs) > 0
+		if len(changedIDs) > 0 || crdNumCountChanged {
+			err = h.refreshAll(h.ctx, changedIDs, crdNumCountChanged)
 		}
 		if err != nil {
 			logrus.Errorf("failed to sync schemas: %v", err)
