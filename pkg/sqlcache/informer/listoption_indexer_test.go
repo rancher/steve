@@ -1102,21 +1102,7 @@ func makePseudoRandomList(size int) *unstructured.UnstructuredList {
 	return ulist
 }
 
-func verifyListIsSorted(b *testing.B, list *unstructured.UnstructuredList, size int) {
-	for i := range size - 1 {
-		curr := list.Items[i]
-		next := list.Items[i+1]
-		if curr.GetNamespace() == next.GetNamespace() {
-			assert.Less(b, curr.GetName(), next.GetName())
-		} else {
-			assert.Less(b, curr.GetNamespace(), next.GetNamespace())
-		}
-	}
-}
-func BenchmarkNamespaceNameList(b *testing.B) {
-	// At 50,000,000 this starts to get very slow
-	const listoptionIndexerVerifySort = "LISTOPTION_INDEXER_VERIFY_SORT"
-	size := 10000
+func doBenchmarkSort(b *testing.B, size int, listOptions sqltypes.ListOptions) {
 	itemList := makePseudoRandomList(size)
 	ctx := context.Background()
 	opts := ListOptionIndexerOptions{
@@ -1129,64 +1115,85 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 		err = loi.Add(&item)
 		assert.NoError(b, err)
 	}
-	b.Run(fmt.Sprintf("sort-%d with explicit namespace/name", size), func(b *testing.B) {
-		listOptions := sqltypes.ListOptions{
-			SortList: sqltypes.SortList{
-				SortDirectives: []sqltypes.Sort{
-					{
-						Fields: []string{"metadata", "namespace"},
-						Order:  sqltypes.ASC,
-					},
-					{
-						Fields: []string{"metadata", "name"},
-						Order:  sqltypes.ASC,
+	partitions := []partition.Partition{{All: true}}
+	ns := ""
+	b.ResetTimer()
+	for b.Loop() {
+		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
+		b.StopTimer()
+		assert.NoError(b, err)
+		postSortCheck(b, total, size, list)
+		b.StartTimer()
+	}
+}
+
+func BenchmarkSorting(b *testing.B) {
+	sizes := []int{1000, 5000, 10000, 50000, 100000, 500000}
+	type optionPair struct {
+		stype       string
+		listOptions sqltypes.ListOptions
+	}
+	optionPairs := []optionPair{
+		{
+			stype: "namespace/name",
+			listOptions: sqltypes.ListOptions{
+				SortList: sqltypes.SortList{
+					SortDirectives: []sqltypes.Sort{
+						{
+							Fields: []string{"metadata", "namespace"},
+							Order:  sqltypes.ASC,
+						},
+						{
+							Fields: []string{"metadata", "name"},
+							Order:  sqltypes.ASC,
+						},
 					},
 				},
 			},
-		}
-		partitions := []partition.Partition{{All: true}}
-		ns := ""
-		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
-		if err != nil {
-			b.Fatal("error getting data", err)
-		}
-		if total != size {
-			b.Errorf("expecting %d items, got %d", size, total)
-		}
-		if len(list.Items) != size {
-			b.Errorf("expecting %d items, got %d", size, len(list.Items))
-		}
-		if os.Getenv(listoptionIndexerVerifySort) == "true" {
-			verifyListIsSorted(b, list, size)
-		}
-	})
-	b.Run(fmt.Sprintf("sort-%d with explicit id", size), func(b *testing.B) {
-		listOptions := sqltypes.ListOptions{
-			SortList: sqltypes.SortList{
-				SortDirectives: []sqltypes.Sort{
-					{
-						Fields: []string{"id"},
-						Order:  sqltypes.ASC,
+		},
+		{
+			stype: "id",
+			listOptions: sqltypes.ListOptions{
+				SortList: sqltypes.SortList{
+					SortDirectives: []sqltypes.Sort{
+						{
+							Fields: []string{"id"},
+							Order:  sqltypes.ASC,
+						},
 					},
 				},
 			},
+		},
+	}
+	for _, size := range sizes {
+		for j := range optionPairs {
+			b.Run(fmt.Sprintf("size=%d/%s", size, optionPairs[j].stype), func(b *testing.B) {
+				doBenchmarkSort(b, size, optionPairs[j].listOptions)
+			})
 		}
-		partitions := []partition.Partition{{All: true}}
-		ns := ""
-		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
-		if err != nil {
-			b.Fatal("error getting data", err)
+	}
+}
+
+func verifyListIsSorted(b *testing.B, list *unstructured.UnstructuredList, size int) {
+	for i := range size - 1 {
+		curr := list.Items[i]
+		next := list.Items[i+1]
+		if curr.GetNamespace() == next.GetNamespace() {
+			assert.Less(b, curr.GetName(), next.GetName())
+		} else {
+			assert.Less(b, curr.GetNamespace(), next.GetNamespace())
 		}
-		if total != size {
-			b.Errorf("expecting %d items, got %d", size, total)
-		}
-		if len(list.Items) != size {
-			b.Errorf("expecting %d items, got %d", size, len(list.Items))
-		}
-		if os.Getenv(listoptionIndexerVerifySort) == "true" {
-			verifyListIsSorted(b, list, size)
-		}
-	})
+	}
+}
+
+func postSortCheck(b *testing.B, total int, size int, list *unstructured.UnstructuredList) {
+	if total != size {
+		b.Errorf("expecting %d items, got %d", size, total)
+	}
+	if len(list.Items) != size {
+		b.Errorf("expecting %d items, got %d", size, len(list.Items))
+	}
+	verifyListIsSorted(b, list, size)
 }
 
 func TestUserDefinedExtractFunction(t *testing.T) {
