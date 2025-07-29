@@ -375,6 +375,41 @@ response as `pages` and `count` respectively.
 
 If a page number is out of bounds, an empty list is returned.
 
+### /v1/subscribe (Watch API)
+
+Steve provides real-time updates for Kubernetes resources through a WebSocket-based Watch API, available at the `/v1/subscribe` endpoint. This API leverages the generic subscription framework from [rancher/apiserver](https://github.com/rancher/apiserver).
+
+To test, connect to the endpoint using a websocket client like websocat:
+
+```sh
+websocat -k wss://127.0.0.1:9443/v1/subscribe
+```
+
+When using Steve as integrated in Rancher, you can connect by:
+
+- Creating an API token:
+  - Open Rancher in a browser, log in
+  - Click on the user icon in the top-right corner
+  - Click on "Account and API Keys"
+  - Click on "Create API Key"
+  - Add a Description, click Create
+  - Copy the "Bearer Token" value
+- Using the following lines:
+
+```sh
+read RANCHER_TOKEN
+websocat --header="Cookie: R_SESS=$RANCHER_TOKEN" wss://my.rancher.server/v1/subscribe
+```
+
+Review the  [rancher/apiserver](https://github.com/rancher/apiserver) README for protocol details.
+
+In addition to regular Kubernetes resources, steve allows you to subscribe to
+special steve resources. For example, to subscribe to counts, send a websocket
+message like this:
+
+```
+{"resourceType":"count"}
+```
 
 Running the Steve server
 ------------------------
@@ -492,26 +527,6 @@ resource for preference storage instead.
 
 Counts keeps track of the number of resources and updates the count in a
 buffered stream that the dashboard can subscribe to.
-
-#### [Subscribe](https://github.com/rancher/apiserver/tree/master/pkg/subscribe)
-
-Steve exposes a websocket endpoint on /v1/subscribe for sending streams of
-events. Connect to the endpoint using a websocket client like websocat:
-
-```sh
-websocat -k wss://127.0.0.1:9443/v1/subscribe
-```
-
-Review the [apiserver](https://github.com/rancher/apiserver#subscribe) guide
-for details.
-
-In addition to regular Kubernetes resources, steve allows you to subscribe to
-special steve resources. For example, to subscribe to counts, send a websocket
-message like this:
-
-```
-{"resourceType":"count"}
-```
 
 ### Schema Templates
 
