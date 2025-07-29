@@ -1128,7 +1128,7 @@ func doBenchmarkSort(b *testing.B, size int, listOptions sqltypes.ListOptions) {
 }
 
 func BenchmarkSorting(b *testing.B) {
-	sizes := []int{1000, 5000, 10000, 50000, 100000, 500000}
+	sizes := []int{1000, 5000, 10000, 50000, 100000}
 	type optionPair struct {
 		stype       string
 		listOptions sqltypes.ListOptions
