@@ -1115,6 +1115,7 @@ func verifyListIsSorted(b *testing.B, list *unstructured.UnstructuredList, size 
 }
 func BenchmarkNamespaceNameList(b *testing.B) {
 	// At 50,000,000 this starts to get very slow
+	const listoptionIndexerVerifySort = "LISTOPTION_INDEXER_VERIFY_SORT"
 	size := 10000
 	itemList := makePseudoRandomList(size)
 	ctx := context.Background()
@@ -1155,7 +1156,9 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 		if len(list.Items) != size {
 			b.Errorf("expecting %d items, got %d", size, len(list.Items))
 		}
-		//verifyListIsSorted(b, list, size)
+		if os.Getenv(listoptionIndexerVerifySort) == "true" {
+			verifyListIsSorted(b, list, size)
+		}
 	})
 	b.Run(fmt.Sprintf("sort-%d with explicit id", size), func(b *testing.B) {
 		listOptions := sqltypes.ListOptions{
@@ -1180,7 +1183,9 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 		if len(list.Items) != size {
 			b.Errorf("expecting %d items, got %d", size, len(list.Items))
 		}
-		//verifyListIsSorted(b, list, size)
+		if os.Getenv(listoptionIndexerVerifySort) == "true" {
+			verifyListIsSorted(b, list, size)
+		}
 	})
 }
 
