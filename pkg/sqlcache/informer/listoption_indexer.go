@@ -227,10 +227,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
 			setStatements[index] = setStatement
 		}
-		if slices.Contains(indexedFields, "metadata.name") && slices.Contains(indexedFields, "metadata.namespace") {
+		if opts.IsNamespaced {
 			mdn := "metadata.name"
 			mdns := "metadata.namespace"
-			// createDoubleFieldsIndexFmt = `CREATE INDEX "%s_%s_%s_index" ON "%s_fields"("%s","%s")`
 			createFieldsIndexQuery := fmt.Sprintf(createDoubleFieldsIndexFmt,
 				dbName, mdns, mdn, dbName, mdns, mdn)
 			_, err = tx.Exec(createFieldsIndexQuery)
