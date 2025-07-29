@@ -41,10 +41,7 @@ func TestNewInformer(t *testing.T) {
 
 		// NewStore() from store package logic. This package is only concerned with whether it returns err or not as NewStore
 		// is tested in depth in its own package.
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(4)
 		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
@@ -68,12 +65,7 @@ func TestNewInformer(t *testing.T) {
 
 		// NewListOptionIndexer() logic. This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(6)
 		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
@@ -181,12 +173,7 @@ func TestNewInformer(t *testing.T) {
 
 		// NewListOptionIndexer() logic. This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(6)
 		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
@@ -242,13 +229,7 @@ func TestNewInformer(t *testing.T) {
 
 		// NewListOptionIndexer() logic. This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
-		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(7)
 		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
