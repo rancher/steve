@@ -59,8 +59,9 @@ type OrFilter struct {
 // The order is represented by prefixing the sort key by '-', e.g. sort=-metadata.name.
 // e.g. To sort internal clusters first followed by clusters in alpha order: sort=-spec.internal,spec.displayName
 type Sort struct {
-	Fields []string
-	Order  SortOrder
+	Fields   []string
+	Order    SortOrder
+	SortAsIP bool
 }
 
 type SortList struct {

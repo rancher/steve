@@ -87,7 +87,9 @@ var (
 			{"spec", "volumeName"}},
 		gvkKey("", "v1", "Pod"): {
 			{"spec", "containers", "image"},
-			{"spec", "nodeName"}},
+			{"spec", "nodeName"},
+			{"status", "podIP"},
+		},
 		gvkKey("", "v1", "ReplicationController"): {
 			{"spec", "template", "spec", "containers", "image"}},
 		gvkKey("", "v1", "Secret"): {

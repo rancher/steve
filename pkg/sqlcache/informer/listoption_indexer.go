@@ -766,7 +766,7 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		for _, sortDirective := range lo.SortList.SortDirectives {
 			fields := sortDirective.Fields
 			if isLabelsFieldList(fields) {
-				clause, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC)
+				clause, err := buildSortLabelsClause(fields[2], joinTableIndexByLabelName, sortDirective.Order == sqltypes.ASC, sortDirective.SortAsIP)
 				if err != nil {
 					return nil, err
 				}
@@ -775,6 +775,9 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				fieldEntry, err := l.getValidFieldEntry("f", fields)
 				if err != nil {
 					return queryInfo, err
+				}
+				if sortDirective.SortAsIP {
+					fieldEntry = fmt.Sprintf("inet_aton(%s)", fieldEntry)
 				}
 				direction := "ASC"
 				if sortDirective.Order == sqltypes.DESC {
@@ -1028,8 +1031,12 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 		orFilters.Filters[0].Op)
 }
 
-func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, error) {
+func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool, sortAsIP bool) (string, error) {
 	ltIndex, err := internLabel(labelName, joinTableIndexByLabelName, -1)
+	fieldEntry := fmt.Sprintf("lt%d.value", ltIndex)
+	if sortAsIP {
+		fieldEntry = fmt.Sprintf("inet_aton(%s)", fieldEntry)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -1039,7 +1046,7 @@ func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[strin
 		dir = "DESC"
 		nullsPosition = "FIRST"
 	}
-	return fmt.Sprintf("lt%d.value %s NULLS %s", ltIndex, dir, nullsPosition), nil
+	return fmt.Sprintf("%s %s NULLS %s", fieldEntry, dir, nullsPosition), nil
 }
 
 func getUnboundSortLabels(lo *sqltypes.ListOptions) []string {
