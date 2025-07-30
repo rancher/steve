@@ -73,8 +73,10 @@ var (
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
 
-	ErrInvalidColumn = errors.New("supplied column is invalid")
-	ErrTooOld        = errors.New("resourceversion too old")
+	ErrInvalidColumn    = errors.New("supplied column is invalid")
+	ErrTooOld           = errors.New("resourceversion too old")
+	projectIDFieldLabel = "field.cattle.io/projectId"
+	namespacesDbName    = "_v1_Namespace"
 )
 
 const (
@@ -677,11 +679,22 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				}
 			}
 		}
+
+	}
+
+	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
+		jtIndex := len(joinTableIndexByLabelName) + 1
+		// TODO check if label already exists 
+		joinTableIndexByLabelName[projectIDFieldLabel] = jtIndex
+		query += "\n  "
+		query += fmt.Sprintf(`JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
+		query += "\n  "
+		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON nsf.key = lt%d.key`, namespacesDbName, jtIndex, jtIndex)
 	}
 
 	// 2- Filtering: WHERE clauses (from lo.Filters)
 	for _, orFilters := range lo.Filters {
-		orClause, orParams, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName)
+		orClause, orParams, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName, "f")
 		if err != nil {
 			return queryInfo, err
 		}
@@ -690,6 +703,17 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		}
 		whereClauses = append(whereClauses, orClause)
 		params = append(params, orParams...)
+	}
+
+	// TODO check if gvk is not namespace
+	// WHERE clauses (from lo.ProjectsOrNamespaces)
+	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
+		projOrNsClause, projOrNsParams, err := l.buildORClauseFromFilters(lo.ProjectsOrNamespaces, dbName, joinTableIndexByLabelName, "nsf")
+		if err != nil {
+			return queryInfo, err
+		}
+		whereClauses = append(whereClauses, projOrNsClause)
+		params = append(params, projOrNsParams...)
 	}
 
 	// WHERE clauses (from namespace)
@@ -757,6 +781,20 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		}
 	}
 
+	// WHERE clauses (from lo.ProjectsOrNamespaces)
+	//if len(lo.ProjectsOrNamespaces) > 0 {
+	//	query += "\nAND ("
+	//	for index, projOrNs := range lo.ProjectsOrNamespaces {
+	//		query += fmt.Sprintf(`(nsf.name = ? OR (nsl.label = ? AND nsl.value = ?)`)
+	//		params = append(params, projOrNs, "field.cattle.io/projectId", projOrNs)
+	//		if index == len(lo.ProjectsOrNamespaces)-1 {
+	//			break
+	//		}
+	//		query += "\nOR "
+	//	}
+	//	query += ")"
+	//}
+
 	// before proceeding, save a copy of the query and params without LIMIT/OFFSET/ORDER info
 	// for COUNTing all results later
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", query)
@@ -797,7 +835,6 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	}
 
 	// 4- Pagination: LIMIT clause (from lo.Pagination)
-
 	limitClause := ""
 	limit := lo.Pagination.PageSize
 	if limit > 0 {
@@ -947,7 +984,7 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 }
 
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
-func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int) (string, []any, error) {
+func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int, fieldPrefix string) (string, []any, error) {
 	var params []any
 	clauses := make([]string, 0, len(orFilters.Filters))
 	var newParams []any
@@ -963,7 +1000,7 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 			}
 			newClause, newParams, err = l.getLabelFilter(index, filter, dbName)
 		} else {
-			newClause, newParams, err = l.getFieldFilter(filter)
+			newClause, newParams, err = l.getFieldFilter(filter, fieldPrefix)
 		}
 		if err != nil {
 			return "", nil, err
@@ -1067,10 +1104,10 @@ func internLabel(labelName string, joinTableIndexByLabelName map[string]int, nex
 // KEY in VALUES
 // KEY notin VALUES
 
-func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter) (string, []any, error) {
+func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string) (string, []any, error) {
 	opString := ""
 	escapeString := ""
-	fieldEntry, err := l.getValidFieldEntry("f", filter.Field)
+	fieldEntry, err := l.getValidFieldEntry(prefix, filter.Field)
 	if err != nil {
 		return "", nil, err
 	}

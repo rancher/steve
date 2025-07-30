@@ -4,19 +4,16 @@ package listprocessor
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -149,21 +146,7 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 		}
 	}
 	if projectsOrNamespaces != "" {
-		projOrNSFilters, err := parseNamespaceOrProjectFilters(apiOp.Context(), projectsOrNamespaces, op, namespaceCache)
-		if err != nil {
-			return opts, err
-		}
-		if len(projOrNSFilters) == 0 {
-			return opts, apierror.NewAPIError(validation.ErrorCode{Code: "No Data", Status: http.StatusNoContent},
-				fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
-		}
-		if op == sqltypes.NotEq {
-			for _, filter := range projOrNSFilters {
-				opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{filter}})
-			}
-		} else {
-			opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: projOrNSFilters})
-		}
+		opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
 	}
 
 	return opts, nil
@@ -183,40 +166,21 @@ func splitQuery(query string) []string {
 	return strings.Split(query, ".")
 }
 
-func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sqltypes.Op, namespaceInformer Cache) ([]sqltypes.Filter, error) {
+func parseNamespaceOrProjectFilters(projOrNS string, op sqltypes.Op) sqltypes.OrFilter {
 	filters := []sqltypes.Filter{}
 	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &sqltypes.ListOptions{
-			Filters: []sqltypes.OrFilter{
-				{
-					Filters: []sqltypes.Filter{
-						{
-							Field:   []string{"metadata", "name"},
-							Matches: []string{pn},
-							Op:      sqltypes.Eq,
-						},
-						{
-							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
-							Matches: []string{pn},
-							Op:      sqltypes.Eq,
-						},
-					},
-				},
-			},
-		}, []partition.Partition{{Passthrough: true}}, "")
-		if err != nil {
-			return filters, err
-		}
-		for _, item := range uList.Items {
-			filters = append(filters, sqltypes.Filter{
-				Field:   []string{"metadata", "namespace"},
-				Matches: []string{item.GetName()},
+		filters = append(filters,
+			sqltypes.Filter{
+				Field:   []string{"metadata", "name"},
+				Matches: []string{pn},
 				Op:      op,
-				Partial: false,
-			})
-		}
-		continue
+			},
+			sqltypes.Filter{
+				Field:   []string{"metadata", "labels", projectIDFieldLabel},
+				Matches: []string{pn},
+				Op:      op,
+			},
+		)
 	}
-
-	return filters, nil
+	return sqltypes.OrFilter{Filters: filters}
 }
