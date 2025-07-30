@@ -1249,15 +1249,16 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"status", "podIP"},
-						Order:  sqltypes.ASC,
+						Fields:   []string{"status", "podIP"},
+						Order:    sqltypes.ASC,
+						SortAsIP: true,
 					},
 				},
 			},
 		},
 		partitions:   []partition.Partition{{All: true}},
 		ns:           "",
-		expectedList: makeList(t, obj03_saddles, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj03a_shoes, obj02b_milk_shoes, obj04_milk, obj05__guard_lodgepole),
+		expectedList: makeList(t, obj03_saddles, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj03a_shoes, obj04_milk, obj02b_milk_shoes, obj05__guard_lodgepole),
 
 		expectedTotal:     len(allObjects),
 		expectedContToken: "",
@@ -1318,7 +1319,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.Nil(t, err)
+			require.Nil(t, err)
 
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)
@@ -1676,6 +1677,121 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) {
 			fields := [][]string{
 				{"spec", "rules", "host"},
+			}
+			fields = append(fields, test.extraIndexedFields...)
+
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+			defer cleanTempFiles(dbPath)
+			assert.NoError(t, err)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				assert.NoError(t, err)
+			}
+
+			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			if test.expectedErr != nil {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedList, list)
+			assert.Equal(t, test.expectedTotal, total)
+			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
+func TestUserDefinedInetToAnonFunction(t *testing.T) {
+	makeObj := func(name string, ipAddr string) map[string]any {
+		h1 := map[string]any{
+			"metadata": map[string]any{
+				"name": name,
+			},
+			"status": map[string]any{
+				"podIP": ipAddr,
+			},
+		}
+		return h1
+	}
+	ctx := context.Background()
+
+	type testCase struct {
+		description string
+		listOptions sqltypes.ListOptions
+		partitions  []partition.Partition
+		ns          string
+
+		items []*unstructured.Unstructured
+
+		extraIndexedFields [][]string
+		expectedList       *unstructured.UnstructuredList
+		expectedTotal      int
+		expectedContToken  string
+		expectedErr        error
+	}
+	obj01 := makeObj("lirdle.com", "145.53.12.123")
+	obj02 := makeObj("cyberciti.biz", "2607:f0d0:1002:51::4")
+	obj03 := makeObj("zombo.com", "50.28.52.163")
+	obj04 := makeObj("not-an-ipaddr", "aardvarks")
+	obj05 := makeObj("smaller-cyberciti.biz", "2607:f0d0:997:51::4")
+	allObjects := []map[string]any{obj01, obj02, obj03, obj04, obj05}
+	makeList := func(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
+		t.Helper()
+
+		if len(objs) == 0 {
+			return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+		}
+
+		var items []any
+		for _, obj := range objs {
+			items = append(items, obj)
+		}
+
+		list := &unstructured.Unstructured{
+			Object: map[string]any{
+				"items": items,
+			},
+		}
+
+		itemList, err := list.ToList()
+		require.NoError(t, err)
+
+		return itemList
+	}
+	itemList := makeList(t, allObjects...)
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "sort by numeric IP addr value",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields:   []string{"status", "podIP"},
+						Order:    sqltypes.ASC,
+						SortAsIP: true,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj04, obj03, obj01, obj05, obj02),
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	t.Parallel()
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			fields := [][]string{
+				{"status", "podIP"},
 			}
 			fields = append(fields, test.extraIndexedFields...)
 
