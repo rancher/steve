@@ -425,6 +425,9 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			"somefield": "foo",
 			"sortfield": "400",
 		},
+		"status": map[string]any{
+			"podIP": "99.4.5.6",
+		},
 	}
 	obj02_milk_saddles := map[string]any{
 		"metadata": map[string]any{
@@ -436,6 +439,9 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				"cows":   "milk",
 				"horses": "saddles",
 			},
+		},
+		"status": map[string]any{
+			"podIP": "102.1.2.3",
 		},
 	}
 	obj02a_beef_saddles := map[string]any{
@@ -449,6 +455,9 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				"horses": "saddles",
 			},
 		},
+		"status": map[string]any{
+			"podIP": "102.99.2.3",
+		},
 	}
 	obj02b_milk_shoes := map[string]any{
 		"metadata": map[string]any{
@@ -460,6 +469,9 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				"cows":   "milk",
 				"horses": "shoes",
 			},
+		},
+		"status": map[string]any{
+			"podIP": "102.103.2.3",
 		},
 	}
 	obj03_saddles := map[string]any{
@@ -473,6 +485,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			},
 		},
 		"status": map[string]any{
+			"podIP":          "77.4.5.6",
 			"someotherfield": "helloworld",
 		},
 	}
@@ -487,6 +500,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			},
 		},
 		"status": map[string]any{
+			"podIP":          "102.99.99.1",
 			"someotherfield": "helloworld",
 		},
 	}
@@ -500,6 +514,9 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				"cows": "milk",
 			},
 		},
+		"status": map[string]any{
+			"podIP": "102.99.105.1",
+		},
 	}
 	obj05__guard_lodgepole := map[string]any{
 		"metadata": map[string]any{
@@ -509,6 +526,9 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			"labels": map[string]any{
 				"guard.cattle.io": "lodgepole",
 			},
+		},
+		"status": map[string]any{
+			"podIP": "203.1.2.3",
 		},
 	}
 	allObjects := []map[string]any{
@@ -1159,6 +1179,26 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "ListByOptions: sorting on ip sorts on the ip octets",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"status", "podIP"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions:   []partition.Partition{{All: true}},
+		ns:           "",
+		expectedList: makeList(t, obj03_saddles, obj01_no_labels, obj02_milk_saddles, obj02a_beef_saddles, obj03a_shoes, obj02b_milk_shoes, obj04_milk, obj05__guard_lodgepole),
+
+		expectedTotal:     len(allObjects),
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
 	//tests = append(tests, testCase{
 	//	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
 	//	partitions: []partition.Partition{
@@ -1183,6 +1223,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			fields := [][]string{
 				{"metadata", "somefield"},
 				{"status", "someotherfield"},
+				{"status", "podIP"},
 				{"metadata", "unknown"},
 				{"metadata", "sortfield"},
 			}
@@ -2413,6 +2454,66 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 		expectedErr:      nil,
 	})
 
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: sort on an IP-designated field does an inet_aton conversion",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "queryField1"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields:   []string{"status", "podIP"},
+						Order:    sqltypes.ASC,
+						SortAsIP: true,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (FALSE)
+  ORDER BY f."metadata.queryField1" ASC, inet_aton(f."status.podIP") ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: sort can ip-convert a label field",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "this"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"status", "queryField2"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `WITH lt1(key, value) AS (
+SELECT key, value FROM "something_labels"
+  WHERE label = ?
+)
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  LEFT OUTER JOIN lt1 ON o.key = lt1.key
+  WHERE
+    (FALSE)
+  ORDER BY lt1.value ASC NULLS LAST, f."status.queryField2" DESC`,
+		expectedStmtArgs: []any{"this"},
+		expectedErr:      nil,
+	})
+
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -2422,7 +2523,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.queryField1", "status.queryField2", "spec.containers.image", "metadata.name", "metadata.namespace"},
+				indexedFields: []string{"metadata.name", "metadata.queryField1", "status.queryField2", "spec.containers.image", "status.podIP", "metadata.namespace"},
 			}
 			if test.description == "TestConstructQuery: handles ProjectOrNamespaces NOT IN" {
 				fmt.Println("stop here")
@@ -2509,6 +2610,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		labelName                 string
 		joinTableIndexByLabelName map[string]int
 		direction                 bool
+		sortAsIP                  bool
 		expectedStmt              string
 		expectedErr               string
 	}
@@ -2533,10 +2635,18 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		direction:                 false,
 		expectedStmt:              `lt4.value DESC NULLS FIRST`,
 	})
+	tests = append(tests, testCase{
+		description:               "TestBuildSortClause: hit descending",
+		labelName:                 "testBSL3",
+		joinTableIndexByLabelName: map[string]int{"testBSL3": 5},
+		direction:                 false,
+		sortAsIP:                  true,
+		expectedStmt:              `inet_aton(lt5.value) DESC NULLS FIRST`,
+	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			stmt, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction)
+			stmt, err := buildSortLabelsClause(test.labelName, test.joinTableIndexByLabelName, test.direction, test.sortAsIP)
 			if test.expectedErr != "" {
 				assert.Equal(t, test.expectedErr, err.Error())
 			} else {
