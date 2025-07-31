@@ -804,11 +804,10 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If two sort params are given, sort " +
-			"options with primary field and secondary field should be set.",
+		description: "ParseQuery() with no errors: If two sort params are given, recognize ASC/DESC and map ip(field) to SortAsIP:true.",
 		req: &types.APIRequest{
 			Request: &http.Request{
-				URL: &url.URL{RawQuery: "sort=-metadata.name,spec.something"},
+				URL: &url.URL{RawQuery: "sort=-metadata.name,ip(spec.something)"},
 			},
 		},
 		expectedLO: sqltypes.ListOptions{
@@ -819,8 +818,9 @@ func TestParseQuery(t *testing.T) {
 						Order:  sqltypes.DESC,
 					},
 					{
-						Fields: []string{"spec", "something"},
-						Order:  sqltypes.ASC,
+						Fields:   []string{"spec", "something"},
+						Order:    sqltypes.ASC,
+						SortAsIP: true,
 					},
 				},
 			},
