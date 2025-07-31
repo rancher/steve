@@ -212,7 +212,7 @@ func setup(ctx context.Context, server *Server) error {
 	if server.SQLCache {
 		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		errStore := proxy.NewErrorStore(
