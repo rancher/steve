@@ -2482,7 +2482,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 		},
 		partitions: []partition.Partition{},
 		ns:         "",
-		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     (FALSE)
@@ -2513,7 +2513,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 SELECT key, value FROM "something_labels"
   WHERE label = ?
 )
-SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN lt1 ON o.key = lt1.key
   WHERE
