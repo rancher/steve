@@ -110,8 +110,9 @@ const (
 			key TEXT NOT NULL PRIMARY KEY,
             %s
 	   )`
-	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
-	deleteFieldsFmt      = `DELETE FROM "%s_fields"`
+	createFieldsIndexFmt       = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
+	createDoubleFieldsIndexFmt = `CREATE INDEX "%s_%s_%s_index" ON "%s_fields"("%s","%s")`
+	deleteFieldsFmt            = `DELETE FROM "%s_fields"`
 
 	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 
@@ -225,6 +226,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			// add formatted set statement for prepared statement
 			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
 			setStatements[index] = setStatement
+		}
+		if opts.IsNamespaced {
+			mdn := "metadata.name"
+			mdns := "metadata.namespace"
+			createFieldsIndexQuery := fmt.Sprintf(createDoubleFieldsIndexFmt,
+				dbName, mdns, mdn, dbName, mdns, mdn)
+			_, err = tx.Exec(createFieldsIndexQuery)
+			if err != nil {
+				return &db.QueryError{QueryString: createFieldsIndexQuery, Err: err}
+			}
 		}
 		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
 		_, err = tx.Exec(createLabelsTableQuery)
