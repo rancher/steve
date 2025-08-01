@@ -306,3 +306,73 @@ func TestAddCustomResources(t *testing.T) {
 		})
 	}
 }
+func TestHasObservedGeneration(t *testing.T) {
+	tests := []struct {
+		name     string
+		schema   *v1.JSONSchemaProps
+		expected bool
+	}{
+		{
+			name:     "nil schema",
+			schema:   nil,
+			expected: false,
+		},
+		{
+			name:     "nil properties",
+			schema:   &v1.JSONSchemaProps{},
+			expected: false,
+		},
+		{
+			name: "no status property",
+			schema: &v1.JSONSchemaProps{
+				Properties: map[string]v1.JSONSchemaProps{
+					"foo": {},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "status property without properties",
+			schema: &v1.JSONSchemaProps{
+				Properties: map[string]v1.JSONSchemaProps{
+					"status": {},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "status property with properties but no observedGeneration",
+			schema: &v1.JSONSchemaProps{
+				Properties: map[string]v1.JSONSchemaProps{
+					"status": {
+						Properties: map[string]v1.JSONSchemaProps{
+							"foo": {},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "status property with observedGeneration",
+			schema: &v1.JSONSchemaProps{
+				Properties: map[string]v1.JSONSchemaProps{
+					"status": {
+						Properties: map[string]v1.JSONSchemaProps{
+							"observedGeneration": {},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasObservedGeneration(tt.schema)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
