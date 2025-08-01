@@ -684,17 +684,26 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 
 	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
 		jtIndex := len(joinTableIndexByLabelName) + 1
-		// TODO check if label already exists 
-		joinTableIndexByLabelName[projectIDFieldLabel] = jtIndex
+		if _, exists := joinTableIndexByLabelName[projectIDFieldLabel]; !exists {
+			joinTableIndexByLabelName[projectIDFieldLabel] = jtIndex
+		}
+
+		// if we're looking for ProjectsOrNamespaces while querying for _v1_Namespaces (not very usual, but possible),
+		// we need to change the field prefix from 'nsf' which means namespaces fields to 'f' which is the default join
+		// name for every object, also we do not need to join namespaces again
+		fieldPrefix := "f"
+		if dbName != namespacesDbName {
+			fieldPrefix = "nsf"
+			query += "\n  "
+			query += fmt.Sprintf(`JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
+		}
 		query += "\n  "
-		query += fmt.Sprintf(`JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
-		query += "\n  "
-		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON nsf.key = lt%d.key`, namespacesDbName, jtIndex, jtIndex)
+		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON %s.key = lt%d.key`, namespacesDbName, jtIndex, fieldPrefix, jtIndex)
 	}
 
 	// 2- Filtering: WHERE clauses (from lo.Filters)
 	for _, orFilters := range lo.Filters {
-		orClause, orParams, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName, "f")
+		orClause, orParams, err := l.buildORClauseFromFilters(orFilters, dbName, joinTableIndexByLabelName)
 		if err != nil {
 			return queryInfo, err
 		}
@@ -705,10 +714,13 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		params = append(params, orParams...)
 	}
 
-	// TODO check if gvk is not namespace
 	// WHERE clauses (from lo.ProjectsOrNamespaces)
 	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
-		projOrNsClause, projOrNsParams, err := l.buildORClauseFromFilters(lo.ProjectsOrNamespaces, dbName, joinTableIndexByLabelName, "nsf")
+		fieldPrefix := "nsf"
+		if dbName == namespacesDbName {
+			fieldPrefix = "f"
+		}
+		projOrNsClause, projOrNsParams, err := l.buildClauseFromProjectsOrNamespaces(lo.ProjectsOrNamespaces, dbName, joinTableIndexByLabelName, fieldPrefix)
 		if err != nil {
 			return queryInfo, err
 		}
@@ -984,7 +996,7 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 }
 
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
-func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int, fieldPrefix string) (string, []any, error) {
+func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int) (string, []any, error) {
 	var params []any
 	clauses := make([]string, 0, len(orFilters.Filters))
 	var newParams []any
@@ -1000,7 +1012,7 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 			}
 			newClause, newParams, err = l.getLabelFilter(index, filter, dbName)
 		} else {
-			newClause, newParams, err = l.getFieldFilter(filter, fieldPrefix)
+			newClause, newParams, err = l.getFieldFilter(filter, "f")
 		}
 		if err != nil {
 			return "", nil, err
@@ -1015,6 +1027,46 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 		return clauses[0], params, nil
 	}
 	return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
+}
+
+func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int, fieldPrefix string) (string, []any, error) {
+	var params []any
+	var newParams []any
+	var newClause string
+	var err error
+
+	if len(orFilters.Filters) == 0 {
+		return "", params, nil
+	}
+
+	clauses := make([]string, 0, len(orFilters.Filters))
+	for _, filter := range orFilters.Filters {
+		if isLabelFilter(&filter) {
+			if index, err := internLabel(filter.Field[2], joinTableIndexByLabelName, -1); err != nil {
+				return "", nil, err
+			} else {
+				newClause, newParams, err = l.getProjectsOrNamespacesLabelFilter(index, filter, dbName)
+			}
+		} else {
+			newClause, newParams, err = l.getProjectsOrNamespacesFieldFilter(filter, fieldPrefix)
+		}
+		if err != nil {
+			return "", nil, err
+		}
+		clauses = append(clauses, newClause)
+		params = append(params, newParams...)
+	}
+
+	if orFilters.Filters[0].Op == sqltypes.In {
+		return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
+	}
+
+	if orFilters.Filters[0].Op == sqltypes.NotIn {
+		return fmt.Sprintf("(%s)", strings.Join(clauses, ") AND (")), params, nil
+	}
+
+	return "", nil, fmt.Errorf("Project Or Namespaces supports only 'IN' or 'NOT IN' operation. Op: %s is not valid.",
+		orFilters.Filters[0].Op)
 }
 
 func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[string]int, isAsc bool) (string, error) {
@@ -1161,6 +1213,61 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		return clause, matches, nil
 	}
 
+	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
+}
+
+func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.Filter, prefix string) (string, []any, error) {
+	opString := ""
+	fieldEntry, err := l.getValidFieldEntry(prefix, filter.Field)
+	if err != nil {
+		return "", nil, err
+	}
+	switch filter.Op {
+	case sqltypes.In:
+		fallthrough
+	case sqltypes.NotIn:
+		target := "()"
+		if len(filter.Matches) > 0 {
+			target = fmt.Sprintf("(?%s)", strings.Repeat(", ?", len(filter.Matches)-1))
+		}
+		opString = "IN"
+		if filter.Op == sqltypes.NotIn {
+			opString = "NOT IN"
+		}
+		clause := fmt.Sprintf("%s %s %s", fieldEntry, opString, target)
+		matches := make([]any, len(filter.Matches))
+		for i, match := range filter.Matches {
+			matches[i] = match
+		}
+		return clause, matches, nil
+	}
+
+	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
+}
+
+func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter sqltypes.Filter, dbName string) (string, []any, error) {
+	opString := ""
+	labelName := filter.Field[2]
+	switch filter.Op {
+	case sqltypes.In:
+		fallthrough
+	case sqltypes.NotIn:
+		opString = "IN"
+		if filter.Op == sqltypes.NotIn {
+			opString = "NOT IN"
+		}
+		target := "()"
+		if len(filter.Matches) > 0 {
+			target = fmt.Sprintf("(?%s)", strings.Repeat(", ?", len(filter.Matches)-1))
+		}
+		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s %s`, index, index, opString, target)
+		matches := make([]any, len(filter.Matches)+1)
+		matches[0] = labelName
+		for i, match := range filter.Matches {
+			matches[i+1] = match
+		}
+		return clause, matches, nil
+	}
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
