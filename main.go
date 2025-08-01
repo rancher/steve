@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/rancher/dynamiclistener/server"
@@ -39,5 +40,10 @@ func run(_ *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	cleanup, err := setupOTelSDK(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup(context.Background())
 	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, &server.ListenOpts{DisplayServerLogs: true})
 }

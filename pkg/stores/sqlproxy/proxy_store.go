@@ -16,11 +16,20 @@ import (
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/attributes"
+	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
+	steveotel "github.com/rancher/steve/pkg/otel"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/virtual"
+	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
+	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
+	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
@@ -28,16 +37,6 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/rancher/steve/pkg/attributes"
-	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
-	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/resources/virtual"
-	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
-	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
-	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
-	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
-
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -783,6 +782,9 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
 func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
+	ctx, span := steveotel.Tracer.Start(apiOp.Context(), "ListByPartitions")
+	defer span.End()
+
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
 	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
@@ -802,6 +804,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
 
+	span.AddEvent("got cache")
+
 	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
 	if err != nil {
 		var apiError *apierror.APIError
@@ -817,6 +821,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		}
 		return nil, 0, "", err
 	}
+
+	span.AddEvent("parsed query")
 
 	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
 		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
@@ -841,13 +847,14 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		}
 	}
 
-	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
+	list, total, continueToken, err := inf.ListByOptions(ctx, &opts, partitions, apiOp.Namespace)
 	if err != nil {
 		if errors.Is(err, informer.ErrInvalidColumn) {
 			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
 		return nil, 0, "", fmt.Errorf("listbyoptions %v: %w", gvk, err)
 	}
+	span.AddEvent("have items")
 
 	return list, total, continueToken, nil
 }
