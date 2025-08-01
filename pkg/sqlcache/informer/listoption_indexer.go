@@ -793,20 +793,6 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		}
 	}
 
-	// WHERE clauses (from lo.ProjectsOrNamespaces)
-	//if len(lo.ProjectsOrNamespaces) > 0 {
-	//	query += "\nAND ("
-	//	for index, projOrNs := range lo.ProjectsOrNamespaces {
-	//		query += fmt.Sprintf(`(nsf.name = ? OR (nsl.label = ? AND nsl.value = ?)`)
-	//		params = append(params, projOrNs, "field.cattle.io/projectId", projOrNs)
-	//		if index == len(lo.ProjectsOrNamespaces)-1 {
-	//			break
-	//		}
-	//		query += "\nOR "
-	//	}
-	//	query += ")"
-	//}
-
 	// before proceeding, save a copy of the query and params without LIMIT/OFFSET/ORDER info
 	// for COUNTing all results later
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", query)
