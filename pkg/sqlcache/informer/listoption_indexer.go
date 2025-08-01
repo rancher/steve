@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	steveotel "github.com/rancher/steve/pkg/otel"
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
@@ -611,6 +612,9 @@ func (l *ListOptionIndexer) deleteLabels(tx transaction.Client) error {
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
 func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+	ctx, span := steveotel.Tracer.Start(ctx, "ListOptionIndexer.ListByOptions")
+	defer span.End()
+
 	queryInfo, err := l.constructQuery(lo, partitions, namespace, db.Sanitize(l.GetName()))
 	if err != nil {
 		return nil, 0, "", err
@@ -844,15 +848,20 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 
 	var items []any
 	err = l.WithTransaction(ctx, false, func(tx transaction.Client) error {
+		ctx, span := steveotel.Tracer.Start(ctx, "SQL transaction")
+		defer span.End()
+
 		txStmt := tx.Stmt(stmt)
 		rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
 		if err != nil {
 			return &db.QueryError{QueryString: queryInfo.query, Err: err}
 		}
+		span.AddEvent("query done")
 		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
 		if err != nil {
 			return fmt.Errorf("read objects: %w", err)
 		}
+		span.AddEvent("read objects done")
 
 		total = len(items)
 		if queryInfo.countQuery != "" {
