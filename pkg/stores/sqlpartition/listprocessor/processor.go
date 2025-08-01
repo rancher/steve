@@ -137,12 +137,12 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 	}
 	opts.Pagination = pagination
 
-	op := sqltypes.Eq
+	op := sqltypes.In
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
 		if projectsOrNamespaces != "" {
-			op = sqltypes.NotEq
+			op = sqltypes.NotIn
 		}
 	}
 	if projectsOrNamespaces != "" {
@@ -167,20 +167,21 @@ func splitQuery(query string) []string {
 }
 
 func parseNamespaceOrProjectFilters(projOrNS string, op sqltypes.Op) sqltypes.OrFilter {
-	filters := []sqltypes.Filter{}
-	for _, pn := range strings.Split(projOrNS, ",") {
-		filters = append(filters,
+	var filters []sqltypes.Filter
+	projOrNs := strings.Split(projOrNS, ",")
+	if len(projOrNs) > 0 {
+		filters = []sqltypes.Filter{
 			sqltypes.Filter{
 				Field:   []string{"metadata", "name"},
-				Matches: []string{pn},
+				Matches: projOrNs,
 				Op:      op,
 			},
 			sqltypes.Filter{
 				Field:   []string{"metadata", "labels", projectIDFieldLabel},
-				Matches: []string{pn},
+				Matches: projOrNs,
 				Op:      op,
 			},
-		)
+		}
 	}
 	return sqltypes.OrFilter{Filters: filters}
 }
