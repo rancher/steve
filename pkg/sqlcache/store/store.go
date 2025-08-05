@@ -75,13 +75,17 @@ var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
 func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
+	exampleType := reflect.TypeOf(example)
+	if exampleType.Kind() != reflect.Ptr {
+		exampleType = reflect.PointerTo(exampleType).Elem()
+	}
 	s := &Store{
 		ctx:                ctx,
 		name:               name,
 		gvk:                gvk,
 		externalUpdateInfo: externalUpdateInfo,
 		selfUpdateInfo:     selfUpdateInfo,
-		typ:                reflect.TypeOf(example),
+		typ:                exampleType,
 		Client:             c,
 		keyFunc:            keyFunc,
 		shouldEncrypt:      shouldEncrypt,
@@ -311,7 +315,7 @@ func (s *Store) GetByKey(key string) (item any, exists bool, err error) {
 	if err != nil {
 		return nil, false, &db.QueryError{QueryString: s.getQuery, Err: err}
 	}
-	result, err := s.ReadObjects(rows, s.typ, s.shouldEncrypt)
+	result, err := s.ReadObjects(rows, s.typ)
 	if err != nil {
 		return nil, false, err
 	}
@@ -333,9 +337,13 @@ func (s *Store) Add(obj any) error {
 	if err != nil {
 		return err
 	}
+	serialized, err := s.Serialize(obj, s.shouldEncrypt)
+	if err != nil {
+		return err
+	}
 
 	err = s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
+		err := s.Upsert(tx, s.upsertStmt, key, serialized)
 		if err != nil {
 			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
 		}
@@ -361,9 +369,13 @@ func (s *Store) Update(obj any) error {
 	if err != nil {
 		return err
 	}
+	serialized, err := s.Serialize(obj, s.shouldEncrypt)
+	if err != nil {
+		return err
+	}
 
 	err = s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
-		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
+		err := s.Upsert(tx, s.upsertStmt, key, serialized)
 		if err != nil {
 			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
 		}
@@ -404,7 +416,7 @@ func (s *Store) List() []any {
 	if err != nil {
 		panic(&db.QueryError{QueryString: s.listQuery, Err: err})
 	}
-	result, err := s.ReadObjects(rows, s.typ, s.shouldEncrypt)
+	result, err := s.ReadObjects(rows, s.typ)
 	if err != nil {
 		panic(fmt.Errorf("error in Store.List: %w", err))
 	}
@@ -459,6 +471,14 @@ func (s *Store) Replace(objects []any, _ string) error {
 
 // replaceByKey will delete the contents of the Store, using instead the given key to obj map
 func (s *Store) replaceByKey(objects map[string]any) error {
+	serializedObjects := make(map[string]db.SerializedObject, len(objects))
+	for key, value := range objects {
+		serialized, err := s.Serialize(value, s.shouldEncrypt)
+		if err != nil {
+			return err
+		}
+		serializedObjects[key] = serialized
+	}
 	return s.WithTransaction(s.ctx, true, func(txC transaction.Client) error {
 		_, err := txC.Stmt(s.deleteAllStmt).Exec()
 		if err != nil {
@@ -471,7 +491,7 @@ func (s *Store) replaceByKey(objects map[string]any) error {
 		}
 
 		for key, obj := range objects {
-			err = s.Upsert(txC, s.upsertStmt, key, obj, s.shouldEncrypt)
+			err = s.Upsert(txC, s.upsertStmt, key, serializedObjects[key])
 			if err != nil {
 				return err
 			}
