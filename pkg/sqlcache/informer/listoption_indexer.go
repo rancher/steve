@@ -1051,7 +1051,7 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 		return fmt.Sprintf("(%s)", strings.Join(clauses, ") AND (")), params, nil
 	}
 
-	return "", nil, fmt.Errorf("project or namespaces supports only 'IN' or 'NOT IN' operation. op: %s is not valid.",
+	return "", nil, fmt.Errorf("project or namespaces supports only 'IN' or 'NOT IN' operation. op: %s is not valid",
 		orFilters.Filters[0].Op)
 }
 
