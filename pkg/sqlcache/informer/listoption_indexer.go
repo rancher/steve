@@ -1020,6 +1020,7 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 	var newParams []any
 	var newClause string
 	var err error
+	var index int
 
 	if len(orFilters.Filters) == 0 {
 		return "", params, nil
@@ -1028,11 +1029,10 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 	clauses := make([]string, 0, len(orFilters.Filters))
 	for _, filter := range orFilters.Filters {
 		if isLabelFilter(&filter) {
-			if index, err := internLabel(filter.Field[2], joinTableIndexByLabelName, -1); err != nil {
+			if index, err = internLabel(filter.Field[2], joinTableIndexByLabelName, -1); err != nil {
 				return "", nil, err
-			} else {
-				newClause, newParams, err = l.getProjectsOrNamespacesLabelFilter(index, filter, dbName)
 			}
+			newClause, newParams, err = l.getProjectsOrNamespacesLabelFilter(index, filter, dbName)
 		} else {
 			newClause, newParams, err = l.getProjectsOrNamespacesFieldFilter(filter, fieldPrefix)
 		}
@@ -1051,7 +1051,7 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 		return fmt.Sprintf("(%s)", strings.Join(clauses, ") AND (")), params, nil
 	}
 
-	return "", nil, fmt.Errorf("Project Or Namespaces supports only 'IN' or 'NOT IN' operation. Op: %s is not valid.",
+	return "", nil, fmt.Errorf("project or namespaces supports only 'IN' or 'NOT IN' operation. op: %s is not valid.",
 		orFilters.Filters[0].Op)
 }
 
