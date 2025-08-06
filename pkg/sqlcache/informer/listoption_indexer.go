@@ -653,7 +653,11 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		params = withParams
 		joinPartsToUse = joinParts
 	}
-	query += fmt.Sprintf(`SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "%s" o`, dbName)
+	query += "SELECT "
+	if queryUsesLabels {
+		query += "DISTINCT "
+	}
+	query += fmt.Sprintf(`o.object, o.objectnonce, o.dekid FROM "%s" o`, dbName)
 	query += "\n  "
 	query += fmt.Sprintf(`JOIN "%s_fields" f ON o.key = f.key`, dbName)
 	if len(joinPartsToUse) > 0 {
