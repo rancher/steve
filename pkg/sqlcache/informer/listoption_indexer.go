@@ -849,10 +849,13 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 	var items []any
 	err = l.WithTransaction(ctx, false, func(tx transaction.Client) error {
 		txStmt := tx.Stmt(stmt)
+		now := time.Now()
 		rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
 		if err != nil {
 			return &db.QueryError{QueryString: queryInfo.query, Err: err}
 		}
+		elapsed := time.Since(now)
+		logLongQuery(elapsed, queryInfo.query, queryInfo.params)
 		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
 		if err != nil {
 			return fmt.Errorf("read objects: %w", err)
@@ -868,10 +871,13 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 				}
 			}()
 			txStmt := tx.Stmt(countStmt)
+			now = time.Now()
 			rows, err := txStmt.QueryContext(ctx, queryInfo.countParams...)
 			if err != nil {
 				return &db.QueryError{QueryString: queryInfo.countQuery, Err: err}
 			}
+			elapsed = time.Since(now)
+			logLongQuery(elapsed, queryInfo.countQuery, queryInfo.countParams)
 			total, err = l.ReadInt(rows)
 			if err != nil {
 				return fmt.Errorf("error reading query results: %w", err)
@@ -896,6 +902,14 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 	l.latestRVLock.RUnlock()
 
 	return toUnstructuredList(items, latestRV), total, continueToken, nil
+}
+
+func logLongQuery(elapsed time.Duration, query string, params []any) {
+	threshold := 500 * time.Millisecond
+	if elapsed < threshold {
+		return
+	}
+	logrus.Debugf("Query took more than %v (took %v): %s with params %v", threshold, elapsed, query, params)
 }
 
 func (l *ListOptionIndexer) validateColumn(column string) error {
