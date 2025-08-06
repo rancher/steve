@@ -538,7 +538,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions with single object matching many labels with OR",
+		description: "ListByOptions with many objects matching many labels with OR",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
@@ -890,6 +890,25 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedTotal:     len(allObjects),
 		expectedContToken: "",
 		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions sorting on two existing labels, with no label filters, should sort correctly",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "labels", "horses"},
+					},
+					{
+						Fields: []string{"metadata", "labels", "cows"},
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{{All: true}},
+		expectedList: makeList(t, obj02a_beef_saddles, obj02_milk_saddles, obj03_saddles,
+			obj02b_milk_shoes, obj03a_shoes, obj04_milk, obj01_no_labels, obj05__guard_lodgepole),
+		expectedTotal: len(allObjects),
 	})
 	tests = append(tests, testCase{
 		description: "ListByOptions with Pagination.PageSize set should set limit to PageSize",
