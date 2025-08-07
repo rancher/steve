@@ -794,7 +794,8 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	} else {
 		// make sure one default order is always picked
 		if l.namespaced {
-			query += "\n  ORDER BY f.\"metadata.namespace\" ASC, f.\"metadata.name\" ASC "
+			// ID == metadata.namespace + "/" + metaqata.name
+			query += "\n  ORDER BY f.\"id\" ASC "
 		} else {
 			query += "\n  ORDER BY f.\"metadata.name\" ASC "
 		}
