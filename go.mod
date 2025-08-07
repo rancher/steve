@@ -26,7 +26,7 @@ require (
 	github.com/rancher/lasso v0.2.3
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/remotedialer v0.4.5-rc.3
-	github.com/rancher/wrangler/v3 v3.2.2
+	github.com/rancher/wrangler/v3 v3.2.3-rc.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
@@ -40,7 +40,7 @@ require (
 	k8s.io/apiserver v0.33.1
 	k8s.io/client-go v0.33.1
 	k8s.io/component-base v0.33.1
-	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.33.1
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
 	k8s.io/kubernetes v1.33.1
@@ -133,7 +133,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kms v0.33.1 // indirect
 	modernc.org/libc v1.66.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
