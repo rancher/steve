@@ -454,6 +454,9 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 		// if two transactions want to write at the same time, allow 2 minutes for the first to complete
 		// before baling out
 		"_pragma=busy_timeout=120000&"+
+		// store temporary tables to memory, to speed up queries making use
+		// of temporary tables (eg: when using DISTINCT)
+		"_pragma=temp_store=2&"+
 		// default to IMMEDIATE mode for transactions. Setting this parameter is the only current way
 		// to be able to switch between DEFERRED and IMMEDIATE modes in modernc.org/sqlite's implementation
 		// of BeginTx
