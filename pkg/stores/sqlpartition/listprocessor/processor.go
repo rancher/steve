@@ -77,7 +77,7 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Fil
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOptions, error) {
+func ParseQuery(apiOp *types.APIRequest) (sqltypes.ListOptions, error) {
 	opts := sqltypes.ListOptions{}
 
 	q := apiOp.Request.URL.Query()

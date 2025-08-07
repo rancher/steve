@@ -802,7 +802,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
 
-	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
+	opts, err := listprocessor.ParseQuery(apiOp)
 	if err != nil {
 		var apiError *apierror.APIError
 		if errors.As(err, &apiError) {
