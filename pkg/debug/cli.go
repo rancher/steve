@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 type Config struct {
@@ -51,7 +51,7 @@ func Flags(config *Config) []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:        "debug-level",
-			Value:       7,
+			Value:       2,
 			Destination: &config.DebugLevel,
 		},
 		&cli.BoolFlag{
