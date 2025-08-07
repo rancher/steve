@@ -634,7 +634,7 @@ type QueryInfo struct {
 func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
 	unboundSortLabels := getUnboundSortLabels(lo)
 	queryInfo := &QueryInfo{}
-	queryUsesLabels := hasLabelFilter(lo.Filters)
+	queryUsesLabels := hasLabelFilter(lo.Filters) || len(lo.ProjectsOrNamespaces) > 0
 	joinTableIndexByLabelName := make(map[string]int)
 
 	// First, what kind of filtering will we be doing?
