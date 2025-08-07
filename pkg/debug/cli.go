@@ -51,7 +51,7 @@ func Flags(config *Config) []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:        "debug-level",
-			Value:       2,
+			Value:       1,
 			Destination: &config.DebugLevel,
 		},
 		&cli.BoolFlag{
