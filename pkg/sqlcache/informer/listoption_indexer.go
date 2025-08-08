@@ -649,8 +649,10 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	latestRV := l.latestRV
 	l.latestRVLock.RUnlock()
 
-	if lo.Revision != latestRV {
-		return nil, ErrUnknownRevision
+	if lo.Revision != "" {
+		if lo.Revision != latestRV {
+			return nil, ErrUnknownRevision
+		}
 	}
 
 	// First, what kind of filtering will we be doing?
