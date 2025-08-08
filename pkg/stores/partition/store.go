@@ -402,5 +402,11 @@ func ToAPIEvent(apiOp *types.APIRequest, schema *types.APISchema, event watch.Ev
 	}
 
 	apiEvent.Revision = m.GetResourceVersion()
+	if u, ok := event.Object.(*unstructured.Unstructured); ok {
+		if latest, ok, err := unstructured.NestedString(u.Object, "latestRV"); err == nil && ok {
+			apiEvent.Revision = latest
+		}
+	}
+
 	return apiEvent
 }

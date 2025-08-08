@@ -73,8 +73,9 @@ var (
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
 
-	ErrInvalidColumn = errors.New("supplied column is invalid")
-	ErrTooOld        = errors.New("resourceversion too old")
+	ErrInvalidColumn   = errors.New("supplied column is invalid")
+	ErrTooOld          = errors.New("resourceversion too old")
+	ErrUnknownRevision = errors.New("unknown revision")
 )
 
 const (
@@ -492,9 +493,18 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 			continue
 		}
 
+		o := obj.(runtime.Object).DeepCopyObject()
+		if u, ok := o.(*unstructured.Unstructured); ok {
+			if err := unstructured.SetNestedField(u.Object, latestRV, "latestRV"); err != nil {
+				logrus.Errorf("couldn't set latestRV value at watcher event object: %s", err.Error())
+			} else {
+				o = u
+			}
+		}
+
 		watcher.ch <- watch.Event{
 			Type:   eventType,
-			Object: obj.(runtime.Object).DeepCopyObject(),
+			Object: o,
 		}
 	}
 	l.watchersLock.RUnlock()
@@ -634,6 +644,14 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryInfo := &QueryInfo{}
 	queryUsesLabels := hasLabelFilter(lo.Filters)
 	joinTableIndexByLabelName := make(map[string]int)
+
+	l.latestRVLock.RLock()
+	latestRV := l.latestRV
+	l.latestRVLock.RUnlock()
+
+	if lo.Revision != latestRV {
+		return nil, ErrUnknownRevision
+	}
 
 	// First, what kind of filtering will we be doing?
 	// 1- Intro: SELECT and JOIN clauses

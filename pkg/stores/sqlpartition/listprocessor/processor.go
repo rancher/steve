@@ -166,6 +166,15 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 		}
 	}
 
+	revision := q.Get(revisionParam)
+	if revision != "" {
+		if _, err := strconv.ParseInt(revision, 10, 64); err != nil {
+			return opts, apierror.NewAPIError(validation.ErrorCode{Code: "invalid revision query param", Status: http.StatusBadRequest},
+				fmt.Sprintf("value %s for revision query param is not valid", revision))
+		}
+		opts.Revision = revision
+	}
+
 	return opts, nil
 }
 
