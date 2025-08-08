@@ -1380,6 +1380,138 @@ func TestConstructQuery(t *testing.T) {
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles ProjectOrNamespaces IN",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					sqltypes.Filter{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"some_namespace"},
+						Op:      sqltypes.In,
+					},
+					sqltypes.Filter{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"some_namespace"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
+			Filters: []sqltypes.OrFilter{},
+		},
+		partitions: []partition.Partition{
+			{
+				All: true,
+			},
+		},
+		ns: "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
+  WHERE
+    ((nsf."metadata.name" IN (?)) OR (lt1.label = ? AND lt1.value IN (?)))
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles ProjectOrNamespaces multiple IN",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					sqltypes.Filter{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"some_namespace", "p-example"},
+						Op:      sqltypes.In,
+					},
+					sqltypes.Filter{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"some_namespace", "p-example"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
+			Filters: []sqltypes.OrFilter{},
+		},
+		partitions: []partition.Partition{
+			{
+				All: true,
+			},
+		},
+		ns: "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
+  WHERE
+    ((nsf."metadata.name" IN (?, ?)) OR (lt1.label = ? AND lt1.value IN (?, ?)))
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles ProjectOrNamespaces NOT IN",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					sqltypes.Filter{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"some_namespace"},
+						Op:      sqltypes.NotIn,
+					},
+					sqltypes.Filter{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"some_namespace"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+			Filters: []sqltypes.OrFilter{},
+		},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
+  WHERE
+    ((nsf."metadata.name" NOT IN (?)) AND (lt1.label = ? AND lt1.value NOT IN (?)))
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: handles ProjectOrNamespaces multiple NOT IN",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					sqltypes.Filter{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"some_namespace", "p-example"},
+						Op:      sqltypes.NotIn,
+					},
+					sqltypes.Filter{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"some_namespace", "p-example"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+			Filters: []sqltypes.OrFilter{},
+		},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
+  WHERE
+    ((nsf."metadata.name" NOT IN (?, ?)) AND (lt1.label = ? AND lt1.value NOT IN (?, ?)))
+  ORDER BY f."metadata.name" ASC `,
+		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example"},
+		expectedErr:      nil,
+	})
+	tests = append(tests, testCase{
 		description: "TestConstructQuery: handles EXISTS statements",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
@@ -2027,7 +2159,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.queryField1", "status.queryField2", "spec.containers.image"},
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "spec.containers.image", "metadata.name"},
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {

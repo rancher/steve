@@ -4,19 +4,16 @@ package listprocessor
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
-	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -80,7 +77,7 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Fil
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOptions, error) {
+func ParseQuery(apiOp *types.APIRequest) (sqltypes.ListOptions, error) {
 	opts := sqltypes.ListOptions{}
 
 	q := apiOp.Request.URL.Query()
@@ -140,30 +137,16 @@ func ParseQuery(apiOp *types.APIRequest, namespaceCache Cache) (sqltypes.ListOpt
 	}
 	opts.Pagination = pagination
 
-	op := sqltypes.Eq
+	op := sqltypes.In
 	projectsOrNamespaces := q.Get(projectsOrNamespacesVar)
 	if projectsOrNamespaces == "" {
 		projectsOrNamespaces = q.Get(projectsOrNamespacesVar + notOp)
 		if projectsOrNamespaces != "" {
-			op = sqltypes.NotEq
+			op = sqltypes.NotIn
 		}
 	}
 	if projectsOrNamespaces != "" {
-		projOrNSFilters, err := parseNamespaceOrProjectFilters(apiOp.Context(), projectsOrNamespaces, op, namespaceCache)
-		if err != nil {
-			return opts, err
-		}
-		if len(projOrNSFilters) == 0 {
-			return opts, apierror.NewAPIError(validation.ErrorCode{Code: "No Data", Status: http.StatusNoContent},
-				fmt.Sprintf("could not find any namespaces named [%s] or namespaces belonging to project named [%s]", projectsOrNamespaces, projectsOrNamespaces))
-		}
-		if op == sqltypes.NotEq {
-			for _, filter := range projOrNSFilters {
-				opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{filter}})
-			}
-		} else {
-			opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: projOrNSFilters})
-		}
+		opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
 	}
 
 	return opts, nil
@@ -183,40 +166,22 @@ func splitQuery(query string) []string {
 	return strings.Split(query, ".")
 }
 
-func parseNamespaceOrProjectFilters(ctx context.Context, projOrNS string, op sqltypes.Op, namespaceInformer Cache) ([]sqltypes.Filter, error) {
-	filters := []sqltypes.Filter{}
-	for _, pn := range strings.Split(projOrNS, ",") {
-		uList, _, _, err := namespaceInformer.ListByOptions(ctx, &sqltypes.ListOptions{
-			Filters: []sqltypes.OrFilter{
-				{
-					Filters: []sqltypes.Filter{
-						{
-							Field:   []string{"metadata", "name"},
-							Matches: []string{pn},
-							Op:      sqltypes.Eq,
-						},
-						{
-							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
-							Matches: []string{pn},
-							Op:      sqltypes.Eq,
-						},
-					},
-				},
-			},
-		}, []partition.Partition{{Passthrough: true}}, "")
-		if err != nil {
-			return filters, err
-		}
-		for _, item := range uList.Items {
-			filters = append(filters, sqltypes.Filter{
-				Field:   []string{"metadata", "namespace"},
-				Matches: []string{item.GetName()},
+func parseNamespaceOrProjectFilters(projOrNS string, op sqltypes.Op) sqltypes.OrFilter {
+	var filters []sqltypes.Filter
+	projOrNs := strings.Split(projOrNS, ",")
+	if len(projOrNs) > 0 {
+		filters = []sqltypes.Filter{
+			sqltypes.Filter{
+				Field:   []string{"metadata", "name"},
+				Matches: projOrNs,
 				Op:      op,
-				Partial: false,
-			})
+			},
+			sqltypes.Filter{
+				Field:   []string{"metadata", "labels", projectIDFieldLabel},
+				Matches: projOrNs,
+				Op:      op,
+			},
 		}
-		continue
 	}
-
-	return filters, nil
+	return sqltypes.OrFilter{Filters: filters}
 }
