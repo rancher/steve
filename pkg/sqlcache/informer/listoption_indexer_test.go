@@ -2456,17 +2456,21 @@ func TestWatchMany(t *testing.T) {
 				"replicas":    int64(1),
 				"minReplicas": float64(1.0),
 			},
+			"latestRV": "100",
 		},
 	}
 	foo.SetResourceVersion("100")
 	foo2 := foo.DeepCopy()
+	foo2.Object["latestRV"] = "120"
 	foo2.SetResourceVersion("120")
 	foo2.SetLabels(map[string]string{
 		"hello": "world",
 	})
 	foo3 := foo.DeepCopy()
+	foo3.Object["latestRV"] = "140"
 	foo3.SetResourceVersion("140")
 	foo4 := foo2.DeepCopy()
+	foo4.Object["latestRV"] = "160"
 	foo4.SetResourceVersion("160")
 
 	err = loi.Add(foo)
@@ -2566,6 +2570,7 @@ func TestWatchFilter(t *testing.T) {
 	foo.SetLabels(map[string]string{
 		"app": "foo",
 	})
+	foo.Object["latestRV"] = ""
 
 	fooUpdated := foo.DeepCopy()
 	fooUpdated.SetLabels(map[string]string{
