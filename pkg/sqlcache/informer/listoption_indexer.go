@@ -1253,24 +1253,27 @@ func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.F
 func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter sqltypes.Filter, dbName string) (string, []any, error) {
 	opString := ""
 	labelName := filter.Field[2]
+	target := "()"
+	if len(filter.Matches) > 0 {
+		target = fmt.Sprintf("(?%s)", strings.Repeat(", ?", len(filter.Matches)-1))
+	}
+	matches := make([]any, len(filter.Matches)+1)
+	matches[0] = labelName
+	for i, match := range filter.Matches {
+		matches[i+1] = match
+	}
 	switch filter.Op {
 	case sqltypes.In:
-		fallthrough
+		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value IN %s`, index, index, target)
+		return clause, matches, nil
 	case sqltypes.NotIn:
-		opString = "IN"
-		if filter.Op == sqltypes.NotIn {
-			opString = "NOT IN"
-		}
-		target := "()"
-		if len(filter.Matches) > 0 {
-			target = fmt.Sprintf("(?%s)", strings.Repeat(", ?", len(filter.Matches)-1))
-		}
-		clause := fmt.Sprintf(`lt%d.label = ? AND lt%d.value %s %s`, index, index, opString, target)
-		matches := make([]any, len(filter.Matches)+1)
-		matches[0] = labelName
-		for i, match := range filter.Matches {
-			matches[i+1] = match
-		}
+		clause1 := fmt.Sprintf(`(lt%d.label = ? AND lt%d.value NOT IN %s)`, index, index, target)
+		clause2 := fmt.Sprintf(`(o.key NOT IN (SELECT o1.key FROM "%s" o1
+		JOIN "%s_fields" f1 ON o1.key = f1.key
+		LEFT OUTER JOIN "%s_labels" lt%di1 ON o1.key = lt%di1.key
+		WHERE lt%di1.label = ?))`, dbName, dbName, dbName, index, index, index)
+		matches = append(matches, labelName)
+		clause := fmt.Sprintf("%s OR %s", clause1, clause2)
 		return clause, matches, nil
 	}
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)

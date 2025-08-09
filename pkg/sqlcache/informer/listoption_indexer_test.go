@@ -1624,9 +1624,12 @@ func TestConstructQuery(t *testing.T) {
   JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?)) AND (lt1.label = ? AND lt1.value NOT IN (?)))
+    ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
+		JOIN "something_fields" f1 ON o1.key = f1.key
+		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+		WHERE lt1i1.label = ?))))
   ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace"},
+		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace", "field.cattle.io/projectId"},
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
@@ -1655,9 +1658,12 @@ func TestConstructQuery(t *testing.T) {
   JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?, ?)) AND (lt1.label = ? AND lt1.value NOT IN (?, ?)))
+    ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
+		JOIN "something_fields" f1 ON o1.key = f1.key
+		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+		WHERE lt1i1.label = ?))))
   ORDER BY f."metadata.name" ASC `,
-		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example"},
+		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example", "field.cattle.io/projectId"},
 		expectedErr:      nil,
 	})
 	tests = append(tests, testCase{
