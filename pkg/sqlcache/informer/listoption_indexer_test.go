@@ -33,14 +33,6 @@ import (
 )
 
 func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, shouldEncrypt bool) (*ListOptionIndexer, string, error) {
-	gvk := schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "ConfigMap",
-	}
-	example := &unstructured.Unstructured{}
-	example.SetGroupVersionKind(gvk)
-	name := informerNameFromGVK(gvk)
 	m, err := encryption.NewManager()
 	if err != nil {
 		return nil, "", err
@@ -50,8 +42,34 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 	if err != nil {
 		return nil, "", err
 	}
-
+	// First create a namespace table so the projectsornamespaces query succeeds
+	gvk := schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "Namespace",
+	}
+	example := &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	name := informerNameFromGVK(gvk)
 	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
+	if err != nil {
+		return nil, "", err
+	}
+
+	gvk = schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "ConfigMap",
+	}
+	example = &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	name = informerNameFromGVK(gvk)
+
+	s, err = store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -65,7 +83,7 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		}
 	}
 
-	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
+	listOptionIndexer, err = NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1062,6 +1080,56 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a positive projectsornamespaces test should work",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "namespace"},
+						Matches: []string{"ns-b"},
+						Op:      sqltypes.In,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"ns-b"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj05__guard_lodgepole),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a negative projectsornamespaces test should work",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "namespace"},
+						Matches: []string{"ns-a"},
+						Op:      sqltypes.NotIn,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"ns-a"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj05__guard_lodgepole),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
 	//tests = append(tests, testCase{
 	//	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
 	//	partitions: []partition.Partition{
@@ -1078,6 +1146,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 	//})
 
 	t.Parallel()
+
+	// First curl the namespaces to load up the namespace database tables.
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -1107,6 +1177,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
+			assert.Nil(t, err)
 
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)

@@ -699,7 +699,7 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		if dbName != namespacesDbName {
 			fieldPrefix = "nsf"
 			query += "\n  "
-			query += fmt.Sprintf(`JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
+			query += fmt.Sprintf(`LEFT OUTER JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
 		}
 		query += "\n  "
 		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON %s.key = lt%d.key`, namespacesDbName, jtIndex, fieldPrefix, jtIndex)
@@ -720,10 +720,9 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 
 	// WHERE clauses (from lo.ProjectsOrNamespaces)
 	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
-		fieldPrefix := "nsf"
-		if dbName == namespacesDbName {
-			fieldPrefix = "f"
-		}
+		// Claim: `fieldPrefix` should always refer to the main table, not the namespace table
+		// TODO: If so, remove the fieldPrefix part from the buildClauseFromProjectsOrNamespaces function.
+		fieldPrefix := "f"
 		projOrNsClause, projOrNsParams, err := l.buildClauseFromProjectsOrNamespaces(lo.ProjectsOrNamespaces, dbName, joinTableIndexByLabelName, fieldPrefix)
 		if err != nil {
 			return queryInfo, err
@@ -1221,9 +1220,9 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.Filter, prefix string) (string, []any, error) {
+func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.Filter, fieldPrefix string) (string, []any, error) {
 	opString := ""
-	fieldEntry, err := l.getValidFieldEntry(prefix, filter.Field)
+	fieldEntry, err := l.getValidFieldEntry(fieldPrefix, filter.Field)
 	if err != nil {
 		return "", nil, err
 	}
