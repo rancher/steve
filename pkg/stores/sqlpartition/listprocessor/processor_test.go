@@ -16,6 +16,7 @@ func TestParseQuery(t *testing.T) {
 	type testCase struct {
 		description string
 		req         *types.APIRequest
+		gvKind      string // This is to distinguish Namespace projectornamespaces from others
 		expectedLO  sqltypes.ListOptions
 		errExpected bool
 		errorText   string
@@ -55,6 +56,46 @@ func TestParseQuery(t *testing.T) {
 						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
 						Matches: []string{"somethin"},
 						Op:      sqltypes.In,
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with only projectsornamespaces on a namespace GVK should return a standard filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "projectsornamespaces=elm&filter=metadata.name~beech"},
+			},
+		},
+		gvKind: "Namespace",
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"beech"},
+							Op:      sqltypes.Eq,
+							Partial: true,
+						},
+					},
+				},
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.In,
+						},
+						{
+							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.In,
+						},
 					},
 				},
 			},
@@ -758,7 +799,7 @@ func TestParseQuery(t *testing.T) {
 			//if test.description == "ParseQuery() with no errors: if projectsornamespaces is not empty, it should return an empty filter array" {
 			//	fmt.Println("stop here")
 			//}
-			lo, err := ParseQuery(test.req)
+			lo, err := ParseQuery(test.req, test.gvKind)
 			if test.errExpected {
 				assert.NotNil(t, err)
 				if test.errorText != "" {

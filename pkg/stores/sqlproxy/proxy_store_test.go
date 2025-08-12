@@ -256,7 +256,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			opts, err := listprocessor.ParseQuery(req)
+			opts, err := listprocessor.ParseQuery(req, "")
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
@@ -329,7 +329,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByPartitions doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			_, err := listprocessor.ParseQuery(req)
+			_, err := listprocessor.ParseQuery(req, "")
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
@@ -403,7 +403,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			opts, err := listprocessor.ParseQuery(req)
+			opts, err := listprocessor.ParseQuery(req, "")
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 
@@ -479,7 +479,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			_, err := listprocessor.ParseQuery(req)
+			_, err := listprocessor.ParseQuery(req, "")
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
@@ -556,7 +556,7 @@ func TestListByPartitions(t *testing.T) {
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
 			// items is equal to the list returned by ListByParititons doesn't ensure no mutation happened
 			copy(listToReturn.Items, expectedItems)
-			opts, err := listprocessor.ParseQuery(req)
+			opts, err := listprocessor.ParseQuery(req, "")
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map

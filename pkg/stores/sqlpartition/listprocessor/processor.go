@@ -77,7 +77,7 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Fil
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest) (sqltypes.ListOptions, error) {
+func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, error) {
 	opts := sqltypes.ListOptions{}
 
 	q := apiOp.Request.URL.Query()
@@ -146,7 +146,14 @@ func ParseQuery(apiOp *types.APIRequest) (sqltypes.ListOptions, error) {
 		}
 	}
 	if projectsOrNamespaces != "" {
-		opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
+		if gvKind == "Namespace" {
+			projNSFilter := parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
+			if len(projNSFilter.Filters) == 2 {
+				opts.Filters = append(opts.Filters, projNSFilter)
+			}
+		} else {
+			opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
+		}
 	}
 
 	return opts, nil
