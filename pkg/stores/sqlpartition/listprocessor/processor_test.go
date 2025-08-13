@@ -105,6 +105,78 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() with only a negative projectsornamespaces should return a project/ns filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "projectsornamespaces!=somethin"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{},
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"somethin"},
+						Op:      sqltypes.NotIn,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"somethin"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with only negative projectsornamespaces on a namespace GVK should return a standard filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "projectsornamespaces!=elm&filter=metadata.name~beech"},
+			},
+		},
+		gvKind: "Namespace",
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"beech"},
+							Op:      sqltypes.Eq,
+							Partial: true,
+						},
+					},
+				},
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.NotIn,
+						},
+					},
+				},
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.NotIn,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with filter param set should include filter with partial set to true in list options.",
 		req: &types.APIRequest{
 			Request: &http.Request{

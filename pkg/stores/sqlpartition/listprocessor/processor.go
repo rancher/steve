@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -149,7 +150,16 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 		if gvKind == "Namespace" {
 			projNSFilter := parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
 			if len(projNSFilter.Filters) == 2 {
-				opts.Filters = append(opts.Filters, projNSFilter)
+				if op == sqltypes.In {
+					opts.Filters = append(opts.Filters, projNSFilter)
+				} else {
+					opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{projNSFilter.Filters[0]}})
+					opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{projNSFilter.Filters[1]}})
+				}
+			} else if len(projNSFilter.Filters) == 0 {
+				// do nothing
+			} else {
+				logrus.Infof("Ignoring unexpected filter for query %q: parseNamespaceOrProjectFilters returned %d filters, expecting 2", q, len(projNSFilter.Filters))
 			}
 		} else {
 			opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
