@@ -1259,7 +1259,7 @@ func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter
 		clause2 := fmt.Sprintf(`(o.key NOT IN (SELECT o1.key FROM "%s" o1
 		JOIN "%s_fields" f1 ON o1.key = f1.key
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
-		LEFT OUTER JOIN "_v1_Namespace_labels" lt%di1 ON o1.key = lt%di1.key
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt%di1 ON nsf1.key = lt%di1.key
 		WHERE lt%di1.label = ?))`, dbName, dbName, index, index, index)
 		matches = append(matches, labelName)
 		clause := fmt.Sprintf("%s OR %s", clause1, clause2)

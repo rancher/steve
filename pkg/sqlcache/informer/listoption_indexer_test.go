@@ -1733,7 +1733,7 @@ func TestConstructQuery(t *testing.T) {
     ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
 		JOIN "something_fields" f1 ON o1.key = f1.key
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
-		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace", "field.cattle.io/projectId"},
@@ -1768,7 +1768,7 @@ func TestConstructQuery(t *testing.T) {
     ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
 		JOIN "something_fields" f1 ON o1.key = f1.key
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
-		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON o1.key = lt1i1.key
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example", "field.cattle.io/projectId"},
