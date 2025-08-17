@@ -75,13 +75,17 @@ var _ cache.Store = (*Store)(nil)
 
 // NewStore creates a SQLite-backed cache.Store for objects of the given example type
 func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Client, shouldEncrypt bool, gvk schema.GroupVersionKind, name string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates) (*Store, error) {
+	exampleType := reflect.TypeOf(example)
+	if exampleType.Kind() != reflect.Ptr {
+		exampleType = reflect.PointerTo(exampleType).Elem()
+	}
 	s := &Store{
 		ctx:                ctx,
 		name:               name,
 		gvk:                gvk,
 		externalUpdateInfo: externalUpdateInfo,
 		selfUpdateInfo:     selfUpdateInfo,
-		typ:                reflect.TypeOf(example),
+		typ:                exampleType,
 		Client:             c,
 		keyFunc:            keyFunc,
 		shouldEncrypt:      shouldEncrypt,
