@@ -41,18 +41,19 @@ func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection, changedSchema
 type handler struct {
 	sync.Mutex
 
-	ctx          context.Context
-	toSync       int32
-	schemas      *schema2.Collection
-	client       discovery.DiscoveryInterface
-	cols         *common.DynamicColumns
-	crdClient    apiextcontrollerv1.CustomResourceDefinitionClient
-	ssar         authorizationv1client.SelfSubjectAccessReviewInterface
-	handler      SchemasHandlerFunc
-	changedIDs   map[k8sapimachineryschema.GroupVersionKind]bool
-	createdCRDs  map[k8sapimachineryschema.GroupVersionKind]bool
-	deletedCRDs  map[k8sapimachineryschema.GroupVersionKind]bool
-	gvksFromKeys map[string][]k8sapimachineryschema.GroupVersionKind
+	ctx               context.Context
+	toSync            int32
+	schemas           *schema2.Collection
+	client            discovery.DiscoveryInterface
+	cols              *common.DynamicColumns
+	crdClient         apiextcontrollerv1.CustomResourceDefinitionClient
+	ssar              authorizationv1client.SelfSubjectAccessReviewInterface
+	handler           SchemasHandlerFunc
+	changedIDs        map[k8sapimachineryschema.GroupVersionKind]bool
+	createdCRDs       map[k8sapimachineryschema.GroupVersionKind]bool
+	deletedCRDs       map[k8sapimachineryschema.GroupVersionKind]bool
+	apiServiceChanged bool
+	gvksFromKeys      map[string][]k8sapimachineryschema.GroupVersionKind
 }
 
 func Register(ctx context.Context,
@@ -123,6 +124,7 @@ func (h *handler) OnChangeCRD(key string, crd *apiextv1.CustomResourceDefinition
 }
 
 func (h *handler) OnChangeAPIService(key string, api *apiv1.APIService) (*apiv1.APIService, error) {
+	h.apiServiceChanged = true
 	h.queueRefresh()
 	return api, nil
 }
@@ -136,6 +138,7 @@ func (h *handler) queueRefresh() {
 		var changedIDs map[k8sapimachineryschema.GroupVersionKind]bool
 		var deletedCRDs map[k8sapimachineryschema.GroupVersionKind]bool
 		var createdCRDs map[k8sapimachineryschema.GroupVersionKind]bool
+		var apiServiceChanged bool
 		h.Lock()
 		if len(h.createdCRDs) > 0 {
 			createdCRDs = h.createdCRDs
@@ -149,9 +152,13 @@ func (h *handler) queueRefresh() {
 			changedIDs = h.changedIDs
 			h.changedIDs = make(map[k8sapimachineryschema.GroupVersionKind]bool)
 		}
+		if h.apiServiceChanged {
+			apiServiceChanged = true
+			h.apiServiceChanged = false
+		}
 		h.Unlock()
 		crdNumCountChanged := len(deletedCRDs) > 0 || len(createdCRDs) > 0
-		if len(changedIDs) > 0 || crdNumCountChanged {
+		if len(changedIDs) > 0 || apiServiceChanged || crdNumCountChanged {
 			err = h.refreshAll(h.ctx, changedIDs, crdNumCountChanged)
 		}
 		if err != nil {
