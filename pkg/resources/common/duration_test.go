@@ -15,6 +15,16 @@ func TestParseHumanReadableDuration(t *testing.T) {
 		expectedErr bool
 	}{
 		{
+			name:     "years + days",
+			input:    "2y10d",
+			expected: (2*365+10)*24*time.Hour,
+		},
+		{
+			name:     "years + days + hours + mins + secs",
+			input:    "3y1d23h45m56s",
+			expected: (3*365+1)*24*time.Hour + 23*time.Hour + 45*time.Minute + 56*time.Second,
+		},
+		{
 			name:     "days + hours + mins + secs",
 			input:    "1d23h45m56s",
 			expected: 24*time.Hour + 23*time.Hour + 45*time.Minute + 56*time.Second,
