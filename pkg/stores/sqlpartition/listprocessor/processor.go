@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/queryparser"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/selection"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -77,7 +78,7 @@ func k8sRequirementToOrFilter(requirement queryparser.Requirement) (sqltypes.Fil
 }
 
 // ParseQuery parses the query params of a request and returns a ListOptions.
-func ParseQuery(apiOp *types.APIRequest) (sqltypes.ListOptions, error) {
+func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, error) {
 	opts := sqltypes.ListOptions{}
 
 	q := apiOp.Request.URL.Query()
@@ -146,7 +147,23 @@ func ParseQuery(apiOp *types.APIRequest) (sqltypes.ListOptions, error) {
 		}
 	}
 	if projectsOrNamespaces != "" {
-		opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
+		if gvKind == "Namespace" {
+			projNSFilter := parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
+			if len(projNSFilter.Filters) == 2 {
+				if op == sqltypes.In {
+					opts.Filters = append(opts.Filters, projNSFilter)
+				} else {
+					opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{projNSFilter.Filters[0]}})
+					opts.Filters = append(opts.Filters, sqltypes.OrFilter{Filters: []sqltypes.Filter{projNSFilter.Filters[1]}})
+				}
+			} else if len(projNSFilter.Filters) == 0 {
+				// do nothing
+			} else {
+				logrus.Infof("Ignoring unexpected filter for query %q: parseNamespaceOrProjectFilters returned %d filters, expecting 2", q, len(projNSFilter.Filters))
+			}
+		} else {
+			opts.ProjectsOrNamespaces = parseNamespaceOrProjectFilters(projectsOrNamespaces, op)
+		}
 	}
 
 	return opts, nil

@@ -32,15 +32,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, shouldEncrypt bool) (*ListOptionIndexer, string, error) {
-	gvk := schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "ConfigMap",
-	}
-	example := &unstructured.Unstructured{}
-	example.SetGroupVersionKind(gvk)
-	name := informerNameFromGVK(gvk)
+var emptyNamespaceList = &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+
+func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, shouldEncrypt bool, nsList *unstructured.UnstructuredList) (*ListOptionIndexer, string, error) {
 	m, err := encryption.NewManager()
 	if err != nil {
 		return nil, "", err
@@ -50,8 +44,44 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 	if err != nil {
 		return nil, "", err
 	}
-
+	// First create a namespace table so the projectsornamespaces query succeeds
+	gvk := schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "Namespace",
+	}
+	example := &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	name := informerNameFromGVK(gvk)
 	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	ns_opts := ListOptionIndexerOptions{
+		Fields:       [][]string{},
+		IsNamespaced: false,
+	}
+	listOptionIndexer, err := NewListOptionIndexer(ctx, s, ns_opts)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, item := range nsList.Items {
+		err = listOptionIndexer.Add(&item)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	gvk = schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "ConfigMap",
+	}
+	example = &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	name = informerNameFromGVK(gvk)
+
+	s, err = store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -65,7 +95,7 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		}
 	}
 
-	listOptionIndexer, err := NewListOptionIndexer(ctx, s, opts)
+	listOptionIndexer, err = NewListOptionIndexer(ctx, s, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -491,8 +521,25 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		obj04_milk,
 		obj05__guard_lodgepole,
 	}
+	ns_a := map[string]any{
+		"metadata": map[string]any{
+			"name": "ns-a",
+			"labels": map[string]any{
+				"guard.cattle.io": "ponderosa",
+			},
+		},
+	}
+	ns_b := map[string]any{
+		"metadata": map[string]any{
+			"name": "ns-b",
+			"labels": map[string]any{
+				"field.cattle.io/projectId": "ns-b",
+			},
+		},
+	}
 
 	itemList := makeList(t, allObjects...)
+	namespaceList := makeList(t, ns_a, ns_b)
 
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -1062,6 +1109,56 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a positive projectsornamespaces test should work",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"ns-b"},
+						Op:      sqltypes.In,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"ns-b"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj05__guard_lodgepole),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions with a negative projectsornamespaces test should work",
+		listOptions: sqltypes.ListOptions{
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"ns-a"},
+						Op:      sqltypes.NotIn,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"ns-a"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+		},
+		partitions:        []partition.Partition{{All: true}},
+		ns:                "",
+		expectedList:      makeList(t, obj05__guard_lodgepole),
+		expectedTotal:     1,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
 	//tests = append(tests, testCase{
 	//	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
 	//	partitions: []partition.Partition{
@@ -1079,6 +1176,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 
 	t.Parallel()
 
+	// First curl the namespaces to load up the namespace database tables.
+
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			fields := [][]string{
@@ -1093,7 +1192,10 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+			if test.description == "ListByOptions with a positive projectsornamespaces test should work" {
+				fmt.Println("Stop here")
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, namespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -1101,12 +1203,16 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				err = loi.Add(&item)
 				assert.NoError(t, err)
 			}
+			if test.description == "ListByOptions with a positive projectsornamespaces test should work" {
+				fmt.Println("Stop here")
+			}
 
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
 			}
+			assert.Nil(t, err)
 
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)
@@ -1190,7 +1296,7 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(b, err)
 	for _, item := range itemList.Items {
@@ -1442,7 +1548,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -1555,7 +1661,7 @@ func TestConstructQuery(t *testing.T) {
 		ns: "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
     ((nsf."metadata.name" IN (?)) OR (lt1.label = ? AND lt1.value IN (?)))
@@ -1590,7 +1696,7 @@ func TestConstructQuery(t *testing.T) {
 		ns: "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
     ((nsf."metadata.name" IN (?, ?)) OR (lt1.label = ? AND lt1.value IN (?, ?)))
@@ -1621,12 +1727,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
     ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
 		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace", "field.cattle.io/projectId"},
@@ -1655,12 +1762,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
+  LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
     ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
 		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
   ORDER BY f."metadata.name" ASC `,
 		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example", "field.cattle.io/projectId"},
@@ -2314,7 +2422,10 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.queryField1", "status.queryField2", "spec.containers.image", "metadata.name"},
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "spec.containers.image", "metadata.name", "metadata.namespace"},
+			}
+			if test.description == "TestConstructQuery: handles ProjectOrNamespaces NOT IN" {
+				fmt.Println("stop here")
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
@@ -2608,7 +2719,7 @@ func TestWatchEncryption(t *testing.T) {
 		IsNamespaced: true,
 	}
 	// shouldEncrypt = true to ensure we can write + read from encrypted events
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, true)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, true, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -2694,7 +2805,7 @@ func TestWatchMany(t *testing.T) {
 		},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -2951,7 +3062,7 @@ func TestWatchFilter(t *testing.T) {
 				Fields:       [][]string{{"metadata", "somefield"}},
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -3045,7 +3156,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -3199,7 +3310,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 		GCInterval:  40 * time.Millisecond,
 		GCKeepCount: 2,
 	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -3310,7 +3421,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 		Fields:       [][]string{{"metadata", "somefield"}},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 

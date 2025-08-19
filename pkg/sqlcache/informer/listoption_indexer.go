@@ -691,18 +691,10 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 		if _, exists := joinTableIndexByLabelName[projectIDFieldLabel]; !exists {
 			joinTableIndexByLabelName[projectIDFieldLabel] = jtIndex
 		}
-
-		// if we're looking for ProjectsOrNamespaces while querying for _v1_Namespaces (not very usual, but possible),
-		// we need to change the field prefix from 'nsf' which means namespaces fields to 'f' which is the default join
-		// name for every object, also we do not need to join namespaces again
-		fieldPrefix := "f"
-		if dbName != namespacesDbName {
-			fieldPrefix = "nsf"
-			query += "\n  "
-			query += fmt.Sprintf(`JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
-		}
 		query += "\n  "
-		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON %s.key = lt%d.key`, namespacesDbName, jtIndex, fieldPrefix, jtIndex)
+		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"`, namespacesDbName)
+		query += "\n  "
+		query += fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON nsf.key = lt%d.key`, namespacesDbName, jtIndex, jtIndex)
 	}
 
 	// 2- Filtering: WHERE clauses (from lo.Filters)
@@ -720,11 +712,7 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 
 	// WHERE clauses (from lo.ProjectsOrNamespaces)
 	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
-		fieldPrefix := "nsf"
-		if dbName == namespacesDbName {
-			fieldPrefix = "f"
-		}
-		projOrNsClause, projOrNsParams, err := l.buildClauseFromProjectsOrNamespaces(lo.ProjectsOrNamespaces, dbName, joinTableIndexByLabelName, fieldPrefix)
+		projOrNsClause, projOrNsParams, err := l.buildClauseFromProjectsOrNamespaces(lo.ProjectsOrNamespaces, dbName, joinTableIndexByLabelName)
 		if err != nil {
 			return queryInfo, err
 		}
@@ -1034,7 +1022,7 @@ func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter
 	return fmt.Sprintf("(%s)", strings.Join(clauses, ") OR (")), params, nil
 }
 
-func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int, fieldPrefix string) (string, []any, error) {
+func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltypes.OrFilter, dbName string, joinTableIndexByLabelName map[string]int) (string, []any, error) {
 	var params []any
 	var newParams []any
 	var newClause string
@@ -1053,7 +1041,7 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 			}
 			newClause, newParams, err = l.getProjectsOrNamespacesLabelFilter(index, filter, dbName)
 		} else {
-			newClause, newParams, err = l.getProjectsOrNamespacesFieldFilter(filter, fieldPrefix)
+			newClause, newParams, err = l.getProjectsOrNamespacesFieldFilter(filter)
 		}
 		if err != nil {
 			return "", nil, err
@@ -1221,9 +1209,9 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
 
-func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.Filter, prefix string) (string, []any, error) {
+func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.Filter) (string, []any, error) {
 	opString := ""
-	fieldEntry, err := l.getValidFieldEntry(prefix, filter.Field)
+	fieldEntry, err := l.getValidFieldEntry("nsf", filter.Field)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1270,8 +1258,9 @@ func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter
 		clause1 := fmt.Sprintf(`(lt%d.label = ? AND lt%d.value NOT IN %s)`, index, index, target)
 		clause2 := fmt.Sprintf(`(o.key NOT IN (SELECT o1.key FROM "%s" o1
 		JOIN "%s_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "%s_labels" lt%di1 ON o1.key = lt%di1.key
-		WHERE lt%di1.label = ?))`, dbName, dbName, dbName, index, index, index)
+		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
+		LEFT OUTER JOIN "_v1_Namespace_labels" lt%di1 ON nsf1.key = lt%di1.key
+		WHERE lt%di1.label = ?))`, dbName, dbName, index, index, index)
 		matches = append(matches, labelName)
 		clause := fmt.Sprintf("%s OR %s", clause1, clause2)
 		return clause, matches, nil
