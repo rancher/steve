@@ -41,6 +41,9 @@ func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection, changedSchema
 type handler struct {
 	sync.Mutex
 
+	// refreshLock prevents refreshAll to be run in parallel
+	refreshLock sync.Mutex
+
 	ctx               context.Context
 	toSync            int32
 	schemas           *schema2.Collection
@@ -222,8 +225,8 @@ func (h *handler) getColumns(ctx context.Context, schemas map[string]*types.APIS
 }
 
 func (h *handler) refreshAll(ctx context.Context, changedGVKs map[k8sapimachineryschema.GroupVersionKind]bool, forceChange bool) error {
-	h.Lock()
-	defer h.Unlock()
+	h.refreshLock.Lock()
+	defer h.refreshLock.Unlock()
 
 	if !h.needToSync() {
 		return nil
