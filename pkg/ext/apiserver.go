@@ -301,6 +301,7 @@ func (s *ExtensionAPIServer) Install(resourceName string, gvk schema.GroupVersio
 	apiGroup, ok := s.apiGroups[gvk.Group]
 	if !ok {
 		apiGroup = genericapiserver.NewDefaultAPIGroupInfo(gvk.Group, s.scheme, metav1.ParameterCodec, s.codecs)
+		apiGroup.NegotiatedSerializer = &withoutProtobufNegotiatedSerializer{s.codecs}
 	}
 
 	_, ok = apiGroup.VersionedResourcesStorageMap[gvk.Version]
@@ -331,4 +332,27 @@ func getDefinitionName(scheme *runtime.Scheme, replacements map[string]string) f
 
 func (s *ExtensionAPIServer) Registered() <-chan struct{} {
 	return s.registeredChan
+}
+
+type withoutProtobufNegotiatedSerializer struct {
+	codec serializer.CodecFactory
+}
+
+func (w *withoutProtobufNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
+	var serializers []runtime.SerializerInfo
+	for _, serializer := range w.codec.SupportedMediaTypes() {
+		if serializer.MediaType != "application/yaml" && serializer.MediaType != "application/json" {
+			continue
+		}
+		serializers = append(serializers, serializer)
+	}
+	return serializers
+}
+
+func (w *withoutProtobufNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder, gv runtime.GroupVersioner) runtime.Encoder {
+	return w.codec.EncoderForVersion(serializer, gv)
+}
+
+func (w *withoutProtobufNegotiatedSerializer) DecoderToVersion(serializer runtime.Decoder, gv runtime.GroupVersioner) runtime.Decoder {
+	return w.codec.DecoderToVersion(serializer, gv)
 }
