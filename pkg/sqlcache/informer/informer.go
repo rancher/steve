@@ -145,7 +145,9 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 func (i *Informer) Run(stopCh <-chan struct{}) {
 	var wg wait.Group
 	wg.StartWithChannel(stopCh, i.SharedIndexInformer.Run)
-	wg.StartWithContext(wait.ContextForChannel(stopCh), i.loi.RunGC)
+	if i.loi != nil {
+		wg.StartWithContext(wait.ContextForChannel(stopCh), i.loi.RunGC)
+	}
 	wg.Wait()
 }
 
