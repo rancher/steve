@@ -44,6 +44,11 @@ type ListOptionIndexer struct {
 	watchersLock sync.RWMutex
 	watchers     map[*watchKey]*watcher
 
+	// gcInterval is how often to run the garbage collection
+	gcInterval time.Duration
+	// gcKeepCount is how many events to keep in _events table when gc runs
+	gcKeepCount int
+
 	upsertEventsQuery        string
 	findEventsRowByRVQuery   string
 	listEventsAfterQuery     string
@@ -282,7 +287,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.deleteLabelsByKeyStmt = l.Prepare(l.deleteLabelsByKeyQuery)
 	l.deleteLabelsStmt = l.Prepare(l.deleteLabelsQuery)
 
-	go l.runGC(ctx, opts.GCInterval, opts.GCKeepCount)
+	l.gcInterval = opts.GCInterval
+	l.gcKeepCount = opts.GCKeepCount
 
 	return l, nil
 }
@@ -1554,21 +1560,22 @@ func matchFilter(filterName string, filterNamespace string, filterSelector label
 	return true
 }
 
-func (l *ListOptionIndexer) runGC(ctx context.Context, interval time.Duration, keepCount int) {
-	if interval == 0 || keepCount == 0 {
+func (l *ListOptionIndexer) RunGC(ctx context.Context) {
+	if l.gcInterval == 0 || l.gcKeepCount == 0 {
 		return
 	}
 
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(l.gcInterval)
 	defer ticker.Stop()
 
-	logrus.Infof("Started SQL cache garbage collection for %s (interval=%s, keep=%d)", l.GetName(), interval, keepCount)
+	logrus.Infof("Started SQL cache garbage collection for %s (interval=%s, keep=%d)", l.GetName(), l.gcInterval, l.gcKeepCount)
+	defer logrus.Infof("Stopped SQL cache garbage collection for %s (interval=%s, keep=%d)", l.GetName(), l.gcInterval, l.gcKeepCount)
 
 	for {
 		select {
 		case <-ticker.C:
 			err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
-				_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(keepCount)
+				_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(l.gcKeepCount)
 				if err != nil {
 					return &db.QueryError{QueryString: l.deleteEventsByCountQuery, Err: err}
 				}

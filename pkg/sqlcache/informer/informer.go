@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
@@ -32,6 +33,7 @@ var defaultRefreshTime = 5 * time.Second
 type Informer struct {
 	cache.SharedIndexInformer
 	ByOptionsLister
+	loi *ListOptionIndexer
 }
 
 type WatchOptions struct {
@@ -135,7 +137,24 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	return &Informer{
 		SharedIndexInformer: sii,
 		ByOptionsLister:     loi,
+		loi:                 loi,
 	}, nil
+}
+
+// Run implements [cache.SharedIndexInformer]
+func (i *Informer) Run(stopCh <-chan struct{}) {
+	var wg wait.Group
+	wg.StartWithChannel(stopCh, i.SharedIndexInformer.Run)
+	wg.StartWithContext(wait.ContextForChannel(stopCh), i.loi.RunGC)
+	wg.Wait()
+}
+
+// RunWithContext implements [cache.SharedIndexInformer]
+func (i *Informer) RunWithContext(ctx context.Context) {
+	var wg wait.Group
+	wg.StartWithContext(ctx, i.SharedIndexInformer.RunWithContext)
+	wg.StartWithContext(ctx, i.loi.RunGC)
+	wg.Wait()
 }
 
 // ListByOptions returns objects according to the specified list options and partitions.
