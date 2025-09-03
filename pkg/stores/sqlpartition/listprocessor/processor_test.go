@@ -1,31 +1,25 @@
 package listprocessor
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 //go:generate mockgen --build_flags=--mod=mod -package listprocessor -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache
 
 func TestParseQuery(t *testing.T) {
 	type testCase struct {
-		description  string
-		setupNSCache func() Cache
-		nsc          Cache
-		req          *types.APIRequest
-		expectedLO   sqltypes.ListOptions
-		errExpected  bool
-		errorText    string
+		description string
+		req         *types.APIRequest
+		gvKind      string // This is to distinguish Namespace projectornamespaces from others
+		expectedLO  sqltypes.ListOptions
+		errExpected bool
+		errorText   string
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
@@ -43,116 +37,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If projectsornamespaces is not empty" +
-			" and nsc returns namespaces, they should be included as filters.",
-		req: &types.APIRequest{
-			Request: &http.Request{
-				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
-			},
-		},
-		expectedLO: sqltypes.ListOptions{
-			Filters: []sqltypes.OrFilter{
-				{
-					Filters: []sqltypes.Filter{
-						{
-							Field:   []string{"metadata", "namespace"},
-							Matches: []string{"ns1"},
-							Op:      sqltypes.Eq,
-							Partial: false,
-						},
-					},
-				},
-			},
-			Pagination: sqltypes.Pagination{
-				Page: 1,
-			},
-		},
-		setupNSCache: func() Cache {
-			list := &unstructured.UnstructuredList{
-				Items: []unstructured.Unstructured{
-					{
-						Object: map[string]interface{}{
-							"metadata": map[string]interface{}{
-								"name": "ns1",
-							},
-						},
-					},
-				},
-			}
-			nsc := NewMockCache(gomock.NewController(t))
-			nsc.EXPECT().ListByOptions(context.Background(), &sqltypes.ListOptions{
-				Filters: []sqltypes.OrFilter{
-					{
-						Filters: []sqltypes.Filter{
-							{
-								Field:   []string{"metadata", "name"},
-								Matches: []string{"somethin"},
-								Op:      sqltypes.Eq,
-							},
-							{
-								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
-								Matches: []string{"somethin"},
-								Op:      sqltypes.Eq,
-							},
-						},
-					},
-				},
-			}, []partition.Partition{{Passthrough: true}}, "").Return(list, len(list.Items), "", nil)
-			return nsc
-		},
-	})
-	tests = append(tests, testCase{
-		description: "ParseQuery() with a namespace informer error returned should return an error.",
-		req: &types.APIRequest{
-			Request: &http.Request{
-				// namespace informer is only used if projectsornamespace param is given
-				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
-			},
-		},
-		expectedLO: sqltypes.ListOptions{
-			Filters: []sqltypes.OrFilter{
-				{
-					Filters: []sqltypes.Filter{
-						{
-							Field:   []string{"metadata", "namespace"},
-							Matches: []string{"ns1"},
-							Op:      sqltypes.Eq,
-							Partial: false,
-						},
-					},
-				},
-			},
-			Pagination: sqltypes.Pagination{
-				Page: 1,
-			},
-		},
-		errExpected: true,
-		setupNSCache: func() Cache {
-			nsi := NewMockCache(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), &sqltypes.ListOptions{
-				Filters: []sqltypes.OrFilter{
-					{
-						Filters: []sqltypes.Filter{
-							{
-								Field:   []string{"metadata", "name"},
-								Matches: []string{"somethin"},
-								Op:      sqltypes.Eq,
-							},
-							{
-								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
-								Matches: []string{"somethin"},
-								Op:      sqltypes.Eq,
-							},
-						},
-					},
-				},
-			}, []partition.Partition{{Passthrough: true}}, "").Return(nil, 0, "", fmt.Errorf("error"))
-			return nsi
-		},
-	})
-	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If projectsornamespaces is not empty" +
-			" and nsc does not return namespaces, it should return an empty filter array",
+		description: "ParseQuery() with only projectsornamespaces should return a project/ns filter.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "projectsornamespaces=somethin"},
@@ -160,35 +45,135 @@ func TestParseQuery(t *testing.T) {
 		},
 		expectedLO: sqltypes.ListOptions{
 			Filters: []sqltypes.OrFilter{},
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"somethin"},
+						Op:      sqltypes.In,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"somethin"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
 			Pagination: sqltypes.Pagination{
 				Page: 1,
 			},
 		},
-		errExpected: true,
-		setupNSCache: func() Cache {
-			list := &unstructured.UnstructuredList{
-				Items: []unstructured.Unstructured{},
-			}
-			nsi := NewMockCache(gomock.NewController(t))
-			nsi.EXPECT().ListByOptions(context.Background(), &sqltypes.ListOptions{
-				Filters: []sqltypes.OrFilter{
-					{
-						Filters: []sqltypes.Filter{
-							{
-								Field:   []string{"metadata", "name"},
-								Matches: []string{"somethin"},
-								Op:      sqltypes.Eq,
-							},
-							{
-								Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
-								Matches: []string{"somethin"},
-								Op:      sqltypes.Eq,
-							},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with only projectsornamespaces on a namespace GVK should return a standard filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "projectsornamespaces=elm&filter=metadata.name~beech"},
+			},
+		},
+		gvKind: "Namespace",
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"beech"},
+							Op:      sqltypes.Eq,
+							Partial: true,
 						},
 					},
 				},
-			}, []partition.Partition{{Passthrough: true}}, "").Return(list, len(list.Items), "", nil)
-			return nsi
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.In,
+						},
+						{
+							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.In,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with only a negative projectsornamespaces should return a project/ns filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "projectsornamespaces!=somethin"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{},
+			ProjectsOrNamespaces: sqltypes.OrFilter{
+				Filters: []sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "name"},
+						Matches: []string{"somethin"},
+						Op:      sqltypes.NotIn,
+					},
+					{
+						Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+						Matches: []string{"somethin"},
+						Op:      sqltypes.NotIn,
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with only negative projectsornamespaces on a namespace GVK should return a standard filter.",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "projectsornamespaces!=elm&filter=metadata.name~beech"},
+			},
+		},
+		gvKind: "Namespace",
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"beech"},
+							Op:      sqltypes.Eq,
+							Partial: true,
+						},
+					},
+				},
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.NotIn,
+						},
+					},
+				},
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "labels", "field.cattle.io/projectId"},
+							Matches: []string{"elm"},
+							Op:      sqltypes.NotIn,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
 		},
 	})
 	tests = append(tests, testCase{
@@ -848,9 +833,6 @@ func TestParseQuery(t *testing.T) {
 				Page: 1,
 			},
 		},
-		setupNSCache: func() Cache {
-			return nil
-		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() with no errors returned should returned no errors. If page param is given, page" +
@@ -886,12 +868,7 @@ func TestParseQuery(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			if test.setupNSCache == nil {
-				test.nsc = nil
-			} else {
-				test.nsc = test.setupNSCache()
-			}
-			lo, err := ParseQuery(test.req, test.nsc)
+			lo, err := ParseQuery(test.req, test.gvKind)
 			if test.errExpected {
 				assert.NotNil(t, err)
 				if test.errorText != "" {
