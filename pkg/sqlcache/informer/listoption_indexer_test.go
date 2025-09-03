@@ -1590,7 +1590,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false)
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
