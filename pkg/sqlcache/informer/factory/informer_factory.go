@@ -113,7 +113,7 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// First of all block Reset() until we are done
 	f.mutex.RLock()
-	cache, err := f.cacheFor(ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
+	cache, err := f.cacheForLocked(ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
 	if err != nil {
 		f.mutex.RUnlock()
 		return nil, err
@@ -121,7 +121,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 	return cache, nil
 }
 
-func (f *CacheFactory) cacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
+func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// Second, check if the informer and its accompanying informer-specific mutex exist already in the informers cache
 	// If not, start by creating such informer-specific mutex. That is used later to ensure no two goroutines create
 	// informers for the same GVK at the same type
