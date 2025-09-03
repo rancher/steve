@@ -72,7 +72,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -97,7 +97,7 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(5 * time.Second)
 			f.cancel()
 		}()
-		var c Cache
+		var c *Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
@@ -163,7 +163,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -184,7 +184,7 @@ func TestCacheFor(t *testing.T) {
 		f.ctx, f.cancel = context.WithCancel(context.Background())
 		f.cancel()
 
-		var c Cache
+		var c *Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
@@ -204,7 +204,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -229,7 +229,7 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(10 * time.Second)
 			f.cancel()
 		}()
-		var c Cache
+		var c *Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
@@ -254,7 +254,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -279,7 +279,7 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(10 * time.Second)
 			f.cancel()
 		}()
-		var c Cache
+		var c *Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
@@ -303,7 +303,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -328,7 +328,7 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(10 * time.Second)
 			f.cancel()
 		}()
-		var c Cache
+		var c *Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
@@ -352,7 +352,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -385,7 +385,7 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(5 * time.Second)
 			f.cancel()
 		}()
-		var c Cache
+		var c *Cache
 		var err error
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
@@ -405,7 +405,7 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 		}
-		expectedC := Cache{
+		expectedC := &Cache{
 			ByOptionsLister: i,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
@@ -433,7 +433,7 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(10 * time.Second)
 			f.cancel()
 		}()
-		var c Cache
+		var c *Cache
 		var err error
 		// CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool)
 		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)

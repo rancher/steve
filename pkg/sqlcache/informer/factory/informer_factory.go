@@ -108,11 +108,20 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 
 // CacheFor returns an informer for given GVK, using sql store indexed with fields, using the specified client. For virtual fields, they must be added by the transform function
 // and specified by fields to be used for later fields.
-func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (Cache, error) {
+//
+// Don't forget to call DoneWithCache with the given informer once done with it.
+func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// First of all block Reset() until we are done
 	f.mutex.RLock()
-	defer f.mutex.RUnlock()
+	cache, err := f.cacheFor(ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
+	if err != nil {
+		f.mutex.RUnlock()
+		return nil, err
+	}
+	return cache, nil
+}
 
+func (f *CacheFactory) cacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// Second, check if the informer and its accompanying informer-specific mutex exist already in the informers cache
 	// If not, start by creating such informer-specific mutex. That is used later to ensure no two goroutines create
 	// informers for the same GVK at the same type
@@ -146,7 +155,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 		shouldEncrypt := f.encryptAll || encryptResourceAlways
 		i, err := f.newInformer(f.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, f.gcInterval, f.gcKeepCount)
 		if err != nil {
-			return Cache{}, err
+			return nil, err
 		}
 
 		err = i.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
@@ -157,7 +166,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 			cache.DefaultWatchErrorHandler(ctx, r, err)
 		})
 		if err != nil {
-			return Cache{}, err
+			return nil, err
 		}
 
 		f.wg.StartWithChannel(f.ctx.Done(), i.Run)
@@ -166,11 +175,18 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 	}
 
 	if !cache.WaitForCacheSync(f.ctx.Done(), gi.informer.HasSynced) {
-		return Cache{}, fmt.Errorf("failed to sync SQLite Informer cache for GVK %v", gvk)
+		return nil, fmt.Errorf("failed to sync SQLite Informer cache for GVK %v", gvk)
 	}
 
 	// At this point the informer is ready, return it
-	return Cache{ByOptionsLister: gi.informer}, nil
+	return &Cache{ByOptionsLister: gi.informer}, nil
+}
+
+// DoneWithCache must be called for every CacheFor call.
+//
+// This ensures that there aren't any inflight list requests while we are resetting the database.
+func (f *CacheFactory) DoneWithCache(_ *Cache) {
+	f.mutex.RUnlock()
 }
 
 // Reset cancels ctx which stops any running informers, assigns a new ctx, resets the GVK-informer cache, and resets
@@ -187,8 +203,8 @@ func (f *CacheFactory) Reset() error {
 
 	// now that we are alone, stop all informers created until this point
 	f.cancel()
-	f.ctx, f.cancel = context.WithCancel(context.Background())
 	f.wg.Wait()
+	f.ctx, f.cancel = context.WithCancel(context.Background())
 
 	// and get rid of all references to those informers and their mutexes
 	f.informersMutex.Lock()
