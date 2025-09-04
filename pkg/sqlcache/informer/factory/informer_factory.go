@@ -185,13 +185,15 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, ex
 // DoneWithCache must be called for every CacheFor call.
 //
 // This ensures that there aren't any inflight list requests while we are resetting the database.
+//
+// TODO: Use the *Cache once we go per-GVK
 func (f *CacheFactory) DoneWithCache(_ *Cache) {
 	f.mutex.RUnlock()
 }
 
-// Reset cancels ctx which stops any running informers, assigns a new ctx, resets the GVK-informer cache, and resets
+// Stop cancels ctx which stops any running informers, assigns a new ctx, resets the GVK-informer cache, and resets
 // the database connection which wipes any current sqlite database at the default location.
-func (f *CacheFactory) Reset() error {
+func (f *CacheFactory) Stop() error {
 	if f.dbClient == nil {
 		// nothing to reset
 		return nil
