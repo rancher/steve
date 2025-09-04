@@ -293,18 +293,18 @@ func (mr *MockCacheFactoryMockRecorder) DoneWithCache(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoneWithCache", reflect.TypeOf((*MockCacheFactory)(nil).DoneWithCache), arg0)
 }
 
-// Reset mocks base method.
-func (m *MockCacheFactory) Reset() error {
+// Stop mocks base method.
+func (m *MockCacheFactory) Stop(gvk schema.GroupVersionKind) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Reset")
+	ret := m.ctrl.Call(m, "Stop", gvk)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Reset indicates an expected call of Reset.
-func (mr *MockCacheFactoryMockRecorder) Reset() *gomock.Call {
+// Stop indicates an expected call of Stop.
+func (mr *MockCacheFactoryMockRecorder) Stop(gvk any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockCacheFactory)(nil).Reset))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockCacheFactory)(nil).Stop), gvk)
 }
 
 // MockSchemaColumnSetter is a mock of SchemaColumnSetter interface.

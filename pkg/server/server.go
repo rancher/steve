@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/aggregation"
+	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
@@ -213,7 +214,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, false)
+		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, true)
 		if err != nil {
 			panic(err)
 		}
@@ -265,6 +266,9 @@ func setup(ctx context.Context, server *Server) error {
 							return slices.Equal(s1, s2)
 						}) {
 						resetEverything = true
+						if err := sqlStore.Reset(attributes.GVK(theSchema)); err != nil {
+							return err
+						}
 					}
 					fieldsForSchema[id] = newFields
 				}
@@ -278,9 +282,6 @@ func setup(ctx context.Context, server *Server) error {
 				return nil
 			}
 			if err := ccache.OnSchemas(schemas); err != nil {
-				return err
-			}
-			if err := sqlStore.Reset(); err != nil {
 				return err
 			}
 			return nil

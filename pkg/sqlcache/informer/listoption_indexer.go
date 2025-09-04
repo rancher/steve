@@ -53,23 +53,29 @@ type ListOptionIndexer struct {
 	findEventsRowByRVQuery   string
 	listEventsAfterQuery     string
 	deleteEventsByCountQuery string
+	dropEventsQuery          string
 	addFieldsQuery           string
 	deleteFieldsByKeyQuery   string
 	deleteFieldsQuery        string
+	dropFieldsQuery          string
 	upsertLabelsQuery        string
 	deleteLabelsByKeyQuery   string
 	deleteLabelsQuery        string
+	dropLabelsQuery          string
 
 	upsertEventsStmt        *sql.Stmt
 	findEventsRowByRVStmt   *sql.Stmt
 	listEventsAfterStmt     *sql.Stmt
 	deleteEventsByCountStmt *sql.Stmt
+	dropEventsStmt          *sql.Stmt
 	addFieldsStmt           *sql.Stmt
 	deleteFieldsByKeyStmt   *sql.Stmt
 	deleteFieldsStmt        *sql.Stmt
+	dropFieldsStmt          *sql.Stmt
 	upsertLabelsStmt        *sql.Stmt
 	deleteLabelsByKeyStmt   *sql.Stmt
 	deleteLabelsStmt        *sql.Stmt
+	dropLabelsStmt          *sql.Stmt
 }
 
 var (
@@ -112,6 +118,7 @@ const (
 	        SELECT rowid FROM "%s_events" ORDER BY rowid DESC LIMIT ?
 	    ) q
 	)`
+	dropEventsFmt = `DROP TABLE IF EXISTS "%s_events"`
 
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
 			key TEXT NOT NULL PRIMARY KEY,
@@ -119,6 +126,7 @@ const (
 	   )`
 	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
 	deleteFieldsFmt      = `DELETE FROM "%s_fields"`
+	dropFieldsFmt        = `DROP TABLE IF EXISTS "%s_fields"`
 
 	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 
@@ -133,6 +141,7 @@ const (
 	upsertLabelsStmtFmt      = `REPLACE INTO "%s_labels"(key, label, value) VALUES (?, ?, ?)`
 	deleteLabelsByKeyStmtFmt = `DELETE FROM "%s_labels" WHERE KEY = ?`
 	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
+	dropLabelsStmtFmt        = `DROP TABLE IF EXISTS "%s_labels"`
 )
 
 type ListOptionIndexerOptions struct {
@@ -190,6 +199,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterAfterDelete(l.notifyEventDeleted)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
+	l.RegisterBeforeDropAll(l.dropEvents)
+	l.RegisterBeforeDropAll(l.dropLabels)
+	l.RegisterBeforeDropAll(l.dropFields)
 	columnDefs := make([]string, len(indexedFields))
 	for index, field := range indexedFields {
 		column := fmt.Sprintf(`"%s" TEXT`, field)
@@ -266,6 +278,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.deleteEventsByCountQuery = fmt.Sprintf(deleteEventsByCountFmt, dbName, dbName)
 	l.deleteEventsByCountStmt = l.Prepare(l.deleteEventsByCountQuery)
 
+	l.dropEventsQuery = fmt.Sprintf(dropEventsFmt, dbName)
+	l.dropEventsStmt = l.Prepare(l.dropEventsQuery)
+
 	l.addFieldsQuery = fmt.Sprintf(
 		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO UPDATE SET %s`,
 		dbName,
@@ -275,17 +290,21 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	)
 	l.deleteFieldsByKeyQuery = fmt.Sprintf(`DELETE FROM "%s_fields" WHERE key = ?`, dbName)
 	l.deleteFieldsQuery = fmt.Sprintf(deleteFieldsFmt, dbName)
+	l.dropFieldsQuery = fmt.Sprintf(dropFieldsFmt, dbName)
 
 	l.addFieldsStmt = l.Prepare(l.addFieldsQuery)
 	l.deleteFieldsByKeyStmt = l.Prepare(l.deleteFieldsByKeyQuery)
 	l.deleteFieldsStmt = l.Prepare(l.deleteFieldsQuery)
+	l.dropFieldsStmt = l.Prepare(l.dropFieldsQuery)
 
 	l.upsertLabelsQuery = fmt.Sprintf(upsertLabelsStmtFmt, dbName)
 	l.deleteLabelsByKeyQuery = fmt.Sprintf(deleteLabelsByKeyStmtFmt, dbName)
 	l.deleteLabelsQuery = fmt.Sprintf(deleteLabelsStmtFmt, dbName)
+	l.dropLabelsQuery = fmt.Sprintf(dropLabelsStmtFmt, dbName)
 	l.upsertLabelsStmt = l.Prepare(l.upsertLabelsQuery)
 	l.deleteLabelsByKeyStmt = l.Prepare(l.deleteLabelsByKeyQuery)
 	l.deleteLabelsStmt = l.Prepare(l.deleteLabelsQuery)
+	l.dropLabelsStmt = l.Prepare(l.dropLabelsQuery)
 
 	l.gcInterval = opts.GCInterval
 	l.gcKeepCount = opts.GCKeepCount
@@ -533,6 +552,14 @@ func (l *ListOptionIndexer) upsertEvent(tx transaction.Client, eventType watch.E
 	return err
 }
 
+func (l *ListOptionIndexer) dropEvents(tx transaction.Client) error {
+	_, err := tx.Stmt(l.dropEventsStmt).Exec()
+	if err != nil {
+		return &db.QueryError{QueryString: l.dropEventsQuery, Err: err}
+	}
+	return nil
+}
+
 // addIndexFields saves sortable/filterable fields into tables
 func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.Client) error {
 	args := []any{key}
@@ -596,6 +623,14 @@ func (l *ListOptionIndexer) deleteFields(tx transaction.Client) error {
 	return nil
 }
 
+func (l *ListOptionIndexer) dropFields(tx transaction.Client) error {
+	_, err := tx.Stmt(l.dropFieldsStmt).Exec()
+	if err != nil {
+		return &db.QueryError{QueryString: l.dropFieldsQuery, Err: err}
+	}
+	return nil
+}
+
 func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx transaction.Client) error {
 	_, err := tx.Stmt(l.deleteLabelsByKeyStmt).Exec(key)
 	if err != nil {
@@ -608,6 +643,14 @@ func (l *ListOptionIndexer) deleteLabels(tx transaction.Client) error {
 	_, err := tx.Stmt(l.deleteLabelsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
+	}
+	return nil
+}
+
+func (l *ListOptionIndexer) dropLabels(tx transaction.Client) error {
+	_, err := tx.Stmt(l.dropLabelsStmt).Exec()
+	if err != nil {
+		return &db.QueryError{QueryString: l.dropLabelsQuery, Err: err}
 	}
 	return nil
 }

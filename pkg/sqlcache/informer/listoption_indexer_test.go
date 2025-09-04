@@ -144,6 +144,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
+		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		// create events table
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
@@ -221,6 +222,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
+		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error"))
 
@@ -256,6 +258,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
+		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -301,6 +304,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
+		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
@@ -350,6 +354,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
+		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)

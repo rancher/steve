@@ -33,7 +33,6 @@ var defaultRefreshTime = 5 * time.Second
 type Informer struct {
 	cache.SharedIndexInformer
 	ByOptionsLister
-	loi *ListOptionIndexer
 }
 
 type WatchOptions struct {
@@ -51,6 +50,8 @@ type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 	GetLatestResourceVersion() []string
+	DropAll() error
+	RunGC(ctx context.Context)
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
@@ -137,17 +138,18 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	return &Informer{
 		SharedIndexInformer: sii,
 		ByOptionsLister:     loi,
-		loi:                 loi,
 	}, nil
+}
+
+func (i *Informer) DropAll() error {
+	return i.ByOptionsLister.DropAll()
 }
 
 // Run implements [cache.SharedIndexInformer]
 func (i *Informer) Run(stopCh <-chan struct{}) {
 	var wg wait.Group
 	wg.StartWithChannel(stopCh, i.SharedIndexInformer.Run)
-	if i.loi != nil {
-		wg.StartWithContext(wait.ContextForChannel(stopCh), i.loi.RunGC)
-	}
+	wg.StartWithContext(wait.ContextForChannel(stopCh), i.ByOptionsLister.RunGC)
 	wg.Wait()
 }
 
@@ -155,7 +157,7 @@ func (i *Informer) Run(stopCh <-chan struct{}) {
 func (i *Informer) RunWithContext(ctx context.Context) {
 	var wg wait.Group
 	wg.StartWithContext(ctx, i.SharedIndexInformer.RunWithContext)
-	wg.StartWithContext(ctx, i.loi.RunGC)
+	wg.StartWithContext(ctx, i.ByOptionsLister.RunGC)
 	wg.Wait()
 }
 

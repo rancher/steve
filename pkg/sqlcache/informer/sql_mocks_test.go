@@ -99,6 +99,20 @@ func (mr *MockStoreMockRecorder) Delete(obj any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStore)(nil).Delete), obj)
 }
 
+// DropAll mocks base method.
+func (m *MockStore) DropAll() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropAll")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropAll indicates an expected call of DropAll.
+func (mr *MockStoreMockRecorder) DropAll() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropAll", reflect.TypeOf((*MockStore)(nil).DropAll))
+}
+
 // Encryptor mocks base method.
 func (m *MockStore) Encryptor() db.Encryptor {
 	m.ctrl.T.Helper()
@@ -370,6 +384,18 @@ func (m *MockStore) RegisterAfterUpdate(f func(string, any, transaction.Client) 
 func (mr *MockStoreMockRecorder) RegisterAfterUpdate(f any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterUpdate", reflect.TypeOf((*MockStore)(nil).RegisterAfterUpdate), f)
+}
+
+// RegisterBeforeDropAll mocks base method.
+func (m *MockStore) RegisterBeforeDropAll(f func(transaction.Client) error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterBeforeDropAll", f)
+}
+
+// RegisterBeforeDropAll indicates an expected call of RegisterBeforeDropAll.
+func (mr *MockStoreMockRecorder) RegisterBeforeDropAll(f any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterBeforeDropAll", reflect.TypeOf((*MockStore)(nil).RegisterBeforeDropAll), f)
 }
 
 // Replace mocks base method.

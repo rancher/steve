@@ -97,7 +97,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	require.NoError(err)
 	defer func() {
 		cacheFactory.DoneWithCache(cache)
-		cacheFactory.Reset()
+		cacheFactory.Stop(configMapGVK)
 	}()
 
 	// doesn't match the filter for somekey == somevalue
@@ -306,6 +306,14 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	}
 }
 
+var (
+	configMapGVK = schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "ConfigMap",
+	}
+)
+
 func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFunc cache.TransformFunc) (*factory.Cache, *factory.CacheFactory, error) {
 	cacheFactory, err := factory.NewCacheFactory(factory.CacheFactoryOptions{})
 	if err != nil {
@@ -314,11 +322,6 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 	dynamicClient, err := dynamic.NewForConfig(&i.restCfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make dynamicClient: %w", err)
-	}
-	configMapGVK := schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "ConfigMap",
 	}
 	configMapGVR := schema.GroupVersionResource{
 		Group:    "",
