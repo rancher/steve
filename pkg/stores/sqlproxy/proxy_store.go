@@ -302,7 +302,7 @@ type CacheFactoryInitializer func() (CacheFactory, error)
 type CacheFactory interface {
 	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
 	DoneWithCache(*factory.Cache)
-	Reset() error
+	Stop() error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
@@ -340,7 +340,7 @@ func (s *Store) Reset() error {
 	if s.namespaceCache != nil {
 		s.cacheFactory.DoneWithCache(s.namespaceCache)
 	}
-	if err := s.cacheFactory.Reset(); err != nil {
+	if err := s.cacheFactory.Stop(); err != nil {
 		return fmt.Errorf("reset: %w", err)
 	}
 

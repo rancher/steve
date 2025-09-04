@@ -726,7 +726,7 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
-			cf.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Stop().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}}, gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nsc, nil)
@@ -754,7 +754,7 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 
-			cf.EXPECT().Reset().Return(fmt.Errorf("error"))
+			cf.EXPECT().Stop().Return(fmt.Errorf("error"))
 			err := s.Reset()
 			assert.NotNil(t, err)
 		},
@@ -776,7 +776,7 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 
-			cf.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Stop().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(fmt.Errorf("error"))
 			err := s.Reset()
 			assert.NotNil(t, err)
@@ -800,7 +800,7 @@ func TestReset(t *testing.T) {
 			}
 			nsSchema := baseNSSchema
 
-			cf.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Stop().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 			err := s.Reset()
@@ -826,7 +826,7 @@ func TestReset(t *testing.T) {
 			}
 			nsSchema := baseNSSchema
 
-			cf.EXPECT().Reset().Return(nil)
+			cf.EXPECT().Stop().Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}}, gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nil, fmt.Errorf("error"))
