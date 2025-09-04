@@ -82,6 +82,10 @@ intended to be used as a way of enforcing RBAC.
 		if err != nil {
 			panic(err)
 		}
+		// Don't forget to let the cache factory know you're done with
+		// the cache. This unlocks a global lock used to prevent
+		// Stop()ing the cache when requests are in flight.
+		defer cacheFactory.DoneWithCache(c)
 
 		// continueToken will just be an offset that can be used in Resume on a subsequent request to continue
 		// to next page
