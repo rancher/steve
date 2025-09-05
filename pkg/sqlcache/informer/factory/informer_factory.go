@@ -213,13 +213,17 @@ func (f *CacheFactory) Stop() error {
 	// and get rid of all references to those informers and their mutexes
 	f.informersMutex.Lock()
 	defer f.informersMutex.Unlock()
-	f.informers = make(map[schema.GroupVersionKind]*guardedInformer)
 
-	// finally, reset the DB connection
-	_, err := f.dbClient.NewConnection(false)
-	if err != nil {
-		return err
+	for gvk, informer := range f.informers {
+		// DropAll needs its own context because the context from the
+		// is canceled
+		err := informer.informer.DropAll(context.Background())
+		if err != nil {
+			return fmt.Errorf("dropall %q: %w", gvk, err)
+		}
 	}
+
+	f.informers = make(map[schema.GroupVersionKind]*guardedInformer)
 
 	return nil
 }
