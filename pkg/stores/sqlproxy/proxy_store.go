@@ -289,7 +289,7 @@ type Store struct {
 	notifier         RelationshipNotifier
 	cacheFactory     CacheFactory
 	cfInitializer    CacheFactoryInitializer
-	namespaceCache   Cache
+	namespaceCache   *factory.Cache
 	lock             sync.Mutex
 	columnSetter     SchemaColumnSetter
 	transformBuilder TransformBuilder
@@ -300,8 +300,9 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
-	Reset() error
+	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
+	DoneWithCache(*factory.Cache)
+	Stop() error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
@@ -336,7 +337,10 @@ func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter Clien
 func (s *Store) Reset() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if err := s.cacheFactory.Reset(); err != nil {
+	if s.namespaceCache != nil {
+		s.cacheFactory.DoneWithCache(s.namespaceCache)
+	}
+	if err := s.cacheFactory.Stop(); err != nil {
 		return fmt.Errorf("reset: %w", err)
 	}
 
@@ -595,6 +599,10 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	if err != nil {
 		return nil, err
 	}
+	// FIXME: This needs to be called when the watch ends, not at the end of
+	// this func. However, there's currently a bug where we don't correctly
+	// shutdown watches, so for now, we do this.
+	defer s.cacheFactory.DoneWithCache(inf)
 
 	var selector labels.Selector
 	if w.Selector != "" {
@@ -803,6 +811,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
+	defer s.cacheFactory.DoneWithCache(inf)
 
 	opts, err := listprocessor.ParseQuery(apiOp, gvk.Kind)
 	if err != nil {

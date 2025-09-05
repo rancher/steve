@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
@@ -49,6 +50,7 @@ type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 	GetLatestResourceVersion() []string
+	RunGC(context.Context)
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
@@ -136,6 +138,22 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 		SharedIndexInformer: sii,
 		ByOptionsLister:     loi,
 	}, nil
+}
+
+// Run implements [cache.SharedIndexInformer]
+func (i *Informer) Run(stopCh <-chan struct{}) {
+	var wg wait.Group
+	wg.StartWithChannel(stopCh, i.SharedIndexInformer.Run)
+	wg.StartWithContext(wait.ContextForChannel(stopCh), i.ByOptionsLister.RunGC)
+	wg.Wait()
+}
+
+// RunWithContext implements [cache.SharedIndexInformer]
+func (i *Informer) RunWithContext(ctx context.Context) {
+	var wg wait.Group
+	wg.StartWithContext(ctx, i.SharedIndexInformer.RunWithContext)
+	wg.StartWithContext(ctx, i.ByOptionsLister.RunGC)
+	wg.Wait()
 }
 
 // ListByOptions returns objects according to the specified list options and partitions.
