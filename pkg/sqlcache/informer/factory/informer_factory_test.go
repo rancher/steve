@@ -120,6 +120,7 @@ func TestCacheFor(t *testing.T) {
 
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(false).AnyTimes()
 		sii.EXPECT().Run(gomock.Any())
@@ -148,7 +149,7 @@ func TestCacheFor(t *testing.T) {
 
 		go func() {
 			time.Sleep(1 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
 		var err error
 		_, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
