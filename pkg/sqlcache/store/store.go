@@ -26,7 +26,7 @@ const (
 	upsertStmtFmt    = `REPLACE INTO "%s"(key, object, objectnonce, dekid) VALUES (?, ?, ?, ?)`
 	deleteStmtFmt    = `DELETE FROM "%s" WHERE key = ?`
 	deleteAllStmtFmt = `DELETE FROM "%s"`
-	dropAllStmtFmt   = `DROP TABLE IF EXISTS "%s"`
+	dropBaseStmtFmt  = `DROP TABLE IF EXISTS "%s"`
 	getStmtFmt       = `SELECT object, objectnonce, dekid FROM "%s" WHERE key = ?`
 	listStmtFmt      = `SELECT object, objectnonce, dekid FROM "%s"`
 	listKeysStmtFmt  = `SELECT key FROM "%s"`
@@ -114,7 +114,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	s.upsertQuery = fmt.Sprintf(upsertStmtFmt, dbName)
 	s.deleteQuery = fmt.Sprintf(deleteStmtFmt, dbName)
 	s.deleteAllQuery = fmt.Sprintf(deleteAllStmtFmt, dbName)
-	s.dropAllQuery = fmt.Sprintf(dropAllStmtFmt, dbName)
+	s.dropAllQuery = fmt.Sprintf(dropBaseStmtFmt, dbName)
 	s.getQuery = fmt.Sprintf(getStmtFmt, dbName)
 	s.listQuery = fmt.Sprintf(listStmtFmt, dbName)
 	s.listKeysQuery = fmt.Sprintf(listKeysStmtFmt, dbName)
