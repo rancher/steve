@@ -106,6 +106,8 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 	// We therefore just disable it right away.
 	resyncPeriod := time.Duration(0)
 
+	// In non-test mode `newInformer` is cache.NewSharedIndexInformer
+	// defined in k8s.io/client-go/tools/cache/shared_informer.go : func NewSharedIndexInformer(lw ...
 	sii := newInformer(listWatcher, example, resyncPeriod, cache.Indexers{})
 	if transform != nil {
 		if err := sii.SetTransform(transform); err != nil {
