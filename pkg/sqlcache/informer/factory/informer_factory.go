@@ -153,6 +153,8 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, ex
 
 		_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
 		shouldEncrypt := f.encryptAll || encryptResourceAlways
+		// In non-test code this invokes pkg/sqlcache/informer/informer.go: NewInformer()
+		// search for "func NewInformer(ctx"
 		i, err := f.newInformer(f.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, f.gcInterval, f.gcKeepCount)
 		if err != nil {
 			return nil, err
