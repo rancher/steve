@@ -67,6 +67,7 @@ func TestCacheFor(t *testing.T) {
 		expectedGVK := schema.GroupVersionKind{}
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true).AnyTimes()
 		sii.EXPECT().Run(gomock.Any()).MinTimes(1)
@@ -99,11 +100,9 @@ func TestCacheFor(t *testing.T) {
 		go func() {
 			// this function ensures that ctx is open for the duration of this test but if part of a longer process it will be closed eventually
 			time.Sleep(5 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
-		var c *Cache
-		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		// this sleep is critical to the test. It ensure there has been enough time for expected function like Run to be invoked in their go routines.
@@ -164,6 +163,7 @@ func TestCacheFor(t *testing.T) {
 
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true).AnyTimes()
 		// may or may not call run initially
@@ -193,11 +193,9 @@ func TestCacheFor(t *testing.T) {
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
 		f.ctx, f.cancel = context.WithCancel(context.Background())
-		f.cancel()
+		f.Stop()
 
-		var c *Cache
-		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
@@ -209,6 +207,7 @@ func TestCacheFor(t *testing.T) {
 		expectedGVK := schema.GroupVersionKind{}
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true)
 		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
@@ -241,11 +240,9 @@ func TestCacheFor(t *testing.T) {
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
-		var c *Cache
-		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
@@ -262,6 +259,7 @@ func TestCacheFor(t *testing.T) {
 		}
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true)
 		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
@@ -294,11 +292,9 @@ func TestCacheFor(t *testing.T) {
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
-		var c *Cache
-		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
@@ -314,6 +310,7 @@ func TestCacheFor(t *testing.T) {
 		}
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true)
 		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
@@ -346,11 +343,9 @@ func TestCacheFor(t *testing.T) {
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
-		var c *Cache
-		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
@@ -363,6 +358,7 @@ func TestCacheFor(t *testing.T) {
 		expectedGVK := schema.GroupVersionKind{}
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true)
 		sii.EXPECT().Run(gomock.Any()).MinTimes(1)
@@ -406,7 +402,7 @@ func TestCacheFor(t *testing.T) {
 		go func() {
 			// this function ensures that ctx is not canceled for the duration of this test but if part of a longer process it will be closed eventually
 			time.Sleep(5 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
 		var c *Cache
 		var err error
@@ -422,6 +418,7 @@ func TestCacheFor(t *testing.T) {
 		expectedGVK := schema.GroupVersionKind{}
 		bloi := NewMockByOptionsLister(gomock.NewController(t))
 		bloi.EXPECT().RunGC(gomock.Any()).AnyTimes()
+		bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
 		sii := NewMockSharedIndexInformer(gomock.NewController(t))
 		sii.EXPECT().HasSynced().Return(true)
 		sii.EXPECT().Run(gomock.Any()).MinTimes(1).AnyTimes()
@@ -457,12 +454,10 @@ func TestCacheFor(t *testing.T) {
 
 		go func() {
 			time.Sleep(10 * time.Second)
-			f.cancel()
+			f.Stop()
 		}()
-		var c *Cache
-		var err error
 		// CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool)
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
