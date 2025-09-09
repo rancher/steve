@@ -57,12 +57,12 @@ type Store struct {
 	getQuery       string
 	listQuery      string
 	listKeysQuery  string
-	dropAllQuery   string
+	dropBaseQuery  string
 
 	upsertStmt    *sql.Stmt
 	deleteStmt    *sql.Stmt
 	deleteAllStmt *sql.Stmt
-	dropAllStmt   *sql.Stmt
+	dropBaseStmt  *sql.Stmt
 	getStmt       *sql.Stmt
 	listStmt      *sql.Stmt
 	listKeysStmt  *sql.Stmt
@@ -114,7 +114,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	s.upsertQuery = fmt.Sprintf(upsertStmtFmt, dbName)
 	s.deleteQuery = fmt.Sprintf(deleteStmtFmt, dbName)
 	s.deleteAllQuery = fmt.Sprintf(deleteAllStmtFmt, dbName)
-	s.dropAllQuery = fmt.Sprintf(dropBaseStmtFmt, dbName)
+	s.dropBaseQuery = fmt.Sprintf(dropBaseStmtFmt, dbName)
 	s.getQuery = fmt.Sprintf(getStmtFmt, dbName)
 	s.listQuery = fmt.Sprintf(listStmtFmt, dbName)
 	s.listKeysQuery = fmt.Sprintf(listKeysStmtFmt, dbName)
@@ -122,7 +122,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	s.upsertStmt = s.Prepare(s.upsertQuery)
 	s.deleteStmt = s.Prepare(s.deleteQuery)
 	s.deleteAllStmt = s.Prepare(s.deleteAllQuery)
-	s.dropAllStmt = s.Prepare(s.dropAllQuery)
+	s.dropBaseStmt = s.Prepare(s.dropBaseQuery)
 	s.getStmt = s.Prepare(s.getQuery)
 	s.listStmt = s.Prepare(s.listQuery)
 	s.listKeysStmt = s.Prepare(s.listKeysQuery)
@@ -545,9 +545,9 @@ func (s *Store) DropAll(ctx context.Context) error {
 			return err
 		}
 
-		_, err = tx.Stmt(s.dropAllStmt).Exec(s.GetName())
+		_, err = tx.Stmt(s.dropBaseStmt).Exec(s.GetName())
 		if err != nil {
-			return &db.QueryError{QueryString: s.dropAllQuery, Err: err}
+			return &db.QueryError{QueryString: s.dropBaseQuery, Err: err}
 		}
 
 		return nil
