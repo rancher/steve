@@ -38,6 +38,10 @@ func (s *SchemaTracker) OnSchemas(schemas *schema.Collection) error {
 
 	for _, id := range schemas.IDs() {
 		theSchema := schemas.Schema(id)
+		if theSchema == nil {
+			continue
+		}
+
 		gvk := attributes.GVK(theSchema)
 
 		cols := common.GetColumnDefinitions(theSchema)
