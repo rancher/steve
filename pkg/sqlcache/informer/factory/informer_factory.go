@@ -52,10 +52,10 @@ type guardedInformer struct {
 	informerMutex *sync.Mutex
 
 	// stopMutex ensures no CacheFor call can be made for a given GVK when
-	// a Stop call is on-going.
+	// a Stop call is ongoing.
 	//
-	// CacheFactory.informersMutex is not enough because because part of the
-	// code might still have an old cache from a previous CacheFor call.
+	// CacheFactory.informersMutex is not enough because part of the code
+	// might still have an old cache from a previous CacheFor call.
 	stopMutex *sync.RWMutex
 
 	ctx    context.Context
@@ -148,12 +148,12 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 	// Prevent Stop() to be called for that GVK
 	gi.stopMutex.RLock()
 
-	cache, err := f.cacheForLocked(ctx, gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
+	gvkCache, err := f.cacheForLocked(ctx, gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
 	if err != nil {
 		gi.stopMutex.RUnlock()
 		return nil, err
 	}
-	return cache, nil
+	return gvkCache, nil
 }
 
 func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {

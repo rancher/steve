@@ -23,8 +23,8 @@ import (
 	"github.com/rancher/steve/pkg/schema/definitions"
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
-	sql "github.com/rancher/steve/pkg/sqlcache"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/rancher/steve/pkg/sqlcache/schematracker"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
@@ -234,7 +234,7 @@ func setup(ctx context.Context, server *Server) error {
 			sf.AddTemplate(template)
 		}
 
-		sqlSchemaTracker := sql.NewSchemaTracker(sqlStore)
+		sqlSchemaTracker := schematracker.NewSchemaTracker(sqlStore)
 
 		onSchemasHandler = func(schemas *schema.Collection) error {
 			var retErr error
