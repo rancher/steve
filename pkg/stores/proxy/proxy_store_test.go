@@ -49,6 +49,10 @@ func (t *testFactory) TableClient(ctx *types.APIRequest, schema *types.APISchema
 	return t.fakeClient.Resource(schema2.GroupVersionResource{}).Namespace(namespace), nil
 }
 
+func (t *testFactory) Client(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	return t.fakeClient.Resource(schema2.GroupVersionResource{}).Namespace(namespace), nil
+}
+
 func TestWatchNamesErrReceive(t *testing.T) {
 	testClientFactory, err := client.NewFactory(&rest.Config{}, false)
 	assert.Nil(t, err)
@@ -475,7 +479,8 @@ func TestCreate(t *testing.T) {
 			}
 
 			testStore := Store{
-				clientGetter: &testFactory{Factory: testClientFactory,
+				clientGetter: &testFactory{
+					Factory:    testClientFactory,
 					fakeClient: fakeClient,
 				},
 			}

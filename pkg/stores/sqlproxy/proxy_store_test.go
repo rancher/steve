@@ -59,6 +59,10 @@ func (t *testFactory) TableClient(ctx *types.APIRequest, schema *types.APISchema
 	return t.fakeClient.Resource(schema2.GroupVersionResource{}).Namespace(namespace), nil
 }
 
+func (t *testFactory) Client(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error) {
+	return t.fakeClient.Resource(schema2.GroupVersionResource{}).Namespace(namespace), nil
+}
+
 func TestNewProxyStore(t *testing.T) {
 	type testCase struct {
 		description string
