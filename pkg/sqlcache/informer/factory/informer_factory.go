@@ -222,7 +222,7 @@ func (f *CacheFactory) Stop() error {
 	defer f.informersMutex.Unlock()
 
 	for gvk, informer := range f.informers {
-		// DropAll needs its own context because the context from the
+		// DropAll needs its own context because the context from the CacheFactory
 		// is canceled
 		err := informer.informer.DropAll(context.Background())
 		if err != nil {
