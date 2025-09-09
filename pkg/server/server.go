@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
-	"sync"
 
 	apiserver "github.com/rancher/apiserver/pkg/server"
 	"github.com/rancher/apiserver/pkg/types"
@@ -31,7 +29,6 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
-	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 )
 
@@ -213,7 +210,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, false)
+		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, true)
 		if err != nil {
 			panic(err)
 		}
@@ -222,7 +219,7 @@ func setup(ctx context.Context, server *Server) error {
 			proxy.NewUnformatterStore(
 				proxy.NewWatchRefresh(
 					sqlpartition.NewStore(
-						sqlStore,
+						s,
 						asl,
 					),
 					asl,
@@ -235,52 +232,12 @@ func setup(ctx context.Context, server *Server) error {
 		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
 			sf.AddTemplate(template)
 		}
-		mutex := &sync.Mutex{}
-		fieldsForSchema := make(map[string][][]string) // map schemaID to fields
-		initializedDB := false
 
-		onSchemasHandler = func(schemas *schema.Collection, changedSchemas map[string]*types.APISchema, deletedSomething bool) error {
-			resetEverything := false
-			// We need a mutex around the fieldsForSchema closure because this handler is invoked asynchronously
-			// from the server
-			mutex.Lock()
-			if !initializedDB {
-				initializedDB = true
-				resetEverything = true
-				for _, id := range schemas.IDs() {
-					theSchema := schemas.Schema(id)
-					if theSchema == nil {
-						fieldsForSchema[id] = [][]string{}
-						continue
-					}
-					fieldsForSchema[id] = sqlproxy.GetFieldsFromSchema(theSchema)
-				}
-				logrus.Debugf("onSchemasHandler: need to reset everything on first run")
-			} else {
-				for id, theSchema := range changedSchemas {
-					oldFields, ok := fieldsForSchema[id]
-					newFields := sqlproxy.GetFieldsFromSchema(theSchema)
-					if !ok || !slices.EqualFunc(oldFields, newFields,
-						func(s1, s2 []string) bool {
-							return slices.Equal(s1, s2)
-						}) {
-						resetEverything = true
-					}
-					fieldsForSchema[id] = newFields
-				}
-				if deletedSomething {
-					resetEverything = true
-				}
-				logrus.Debugf("onSchemasHandler: need to reset everything: %t", resetEverything)
-			}
-			mutex.Unlock()
-			if !resetEverything {
-				return nil
-			}
+		onSchemasHandler = func(schemas *schema.Collection) error {
 			if err := ccache.OnSchemas(schemas); err != nil {
 				return err
 			}
-			if err := sqlStore.Reset(); err != nil {
+			if err := s.Reset(); err != nil {
 				return err
 			}
 			return nil
@@ -289,9 +246,7 @@ func setup(ctx context.Context, server *Server) error {
 		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache(), common.TemplateOptions{InSQLMode: false}) {
 			sf.AddTemplate(template)
 		}
-		onSchemasHandler = func(schemas *schema.Collection, _ map[string]*types.APISchema, _ bool) error {
-			return ccache.OnSchemas(schemas)
-		}
+		onSchemasHandler = ccache.OnSchemas
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
