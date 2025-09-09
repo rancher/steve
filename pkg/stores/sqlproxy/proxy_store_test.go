@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -726,13 +727,14 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
-			cf.EXPECT().Stop().Return(nil)
+			gvk := attributes.GVK(&nsSchema)
+			cf.EXPECT().Stop(gvk).Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}}, gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nsc, nil)
 			cf.EXPECT().DoneWithCache(nsc)
-			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema), gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			err := s.Reset()
+			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			err := s.Reset(gvk)
 			assert.Nil(t, err)
 			assert.Equal(t, nsc, s.namespaceCache)
 		},
@@ -754,8 +756,9 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 
-			cf.EXPECT().Stop().Return(fmt.Errorf("error"))
-			err := s.Reset()
+			gvk := schema.GroupVersionKind{}
+			cf.EXPECT().Stop(gvk).Return(fmt.Errorf("error"))
+			err := s.Reset(gvk)
 			assert.NotNil(t, err)
 		},
 	})
@@ -776,9 +779,12 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 
-			cf.EXPECT().Stop().Return(nil)
+			nsSchema := baseNSSchema
+			gvk := attributes.GVK(&nsSchema)
+
+			cf.EXPECT().Stop(gvk).Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(fmt.Errorf("error"))
-			err := s.Reset()
+			err := s.Reset(gvk)
 			assert.NotNil(t, err)
 		},
 	})
@@ -799,11 +805,12 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
+			gvk := attributes.GVK(&nsSchema)
 
-			cf.EXPECT().Stop().Return(nil)
+			cf.EXPECT().Stop(gvk).Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
-			err := s.Reset()
+			err := s.Reset(gvk)
 			assert.NotNil(t, err)
 		},
 	})
@@ -825,13 +832,14 @@ func TestReset(t *testing.T) {
 				transformBuilder: tb,
 			}
 			nsSchema := baseNSSchema
+			gvk := attributes.GVK(&nsSchema)
 
-			cf.EXPECT().Stop().Return(nil)
+			cf.EXPECT().Stop(gvk).Return(nil)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(), [][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}}, gomock.Any(), gomock.Any(), gomock.Any(), &tablelistconvert.Client{ResourceInterface: ri}, attributes.GVK(&nsSchema), false, true).Return(nil, fmt.Errorf("error"))
-			tb.EXPECT().GetTransformFunc(attributes.GVK(&nsSchema), gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			err := s.Reset()
+			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			err := s.Reset(gvk)
 			assert.NotNil(t, err)
 		},
 	})

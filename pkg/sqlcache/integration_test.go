@@ -97,7 +97,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	require.NoError(err)
 	defer func() {
 		cacheFactory.DoneWithCache(cache)
-		cacheFactory.Stop()
+		cacheFactory.Stop(cache.GVK())
 	}()
 
 	// doesn't match the filter for somekey == somevalue
