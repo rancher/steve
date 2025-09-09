@@ -211,7 +211,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, false)
+		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, false)
 		if err != nil {
 			panic(err)
 		}
@@ -220,7 +220,7 @@ func setup(ctx context.Context, server *Server) error {
 			proxy.NewUnformatterStore(
 				proxy.NewWatchRefresh(
 					sqlpartition.NewStore(
-						s,
+						sqlStore,
 						asl,
 					),
 					asl,
@@ -234,7 +234,7 @@ func setup(ctx context.Context, server *Server) error {
 			sf.AddTemplate(template)
 		}
 
-		sqlSchemaTracker := sql.NewSchemaTracker(s)
+		sqlSchemaTracker := sql.NewSchemaTracker(sqlStore)
 
 		onSchemasHandler = func(schemas *schema.Collection) error {
 			var retErr error
