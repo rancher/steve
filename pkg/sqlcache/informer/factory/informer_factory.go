@@ -197,7 +197,19 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	}
 	gi.informerMutex.Unlock()
 
-	if !cache.WaitForCacheSync(gi.ctx.Done(), gi.informer.HasSynced) {
+	// We don't want to get stuck in WaitForCachesSync if the request from
+	// the client has been canceled.
+	waitCh := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-ctx.Done():
+			close(waitCh)
+		case <-gi.ctx.Done():
+			close(waitCh)
+		}
+	}()
+
+	if !cache.WaitForCacheSync(waitCh, gi.informer.HasSynced) {
 		return nil, fmt.Errorf("failed to sync SQLite Informer cache for GVK %v", gvk)
 	}
 
