@@ -148,7 +148,7 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, ex
 		start := time.Now()
 		log.Infof("CacheFor STARTS creating informer for %v", gvk)
 		defer func() {
-			log.Infof("CacheFor IS DONE creating informer for %v (took %v)", gvk, time.Now().Sub(start))
+			log.Infof("CacheFor IS DONE creating informer for %v (took %v)", gvk, time.Since(start))
 		}()
 
 		_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
@@ -199,25 +199,36 @@ func (f *CacheFactory) Stop() error {
 		return nil
 	}
 
-	// first of all wait until all CacheFor() calls that create new informers are finished. Also block any new ones
+	// We must stop informers here to unblock those stuck in WaitForCacheSync
+	// which is blocking DoneWithCache call.
+	//
+	// This is fine without a lock as long as multiple Stop() call aren't made
+	// concurrently (which they currently aren't)
+	f.cancel()
+
+	// Prevent more CacheFor calls
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	// now that we are alone, stop all informers created until this point
-	f.cancel()
+	// Wait for all informers to have exited
 	f.wg.Wait()
+
 	f.ctx, f.cancel = context.WithCancel(context.Background())
 
 	// and get rid of all references to those informers and their mutexes
 	f.informersMutex.Lock()
 	defer f.informersMutex.Unlock()
-	f.informers = make(map[schema.GroupVersionKind]*guardedInformer)
 
-	// finally, reset the DB connection
-	_, err := f.dbClient.NewConnection(false)
-	if err != nil {
-		return err
+	for gvk, informer := range f.informers {
+		// DropAll needs its own context because the context from the CacheFactory
+		// is canceled
+		err := informer.informer.DropAll(context.Background())
+		if err != nil {
+			return fmt.Errorf("dropall %q: %w", gvk, err)
+		}
 	}
+
+	f.informers = make(map[schema.GroupVersionKind]*guardedInformer)
 
 	return nil
 }

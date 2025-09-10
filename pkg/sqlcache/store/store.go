@@ -26,6 +26,7 @@ const (
 	upsertStmtFmt    = `REPLACE INTO "%s"(key, object, objectnonce, dekid) VALUES (?, ?, ?, ?)`
 	deleteStmtFmt    = `DELETE FROM "%s" WHERE key = ?`
 	deleteAllStmtFmt = `DELETE FROM "%s"`
+	dropBaseStmtFmt  = `DROP TABLE IF EXISTS "%s"`
 	getStmtFmt       = `SELECT object, objectnonce, dekid FROM "%s" WHERE key = ?`
 	listStmtFmt      = `SELECT object, objectnonce, dekid FROM "%s"`
 	listKeysStmtFmt  = `SELECT key FROM "%s"`
@@ -56,10 +57,12 @@ type Store struct {
 	getQuery       string
 	listQuery      string
 	listKeysQuery  string
+	dropBaseQuery  string
 
 	upsertStmt    *sql.Stmt
 	deleteStmt    *sql.Stmt
 	deleteAllStmt *sql.Stmt
+	dropBaseStmt  *sql.Stmt
 	getStmt       *sql.Stmt
 	listStmt      *sql.Stmt
 	listKeysStmt  *sql.Stmt
@@ -68,6 +71,7 @@ type Store struct {
 	afterUpdate    []func(key string, obj any, tx transaction.Client) error
 	afterDelete    []func(key string, obj any, tx transaction.Client) error
 	afterDeleteAll []func(tx transaction.Client) error
+	beforeDropAll  []func(tx transaction.Client) error
 }
 
 // Test that Store implements cache.Indexer
@@ -110,6 +114,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	s.upsertQuery = fmt.Sprintf(upsertStmtFmt, dbName)
 	s.deleteQuery = fmt.Sprintf(deleteStmtFmt, dbName)
 	s.deleteAllQuery = fmt.Sprintf(deleteAllStmtFmt, dbName)
+	s.dropBaseQuery = fmt.Sprintf(dropBaseStmtFmt, dbName)
 	s.getQuery = fmt.Sprintf(getStmtFmt, dbName)
 	s.listQuery = fmt.Sprintf(listStmtFmt, dbName)
 	s.listKeysQuery = fmt.Sprintf(listKeysStmtFmt, dbName)
@@ -117,6 +122,7 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 	s.upsertStmt = s.Prepare(s.upsertQuery)
 	s.deleteStmt = s.Prepare(s.deleteQuery)
 	s.deleteAllStmt = s.Prepare(s.deleteAllQuery)
+	s.dropBaseStmt = s.Prepare(s.dropBaseQuery)
 	s.getStmt = s.Prepare(s.getQuery)
 	s.listStmt = s.Prepare(s.listQuery)
 	s.listKeysStmt = s.Prepare(s.listKeysQuery)
@@ -524,6 +530,34 @@ func (s *Store) RegisterAfterDeleteAll(f func(txC transaction.Client) error) {
 	s.afterDeleteAll = append(s.afterDeleteAll, f)
 }
 
+func (s *Store) RegisterBeforeDropAll(f func(txC transaction.Client) error) {
+	s.beforeDropAll = append(s.beforeDropAll, f)
+}
+
+// DropAll effectively removes the store from the database. The store must be
+// recreated with NewStore.
+//
+// The store shouldn't be used once DropAll is called.
+func (s *Store) DropAll(ctx context.Context) error {
+	err := s.WithTransaction(ctx, true, func(tx transaction.Client) error {
+		err := s.runBeforeDropAll(tx)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Stmt(s.dropBaseStmt).Exec(s.GetName())
+		if err != nil {
+			return &db.QueryError{QueryString: s.dropBaseQuery, Err: err}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("dropall for %q: %w", s.GetName(), err)
+	}
+	return nil
+}
+
 // runAfterAdd executes functions registered to run after add event
 func (s *Store) runAfterAdd(key string, obj any, txC transaction.Client) error {
 	for _, f := range s.afterAdd {
@@ -561,6 +595,16 @@ func (s *Store) runAfterDelete(key string, obj any, txC transaction.Client) erro
 // the database is being replaced.
 func (s *Store) runAfterDeleteAll(txC transaction.Client) error {
 	for _, f := range s.afterDeleteAll {
+		err := f(txC)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) runBeforeDropAll(txC transaction.Client) error {
+	for _, f := range s.beforeDropAll {
 		err := f(txC)
 		if err != nil {
 			return err
