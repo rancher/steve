@@ -3505,3 +3505,68 @@ func TestNonNumberResourceVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedList.Items, list.Items)
 }
+
+// Test that we don't panic in case the transaction fails but stil manages to add a watcher
+func TestWatchCancel(t *testing.T) {
+	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
+		eventsCh := make(chan watch.Event, 1)
+		errCh := make(chan error, 1)
+		go func() {
+			watchErr := loi.Watch(ctx, WatchOptions{ResourceVersion: rv}, eventsCh)
+			errCh <- watchErr
+			close(eventsCh)
+		}()
+		time.Sleep(100 * time.Millisecond)
+		return eventsCh, errCh
+	}
+
+	ctx := context.Background()
+
+	opts := ListOptionIndexerOptions{
+		Fields:       [][]string{{"metadata", "somefield"}},
+		IsNamespaced: true,
+	}
+	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+	defer cleanTempFiles(dbPath)
+	assert.NoError(t, err)
+
+	foo := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "foo",
+			},
+		},
+	}
+	foo.SetResourceVersion("100")
+
+	foo2 := foo.DeepCopy()
+	foo2.SetResourceVersion("200")
+
+	foo3 := foo.DeepCopy()
+	foo3.SetResourceVersion("300")
+
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	loi.Add(foo2)
+	assert.NoError(t, err)
+	loi.Add(foo3)
+	assert.NoError(t, err)
+
+	watchCtx, watchCancel := context.WithCancel(ctx)
+
+	eventsCh, errCh := startWatcher(watchCtx, loi, "100")
+
+	<-eventsCh
+
+	watchCancel()
+
+	<-eventsCh
+
+	go func() {
+		foo4 := foo.DeepCopy()
+		foo4.SetResourceVersion("400")
+		loi.Add(foo4)
+	}()
+	<-errCh
+	time.Sleep(1 * time.Second)
+}
