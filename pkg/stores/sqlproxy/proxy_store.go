@@ -300,7 +300,7 @@ type CacheFactoryInitializer func() (CacheFactory, error)
 type CacheFactory interface {
 	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
 	DoneWithCache(*factory.Cache)
-	Stop() error
+	Stop(gvk schema.GroupVersionKind) error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
@@ -332,18 +332,20 @@ func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter Clien
 }
 
 // Reset locks the store, resets the underlying cache factory, and warm the namespace cache.
-func (s *Store) Reset() error {
+func (s *Store) Reset(gvk schema.GroupVersionKind) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if s.namespaceCache != nil {
+	if s.namespaceCache != nil && gvk == namespaceGVK {
 		s.cacheFactory.DoneWithCache(s.namespaceCache)
 	}
-	if err := s.cacheFactory.Stop(); err != nil {
+	if err := s.cacheFactory.Stop(gvk); err != nil {
 		return fmt.Errorf("reset: %w", err)
 	}
 
-	if err := s.initializeNamespaceCache(); err != nil {
-		return err
+	if gvk == namespaceGVK {
+		if err := s.initializeNamespaceCache(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

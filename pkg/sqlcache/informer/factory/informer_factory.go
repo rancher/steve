@@ -28,14 +28,12 @@ const EncryptAllEnvVar = "CATTLE_ENCRYPT_CACHE_ALL"
 
 // CacheFactory builds Informer instances and keeps a cache of instances it created
 type CacheFactory struct {
-	wg       wait.Group
 	dbClient db.Client
 
 	// ctx determines when informers need to stop
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mutex      sync.RWMutex
 	encryptAll bool
 
 	gcInterval  time.Duration
@@ -49,13 +47,31 @@ type CacheFactory struct {
 
 type guardedInformer struct {
 	informer *informer.Informer
-	mutex    *sync.Mutex
+	// informerMutex ensures informer is only set by one goroutine even if
+	// multiple concurrent calls to CacheFor are made
+	informerMutex *sync.Mutex
+
+	// stopMutex ensures no CacheFor call can be made for a given GVK when
+	// a Stop call is ongoing.
+	//
+	// CacheFactory.informersMutex is not enough because part of the code
+	// might still have an old cache from a previous CacheFor call.
+	stopMutex *sync.RWMutex
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     wait.Group
 }
 
 type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error)
 
 type Cache struct {
 	informer.ByOptionsLister
+	gvk schema.GroupVersionKind
+}
+
+func (c *Cache) GVK() schema.GroupVersionKind {
+	return c.gvk
 }
 
 var defaultEncryptedResourceTypes = map[schema.GroupVersionKind]struct{}{
@@ -90,8 +106,6 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &CacheFactory{
-		wg: wait.Group{},
-
 		ctx:    ctx,
 		cancel: cancel,
 
@@ -111,17 +125,6 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 //
 // Don't forget to call DoneWithCache with the given informer once done with it.
 func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
-	// First of all block Reset() until we are done
-	f.mutex.RLock()
-	cache, err := f.cacheForLocked(ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
-	if err != nil {
-		f.mutex.RUnlock()
-		return nil, err
-	}
-	return cache, nil
-}
-
-func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// Second, check if the informer and its accompanying informer-specific mutex exist already in the informers cache
 	// If not, start by creating such informer-specific mutex. That is used later to ensure no two goroutines create
 	// informers for the same GVK at the same type
@@ -130,17 +133,32 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, ex
 	// that blocks CacheFor for other GVKs, hence not deferring unlock here
 	gi, ok := f.informers[gvk]
 	if !ok {
+		giCtx, giCancel := context.WithCancel(f.ctx)
 		gi = &guardedInformer{
-			informer: nil,
-			mutex:    &sync.Mutex{},
+			informer:      nil,
+			informerMutex: &sync.Mutex{},
+			stopMutex:     &sync.RWMutex{},
+			ctx:           giCtx,
+			cancel:        giCancel,
 		}
 		f.informers[gvk] = gi
 	}
 	f.informersMutex.Unlock()
 
+	// Prevent Stop() to be called for that GVK
+	gi.stopMutex.RLock()
+
+	gvkCache, err := f.cacheForLocked(ctx, gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
+	if err != nil {
+		gi.stopMutex.RUnlock()
+		return nil, err
+	}
+	return gvkCache, nil
+}
+
+func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// At this point an informer-specific mutex (gi.mutex) is guaranteed to exist. Lock it
-	gi.mutex.Lock()
-	defer gi.mutex.Unlock()
+	gi.informerMutex.Lock()
 
 	// Then: if the informer really was not created yet (first time here or previous times have errored out)
 	// actually create the informer
@@ -166,69 +184,92 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, fields [][]string, ex
 			cache.DefaultWatchErrorHandler(ctx, r, err)
 		})
 		if err != nil {
+			gi.informerMutex.Unlock()
 			return nil, err
 		}
 
-		f.wg.StartWithChannel(f.ctx.Done(), i.Run)
+		gi.wg.StartWithChannel(gi.ctx.Done(), i.Run)
 
 		gi.informer = i
 	}
+	gi.informerMutex.Unlock()
 
-	if !cache.WaitForCacheSync(f.ctx.Done(), gi.informer.HasSynced) {
+	// We don't want to get stuck in WaitForCachesSync if the request from
+	// the client has been canceled.
+	waitCh := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-ctx.Done():
+			close(waitCh)
+		case <-gi.ctx.Done():
+			close(waitCh)
+		}
+	}()
+
+	if !cache.WaitForCacheSync(waitCh, gi.informer.HasSynced) {
 		return nil, fmt.Errorf("failed to sync SQLite Informer cache for GVK %v", gvk)
 	}
 
 	// At this point the informer is ready, return it
-	return &Cache{ByOptionsLister: gi.informer}, nil
+	return &Cache{ByOptionsLister: gi.informer, gvk: gvk}, nil
 }
 
-// DoneWithCache must be called for every CacheFor call.
+// DoneWithCache must be called for every successful CacheFor call. The Cache should
+// no longer be used after DoneWithCache is called.
 //
 // This ensures that there aren't any inflight list requests while we are resetting the database.
-//
-// TODO: Use the *Cache once we go per-GVK
-func (f *CacheFactory) DoneWithCache(_ *Cache) {
-	f.mutex.RUnlock()
+func (f *CacheFactory) DoneWithCache(cache *Cache) {
+	if cache == nil {
+		return
+	}
+
+	f.informersMutex.Lock()
+	defer f.informersMutex.Unlock()
+
+	// Note: the informers cache is protected by informersMutex, which we don't want to hold for very long because
+	// that blocks CacheFor for other GVKs, hence not deferring unlock here
+	gi, ok := f.informers[cache.gvk]
+	if !ok {
+		return
+	}
+
+	gi.stopMutex.RUnlock()
 }
 
 // Stop cancels ctx which stops any running informers, assigns a new ctx, resets the GVK-informer cache, and resets
 // the database connection which wipes any current sqlite database at the default location.
-func (f *CacheFactory) Stop() error {
+func (f *CacheFactory) Stop(gvk schema.GroupVersionKind) error {
 	if f.dbClient == nil {
 		// nothing to reset
 		return nil
 	}
 
-	// We must stop informers here to unblock those stuck in WaitForCacheSync
-	// which is blocking DoneWithCache call.
-	//
-	// This is fine without a lock as long as multiple Stop() call aren't made
-	// concurrently (which they currently aren't)
-	f.cancel()
-
-	// Prevent more CacheFor calls
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	// Wait for all informers to have exited
-	f.wg.Wait()
-
-	f.ctx, f.cancel = context.WithCancel(context.Background())
-
-	// and get rid of all references to those informers and their mutexes
 	f.informersMutex.Lock()
 	defer f.informersMutex.Unlock()
 
-	for gvk, informer := range f.informers {
-		// DropAll needs its own context because the context from the CacheFactory
-		// is canceled
-		err := informer.informer.DropAll(context.Background())
-		if err != nil {
-			return fmt.Errorf("dropall %q: %w", gvk, err)
-		}
+	gi, ok := f.informers[gvk]
+	if !ok {
+		return nil
 	}
+	delete(f.informers, gvk)
 
-	f.informers = make(map[schema.GroupVersionKind]*guardedInformer)
+	// We must stop informers here to unblock those stuck in WaitForCacheSync
+	// which is blocking DoneWithCache call.
+	gi.cancel()
+
+	// Prevent other CacheFor calls for that GVK
+	gi.stopMutex.Lock()
+	defer gi.stopMutex.Unlock()
+
+	// Wait for all informers to have exited
+	gi.wg.Wait()
+
+	// DropAll needs its own context because the context from the informer
+	// is canceled
+	err := gi.informer.DropAll(context.Background())
+	if err != nil {
+		return fmt.Errorf("dropall %q: %w", gvk, err)
+	}
 
 	return nil
 }
