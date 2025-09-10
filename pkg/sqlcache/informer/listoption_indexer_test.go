@@ -99,6 +99,8 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		return nil, "", err
 	}
 
+	go listOptionIndexer.RunGC(ctx)
+
 	return listOptionIndexer, dbPath, nil
 }
 

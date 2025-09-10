@@ -76,6 +76,18 @@ func (mr *MockByOptionsListerMockRecorder) ListByOptions(ctx, lo, partitions, na
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockByOptionsLister)(nil).ListByOptions), ctx, lo, partitions, namespace)
 }
 
+// RunGC mocks base method.
+func (m *MockByOptionsLister) RunGC(arg0 context.Context) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RunGC", arg0)
+}
+
+// RunGC indicates an expected call of RunGC.
+func (mr *MockByOptionsListerMockRecorder) RunGC(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunGC", reflect.TypeOf((*MockByOptionsLister)(nil).RunGC), arg0)
+}
+
 // Watch mocks base method.
 func (m *MockByOptionsLister) Watch(ctx context.Context, options informer.WatchOptions, eventsCh chan<- watch.Event) error {
 	m.ctrl.T.Helper()
