@@ -399,6 +399,11 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		return nil
 	})
 	if err != nil {
+		// We might have added a watcher but the transaction failed in
+		// which case we still want to remove the watcher
+		if key != nil {
+			l.removeWatcher(key)
+		}
 		return err
 	}
 
