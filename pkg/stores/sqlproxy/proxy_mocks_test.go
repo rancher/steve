@@ -294,17 +294,17 @@ func (mr *MockCacheFactoryMockRecorder) DoneWithCache(arg0 any) *gomock.Call {
 }
 
 // Stop mocks base method.
-func (m *MockCacheFactory) Stop() error {
+func (m *MockCacheFactory) Stop(gvk schema.GroupVersionKind) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
+	ret := m.ctrl.Call(m, "Stop", gvk)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockCacheFactoryMockRecorder) Stop() *gomock.Call {
+func (mr *MockCacheFactoryMockRecorder) Stop(gvk any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockCacheFactory)(nil).Stop))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockCacheFactory)(nil).Stop), gvk)
 }
 
 // MockSchemaColumnSetter is a mock of SchemaColumnSetter interface.

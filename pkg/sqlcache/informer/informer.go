@@ -51,6 +51,7 @@ type ByOptionsLister interface {
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 	GetLatestResourceVersion() []string
 	RunGC(context.Context)
+	DropAll(context.Context) error
 }
 
 // this is set to a var so that it can be overridden by test code for mocking purposes
