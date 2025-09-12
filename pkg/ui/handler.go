@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -100,10 +99,10 @@ func NewUIHandler(opts *Options) *Handler {
 
 func (u *Handler) canDownload(url string) bool {
 	u.downloadOnce.Do(func() {
-		if err := serveRemote(ioutil.Discard, url); err == nil {
+		if err := serveRemote(io.Discard, url); err == nil {
 			u.downloadSuccess = true
 		} else {
-			logrus.Errorf("Failed to download %s, falling back to packaged UI", url)
+			logrus.Errorf("failed to download %s: %v, falling back to packaged UI", url, err)
 		}
 	})
 	return u.downloadSuccess
