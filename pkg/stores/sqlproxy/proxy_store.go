@@ -120,6 +120,8 @@ var (
 		gvkKey("batch", "v1", "CronJob"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
 			{"spec", "jobTemplate", "spec", "template", "spec", "containers", "image"},
+			{"status", "lastScheduleTime"},
+			{"status", "lastSuccessfulTime"},
 		},
 		gvkKey("batch", "v1", "Job"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
@@ -287,7 +289,7 @@ type Store struct {
 	notifier         RelationshipNotifier
 	cacheFactory     CacheFactory
 	cfInitializer    CacheFactoryInitializer
-	namespaceCache   Cache
+	namespaceCache   *factory.Cache
 	lock             sync.Mutex
 	columnSetter     SchemaColumnSetter
 	transformBuilder TransformBuilder
@@ -298,12 +300,13 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (factory.Cache, error)
-	Reset() error
+	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
+	DoneWithCache(*factory.Cache)
+	Stop(gvk schema.GroupVersionKind) error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, factory CacheFactory) (*Store, error) {
+func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, factory CacheFactory, needToInitNamespaceCache bool) (*Store, error) {
 	store := &Store{
 		ctx:              ctx,
 		clientGetter:     clientGetter,
@@ -322,22 +325,29 @@ func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter Clien
 	}
 
 	store.cacheFactory = factory
-	if err := store.initializeNamespaceCache(); err != nil {
-		logrus.Infof("failed to warm up namespace informer for proxy store in steve, will try again on next ns request")
+	if needToInitNamespaceCache {
+		if err := store.initializeNamespaceCache(); err != nil {
+			logrus.Infof("failed to warm up namespace informer for proxy store in steve, will try again on next ns request")
+		}
 	}
 	return store, nil
 }
 
 // Reset locks the store, resets the underlying cache factory, and warm the namespace cache.
-func (s *Store) Reset() error {
+func (s *Store) Reset(gvk schema.GroupVersionKind) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if err := s.cacheFactory.Reset(); err != nil {
+	if s.namespaceCache != nil && gvk == namespaceGVK {
+		s.cacheFactory.DoneWithCache(s.namespaceCache)
+	}
+	if err := s.cacheFactory.Stop(gvk); err != nil {
 		return fmt.Errorf("reset: %w", err)
 	}
 
-	if err := s.initializeNamespaceCache(); err != nil {
-		return err
+	if gvk == namespaceGVK {
+		if err := s.initializeNamespaceCache(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -369,7 +379,7 @@ func (s *Store) initializeNamespaceCache() error {
 
 	gvk := attributes.GVK(&nsSchema)
 	// get fields from schema's columns
-	fields := getFieldsFromSchema(&nsSchema)
+	fields := GetFieldsFromSchema(&nsSchema)
 
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
@@ -403,9 +413,9 @@ func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
 
-// getFieldsFromSchema converts object field names from types.APISchema's format into steve's
+// GetFieldsFromSchema converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
-func getFieldsFromSchema(schema *types.APISchema) [][]string {
+func GetFieldsFromSchema(schema *types.APISchema) [][]string {
 	var fields [][]string
 	columns := attributes.Columns(schema)
 	if columns == nil {
@@ -581,7 +591,7 @@ func newWatchers() *Watchers {
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
 	// warnings from inside the informer are discarded
 	gvk := attributes.GVK(schema)
-	fields := getFieldsFromSchema(schema)
+	fields := GetFieldsFromSchema(schema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	cols := common.GetColumnDefinitions(schema)
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(schema))
@@ -591,6 +601,10 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	if err != nil {
 		return nil, err
 	}
+	// FIXME: This needs to be called when the watch ends, not at the end of
+	// this func. However, there's currently a bug where we don't correctly
+	// shutdown watches, so for now, we do this.
+	defer s.cacheFactory.DoneWithCache(inf)
 
 	var selector labels.Selector
 	if w.Selector != "" {
@@ -788,7 +802,7 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return nil, 0, "", err
 	}
 	gvk := attributes.GVK(apiSchema)
-	fields := getFieldsFromSchema(apiSchema)
+	fields := GetFieldsFromSchema(apiSchema)
 	fields = append(fields, getFieldForGVK(gvk)...)
 	cols := common.GetColumnDefinitions(apiSchema)
 
@@ -799,8 +813,9 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
+	defer s.cacheFactory.DoneWithCache(inf)
 
-	opts, err := listprocessor.ParseQuery(apiOp, s.namespaceCache)
+	opts, err := listprocessor.ParseQuery(apiOp, gvk.Kind)
 	if err != nil {
 		var apiError *apierror.APIError
 		if errors.As(err, &apiError) {

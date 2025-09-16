@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
+	"github.com/sirupsen/logrus"
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
@@ -416,9 +417,12 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 		}
 	}
 	if !useTempDir {
-		err := os.RemoveAll(InformerObjectCacheDBPath)
-		if err != nil {
-			return "", err
+		for _, suffix := range []string{"", "-shm", "-wal"} {
+			f := InformerObjectCacheDBPath + suffix
+			err := os.RemoveAll(f)
+			if err != nil {
+				logrus.Errorf("error removing existing db file %s: %v", f, err)
+			}
 		}
 	}
 
@@ -454,6 +458,9 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 		// if two transactions want to write at the same time, allow 2 minutes for the first to complete
 		// before baling out
 		"_pragma=busy_timeout=120000&"+
+		// store temporary tables to memory, to speed up queries making use
+		// of temporary tables (eg: when using DISTINCT)
+		"_pragma=temp_store=2&"+
 		// default to IMMEDIATE mode for transactions. Setting this parameter is the only current way
 		// to be able to switch between DEFERRED and IMMEDIATE modes in modernc.org/sqlite's implementation
 		// of BeginTx

@@ -1,11 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rancher/apiserver/pkg/middleware"
@@ -20,12 +21,13 @@ type StringSetting func() string
 type BoolSetting func() bool
 
 type Handler struct {
-	pathSetting     func() string
-	indexSetting    func() string
-	releaseSetting  func() bool
-	offlineSetting  func() string
-	middleware      func(http.Handler) http.Handler
-	indexMiddleware func(http.Handler) http.Handler
+	pathSetting         func() string
+	indexSetting        func() string
+	releaseSetting      func() bool
+	offlineSetting      func() string
+	apiUIVersionSetting func() string
+	middleware          func(http.Handler) http.Handler
+	indexMiddleware     func(http.Handler) http.Handler
 
 	downloadOnce    sync.Once
 	downloadSuccess bool
@@ -40,6 +42,8 @@ type Options struct {
 	Offline StringSetting
 	// Whether or not is it release, if true UI will run offline if set to dynamic
 	ReleaseSetting BoolSetting
+	// The version of API UI to use
+	APIUIVersionSetting StringSetting
 }
 
 func NewUIHandler(opts *Options) *Handler {
@@ -48,10 +52,11 @@ func NewUIHandler(opts *Options) *Handler {
 	}
 
 	h := &Handler{
-		indexSetting:   opts.Index,
-		offlineSetting: opts.Offline,
-		pathSetting:    opts.Path,
-		releaseSetting: opts.ReleaseSetting,
+		indexSetting:        opts.Index,
+		offlineSetting:      opts.Offline,
+		pathSetting:         opts.Path,
+		releaseSetting:      opts.ReleaseSetting,
+		apiUIVersionSetting: opts.APIUIVersionSetting,
 		middleware: middleware.Chain{
 			middleware.Gzip,
 			middleware.FrameOptions,
@@ -94,16 +99,16 @@ func NewUIHandler(opts *Options) *Handler {
 
 func (u *Handler) canDownload(url string) bool {
 	u.downloadOnce.Do(func() {
-		if err := serveIndex(ioutil.Discard, url); err == nil {
+		if err := serveRemote(io.Discard, url); err == nil {
 			u.downloadSuccess = true
 		} else {
-			logrus.Errorf("Failed to download %s, falling back to packaged UI", url)
+			logrus.Errorf("failed to download %s: %v, falling back to packaged UI", url, err)
 		}
 	})
 	return u.downloadSuccess
 }
 
-func (u *Handler) path() (path string, isURL bool) {
+func (u *Handler) indexPath() (path string, isURL bool) {
 	switch u.offlineSetting() {
 	case "dynamic":
 		if u.releaseSetting() {
@@ -118,6 +123,46 @@ func (u *Handler) path() (path string, isURL bool) {
 	default:
 		return u.indexSetting(), true
 	}
+}
+
+func (u *Handler) apiUIPath() (string, bool) {
+	version := u.apiUIVersionSetting()
+	remotePath := "https://releases.rancher.com/api-ui/"
+
+	switch u.offlineSetting() {
+	case "dynamic":
+		if u.releaseSetting() {
+			return filepath.Join(u.pathSetting(), "api-ui"), false
+		}
+		if u.canDownload(fmt.Sprintf("%s/%s/%s", remotePath, version, "ui.min.js")) {
+			return remotePath, true
+		}
+		return filepath.Join(u.pathSetting(), "api-ui"), false
+	case "true":
+		return filepath.Join(u.pathSetting(), "api-ui"), false
+	default:
+		return remotePath, true
+	}
+}
+
+func (u *Handler) ServeAPIUI() http.Handler {
+	return u.middleware(http.StripPrefix("/api-ui/",
+		http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			base, isURL := u.apiUIPath()
+			if isURL {
+				remoteURL := base + req.URL.Path
+				if err := serveRemote(rw, remoteURL); err != nil {
+					logrus.Errorf("failed to fetch asset from %s: %v", remoteURL, err)
+				}
+			} else {
+				parts := strings.SplitN(req.URL.Path, "/", 2)
+				if len(parts) == 2 {
+					http.ServeFile(rw, req, filepath.Join(base, parts[1]))
+				} else {
+					http.NotFound(rw, req)
+				}
+			}
+		})))
 }
 
 func (u *Handler) ServeAsset() http.Handler {
@@ -145,8 +190,8 @@ func (u *Handler) IndexFileOnNotFound() http.Handler {
 
 func (u *Handler) IndexFile() http.Handler {
 	return u.indexMiddleware(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if path, isURL := u.path(); isURL {
-			err := serveIndex(rw, path)
+		if path, isURL := u.indexPath(); isURL {
+			err := serveRemote(rw, path)
 			if err != nil {
 				logrus.Errorf("failed to download %s: %v", path, err)
 			}
@@ -156,7 +201,7 @@ func (u *Handler) IndexFile() http.Handler {
 	}))
 }
 
-func serveIndex(resp io.Writer, url string) error {
+func serveRemote(resp io.Writer, url string) error {
 	client := &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -167,6 +212,15 @@ func serveIndex(resp io.Writer, url string) error {
 		return err
 	}
 	defer r.Body.Close()
+
+	if w, ok := resp.(http.ResponseWriter); ok {
+		for k, v := range r.Header {
+			for _, vv := range v {
+				w.Header().Add(k, vv)
+			}
+		}
+		w.WriteHeader(r.StatusCode)
+	}
 
 	_, err = io.Copy(resp, r.Body)
 	return err

@@ -267,10 +267,10 @@ func (m *MockCacheFactory) EXPECT() *MockCacheFactoryMockRecorder {
 }
 
 // CacheFor mocks base method.
-func (m *MockCacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced, watchable bool) (factory.Cache, error) {
+func (m *MockCacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced, watchable bool) (*factory.Cache, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CacheFor", ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
-	ret0, _ := ret[0].(factory.Cache)
+	ret0, _ := ret[0].(*factory.Cache)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -281,18 +281,30 @@ func (mr *MockCacheFactoryMockRecorder) CacheFor(ctx, fields, externalUpdateInfo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
 }
 
-// Reset mocks base method.
-func (m *MockCacheFactory) Reset() error {
+// DoneWithCache mocks base method.
+func (m *MockCacheFactory) DoneWithCache(arg0 *factory.Cache) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Reset")
+	m.ctrl.Call(m, "DoneWithCache", arg0)
+}
+
+// DoneWithCache indicates an expected call of DoneWithCache.
+func (mr *MockCacheFactoryMockRecorder) DoneWithCache(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoneWithCache", reflect.TypeOf((*MockCacheFactory)(nil).DoneWithCache), arg0)
+}
+
+// Stop mocks base method.
+func (m *MockCacheFactory) Stop(gvk schema.GroupVersionKind) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stop", gvk)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Reset indicates an expected call of Reset.
-func (mr *MockCacheFactoryMockRecorder) Reset() *gomock.Call {
+// Stop indicates an expected call of Stop.
+func (mr *MockCacheFactoryMockRecorder) Stop(gvk any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockCacheFactory)(nil).Reset))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockCacheFactory)(nil).Stop), gvk)
 }
 
 // MockSchemaColumnSetter is a mock of SchemaColumnSetter interface.

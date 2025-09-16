@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/steve/pkg/server/handler"
 	"github.com/rancher/steve/pkg/server/router"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/rancher/steve/pkg/sqlcache/schematracker"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/stores/sqlpartition"
@@ -210,7 +211,7 @@ func setup(ctx context.Context, server *Server) error {
 
 	var onSchemasHandler schemacontroller.SchemasHandlerFunc
 	if server.SQLCache {
-		s, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory)
+		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, server.cacheFactory, false)
 		if err != nil {
 			return err
 		}
@@ -219,7 +220,7 @@ func setup(ctx context.Context, server *Server) error {
 			proxy.NewUnformatterStore(
 				proxy.NewWatchRefresh(
 					sqlpartition.NewStore(
-						s,
+						sqlStore,
 						asl,
 					),
 					asl,
@@ -233,14 +234,18 @@ func setup(ctx context.Context, server *Server) error {
 			sf.AddTemplate(template)
 		}
 
+		sqlSchemaTracker := schematracker.NewSchemaTracker(sqlStore)
+
 		onSchemasHandler = func(schemas *schema.Collection) error {
-			if err := ccache.OnSchemas(schemas); err != nil {
-				return err
-			}
-			if err := s.Reset(); err != nil {
-				return err
-			}
-			return nil
+			var retErr error
+
+			err := ccache.OnSchemas(schemas)
+			retErr = errors.Join(retErr, err)
+
+			err = sqlSchemaTracker.OnSchemas(schemas)
+			retErr = errors.Join(retErr, err)
+
+			return retErr
 		}
 	} else {
 		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache(), common.TemplateOptions{InSQLMode: false}) {

@@ -61,7 +61,7 @@ func (i *IntegrationSuite) TearDownSuite() {
 }
 
 func (i *IntegrationSuite) TestSQLCacheFilters() {
-	fields := [][]string{{"metadata", "annotations", "somekey"}}
+	fields := [][]string{{"id"}, {"metadata", "annotations", "somekey"}}
 	require := i.Require()
 	configMapWithAnnotations := func(name string, annotations map[string]string) v1.ConfigMap {
 		return v1.ConfigMap{
@@ -95,7 +95,10 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 
 	cache, cacheFactory, err := i.createCacheAndFactory(fields, nil)
 	require.NoError(err)
-	defer cacheFactory.Reset()
+	defer func() {
+		cacheFactory.DoneWithCache(cache)
+		cacheFactory.Stop(cache.GVK())
+	}()
 
 	// doesn't match the filter for somekey == somevalue
 	notMatches := configMapWithAnnotations("not-matches-filter", map[string]string{"somekey": "notequal"})
@@ -327,7 +330,7 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make cache: %w", err)
 	}
-	return &cache, cacheFactory, nil
+	return cache, cacheFactory, nil
 }
 
 func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namespace string, cache *factory.Cache) error {

@@ -45,6 +45,20 @@ func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 	return m.recorder
 }
 
+// DropAll mocks base method.
+func (m *MockByOptionsLister) DropAll(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropAll", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropAll indicates an expected call of DropAll.
+func (mr *MockByOptionsListerMockRecorder) DropAll(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropAll", reflect.TypeOf((*MockByOptionsLister)(nil).DropAll), arg0)
+}
+
 // GetLatestResourceVersion mocks base method.
 func (m *MockByOptionsLister) GetLatestResourceVersion() []string {
 	m.ctrl.T.Helper()
@@ -74,6 +88,18 @@ func (m *MockByOptionsLister) ListByOptions(ctx context.Context, lo *sqltypes.Li
 func (mr *MockByOptionsListerMockRecorder) ListByOptions(ctx, lo, partitions, namespace any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByOptions", reflect.TypeOf((*MockByOptionsLister)(nil).ListByOptions), ctx, lo, partitions, namespace)
+}
+
+// RunGC mocks base method.
+func (m *MockByOptionsLister) RunGC(arg0 context.Context) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RunGC", arg0)
+}
+
+// RunGC indicates an expected call of RunGC.
+func (mr *MockByOptionsListerMockRecorder) RunGC(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunGC", reflect.TypeOf((*MockByOptionsLister)(nil).RunGC), arg0)
 }
 
 // Watch mocks base method.
