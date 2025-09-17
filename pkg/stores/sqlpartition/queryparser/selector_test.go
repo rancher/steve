@@ -176,6 +176,7 @@ func TestLexerSequence(t *testing.T) {
 		{"key!~ value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key !~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{"key!~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
+		{`ip(status.podIP)`, []Token{IdentifierToken, OpenParToken, IdentifierToken, ClosedParToken}},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -217,6 +218,7 @@ func TestParserLookahead(t *testing.T) {
 		{"key gt 3", []Token{IdentifierToken, IdentifierToken, IdentifierToken, EndOfStringToken}},
 		{"key lt 4", []Token{IdentifierToken, IdentifierToken, IdentifierToken, EndOfStringToken}},
 		{`key = "multi-word-string"`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
+		{`ip(status.podIP)`, []Token{IdentifierToken, OpenParToken, IdentifierToken, ClosedParToken, EndOfStringToken}},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
