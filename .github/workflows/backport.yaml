@@ -1,0 +1,26 @@
+name: Backport
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull-request:
+        required: true
+      target-branch:
+        required: true
+        default: "test-branch-for-backport"
+
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          token: ${{ env.GH_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - uses: tomleb/gha-tests/backport@main
+        with:
+          pull-request: ${{ github.event.inputs.pull-request }}
+          target-branch: ${{ github.event.inputs.target-branch }}
+          repo: "${{ github.repository }}"
