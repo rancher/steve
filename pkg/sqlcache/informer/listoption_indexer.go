@@ -138,7 +138,18 @@ const (
 	)`
 	createLabelsTableIndexFmt = `CREATE INDEX IF NOT EXISTS "%s_labels_index" ON "%s_labels"(label, value)`
 
-	upsertLabelsStmtFmt      = `REPLACE INTO "%s_labels"(key, label, value) VALUES (?, ?, ?)`
+	upsertEventsQueryFmt = `
+INSERT INTO "%s_events" (rv, type, event, eventnonce, dekid)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(type, rv) DO UPDATE SET
+  event = excluded.event,
+  eventnonce = excluded.eventnonce,
+  dekid = excluded.dekid`
+	upsertLabelsStmtFmt = `
+INSERT INTO "%s_labels" (key, label, value)
+VALUES (?, ?, ?)
+ON CONFLICT(key, label) DO UPDATE SET
+  value = excluded.value`
 	deleteLabelsByKeyStmtFmt = `DELETE FROM "%s_labels" WHERE KEY = ?`
 	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
 	dropLabelsStmtFmt        = `DROP TABLE IF EXISTS "%s_labels"`
@@ -263,10 +274,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
-	l.upsertEventsQuery = fmt.Sprintf(
-		`REPLACE INTO "%s_events"(rv, type, event, eventnonce, dekid) VALUES (?, ?, ?, ?, ?)`,
-		dbName,
-	)
+	l.upsertEventsQuery = fmt.Sprintf(upsertEventsQueryFmt, dbName)
 	l.upsertEventsStmt = l.Prepare(l.upsertEventsQuery)
 
 	l.listEventsAfterQuery = fmt.Sprintf(listEventsAfterFmt, dbName)

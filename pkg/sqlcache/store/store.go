@@ -23,7 +23,13 @@ import (
 )
 
 const (
-	upsertStmtFmt    = `REPLACE INTO "%s"(key, object, objectnonce, dekid) VALUES (?, ?, ?, ?)`
+	upsertStmtFmt = `
+INSERT INTO "%s" (key, object, objectnonce, dekid)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(key) DO UPDATE SET
+  object = excluded.object,
+  objectnonce = excluded.objectnonce,
+  dekid = excluded.dekid`
 	deleteStmtFmt    = `DELETE FROM "%s" WHERE key = ?`
 	deleteAllStmtFmt = `DELETE FROM "%s"`
 	dropBaseStmtFmt  = `DROP TABLE IF EXISTS "%s"`
