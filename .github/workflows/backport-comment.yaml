@@ -1,0 +1,37 @@
+name: Backport on comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  backport-comment:
+    runs-on: ubuntu-latest
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/backport')
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - run: |
+          git config --global user.email "tom.lebreux@suse.com"
+          git config --global user.name "Tom Lebreux <tom.lebreux@suse.com>"
+
+      # TODO: Check is member
+
+      - id: extract
+        run: |
+          branch=$(echo "$COMMENT" | awk '{ print $2 }')
+          echo "target-branch=$branch" >> $GITHUB_OUTPUT
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+
+      - uses: tomleb/gha-tests/backport@main
+        with:
+          pull-request: ${{ github.event.issue.number }}
+          target-branch: ${{ steps.extract.outputs.target-branch }}
+          repository: "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
