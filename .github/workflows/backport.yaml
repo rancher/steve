@@ -19,6 +19,10 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
+      - run:
+          git config --global user.email "tom.lebreux@suse.com"
+          git config --global user.name "Tom Lebreux <tom.lebreux@suse.com>"
+
       - uses: tomleb/gha-tests/backport@main
         with:
           pull-request: ${{ github.event.inputs.pull-request }}
