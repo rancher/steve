@@ -19,7 +19,7 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
-      - run:
+      - run: |
           git config --global user.email "tom.lebreux@suse.com"
           git config --global user.name "Tom Lebreux <tom.lebreux@suse.com>"
 
