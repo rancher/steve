@@ -23,4 +23,4 @@ jobs:
         with:
           pull-request: ${{ github.event.inputs.pull-request }}
           target-branch: ${{ github.event.inputs.target-branch }}
-          repo: "${{ github.repository }}"
+          repository: "${{ github.repository }}"
