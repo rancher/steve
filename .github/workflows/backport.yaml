@@ -19,9 +19,6 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
-      - run: git fetch --all
-      - run: git show 4bf455252dba5b804b97defec5ddb5294fd04813
-
       - uses: tomleb/gha-tests/backport@main
         with:
           pull-request: ${{ github.event.inputs.pull-request }}
