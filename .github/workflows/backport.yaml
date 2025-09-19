@@ -24,3 +24,5 @@ jobs:
           pull-request: ${{ github.event.inputs.pull-request }}
           target-branch: ${{ github.event.inputs.target-branch }}
           repository: "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
