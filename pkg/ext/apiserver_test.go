@@ -888,7 +888,7 @@ func TestCustomColumns(t *testing.T) {
 					{
 						Cells: []any{"foo", "0001-01-01T00:00:00Z"},
 						Object: runtime.RawExtension{
-							Raw: []byte(`{"kind":"PartialObjectMetadata","apiVersion":"meta.k8s.io/v1","metadata":{"name":"foo","creationTimestamp":null}}`),
+							Raw: []byte(`{"kind":"PartialObjectMetadata","apiVersion":"meta.k8s.io/v1","metadata":{"name":"foo"}}`),
 						},
 					},
 				},
@@ -916,7 +916,7 @@ func TestCustomColumns(t *testing.T) {
 					{
 						Cells: []any{"the name is foo", "the foo value", "the bar value"},
 						Object: runtime.RawExtension{
-							Raw: []byte(`{"kind":"PartialObjectMetadata","apiVersion":"meta.k8s.io/v1","metadata":{"name":"foo","creationTimestamp":null}}`),
+							Raw: []byte(`{"kind":"PartialObjectMetadata","apiVersion":"meta.k8s.io/v1","metadata":{"name":"foo"}}`),
 						},
 					},
 				},
@@ -965,7 +965,7 @@ func TestCustomColumns(t *testing.T) {
 					{
 						Cells: []any{"the name is foo", "the foo value", "the bar value"},
 						Object: runtime.RawExtension{
-							Raw: []byte(`{"kind":"TestType","apiVersion":"ext.cattle.io/v1","metadata":{"name":"foo","creationTimestamp":null}}`),
+							Raw: []byte(`{"kind":"TestType","apiVersion":"ext.cattle.io/v1","metadata":{"name":"foo"}}`),
 						},
 					},
 				},

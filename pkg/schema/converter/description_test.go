@@ -8,7 +8,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 func TestAddDescription(t *testing.T) {
