@@ -121,7 +121,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with no errors returned, should return no error", test: func(t *testing.T) {
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		id := "somename"
@@ -176,7 +176,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		assert.NotNil(t, loi)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error returned from NewIndexer(), should return an error", test: func(t *testing.T) {
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		id := "somename"
@@ -199,7 +199,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error returned from Begin(), should return an error", test: func(t *testing.T) {
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		id := "somename"
@@ -235,7 +235,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Exec() when creating fields table, should return an error", test: func(t *testing.T) {
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		id := "somename"
@@ -281,7 +281,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from create-labels, should return an error", test: func(t *testing.T) {
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		id := "somename"
@@ -331,7 +331,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error from Commit(), should return an error", test: func(t *testing.T) {
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
 		fields := [][]string{{"something"}}
 		id := "somename"

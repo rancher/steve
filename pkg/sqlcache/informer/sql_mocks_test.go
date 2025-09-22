@@ -244,10 +244,10 @@ func (mr *MockStoreMockRecorder) NewConnection(isTemp any) *gomock.Call {
 }
 
 // Prepare mocks base method.
-func (m *MockStore) Prepare(stmt string) *sql.Stmt {
+func (m *MockStore) Prepare(stmt string) db.Stmt {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Prepare", stmt)
-	ret0, _ := ret[0].(*sql.Stmt)
+	ret0, _ := ret[0].(db.Stmt)
 	return ret0
 }
 
@@ -440,7 +440,7 @@ func (mr *MockStoreMockRecorder) Update(obj any) *gomock.Call {
 }
 
 // Upsert mocks base method.
-func (m *MockStore) Upsert(tx db.TxClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (m *MockStore) Upsert(tx db.TxClient, stmt db.Stmt, key string, obj any, shouldEncrypt bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj, shouldEncrypt)
 	ret0, _ := ret[0].(error)

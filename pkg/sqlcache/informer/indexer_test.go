@@ -20,8 +20,7 @@ import (
 )
 
 //go:generate mockgen --build_flags=--mod=mod -package informer -destination ./sql_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer Store
-//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
+//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,Stmt,TxClient
 
 type testStoreObject struct {
 	Id  string
@@ -38,7 +37,7 @@ func TestNewIndexer(t *testing.T) {
 
 	tests = append(tests, testCase{description: "NewIndexer() with no errors returned from Store or Client, should return no error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -87,7 +86,7 @@ func TestNewIndexer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on first call to Exec(), should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -111,7 +110,7 @@ func TestNewIndexer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on second call to Exec(), should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -137,7 +136,7 @@ func TestNewIndexer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with Client Commit() error, should return error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -175,7 +174,7 @@ func TestAfterUpsert(t *testing.T) {
 
 	tests = append(tests, testCase{description: "AfterUpsert() with no errors returned from Client should return no error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		addIndexStmt := NewMockStmt(gomock.NewController(t))
@@ -199,7 +198,7 @@ func TestAfterUpsert(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client StmtExec() should return an error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		indexer := &Indexer{
@@ -221,7 +220,7 @@ func TestAfterUpsert(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client second StmtExec() call should return an error", test: func(t *testing.T) {
 		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		client := NewMockTxClient(gomock.NewController(t))
 		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
 		addIndexStmt := NewMockStmt(gomock.NewController(t))
 		objKey := "key"

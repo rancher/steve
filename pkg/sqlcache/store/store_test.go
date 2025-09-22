@@ -7,8 +7,7 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,TxClient,Stmt
 
 import (
 	"context"
@@ -1011,9 +1010,9 @@ func TestAddWithBothUpdates(t *testing.T) {
 	}
 }
 
-func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
+func SetupMockDB(t *testing.T) (*MockClient, *MockTxClient) {
 	dbC := NewMockClient(gomock.NewController(t)) // add functionality once store expectation are known
-	txC := NewMockTXClient(gomock.NewController(t))
+	txC := NewMockTxClient(gomock.NewController(t))
 	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil, nil)
 	dbC.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 		func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {

@@ -33,7 +33,7 @@ func TestNewInformer(t *testing.T) {
 
 	tests = append(tests, testCase{description: "NewInformer() with no errors returned, should return no error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
 		fields := [][]string{{"something"}}
@@ -88,7 +88,7 @@ func TestNewInformer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewStore(), should return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
 		fields := [][]string{{"something"}}
@@ -110,7 +110,7 @@ func TestNewInformer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewIndexer(), should return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
 		fields := [][]string{{"something"}}
@@ -145,7 +145,7 @@ func TestNewInformer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewListOptionIndexer(), should return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
 		fields := [][]string{{"something"}}
@@ -198,7 +198,7 @@ func TestNewInformer(t *testing.T) {
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with transform func", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
-		txClient := NewMockTXClient(gomock.NewController(t))
+		txClient := NewMockTxClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		mockInformer := mockInformer{}
 		testNewInformer := func(lw cache.ListerWatcher,
