@@ -406,15 +406,14 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockClient(gomock.NewController(t))
-		sqlStmt := &sql.Stmt{}
+		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
 		testObjBytes := toBytes(testObject)
 		testByteValue := []byte("something")
 		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
-		txC.EXPECT().Stmt(sqlStmt).Return(stmt)
+		txC.EXPECT().Stmt(stmt).Return(stmt)
 		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, nil)
-		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
+		err := client.Upsert(txC, stmt, "somekey", testObject, true)
 		assert.Nil(t, err)
 	},
 	})
@@ -424,8 +423,8 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockClient(gomock.NewController(t))
-		sqlStmt := &sql.Stmt{}
+		txC := NewMockTxClient(gomock.NewController(t))
+		sqlStmt := &stmt{}
 		testObjBytes := toBytes(testObject)
 		e.EXPECT().Encrypt(testObjBytes).Return(nil, nil, uint32(0), fmt.Errorf("error"))
 		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
@@ -438,15 +437,14 @@ func TestUpsert(t *testing.T) {
 		d := SetupMockDecryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockClient(gomock.NewController(t))
-		sqlStmt := &sql.Stmt{}
+		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
 		testObjBytes := toBytes(testObject)
 		testByteValue := []byte("something")
 		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
-		txC.EXPECT().Stmt(sqlStmt).Return(stmt)
+		txC.EXPECT().Stmt(stmt).Return(stmt)
 		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, fmt.Errorf("error"))
-		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
+		err := client.Upsert(txC, stmt, "somekey", testObject, true)
 		assert.NotNil(t, err)
 	},
 	})
@@ -456,14 +454,13 @@ func TestUpsert(t *testing.T) {
 		e := SetupMockEncryptor(t)
 
 		client := SetupClient(t, c, e, d)
-		txC := NewMockClient(gomock.NewController(t))
-		sqlStmt := &sql.Stmt{}
+		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
 		var testByteValue []byte
 		testObjBytes := toBytes(testObject)
-		txC.EXPECT().Stmt(sqlStmt).Return(stmt)
+		txC.EXPECT().Stmt(stmt).Return(stmt)
 		stmt.EXPECT().Exec("somekey", testObjBytes, testByteValue, uint32(0)).Return(nil, nil)
-		err := client.Upsert(txC, sqlStmt, "somekey", testObject, false)
+		err := client.Upsert(txC, stmt, "somekey", testObject, false)
 		assert.Nil(t, err)
 	},
 	})
@@ -490,7 +487,8 @@ func TestPrepare(t *testing.T) {
 		c.EXPECT().Prepare("something").Return(sqlStmt, nil)
 
 		stmt := client.Prepare("something")
-		assert.Equal(t, sqlStmt, stmt)
+		assert.Equal(t, sqlStmt, stmt.SQLStmt())
+		assert.Equal(t, "something", stmt.GetQueryString())
 	},
 	})
 	tests = append(tests, testCase{description: "Prepare() with Connection Prepare() error", test: func(t *testing.T) {
@@ -579,8 +577,12 @@ func SetupMockRows(t *testing.T) *MockRows {
 }
 
 func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) Client {
+	t.Helper()
 	// No need to specify temp dir for this client because the connection is mocked
-	c, _, _ := NewClient(connection, encryptor, decryptor, false)
+	c, _, err := NewClient(connection, encryptor, decryptor, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return c
 }
 
