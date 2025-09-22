@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -224,7 +223,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	qmarks := make([]string, len(indexedFields))
 	setStatements := make([]string, len(indexedFields))
 
-	err = l.WithTransaction(ctx, true, func(tx transaction.Client) error {
+	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		createEventsTableQuery := fmt.Sprintf(createEventsTableFmt, dbName)
 		_, err = tx.Exec(createEventsTableQuery)
 		if err != nil {
@@ -344,7 +343,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	var key *watchKey
 	// Even though we're not writing in this transaction, we prevent other writes to SQL
 	// because we don't want to add more events while we're backfilling events, so we don't miss events
-	err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
+	err := l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		rowIDRow := tx.Stmt(l.findEventsRowByRVStmt).QueryRowContext(ctx, targetRV)
 		if err := rowIDRow.Err(); err != nil {
 			return &db.QueryError{QueryString: l.findEventsRowByRVQuery, Err: err}
@@ -484,11 +483,11 @@ func (l *ListOptionIndexer) removeWatcher(key *watchKey) {
 
 /* Core methods */
 
-func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, tx db.TxClient) error {
 	return l.notifyEvent(watch.Added, nil, obj, tx)
 }
 
-func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx db.TxClient) error {
 	oldObj, exists, err := l.GetByKey(key)
 	if err != nil {
 		return fmt.Errorf("error getting old object: %w", err)
@@ -501,7 +500,7 @@ func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx transact
 	return l.notifyEvent(watch.Modified, oldObj, obj, tx)
 }
 
-func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx db.TxClient) error {
 	oldObj, exists, err := l.GetByKey(key)
 	if err != nil {
 		return fmt.Errorf("error getting old object: %w", err)
@@ -513,7 +512,7 @@ func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx transacti
 	return l.notifyEvent(watch.Deleted, oldObj, obj, tx)
 }
 
-func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, obj any, tx db.TxClient) error {
 	acc, err := meta.Accessor(obj)
 	if err != nil {
 		return err
@@ -545,7 +544,7 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	return nil
 }
 
-func (l *ListOptionIndexer) upsertEvent(tx transaction.Client, eventType watch.EventType, latestRV string, obj any) error {
+func (l *ListOptionIndexer) upsertEvent(tx db.TxClient, eventType watch.EventType, latestRV string, obj any) error {
 	objBytes := toBytes(obj)
 	var dataNonce []byte
 	var err error
@@ -565,7 +564,7 @@ func (l *ListOptionIndexer) upsertEvent(tx transaction.Client, eventType watch.E
 	return err
 }
 
-func (l *ListOptionIndexer) dropEvents(tx transaction.Client) error {
+func (l *ListOptionIndexer) dropEvents(tx db.TxClient) error {
 	_, err := tx.Stmt(l.dropEventsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.dropEventsQuery, Err: err}
@@ -574,7 +573,7 @@ func (l *ListOptionIndexer) dropEvents(tx transaction.Client) error {
 }
 
 // addIndexFields saves sortable/filterable fields into tables
-func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) error {
 	args := []any{key}
 	for _, field := range l.indexedFields {
 		value, err := getField(obj, field)
@@ -603,7 +602,7 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx transaction.C
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK
-func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client) error {
+func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TxClient) error {
 	k8sObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return fmt.Errorf("addLabels: unexpected object type, expected unstructured.Unstructured: %v", obj)
@@ -618,7 +617,7 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx transaction.Client
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteFieldsByKey(key string, _ any, tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteFieldsByKey(key string, _ any, tx db.TxClient) error {
 	args := []any{key}
 
 	_, err := tx.Stmt(l.deleteFieldsByKeyStmt).Exec(args...)
@@ -628,7 +627,7 @@ func (l *ListOptionIndexer) deleteFieldsByKey(key string, _ any, tx transaction.
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteFields(tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteFields(tx db.TxClient) error {
 	_, err := tx.Stmt(l.deleteFieldsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteFieldsQuery, Err: err}
@@ -636,7 +635,7 @@ func (l *ListOptionIndexer) deleteFields(tx transaction.Client) error {
 	return nil
 }
 
-func (l *ListOptionIndexer) dropFields(tx transaction.Client) error {
+func (l *ListOptionIndexer) dropFields(tx db.TxClient) error {
 	_, err := tx.Stmt(l.dropFieldsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.dropFieldsQuery, Err: err}
@@ -644,7 +643,7 @@ func (l *ListOptionIndexer) dropFields(tx transaction.Client) error {
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx db.TxClient) error {
 	_, err := tx.Stmt(l.deleteLabelsByKeyStmt).Exec(key)
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsByKeyQuery, Err: err}
@@ -652,7 +651,7 @@ func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx transaction.
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteLabels(tx transaction.Client) error {
+func (l *ListOptionIndexer) deleteLabels(tx db.TxClient) error {
 	_, err := tx.Stmt(l.deleteLabelsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.deleteLabelsQuery, Err: err}
@@ -660,7 +659,7 @@ func (l *ListOptionIndexer) deleteLabels(tx transaction.Client) error {
 	return nil
 }
 
-func (l *ListOptionIndexer) dropLabels(tx transaction.Client) error {
+func (l *ListOptionIndexer) dropLabels(tx db.TxClient) error {
 	_, err := tx.Stmt(l.dropLabelsStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: l.dropLabelsQuery, Err: err}
@@ -933,7 +932,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 	}()
 
 	var items []any
-	err = l.WithTransaction(ctx, false, func(tx transaction.Client) error {
+	err = l.WithTransaction(ctx, false, func(tx db.TxClient) error {
 		txStmt := tx.Stmt(stmt)
 		now := time.Now()
 		rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
@@ -1631,7 +1630,7 @@ func (l *ListOptionIndexer) RunGC(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			err := l.WithTransaction(ctx, true, func(tx transaction.Client) error {
+			err := l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 				_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(l.gcKeepCount)
 				if err != nil {
 					return &db.QueryError{QueryString: l.deleteEventsByCountQuery, Err: err}

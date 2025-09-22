@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 
 	"github.com/stretchr/testify/assert"
@@ -80,7 +79,7 @@ func TestAdd(t *testing.T) {
 			})
 
 		var count int
-		store.afterAdd = append(store.afterAdd, func(key string, object any, tx transaction.Client) error {
+		store.afterAdd = append(store.afterAdd, func(key string, object any, tx db.TxClient) error {
 			count++
 			return nil
 		})
@@ -103,7 +102,7 @@ func TestAdd(t *testing.T) {
 				}
 			})
 
-		store.afterAdd = append(store.afterAdd, func(key string, object any, txC transaction.Client) error {
+		store.afterAdd = append(store.afterAdd, func(key string, object any, txC db.TxClient) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Add(testObject)
@@ -202,7 +201,7 @@ func TestUpdate(t *testing.T) {
 			})
 
 		var count int
-		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC transaction.Client) error {
+		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC db.TxClient) error {
 			count++
 			return nil
 		})
@@ -226,7 +225,7 @@ func TestUpdate(t *testing.T) {
 				}
 			})
 
-		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC transaction.Client) error {
+		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC db.TxClient) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Update(testObject)

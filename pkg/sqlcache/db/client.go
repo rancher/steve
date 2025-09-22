@@ -20,7 +20,6 @@ import (
 
 	"errors"
 
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/sirupsen/logrus"
 
 	// needed for drivers
@@ -42,12 +41,12 @@ const (
 type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
 	Prepare(stmt string) *sql.Stmt
-	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
+	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (*sql.Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
-	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
+	Upsert(tx TxClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable Closable) error
 	NewConnection(isTemp bool) (string, error)
 	Encryptor() Encryptor
@@ -83,7 +82,7 @@ func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTra
 		return fmt.Errorf("begin tx: %w", err)
 	}
 
-	if err = f(transaction.NewClient(tx)); err != nil {
+	if err = f(NewTxClient(tx)); err != nil {
 		rerr := c.rollback(ctx, tx)
 		return errors.Join(err, rerr)
 	}
@@ -114,7 +113,7 @@ func (c *client) rollback(ctx context.Context, tx *sql.Tx) error {
 }
 
 // WithTransactionFunction is a function that uses a transaction
-type WithTransactionFunction func(tx transaction.Client) error
+type WithTransactionFunction func(tx TxClient) error
 
 // client is the main implementation of Client. Other implementations exist for test purposes
 type client struct {
@@ -204,7 +203,7 @@ func (c *client) Prepare(stmt string) *sql.Stmt {
 
 // QueryForRows queries the given stmt with the given params and returns the resulting rows. The query wil be retried
 // given a sqlite busy error.
-func (c *client) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
+func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (*sql.Rows, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
@@ -351,7 +350,7 @@ func (c *client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
 
 // Upsert executes an upsert statement encrypting arguments if necessary
 // note the statement should have 4 parameters: key, objBytes, dataNonce, kid
-func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (c *client) Upsert(tx TxClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
 	objBytes := toBytes(obj)
 	var dataNonce []byte
 	var err error

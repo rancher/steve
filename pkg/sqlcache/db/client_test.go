@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -531,7 +530,7 @@ func TestNewConnection(t *testing.T) {
 		assert.Nil(t, err)
 
 		// Create a transaction to ensure that the file is written to disk.
-		err = client.WithTransaction(context.Background(), false, func(tx transaction.Client) error {
+		err = client.WithTransaction(context.Background(), false, func(tx TxClient) error {
 			return nil
 		})
 		assert.NoError(t, err)

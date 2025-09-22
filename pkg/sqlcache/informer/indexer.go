@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -73,11 +72,11 @@ type Store interface {
 
 	GetByKey(key string) (item any, exists bool, err error)
 	GetName() string
-	RegisterAfterAdd(f func(key string, obj any, tx transaction.Client) error)
-	RegisterAfterUpdate(f func(key string, obj any, tx transaction.Client) error)
-	RegisterAfterDelete(f func(key string, obj any, tx transaction.Client) error)
-	RegisterAfterDeleteAll(f func(tx transaction.Client) error)
-	RegisterBeforeDropAll(f func(tx transaction.Client) error)
+	RegisterAfterAdd(f func(key string, obj any, tx db.TxClient) error)
+	RegisterAfterUpdate(f func(key string, obj any, tx db.TxClient) error)
+	RegisterAfterDelete(f func(key string, obj any, tx db.TxClient) error)
+	RegisterAfterDeleteAll(f func(tx db.TxClient) error)
+	RegisterBeforeDropAll(f func(tx db.TxClient) error)
 	GetShouldEncrypt() bool
 	GetType() reflect.Type
 	DropAll(ctx context.Context) error
@@ -87,7 +86,7 @@ type Store interface {
 func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer, error) {
 	dbName := db.Sanitize(s.GetName())
 
-	err := s.WithTransaction(ctx, true, func(tx transaction.Client) error {
+	err := s.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
 		_, err := tx.Exec(createTableQuery)
 		if err != nil {
@@ -133,7 +132,7 @@ func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer
 /* Core methods */
 
 // AfterUpsert updates indices of an object
-func (i *Indexer) AfterUpsert(key string, obj any, tx transaction.Client) error {
+func (i *Indexer) AfterUpsert(key string, obj any, tx db.TxClient) error {
 	// delete all
 	_, err := tx.Stmt(i.deleteIndicesStmt).Exec(key)
 	if err != nil {
@@ -208,7 +207,7 @@ func (i *Indexer) Index(indexName string, obj any) (result []any, err error) {
 	return i.ReadObjects(rows, i.GetType(), i.GetShouldEncrypt())
 }
 
-func (i *Indexer) dropIndices(tx transaction.Client) error {
+func (i *Indexer) dropIndices(tx db.TxClient) error {
 	_, err := tx.Stmt(i.dropIndicesStmt).Exec()
 	if err != nil {
 		return &db.QueryError{QueryString: i.dropIndicesQuery, Err: err}

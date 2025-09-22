@@ -15,7 +15,6 @@ import (
 	reflect "reflect"
 
 	db "github.com/rancher/steve/pkg/sqlcache/db"
-	transaction "github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -259,7 +258,7 @@ func (mr *MockStoreMockRecorder) Prepare(stmt any) *gomock.Call {
 }
 
 // QueryForRows mocks base method.
-func (m *MockStore) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
+func (m *MockStore) QueryForRows(ctx context.Context, stmt db.Stmt, params ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, stmt}
 	for _, a := range params {
@@ -339,7 +338,7 @@ func (mr *MockStoreMockRecorder) ReadStrings2(rows any) *gomock.Call {
 }
 
 // RegisterAfterAdd mocks base method.
-func (m *MockStore) RegisterAfterAdd(f func(string, any, transaction.Client) error) {
+func (m *MockStore) RegisterAfterAdd(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterAdd", f)
 }
@@ -351,7 +350,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterAdd(f any) *gomock.Call {
 }
 
 // RegisterAfterDelete mocks base method.
-func (m *MockStore) RegisterAfterDelete(f func(string, any, transaction.Client) error) {
+func (m *MockStore) RegisterAfterDelete(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDelete", f)
 }
@@ -363,7 +362,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterDelete(f any) *gomock.Call {
 }
 
 // RegisterAfterDeleteAll mocks base method.
-func (m *MockStore) RegisterAfterDeleteAll(f func(transaction.Client) error) {
+func (m *MockStore) RegisterAfterDeleteAll(f func(db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDeleteAll", f)
 }
@@ -375,7 +374,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterDeleteAll(f any) *gomock.Call {
 }
 
 // RegisterAfterUpdate mocks base method.
-func (m *MockStore) RegisterAfterUpdate(f func(string, any, transaction.Client) error) {
+func (m *MockStore) RegisterAfterUpdate(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterUpdate", f)
 }
@@ -387,7 +386,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterUpdate(f any) *gomock.Call {
 }
 
 // RegisterBeforeDropAll mocks base method.
-func (m *MockStore) RegisterBeforeDropAll(f func(transaction.Client) error) {
+func (m *MockStore) RegisterBeforeDropAll(f func(db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterBeforeDropAll", f)
 }
@@ -441,7 +440,7 @@ func (mr *MockStoreMockRecorder) Update(obj any) *gomock.Call {
 }
 
 // Upsert mocks base method.
-func (m *MockStore) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (m *MockStore) Upsert(tx db.TxClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj, shouldEncrypt)
 	ret0, _ := ret[0].(error)

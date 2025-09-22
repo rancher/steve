@@ -12,7 +12,6 @@ import (
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -73,11 +72,11 @@ type Store struct {
 	listStmt      *sql.Stmt
 	listKeysStmt  *sql.Stmt
 
-	afterAdd       []func(key string, obj any, tx transaction.Client) error
-	afterUpdate    []func(key string, obj any, tx transaction.Client) error
-	afterDelete    []func(key string, obj any, tx transaction.Client) error
-	afterDeleteAll []func(tx transaction.Client) error
-	beforeDropAll  []func(tx transaction.Client) error
+	afterAdd       []func(key string, obj any, tx db.TxClient) error
+	afterUpdate    []func(key string, obj any, tx db.TxClient) error
+	afterDelete    []func(key string, obj any, tx db.TxClient) error
+	afterDeleteAll []func(tx db.TxClient) error
+	beforeDropAll  []func(tx db.TxClient) error
 }
 
 // Test that Store implements cache.Indexer
@@ -99,16 +98,16 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 		Client:             c,
 		keyFunc:            keyFunc,
 		shouldEncrypt:      shouldEncrypt,
-		afterAdd:           []func(key string, obj any, tx transaction.Client) error{},
-		afterUpdate:        []func(key string, obj any, tx transaction.Client) error{},
-		afterDelete:        []func(key string, obj any, tx transaction.Client) error{},
-		afterDeleteAll:     []func(tx transaction.Client) error{},
+		afterAdd:           []func(key string, obj any, tx db.TxClient) error{},
+		afterUpdate:        []func(key string, obj any, tx db.TxClient) error{},
+		afterDelete:        []func(key string, obj any, tx db.TxClient) error{},
+		afterDeleteAll:     []func(tx db.TxClient) error{},
 	}
 
 	dbName := db.Sanitize(s.name)
 
 	// once multiple informer-factories are needed, this can accept the case where table already exists error is received
-	err := s.WithTransaction(ctx, true, func(tx transaction.Client) error {
+	err := s.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
 		_, err := tx.Exec(createTableQuery)
 		if err != nil {
@@ -147,7 +146,7 @@ func isDBError(e error) bool {
 func (s *Store) checkUpdateExternalInfo(key string) {
 	for _, updateBlock := range []*sqltypes.ExternalGVKUpdates{s.externalUpdateInfo, s.selfUpdateInfo} {
 		if updateBlock != nil {
-			s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+			s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
 				err := s.updateExternalInfo(tx, key, updateBlock)
 				if err != nil && !isDBError(err) {
 					// Just report and ignore errors
@@ -171,7 +170,7 @@ func (s *Store) checkUpdateExternalInfo(key string) {
 // Some code later on in the function verifies that we aren't overwriting a non-empty value
 // with the empty string. I assume this is never desired.
 
-func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
+func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
 		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
   LEFT OUTER JOIN "%s_labels" lt1 ON f.key = lt1.key
@@ -306,7 +305,7 @@ func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetV
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
 func (s *Store) deleteByKey(key string, obj any) error {
-	return s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+	return s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
 		_, err := tx.Stmt(s.deleteStmt).Exec(key)
 		if err != nil {
 			return &db.QueryError{QueryString: s.deleteQuery, Err: err}
@@ -350,7 +349,7 @@ func (s *Store) Add(obj any) error {
 		return err
 	}
 
-	err = s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+	err = s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
 		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
 		if err != nil {
 			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
@@ -378,7 +377,7 @@ func (s *Store) Update(obj any) error {
 		return err
 	}
 
-	err = s.WithTransaction(s.ctx, true, func(tx transaction.Client) error {
+	err = s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
 		err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt)
 		if err != nil {
 			return &db.QueryError{QueryString: s.upsertQuery, Err: err}
@@ -475,7 +474,7 @@ func (s *Store) Replace(objects []any, _ string) error {
 
 // replaceByKey will delete the contents of the Store, using instead the given key to obj map
 func (s *Store) replaceByKey(objects map[string]any) error {
-	return s.WithTransaction(s.ctx, true, func(txC transaction.Client) error {
+	return s.WithTransaction(s.ctx, true, func(txC db.TxClient) error {
 		_, err := txC.Stmt(s.deleteAllStmt).Exec()
 		if err != nil {
 			return &db.QueryError{QueryString: s.deleteAllQuery, Err: err}
@@ -521,26 +520,26 @@ func (s *Store) GetType() reflect.Type {
 }
 
 // RegisterAfterAdd registers a func to be called after each add event
-func (s *Store) RegisterAfterAdd(f func(key string, obj any, txC transaction.Client) error) {
+func (s *Store) RegisterAfterAdd(f func(key string, obj any, txC db.TxClient) error) {
 	s.afterAdd = append(s.afterAdd, f)
 }
 
 // RegisterAfterUpdate registers a func to be called after each update event
-func (s *Store) RegisterAfterUpdate(f func(key string, obj any, txC transaction.Client) error) {
+func (s *Store) RegisterAfterUpdate(f func(key string, obj any, txC db.TxClient) error) {
 	s.afterUpdate = append(s.afterUpdate, f)
 }
 
 // RegisterAfterDelete registers a func to be called after each deletion
-func (s *Store) RegisterAfterDelete(f func(key string, obj any, txC transaction.Client) error) {
+func (s *Store) RegisterAfterDelete(f func(key string, obj any, txC db.TxClient) error) {
 	s.afterDelete = append(s.afterDelete, f)
 }
 
 // RegisterAfterDelete registers a func to be called after each deletion
-func (s *Store) RegisterAfterDeleteAll(f func(txC transaction.Client) error) {
+func (s *Store) RegisterAfterDeleteAll(f func(txC db.TxClient) error) {
 	s.afterDeleteAll = append(s.afterDeleteAll, f)
 }
 
-func (s *Store) RegisterBeforeDropAll(f func(txC transaction.Client) error) {
+func (s *Store) RegisterBeforeDropAll(f func(txC db.TxClient) error) {
 	s.beforeDropAll = append(s.beforeDropAll, f)
 }
 
@@ -549,7 +548,7 @@ func (s *Store) RegisterBeforeDropAll(f func(txC transaction.Client) error) {
 //
 // The store shouldn't be used once DropAll is called.
 func (s *Store) DropAll(ctx context.Context) error {
-	err := s.WithTransaction(ctx, true, func(tx transaction.Client) error {
+	err := s.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		err := s.runBeforeDropAll(tx)
 		if err != nil {
 			return err
@@ -569,7 +568,7 @@ func (s *Store) DropAll(ctx context.Context) error {
 }
 
 // runAfterAdd executes functions registered to run after add event
-func (s *Store) runAfterAdd(key string, obj any, txC transaction.Client) error {
+func (s *Store) runAfterAdd(key string, obj any, txC db.TxClient) error {
 	for _, f := range s.afterAdd {
 		err := f(key, obj, txC)
 		if err != nil {
@@ -580,7 +579,7 @@ func (s *Store) runAfterAdd(key string, obj any, txC transaction.Client) error {
 }
 
 // runAfterUpdate executes functions registered to run after update event
-func (s *Store) runAfterUpdate(key string, obj any, txC transaction.Client) error {
+func (s *Store) runAfterUpdate(key string, obj any, txC db.TxClient) error {
 	for _, f := range s.afterUpdate {
 		err := f(key, obj, txC)
 		if err != nil {
@@ -591,7 +590,7 @@ func (s *Store) runAfterUpdate(key string, obj any, txC transaction.Client) erro
 }
 
 // runAfterDelete executes functions registered to run after delete event
-func (s *Store) runAfterDelete(key string, obj any, txC transaction.Client) error {
+func (s *Store) runAfterDelete(key string, obj any, txC db.TxClient) error {
 	for _, f := range s.afterDelete {
 		err := f(key, obj, txC)
 		if err != nil {
@@ -603,7 +602,7 @@ func (s *Store) runAfterDelete(key string, obj any, txC transaction.Client) erro
 
 // runAfterDeleteAll executes functions registered to run after delete events when
 // the database is being replaced.
-func (s *Store) runAfterDeleteAll(txC transaction.Client) error {
+func (s *Store) runAfterDeleteAll(txC db.TxClient) error {
 	for _, f := range s.afterDeleteAll {
 		err := f(txC)
 		if err != nil {
@@ -613,7 +612,7 @@ func (s *Store) runAfterDeleteAll(txC transaction.Client) error {
 	return nil
 }
 
-func (s *Store) runBeforeDropAll(txC transaction.Client) error {
+func (s *Store) runBeforeDropAll(txC db.TxClient) error {
 	for _, f := range s.beforeDropAll {
 		err := f(txC)
 		if err != nil {
