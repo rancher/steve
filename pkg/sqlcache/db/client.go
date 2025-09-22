@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -17,8 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"errors"
 
 	"github.com/sirupsen/logrus"
 
@@ -40,13 +39,13 @@ const (
 // Client defines a database client that provides encrypting, decrypting, and database resetting
 type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
-	Prepare(stmt string) *sql.Stmt
+	Prepare(stmt string) Stmt
 	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (*sql.Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
-	Upsert(tx TxClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
+	Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error
 	CloseStmt(closable Closable) error
 	NewConnection(isTemp bool) (string, error)
 	Encryptor() Encryptor
@@ -191,14 +190,17 @@ func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor, useTempDi
 }
 
 // Prepare prepares the given string into a sql statement on the client's connection.
-func (c *client) Prepare(stmt string) *sql.Stmt {
+func (c *client) Prepare(queryString string) Stmt {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
-	prepared, err := c.conn.Prepare(stmt)
+	prepared, err := c.conn.Prepare(queryString)
 	if err != nil {
-		panic(fmt.Errorf("Error preparing statement: %s\n%w", stmt, err))
+		panic(fmt.Errorf("Error preparing statement: %s\n%w", queryString, err))
 	}
-	return prepared
+	return &stmt{
+		Stmt:        prepared,
+		queryString: queryString,
+	}
 }
 
 // QueryForRows queries the given stmt with the given params and returns the resulting rows. The query wil be retried
@@ -350,7 +352,7 @@ func (c *client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
 
 // Upsert executes an upsert statement encrypting arguments if necessary
 // note the statement should have 4 parameters: key, objBytes, dataNonce, kid
-func (c *client) Upsert(tx TxClient, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (c *client) Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error {
 	objBytes := toBytes(obj)
 	var dataNonce []byte
 	var err error

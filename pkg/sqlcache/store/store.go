@@ -5,7 +5,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"reflect"
 	"strings"
@@ -64,13 +63,13 @@ type Store struct {
 	listKeysQuery  string
 	dropBaseQuery  string
 
-	upsertStmt    *sql.Stmt
-	deleteStmt    *sql.Stmt
-	deleteAllStmt *sql.Stmt
-	dropBaseStmt  *sql.Stmt
-	getStmt       *sql.Stmt
-	listStmt      *sql.Stmt
-	listKeysStmt  *sql.Stmt
+	upsertStmt    db.Stmt
+	deleteStmt    db.Stmt
+	deleteAllStmt db.Stmt
+	dropBaseStmt  db.Stmt
+	getStmt       db.Stmt
+	listStmt      db.Stmt
+	listKeysStmt  db.Stmt
 
 	afterAdd       []func(key string, obj any, tx db.TxClient) error
 	afterUpdate    []func(key string, obj any, tx db.TxClient) error

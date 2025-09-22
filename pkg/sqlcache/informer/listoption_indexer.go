@@ -62,19 +62,19 @@ type ListOptionIndexer struct {
 	deleteLabelsQuery        string
 	dropLabelsQuery          string
 
-	upsertEventsStmt        *sql.Stmt
-	findEventsRowByRVStmt   *sql.Stmt
-	listEventsAfterStmt     *sql.Stmt
-	deleteEventsByCountStmt *sql.Stmt
-	dropEventsStmt          *sql.Stmt
-	addFieldsStmt           *sql.Stmt
-	deleteFieldsByKeyStmt   *sql.Stmt
-	deleteFieldsStmt        *sql.Stmt
-	dropFieldsStmt          *sql.Stmt
-	upsertLabelsStmt        *sql.Stmt
-	deleteLabelsByKeyStmt   *sql.Stmt
-	deleteLabelsStmt        *sql.Stmt
-	dropLabelsStmt          *sql.Stmt
+	upsertEventsStmt        db.Stmt
+	findEventsRowByRVStmt   db.Stmt
+	listEventsAfterStmt     db.Stmt
+	deleteEventsByCountStmt db.Stmt
+	dropEventsStmt          db.Stmt
+	addFieldsStmt           db.Stmt
+	deleteFieldsByKeyStmt   db.Stmt
+	deleteFieldsStmt        db.Stmt
+	dropFieldsStmt          db.Stmt
+	upsertLabelsStmt        db.Stmt
+	deleteLabelsByKeyStmt   db.Stmt
+	deleteLabelsStmt        db.Stmt
+	dropLabelsStmt          db.Stmt
 }
 
 var (
