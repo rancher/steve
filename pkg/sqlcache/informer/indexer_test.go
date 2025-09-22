@@ -440,7 +440,7 @@ func TestIndex(t *testing.T) {
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
-		store.EXPECT().CloseStmt(mockStmt).Return(nil)
+		mockStmt.EXPECT().Close().Return(nil)
 		objs, err := indexer.Index(indexName, testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{testObject}, objs)

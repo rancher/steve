@@ -129,35 +129,6 @@ type Connection interface {
 	Close() error
 }
 
-// Closable Closes an underlying connection and returns an error on failure.
-type Closable interface {
-	Close() error
-}
-
-// Rows represents sql rows. It exposes method to navigate the rows, read their outputs, and close them.
-type Rows interface {
-	Next() bool
-	Err() error
-	Close() error
-	Scan(dest ...any) error
-}
-
-// Stmt is an interface over a subset of sql.Stmt methods
-// rationale: allow mocking
-type Stmt interface {
-	Exec(args ...any) (sql.Result, error)
-	Query(args ...any) (*sql.Rows, error)
-	QueryContext(ctx context.Context, args ...any) (Rows, error)
-	QueryRowContext(ctx context.Context, args ...any) Row
-	Close() error
-
-	// SQLStmt unwraps the original sql.Stmt
-	SQLStmt() *sql.Stmt
-
-	// GetQueryString returns the original text used to prepare this statement
-	GetQueryString() string
-}
-
 // QueryError encapsulates an error while executing a query
 type QueryError struct {
 	QueryString string
