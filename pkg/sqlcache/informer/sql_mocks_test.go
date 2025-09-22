@@ -11,7 +11,6 @@ package informer
 
 import (
 	context "context"
-	sql "database/sql"
 	reflect "reflect"
 
 	db "github.com/rancher/steve/pkg/sqlcache/db"
@@ -54,20 +53,6 @@ func (m *MockStore) Add(obj any) error {
 func (mr *MockStoreMockRecorder) Add(obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockStore)(nil).Add), obj)
-}
-
-// CloseStmt mocks base method.
-func (m *MockStore) CloseStmt(closable db.Closable) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloseStmt", closable)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CloseStmt indicates an expected call of CloseStmt.
-func (mr *MockStoreMockRecorder) CloseStmt(closable any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockStore)(nil).CloseStmt), closable)
 }
 
 // Decryptor mocks base method.
@@ -258,14 +243,14 @@ func (mr *MockStoreMockRecorder) Prepare(stmt any) *gomock.Call {
 }
 
 // QueryForRows mocks base method.
-func (m *MockStore) QueryForRows(ctx context.Context, stmt db.Stmt, params ...any) (*sql.Rows, error) {
+func (m *MockStore) QueryForRows(ctx context.Context, stmt db.Stmt, params ...any) (db.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, stmt}
 	for _, a := range params {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryForRows", varargs...)
-	ret0, _ := ret[0].(*sql.Rows)
+	ret0, _ := ret[0].(db.Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

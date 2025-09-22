@@ -40,13 +40,12 @@ const (
 type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
 	Prepare(stmt string) Stmt
-	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (*sql.Rows, error)
+	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
 	Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error
-	CloseStmt(closable Closable) error
 	NewConnection(isTemp bool) (string, error)
 	Encryptor() Encryptor
 	Decryptor() Decryptor
@@ -143,6 +142,22 @@ type Rows interface {
 	Scan(dest ...any) error
 }
 
+// Stmt is an interface over a subset of sql.Stmt methods
+// rationale: allow mocking
+type Stmt interface {
+	Exec(args ...any) (sql.Result, error)
+	Query(args ...any) (*sql.Rows, error)
+	QueryContext(ctx context.Context, args ...any) (Rows, error)
+	QueryRowContext(ctx context.Context, args ...any) Row
+	Close() error
+
+	// SQLStmt unwraps the original sql.Stmt
+	SQLStmt() *sql.Stmt
+
+	// GetQueryString returns the original text used to prepare this statement
+	GetQueryString() string
+}
+
 // QueryError encapsulates an error while executing a query
 type QueryError struct {
 	QueryString string
@@ -205,17 +220,11 @@ func (c *client) Prepare(queryString string) Stmt {
 
 // QueryForRows queries the given stmt with the given params and returns the resulting rows. The query wil be retried
 // given a sqlite busy error.
-func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (*sql.Rows, error) {
+func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
 	return stmt.QueryContext(ctx, params...)
-}
-
-// CloseStmt will call close on the given Closable. It is intended to be used with a sql statement. This function is meant
-// to replace stmt.Close which can cause panics when callers unit-test since there usually is no real underlying connection.
-func (c *client) CloseStmt(closable Closable) error {
-	return closable.Close()
 }
 
 // ReadObjects Scans the given rows, performs any necessary decryption, converts the data to objects of the given type,

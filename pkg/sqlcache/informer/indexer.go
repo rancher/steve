@@ -48,13 +48,6 @@ type Indexer struct {
 	indexers     cache.Indexers
 	indexersLock sync.RWMutex
 
-	deleteIndicesQuery   string
-	dropIndicesQuery     string
-	addIndexQuery        string
-	listByIndexQuery     string
-	listKeysByIndexQuery string
-	listIndexValuesQuery string
-
 	deleteIndicesStmt   db.Stmt
 	dropIndicesStmt     db.Stmt
 	addIndexStmt        db.Stmt
@@ -87,16 +80,12 @@ func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer
 
 	err := s.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
-		_, err := tx.Exec(createTableQuery)
-		if err != nil {
-			return &db.QueryError{QueryString: createTableQuery, Err: err}
+		if _, err := tx.Exec(createTableQuery); err != nil {
+			return err
 		}
 		createIndexQuery := fmt.Sprintf(createIndexFmt, dbName)
-		_, err = tx.Exec(createIndexQuery)
-		if err != nil {
-			return &db.QueryError{QueryString: createIndexQuery, Err: err}
-		}
-		return nil
+		_, err := tx.Exec(createIndexQuery)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -111,19 +100,12 @@ func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer
 	i.RegisterAfterUpdate(i.AfterUpsert)
 	i.RegisterBeforeDropAll(i.dropIndices)
 
-	i.deleteIndicesQuery = fmt.Sprintf(deleteIndicesFmt, db.Sanitize(s.GetName()))
-	i.dropIndicesQuery = fmt.Sprintf(dropIndicesFmt, db.Sanitize(s.GetName()))
-	i.addIndexQuery = fmt.Sprintf(addIndexFmt, db.Sanitize(s.GetName()))
-	i.listByIndexQuery = fmt.Sprintf(listByIndexFmt, db.Sanitize(s.GetName()))
-	i.listKeysByIndexQuery = fmt.Sprintf(listKeyByIndexFmt, db.Sanitize(s.GetName()))
-	i.listIndexValuesQuery = fmt.Sprintf(listIndexValuesFmt, db.Sanitize(s.GetName()))
-
-	i.deleteIndicesStmt = s.Prepare(i.deleteIndicesQuery)
-	i.dropIndicesStmt = s.Prepare(i.dropIndicesQuery)
-	i.addIndexStmt = s.Prepare(i.addIndexQuery)
-	i.listByIndexStmt = s.Prepare(i.listByIndexQuery)
-	i.listKeysByIndexStmt = s.Prepare(i.listKeysByIndexQuery)
-	i.listIndexValuesStmt = s.Prepare(i.listIndexValuesQuery)
+	i.deleteIndicesStmt = s.Prepare(fmt.Sprintf(deleteIndicesFmt, dbName))
+	i.dropIndicesStmt = s.Prepare(fmt.Sprintf(dropIndicesFmt, dbName))
+	i.addIndexStmt = s.Prepare(fmt.Sprintf(addIndexFmt, dbName))
+	i.listByIndexStmt = s.Prepare(fmt.Sprintf(listByIndexFmt, dbName))
+	i.listKeysByIndexStmt = s.Prepare(fmt.Sprintf(listKeyByIndexFmt, dbName))
+	i.listIndexValuesStmt = s.Prepare(fmt.Sprintf(listIndexValuesFmt, dbName))
 
 	return i, nil
 }
@@ -133,9 +115,8 @@ func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer
 // AfterUpsert updates indices of an object
 func (i *Indexer) AfterUpsert(key string, obj any, tx db.TxClient) error {
 	// delete all
-	_, err := tx.Stmt(i.deleteIndicesStmt).Exec(key)
-	if err != nil {
-		return &db.QueryError{QueryString: i.deleteIndicesQuery, Err: err}
+	if _, err := tx.Stmt(i.deleteIndicesStmt).Exec(key); err != nil {
+		return err
 	}
 
 	// re-insert all values
@@ -148,9 +129,8 @@ func (i *Indexer) AfterUpsert(key string, obj any, tx db.TxClient) error {
 		}
 
 		for _, value := range values {
-			_, err = tx.Stmt(i.addIndexStmt).Exec(indexName, value, key)
-			if err != nil {
-				return &db.QueryError{QueryString: i.addIndexQuery, Err: err}
+			if _, err := tx.Stmt(i.addIndexStmt).Exec(indexName, value, key); err != nil {
+				return err
 			}
 		}
 	}
@@ -188,9 +168,8 @@ func (i *Indexer) Index(indexName string, obj any) (result []any, err error) {
 	stmt := i.Prepare(query)
 
 	defer func() {
-		cerr := i.CloseStmt(stmt)
-		if cerr != nil {
-			err = errors.Join(err, &db.QueryError{QueryString: query, Err: cerr})
+		if cerr := stmt.Close(); cerr != nil {
+			err = errors.Join(err, cerr)
 		}
 	}()
 	// HACK: Query will accept []any but not []string
@@ -201,17 +180,14 @@ func (i *Indexer) Index(indexName string, obj any) (result []any, err error) {
 
 	rows, err := i.QueryForRows(i.ctx, stmt, params...)
 	if err != nil {
-		return nil, &db.QueryError{QueryString: query, Err: err}
+		return nil, err
 	}
 	return i.ReadObjects(rows, i.GetType(), i.GetShouldEncrypt())
 }
 
 func (i *Indexer) dropIndices(tx db.TxClient) error {
 	_, err := tx.Stmt(i.dropIndicesStmt).Exec()
-	if err != nil {
-		return &db.QueryError{QueryString: i.dropIndicesQuery, Err: err}
-	}
-	return nil
+	return err
 }
 
 // ByIndex returns the stored objects whose set of indexed values
@@ -219,7 +195,7 @@ func (i *Indexer) dropIndices(tx db.TxClient) error {
 func (i *Indexer) ByIndex(indexName, indexedValue string) ([]any, error) {
 	rows, err := i.QueryForRows(i.ctx, i.listByIndexStmt, indexName, indexedValue)
 	if err != nil {
-		return nil, &db.QueryError{QueryString: i.listByIndexQuery, Err: err}
+		return nil, err
 	}
 	return i.ReadObjects(rows, i.GetType(), i.GetShouldEncrypt())
 }
@@ -235,7 +211,7 @@ func (i *Indexer) IndexKeys(indexName, indexedValue string) ([]string, error) {
 
 	rows, err := i.QueryForRows(i.ctx, i.listKeysByIndexStmt, indexName, indexedValue)
 	if err != nil {
-		return nil, &db.QueryError{QueryString: i.listKeysByIndexQuery, Err: err}
+		return nil, err
 	}
 	return i.ReadStrings(rows)
 }
@@ -253,7 +229,7 @@ func (i *Indexer) ListIndexFuncValues(name string) []string {
 func (i *Indexer) safeListIndexFuncValues(indexName string) ([]string, error) {
 	rows, err := i.QueryForRows(i.ctx, i.listIndexValuesStmt, indexName)
 	if err != nil {
-		return nil, &db.QueryError{QueryString: i.listIndexValuesQuery, Err: err}
+		return nil, err
 	}
 	return i.ReadStrings(rows)
 }

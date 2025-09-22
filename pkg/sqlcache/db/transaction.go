@@ -24,7 +24,14 @@ func NewTxClient(tx *sql.Tx) TxClient {
 }
 
 func (c txClient) Exec(query string, args ...any) (sql.Result, error) {
-	return c.tx.Exec(query, args...)
+	res, err := c.tx.Exec(query, args...)
+	if err != nil {
+		err = &QueryError{
+			QueryString: query,
+			Err:         err,
+		}
+	}
+	return res, err
 }
 
 func (c txClient) Stmt(s Stmt) Stmt {

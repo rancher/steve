@@ -126,20 +126,6 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
-// CloseStmt mocks base method.
-func (m *MockClient) CloseStmt(closable db.Closable) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloseStmt", closable)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CloseStmt indicates an expected call of CloseStmt.
-func (mr *MockClientMockRecorder) CloseStmt(closable any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockClient)(nil).CloseStmt), closable)
-}
-
 // Decryptor mocks base method.
 func (m *MockClient) Decryptor() db.Decryptor {
 	m.ctrl.T.Helper()
@@ -198,14 +184,14 @@ func (mr *MockClientMockRecorder) Prepare(stmt any) *gomock.Call {
 }
 
 // QueryForRows mocks base method.
-func (m *MockClient) QueryForRows(ctx context.Context, stmt db.Stmt, params ...any) (*sql.Rows, error) {
+func (m *MockClient) QueryForRows(ctx context.Context, stmt db.Stmt, params ...any) (db.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, stmt}
 	for _, a := range params {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryForRows", varargs...)
-	ret0, _ := ret[0].(*sql.Rows)
+	ret0, _ := ret[0].(db.Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -396,14 +382,14 @@ func (mr *MockStmtMockRecorder) Query(args ...any) *gomock.Call {
 }
 
 // QueryContext mocks base method.
-func (m *MockStmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error) {
+func (m *MockStmt) QueryContext(ctx context.Context, args ...any) (db.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryContext", varargs...)
-	ret0, _ := ret[0].(*sql.Rows)
+	ret0, _ := ret[0].(db.Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -416,14 +402,14 @@ func (mr *MockStmtMockRecorder) QueryContext(ctx any, args ...any) *gomock.Call 
 }
 
 // QueryRowContext mocks base method.
-func (m *MockStmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
+func (m *MockStmt) QueryRowContext(ctx context.Context, args ...any) db.Row {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
-	ret0, _ := ret[0].(*sql.Row)
+	ret0, _ := ret[0].(db.Row)
 	return ret0
 }
 

@@ -418,14 +418,14 @@ func (mr *MockStmtMockRecorder) Query(args ...any) *gomock.Call {
 }
 
 // QueryContext mocks base method.
-func (m *MockStmt) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error) {
+func (m *MockStmt) QueryContext(ctx context.Context, args ...any) (Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryContext", varargs...)
-	ret0, _ := ret[0].(*sql.Rows)
+	ret0, _ := ret[0].(Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -438,14 +438,14 @@ func (mr *MockStmtMockRecorder) QueryContext(ctx any, args ...any) *gomock.Call 
 }
 
 // QueryRowContext mocks base method.
-func (m *MockStmt) QueryRowContext(ctx context.Context, args ...any) *sql.Row {
+func (m *MockStmt) QueryRowContext(ctx context.Context, args ...any) Row {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
-	ret0, _ := ret[0].(*sql.Row)
+	ret0, _ := ret[0].(Row)
 	return ret0
 }
 
