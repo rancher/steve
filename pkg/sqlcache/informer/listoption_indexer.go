@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
@@ -79,8 +80,15 @@ type ListOptionIndexer struct {
 }
 
 var (
-	defaultIndexedFields    = []string{"metadata.name", "metadata.creationTimestamp"}
-	defaultIndexNamespaced  = "metadata.namespace"
+	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
+	defaultIndexNamespaced = "metadata.namespace"
+	immutableFields        = sets.New(
+		"metadata.creationTimestamp",
+		"metadata.namespace",
+		"metadata.name",
+		"id",
+		"metadata.state.name",
+	)
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
 
@@ -220,9 +228,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	dbName := db.Sanitize(i.GetName())
-	columns := make([]string, len(indexedFields))
-	qmarks := make([]string, len(indexedFields))
-	setStatements := make([]string, len(indexedFields))
+	columns := make([]string, 0, len(indexedFields))
+	qmarks := make([]string, 0, len(indexedFields))
+	setStatements := make([]string, 0, len(indexedFields))
 
 	err = l.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		createEventsTableQuery := fmt.Sprintf(createEventsTableFmt, dbName)
@@ -237,7 +245,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return &db.QueryError{QueryString: createFieldsTableQuery, Err: err}
 		}
 
-		for index, field := range indexedFields {
+		for _, field := range indexedFields {
 			// create index for field
 			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
 			_, err = tx.Exec(createFieldsIndexQuery)
@@ -247,14 +255,17 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 			// format field into column for prepared statement
 			column := fmt.Sprintf(`"%s"`, field)
-			columns[index] = column
+			columns = append(columns, column)
 
 			// add placeholder for column's value in prepared statement
-			qmarks[index] = "?"
+			qmarks = append(qmarks, "?")
 
 			// add formatted set statement for prepared statement
-			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
-			setStatements[index] = setStatement
+			// optimization: avoid SET for fields which cannot change
+			if !immutableFields.Has(field) {
+				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
+				setStatements = append(setStatements, setStatement)
+			}
 		}
 		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
 		_, err = tx.Exec(createLabelsTableQuery)
