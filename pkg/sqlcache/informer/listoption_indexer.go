@@ -271,12 +271,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.deleteEventsByCountStmt = l.Prepare(fmt.Sprintf(deleteEventsByCountFmt, dbName, dbName))
 	l.dropEventsStmt = l.Prepare(fmt.Sprintf(dropEventsFmt, dbName))
 
+	addFieldsOnConflict := "NOTHING"
+	if len(setStatements) > 0 {
+		addFieldsOnConflict = "UPDATE SET " + strings.Join(setStatements, ", ")
+	}
 	l.addFieldsStmt = l.Prepare(fmt.Sprintf(
-		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO UPDATE SET %s`,
+		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO %s`,
 		dbName,
 		strings.Join(columns, ", "),
 		strings.Join(qmarks, ", "),
-		strings.Join(setStatements, ", "),
+		addFieldsOnConflict,
 	))
 	l.deleteFieldsByKeyStmt = l.Prepare(fmt.Sprintf(`DELETE FROM "%s_fields" WHERE key = ?`, dbName))
 	l.deleteFieldsStmt = l.Prepare(fmt.Sprintf(deleteFieldsFmt, dbName))
