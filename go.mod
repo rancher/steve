@@ -8,6 +8,7 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
+	github.com/stretchr/testify => github.com/stretchr/testify v1.10.0
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
 	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
@@ -29,12 +30,12 @@ require (
 	github.com/rancher/apiserver v0.7.3
 	github.com/rancher/dynamiclistener v0.7.0
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
-	github.com/rancher/lasso v0.2.4
+	github.com/rancher/lasso v0.2.5-rc.1
 	github.com/rancher/norman v0.7.0
 	github.com/rancher/remotedialer v0.4.5-rc.3
 	github.com/rancher/wrangler/v3 v3.2.4
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/mock v0.6.0
 	go.yaml.in/yaml/v3 v3.0.4
