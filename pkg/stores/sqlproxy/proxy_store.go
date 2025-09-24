@@ -873,6 +873,11 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 		if colType == "integer" || colType == "boolean" || ptn.MatchString(td.Description) {
 			//TODO: What do "REAL" (float) types look like?
 			colType = "INT"
+		} else {
+			field1, ok := builtinIntTable[gvk]
+			if ok && field1[trimmedField] {
+				colType = "INT"
+			}
 		}
 		if colType != "string" {
 			// Strip the parts off separately in case t
