@@ -861,7 +861,9 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 			}
 		}
 		if colType != "string" {
-			// Strip the parts off separately in case t
+			// Strip the parts off separately in case there's no '$' at the start
+			trimmedField := strings.TrimPrefix(col.Field, "$")
+			trimmedField = strings.TrimPrefix(trimmedField, ".")
 			guidance[trimmedField] = colType
 		}
 	}
