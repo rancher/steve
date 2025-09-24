@@ -840,15 +840,10 @@ func getTypeGuidance(cols []common.ColumnDefinition) map[string]string {
 			colType = "INT"
 		}
 		if colType != "string" {
-			field1 := col.Field
 			// Strip the parts off separately in case there's no '$' at the start
-			if field1[0] == '$' {
-				field1 = field1[1:]
-			}
-			if field1[0] == '.' {
-				field1 = field1[1:]
-			}
-			guidance[field1] = colType
+			trimmedField := strings.TrimPrefix(col.Field, "$")
+			trimmedField = strings.TrimPrefix(trimmedField, ".")
+			guidance[trimmedField] = colType
 		}
 	}
 	return guidance
