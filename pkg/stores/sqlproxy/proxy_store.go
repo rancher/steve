@@ -859,11 +859,14 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 			if ok && field1[trimmedField] {
 				colType = "INT"
 			}
+		} else {
+			field1, ok := builtinIntTable[gvk]
+			if ok && field1[trimmedField] {
+				colType = "INT"
+			}
 		}
 		if colType != "string" {
-			// Strip the parts off separately in case there's no '$' at the start
-			trimmedField := strings.TrimPrefix(col.Field, "$")
-			trimmedField = strings.TrimPrefix(trimmedField, ".")
+			// Strip the parts off separately in case t
 			guidance[trimmedField] = colType
 		}
 	}
