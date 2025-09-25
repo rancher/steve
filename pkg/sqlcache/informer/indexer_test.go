@@ -20,8 +20,7 @@ import (
 )
 
 //go:generate mockgen --build_flags=--mod=mod -package informer -destination ./sql_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer Store
-//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
+//go:generate mockgen --build_flags=--mod=mod -package informer -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,Stmt,TxClient
 
 type testStoreObject struct {
 	Id  string
@@ -37,8 +36,9 @@ func TestNewIndexer(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "NewIndexer() with no errors returned from Store or Client, should return no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -72,7 +72,8 @@ func TestNewIndexer(t *testing.T) {
 		assert.Equal(t, cache.Indexers(indexers), indexer.indexers)
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with WithTransaction() error, should return error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -86,8 +87,9 @@ func TestNewIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on first call to Exec(), should return error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -110,8 +112,9 @@ func TestNewIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with Client Exec() error on second call to Exec(), should return error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -136,8 +139,9 @@ func TestNewIndexer(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewIndexer() with Client Commit() error, should return error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
 
 		objKey := "objKey"
 		indexers := map[string]cache.IndexFunc{
@@ -174,11 +178,12 @@ func TestAfterUpsert(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "AfterUpsert() with no errors returned from Client should return no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
 		objKey := "key"
-		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
-		addIndexStmt := NewMockStmt(gomock.NewController(t))
+		deleteIndicesStmt := NewMockStmt(ctrl)
+		addIndexStmt := NewMockStmt(ctrl)
 		indexer := &Indexer{
 			ctx:   context.Background(),
 			Store: store,
@@ -198,10 +203,11 @@ func TestAfterUpsert(t *testing.T) {
 		assert.Nil(t, err)
 	}})
 	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client StmtExec() should return an error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
 		objKey := "key"
-		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
+		deleteIndicesStmt := NewMockStmt(ctrl)
 		indexer := &Indexer{
 			ctx:   context.Background(),
 			Store: store,
@@ -220,10 +226,11 @@ func TestAfterUpsert(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "AfterUpsert() with error returned from Client second StmtExec() call should return an error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		client := NewMockTXClient(gomock.NewController(t))
-		deleteIndicesStmt := NewMockStmt(gomock.NewController(t))
-		addIndexStmt := NewMockStmt(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		client := NewMockTxClient(ctrl)
+		deleteIndicesStmt := NewMockStmt(ctrl)
+		addIndexStmt := NewMockStmt(ctrl)
 		objKey := "key"
 		indexer := &Indexer{
 			ctx:   context.Background(),
@@ -258,9 +265,10 @@ func TestIndex(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "Index() with no errors returned from store and 1 object returned by ReadObjects(), should return one obj and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -284,9 +292,10 @@ func TestIndex(t *testing.T) {
 		assert.Equal(t, []any{testObject}, objs)
 	}})
 	tests = append(tests, testCase{description: "Index() with no errors returned from store and multiple objects returned by ReadObjects(), should return multiple objects and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -310,9 +319,10 @@ func TestIndex(t *testing.T) {
 		assert.Equal(t, []any{testObject, testObject}, objs)
 	}})
 	tests = append(tests, testCase{description: "Index() with no errors returned from store and no objects returned by ReadObjects(), should return no objects and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -336,8 +346,9 @@ func TestIndex(t *testing.T) {
 		assert.Equal(t, []any{}, objs)
 	}})
 	tests = append(tests, testCase{description: "Index() where index name is not in indexers, should return error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		listStmt := &sql.Stmt{}
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -356,8 +367,9 @@ func TestIndex(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "Index() with an error returned from store QueryForRows, should return an error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		listStmt := &sql.Stmt{}
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -377,9 +389,10 @@ func TestIndex(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "Index() with an errors returned from store ReadObjects(), should return an error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -402,9 +415,10 @@ func TestIndex(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "Index() with no errors returned from store and multiple keys returned from index func, should return one obj and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -419,14 +433,14 @@ func TestIndex(t *testing.T) {
 		}
 		testObject := testStoreObject{Id: "something", Val: "a"}
 
+		mockStmt := NewMockStmt(ctrl)
 		store.EXPECT().GetName().Return("name")
-		stmt := &sql.Stmt{}
-		store.EXPECT().Prepare(fmt.Sprintf(selectQueryFmt, "name", ", ?")).Return(stmt)
+		store.EXPECT().Prepare(fmt.Sprintf(selectQueryFmt, "name", ", ?")).Return(mockStmt)
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey, objKey+"2").Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
 		store.EXPECT().GetShouldEncrypt().Return(false)
 		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
-		store.EXPECT().CloseStmt(stmt).Return(nil)
+		mockStmt.EXPECT().Close().Return(nil)
 		objs, err := indexer.Index(indexName, testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{testObject}, objs)
@@ -446,9 +460,10 @@ func TestByIndex(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "IndexBy() with no errors returned from store and 1 object returned by ReadObjects(), should return one obj and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -467,9 +482,10 @@ func TestByIndex(t *testing.T) {
 		assert.Equal(t, []any{testObject}, objs)
 	}})
 	tests = append(tests, testCase{description: "IndexBy() with no errors returned from store and multiple objects returned by ReadObjects(), should return multiple objects and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -488,9 +504,10 @@ func TestByIndex(t *testing.T) {
 		assert.Equal(t, []any{testObject, testObject}, objs)
 	}})
 	tests = append(tests, testCase{description: "IndexBy() with no errors returned from store and no objects returned by ReadObjects(), should return no objects and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -509,8 +526,9 @@ func TestByIndex(t *testing.T) {
 		assert.Equal(t, []any{}, objs)
 	}})
 	tests = append(tests, testCase{description: "IndexBy() with an error returned from store QueryForRows, should return an error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		listStmt := &sql.Stmt{}
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -524,9 +542,10 @@ func TestByIndex(t *testing.T) {
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "IndexBy() with an errors returned from store ReadObjects(), should return an error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		objKey := "key"
 		indexName := "someindexname"
 		indexer := &Indexer{
@@ -558,9 +577,10 @@ func TestListIndexFuncValues(t *testing.T) {
 	var tests []testCase
 
 	tests = append(tests, testCase{description: "ListIndexFuncvalues() with no errors returned from store and 1 object returned by ReadObjects(), should return one obj and no error", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		indexName := "someindexname"
 		indexer := &Indexer{
 			ctx:             context.Background(),
@@ -573,8 +593,9 @@ func TestListIndexFuncValues(t *testing.T) {
 		assert.Equal(t, []string{"somestrings"}, vals)
 	}})
 	tests = append(tests, testCase{description: "ListIndexFuncvalues() with QueryForRows() error returned from store, should panic", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
-		listStmt := &sql.Stmt{}
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		indexName := "someindexname"
 		indexer := &Indexer{
 			ctx:             context.Background(),
@@ -585,9 +606,10 @@ func TestListIndexFuncValues(t *testing.T) {
 		assert.Panics(t, func() { indexer.ListIndexFuncValues(indexName) })
 	}})
 	tests = append(tests, testCase{description: "ListIndexFuncvalues() with ReadStrings() error returned from store, should panic", test: func(t *testing.T) {
-		store := NewMockStore(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		store := NewMockStore(ctrl)
+		listStmt := NewMockStmt(ctrl)
 		rows := &sql.Rows{}
-		listStmt := &sql.Stmt{}
 		indexName := "someindexname"
 		indexer := &Indexer{
 			ctx:             context.Background(),
