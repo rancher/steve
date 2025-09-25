@@ -1,4 +1,4 @@
-name: Backport
+name: Backport label
 
 on:
   # Documentation for pull_request event: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
@@ -10,9 +10,9 @@ on:
     # - 'release/**'
 
 jobs:
-  backport:
+  backport-label:
     # For now, only run if the PR is merged
-    if: github.event.pull_request.merged == true
+    # if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       # - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
