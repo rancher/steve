@@ -1,0 +1,28 @@
+name: 'Backport PR'
+description: 'Backports a PR to a target branch'
+inputs:
+  pull-request:
+    required: true
+  target-branch:
+    required: true
+  repository:
+    required: true
+  is-draft:
+    default: false
+    type: boolean
+outputs:
+  pr-url:
+    value: ${{ steps.run.outputs.pr-url }}
+runs:
+  using: "composite"
+  steps:
+  - name: Run it
+    id: run
+    shell: bash
+    run: |
+      ${{ github.action_path }}/backport.sh "$PULL_REQUEST" "$TARGET_BRANCH" "$REPO"
+    env:
+      PULL_REQUEST: ${{ inputs.pull-request }}
+      TARGET_BRANCH: ${{ inputs.target-branch }}
+      REPO: ${{ inputs.repository }}
+      IS_DRAFT: ${{ inputs.is-draft }}

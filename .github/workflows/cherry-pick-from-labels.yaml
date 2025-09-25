@@ -1,0 +1,35 @@
+name: Backport label
+
+on:
+  pull_request:
+    types: [labeled]
+    branches:
+    - main
+    - 'release/**'
+
+jobs:
+  backport-label:
+    permissions:
+      # Necessary to add cherry-pick-done/* label
+      pull-requests: write
+      # Necessary to create the PR
+      #
+      # NOTE: We'll want to switch to an app token once we have one.
+      # Reason: GHA is designed to not trigger other workflows when creating a PR
+      # within a workflow run using the workflow run token.
+      #
+      # Temporary workaround is to close/re-open the PR in the UI. This will trigger
+      # the pull_request event.
+      contents: write
+
+    # For now, only run if the PR is merged
+    if: github.event.pull_request.merged == true && startsWith(github.event.label.name, 'cherry-pick/')
+    uses: rancher/steve/.github/workflows/cherry-pick-from-labels.yaml@main
+    with:
+      label-added: ${{ github.event.label.name }}
+      all-labels-json: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      pr-number: ${{ github.event.pull_request.number }}
+      git-user-email: "github-actions[bot]"
+      git-user-name: "41898282+github-actions[bot]@users.noreply.github.com"
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
