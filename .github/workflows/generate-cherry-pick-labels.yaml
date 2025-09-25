@@ -1,0 +1,16 @@
+name: Auto-generate cherry-pick labels
+
+on:
+  workflow_dispatch:
+  create:
+
+jobs:
+  generate-cherry-pick-labels:
+    permissions:
+      # Necessary to create/edit labels
+      issues: write
+    uses: rancher/steve/.github/workflows/generate-cherry-pick-labels.yaml@main
+    with:
+      branch-filter-regex: "^main|release/.*"
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,117 @@
+name: Cherry-pick a PR using labels
+
+on:
+  workflow_call:
+    inputs:
+      label-added:
+        description: "Create the labels in this repository"
+        required: true
+        type: string
+      all-labels-json:
+        description: "List of all labels for the PR"
+        required: true
+        type: string
+      pr-number:
+        description: ""
+        required: true
+        type: string
+      git-user-email:
+        description: ""
+        required: true
+        type: string
+      git-user-name:
+        description: ""
+        required: true
+        type: string
+      skip-membership-check:
+        default: false
+        type: boolean
+    secrets:
+      token:
+        required: true
+
+jobs:
+  cherry-pick-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check org membership
+        id: membership
+        env:
+          GH_TOKEN: ${{ secrets.token }}
+          SKIP: ${{ inputs.skip-membership-check }}
+        run: |
+          if [ "$SKIP" = "true" ]; then
+            echo "is_member=true" >> $GITHUB_OUTPUT
+          else
+            if gh api orgs/${GITHUB_REPOSITORY_OWNER}/members --paginate | jq -e --arg GITHUB_ACTOR "$GITHUB_ACTOR" '.[] | select(.login == $GITHUB_ACTOR)' > /dev/null; then
+                echo "${GITHUB_ACTOR} is a member"
+                echo "is_member=true" >> $GITHUB_OUTPUT
+            else
+                echo "${GITHUB_ACTOR} is not a member" >> $GITHUB_STEP_SUMMARY
+                echo "is_member=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - if: ${{ steps.membership.outputs.is_member == 'true' }}
+        id: detect
+        run: |
+          has_label() {
+            labels=$(printf '%s' "$LABELS" | jq -r '.[]')
+            for l in $labels; do
+              if [ "$l" = "$1" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          target="$(echo "$CHERRY_PICK_LABEL" | sed 's|cherry-pick/||')"
+          if has_label "cherry-pick-done/$target"; then
+            echo "Skipping $label ($target) because already cherry-picked"
+            echo "target-branch=" >> $GITHUB_OUTPUT
+            return 0
+          fi
+
+          echo "Need to create cherry-pick for $label ($target)"
+          echo "target-branch=$target" >> $GITHUB_OUTPUT
+        env:
+          CHERRY_PICK_LABEL: ${{ inputs.label-added }}
+          LABELS: ${{ inputs.all-labels-json }}
+
+      - if: ${{ steps.detect.outputs.target-branch != '' }}
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          token: ${{ secrets.token }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - if: ${{ steps.detect.outputs.target-branch != '' }}
+        run: |
+          git config --global user.email "$EMAIL"
+          git config --global user.name "$NAME"
+        env:
+          EMAIL: ${{ inputs.git-user-email }}
+          NAME: ${{ inputs.git-user-name }}
+
+      - if: ${{ steps.detect.outputs.target-branch != '' }}
+        uses: ./.github/actions/backport
+        id: backport
+        with:
+          pull-request: ${{ inputs.pr-number }}
+          target-branch: ${{ steps.detect.outputs.target-branch }}
+          repository: ${{ github.repository }}
+          is-draft: false
+        env:
+          GH_TOKEN: ${{ secrets.token }}
+
+      - if: ${{ steps.detect.outputs.target-branch != '' }}
+        run: |
+          gh pr edit $PR_NUMBER -R "$REPO" --add-label "cherry-pick-done/$TARGET"
+          gh pr comment $PR_NUMBER -R "$REPO" --body "Cherry-pick requested from @$GITHUB_ACTOR. Created the following cherry-pick PR: $BACKPORT_PR_URL. See run for more details at: $RUN_URL"
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BACKPORT_PR_URL: ${{ steps.backport.outputs.pr-url }}
+          TARGET: ${{ steps.detect.outputs.target-branch }}
+          GH_TOKEN: ${{ secrets.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          REPO: ${{ github.repository }}

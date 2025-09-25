@@ -1,0 +1,49 @@
+name: Generate cherry-pick labels
+
+on:
+  workflow_call:
+    inputs:
+      branch-filter-regex:
+        description: "Regex to filter which branches need cherry-pick labels (eg: main|release/.*)"
+        required: true
+        type: string
+      color:
+        description: "Color of the cherry-pick/* labels (eg: FF00FF)"
+        default: "38B395"
+        type: string
+      color-done:
+        description: "Color of the cherry-pick-done/* labels (eg: FF00FF)"
+        default: "E99695"
+        type: string
+    secrets:
+      token:
+        required: true
+
+jobs:
+  generate-cherry-pick-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          branches=$(gh api repos/$REPO/branches | jq -r '.[].name')
+
+          for branch in $branches; do
+            if ! echo "$branch" | grep -Eq "$REGEX"; then
+              continue
+            fi
+
+            echo "Creating or updating cherry-pick labels for branch $branch"
+            gh -R "$REPO" label create cherry-pick/$branch \
+              --description "Create cherry-pick PR for branch $branch" \
+              --color "$COLOR" \
+              --force
+            gh -R "$REPO" label create cherry-pick-done/$branch \
+              --description "Mark PR as already cherry-picked for branch $branch" \
+              --color "$DONE_COLOR" \
+              --force
+          done
+        env:
+          REPO: ${{ github.repository }}
+          COLOR: ${{ inputs.color }}
+          COLOR_DONE: ${{ inputs.color-done }}
+          GH_TOKEN: ${{ secrets.token }}
+          REGEX: ${{ inputs.branch-filter-regex }}
