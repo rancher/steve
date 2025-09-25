@@ -3574,3 +3574,33 @@ func TestWatchCancel(t *testing.T) {
 	<-errCh
 	time.Sleep(1 * time.Second)
 }
+
+func Test_watcherWithBackfill(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+
+	eventsCh := make(chan int, 10)
+	w, done := watcherWithBackfill(ctx, eventsCh)
+
+	eventsCh <- 1
+	eventsCh <- 2
+	w <- 5
+	eventsCh <- 3
+	w <- 6
+	eventsCh <- 4
+	done()
+
+	time.Sleep(10 * time.Millisecond)
+	w <- 7
+	w <- 8
+
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	close(eventsCh)
+	res := make([]int, 0, len(eventsCh))
+	for n := range eventsCh {
+		res = append(res, n)
+	}
+
+	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8}, res)
+}
