@@ -535,11 +535,6 @@ func TestCacheFor(t *testing.T) {
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
 		f.ctx, f.cancel = context.WithCancel(context.Background())
-
-		go func() {
-			time.Sleep(10 * time.Second)
-			f.Stop(expectedGVK)
-		}()
 		_, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
 		assert.Error(t, err)
 		err = f.Stop(expectedGVK)
