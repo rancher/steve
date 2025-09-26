@@ -290,62 +290,6 @@ func (l *ListOptionIndexer) GetLatestResourceVersion() []string {
 	return latestRV
 }
 
-func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan<- T, func()) {
-	backfill, backfillDone := context.WithCancel(ctx)
-	writeChan := make(chan T)
-	buffer := make(chan T, 100)
-
-	// Store any input in the buffer during backfilling.
-	// Immediately stop accepting new events once backfilling completed
-	// Consuming the buffer needs to happen in another goroutine to avoid deadlocks
-	go func() {
-		defer close(buffer)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-backfill.Done():
-				return
-			case event := <-writeChan:
-				buffer <- event
-			}
-		}
-	}()
-
-	go func() {
-		defer close(writeChan)
-
-		// Wait for backfilling, then flush the buffer into the events chan
-	FlushBuffer:
-		for {
-			select {
-			case <-ctx.Done():
-				// empty the buffer
-				for range buffer {
-				}
-				return
-			case <-backfill.Done():
-				event, ok := <-buffer
-				if !ok {
-					break FlushBuffer
-				}
-				eventsChan <- event
-			}
-		}
-
-		// Finally pipe writeChan (not buffered) to the original eventsChan, as usual
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event := <-writeChan:
-				eventsChan <- event
-			}
-		}
-	}()
-	return writeChan, backfillDone
-}
-
 func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -464,6 +408,62 @@ func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
 	singleResult := reflect.New(typ)
 	err := dec.DecodeValue(singleResult)
 	return singleResult, err
+}
+
+func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan<- T, func()) {
+	backfill, backfillDone := context.WithCancel(ctx)
+	writeChan := make(chan T)
+	buffer := make(chan T, 100)
+
+	// Store any input in the buffer during backfilling.
+	// Immediately stop accepting new events once backfilling completed
+	// Consuming the buffer needs to happen in another goroutine to avoid deadlocks
+	go func() {
+		defer close(buffer)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-backfill.Done():
+				return
+			case event := <-writeChan:
+				buffer <- event
+			}
+		}
+	}()
+
+	go func() {
+		defer close(writeChan)
+
+		// Wait for backfilling, then flush the buffer into the events chan
+	FlushBuffer:
+		for {
+			select {
+			case <-ctx.Done():
+				// empty the buffer
+				for range buffer {
+				}
+				return
+			case <-backfill.Done():
+				event, ok := <-buffer
+				if !ok {
+					break FlushBuffer
+				}
+				eventsChan <- event
+			}
+		}
+
+		// Finally pipe writeChan (not buffered) to the original eventsChan, as usual
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event := <-writeChan:
+				eventsChan <- event
+			}
+		}
+	}()
+	return writeChan, backfillDone
 }
 
 type watchKey struct {
