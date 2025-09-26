@@ -38,6 +38,7 @@ type ListOptionIndexer struct {
 	namespaced    bool
 	indexedFields []string
 
+	// lock protects both latestRV and watchers
 	lock     sync.RWMutex
 	latestRV string
 	watchers map[*watchKey]*watcher
