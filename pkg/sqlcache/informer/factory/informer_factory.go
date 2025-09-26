@@ -267,11 +267,15 @@ func (f *CacheFactory) Stop(gvk schema.GroupVersionKind) error {
 	// Wait for all informers to have exited
 	gi.wg.Wait()
 
-	// DropAll needs its own context because the context from the informer
-	// is canceled
-	err := gi.informer.DropAll(context.Background())
-	if err != nil {
-		return fmt.Errorf("dropall %q: %w", gvk, err)
+	// Since we hold the lock on gi.stopMutex, we do not need to also hold
+	// onto gi.informersMutex
+	if gi.informer != nil {
+		// DropAll needs its own context because the context from the informer
+		// is canceled
+		err := gi.informer.DropAll(context.Background())
+		if err != nil {
+			return fmt.Errorf("dropall %q: %w", gvk, err)
+		}
 	}
 
 	return nil

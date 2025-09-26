@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -518,6 +519,33 @@ func TestCacheFor(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, expectedC, c)
 		time.Sleep(1 * time.Second)
+	}})
+	// Test for panic from https://github.com/rancher/rancher/issues/52124
+	tests = append(tests, testCase{description: "CacheFor() able to stop cache with a nil gi.informer", test: func(t *testing.T) {
+		dbClient := NewMockClient(gomock.NewController(t))
+		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
+		fields := [][]string{{"something"}}
+		expectedGVK := schema.GroupVersionKind{}
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
+			return nil, fmt.Errorf("fake error")
+		}
+		f := &CacheFactory{
+			dbClient:    dbClient,
+			newInformer: testNewInformer,
+			encryptAll:  true,
+			informers:   map[schema.GroupVersionKind]*guardedInformer{},
+		}
+		f.ctx, f.cancel = context.WithCancel(context.Background())
+
+		go func() {
+			time.Sleep(10 * time.Second)
+			f.Stop(expectedGVK)
+		}()
+		// CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool)
+		_, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		assert.Error(t, err)
+		err = f.Stop(expectedGVK)
+		assert.NoError(t, err)
 	}})
 	t.Parallel()
 	for _, test := range tests {
