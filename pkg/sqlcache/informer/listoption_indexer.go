@@ -400,7 +400,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	defer l.removeWatcher(key)
 
 	targetRV := opts.ResourceVersion
-	if opts.ResourceVersion == "" {
+	if targetRV == "" {
 		targetRV = latestRV
 	}
 
@@ -427,7 +427,8 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		}
 		defer rows.Close()
 
-		for rows.Next() {
+		var latestRevisionReached bool
+		for !latestRevisionReached && rows.Next() {
 			typ, buf, err := l.decryptScanEvent(rows)
 			if err != nil {
 				return fmt.Errorf("scanning event row: %w", err)
@@ -439,9 +440,13 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				return fmt.Errorf("decoding event object: %w", err)
 			}
 
-			obj, ok := val.Elem().Interface().(runtime.Object)
+			obj, ok := val.Elem().Interface().(*unstructured.Unstructured)
 			if !ok {
 				continue
+			}
+			if obj.GetResourceVersion() == latestRV {
+				// This iteration will be the last one, as we already reached the last event at the moment we started the loop
+				latestRevisionReached = true
 			}
 
 			filter := opts.Filter
@@ -450,7 +455,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 			}
 			eventsCh <- watch.Event{
 				Type:   typ,
-				Object: val.Elem().Interface().(runtime.Object),
+				Object: obj,
 			}
 		}
 		return rows.Err()
