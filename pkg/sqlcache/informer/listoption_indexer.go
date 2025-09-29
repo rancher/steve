@@ -30,29 +30,18 @@ type ListOptionIndexer struct {
 	namespaced    bool
 	indexedFields []string
 
-	// lock protects both latestRV and watchers
+	// lock protects latestRV
 	lock     sync.RWMutex
 	latestRV string
-	watchers map[*watchKey]*watcher
 
 	eventLog *ring.CircularBuffer[*event]
 
-	// gcInterval is how often to run the garbage collection
-	gcInterval time.Duration
-	// gcKeepCount is how many events to keep in _events table when gc runs
-	gcKeepCount int
-
-	upsertEventsStmt        db.Stmt
-	findEventsRowByRVStmt   db.Stmt
-	listEventsAfterStmt     db.Stmt
-	deleteEventsByCountStmt db.Stmt
-	dropEventsStmt          db.Stmt
-	addFieldsStmt           db.Stmt
-	deleteFieldsStmt        db.Stmt
-	dropFieldsStmt          db.Stmt
-	upsertLabelsStmt        db.Stmt
-	deleteLabelsStmt        db.Stmt
-	dropLabelsStmt          db.Stmt
+	addFieldsStmt    db.Stmt
+	deleteFieldsStmt db.Stmt
+	dropFieldsStmt   db.Stmt
+	upsertLabelsStmt db.Stmt
+	deleteLabelsStmt db.Stmt
+	dropLabelsStmt   db.Stmt
 }
 
 var (
@@ -69,39 +58,6 @@ var (
 )
 
 const (
-
-	// RV stands for ResourceVersion
-	createEventsTableFmt = `CREATE TABLE "%s_events" (
-                       rv TEXT NOT NULL,
-                       type TEXT NOT NULL,
-                       event BLOB NOT NULL,
-                       eventnonce BLOB,
-	               dekid BLOB,
-                       PRIMARY KEY (rv, type)
-          )`
-	listEventsAfterFmt = `SELECT type, rv, event, eventnonce, dekid
-	       FROM "%s_events"
-	       WHERE rowid > ?
-       `
-	findEventsRowByRVFmt = `SELECT rowid
-               FROM "%s_events"
-               WHERE rv = ?
-       `
-	upsertEventsStmtFmt = `
-INSERT INTO "%s_events" (rv, type, event, eventnonce, dekid)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(type, rv) DO UPDATE SET
-  event = excluded.event,
-  eventnonce = excluded.eventnonce,
-  dekid = excluded.dekid`
-	deleteEventsByCountFmt = `DELETE FROM "%s_events"
-	WHERE rowid < (
-	    SELECT MIN(rowid) FROM (
-	        SELECT rowid FROM "%s_events" ORDER BY rowid DESC LIMIT ?
-	    ) q
-	)`
-	dropEventsFmt = `DROP TABLE IF EXISTS "%s_events"`
-
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
 		key TEXT NOT NULL REFERENCES "%s"(key) ON DELETE CASCADE,
 		%s,
@@ -149,9 +105,7 @@ type ListOptionIndexerOptions struct {
 	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
 	// namespaced
 	IsNamespaced bool
-	// GCInterval is how often to run the garbage collection
-	GCInterval time.Duration
-	// GCKeepCount is how many events to keep in _events table when gc runs
+	// GCKeepCount is how many events to keep in memory
 	GCKeepCount int
 }
 
@@ -214,16 +168,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	setStatements := make([]string, 0, len(indexedFields))
 
 	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
-		dropEventsQuery := fmt.Sprintf(dropEventsFmt, dbName)
-		if _, err := tx.Exec(dropEventsQuery); err != nil {
-			return err
-		}
-
-		createEventsTableQuery := fmt.Sprintf(createEventsTableFmt, dbName)
-		if _, err := tx.Exec(createEventsTableQuery); err != nil {
-			return err
-		}
-
 		dropFieldsQuery := fmt.Sprintf(dropFieldsFmt, dbName)
 		if _, err := tx.Exec(dropFieldsQuery); err != nil {
 			return err
@@ -277,12 +221,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
-	l.upsertEventsStmt = l.Prepare(fmt.Sprintf(upsertEventsStmtFmt, dbName))
-	l.listEventsAfterStmt = l.Prepare(fmt.Sprintf(listEventsAfterFmt, dbName))
-	l.findEventsRowByRVStmt = l.Prepare(fmt.Sprintf(findEventsRowByRVFmt, dbName))
-	l.deleteEventsByCountStmt = l.Prepare(fmt.Sprintf(deleteEventsByCountFmt, dbName, dbName))
-	l.dropEventsStmt = l.Prepare(fmt.Sprintf(dropEventsFmt, dbName))
-
 	addFieldsOnConflict := "NOTHING"
 	if len(setStatements) > 0 {
 		addFieldsOnConflict = "UPDATE SET " + strings.Join(setStatements, ", ")
@@ -300,9 +238,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.upsertLabelsStmt = l.Prepare(fmt.Sprintf(upsertLabelsStmtFmt, dbName))
 	l.deleteLabelsStmt = l.Prepare(fmt.Sprintf(deleteLabelsStmtFmt, dbName))
 	l.dropLabelsStmt = l.Prepare(fmt.Sprintf(dropLabelsStmtFmt, dbName))
-
-	l.gcInterval = opts.GCInterval
-	l.gcKeepCount = opts.GCKeepCount
 
 	return l, nil
 }
@@ -366,120 +301,6 @@ func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) 
 
 	}
 	return watch.EventType(typ), nil
-}
-
-// watcherWithBackfill creates a proxy channel that buffers events during a "backfill" phase
-// and then seamlessly transitions to live event processing.
-func watcherWithBackfill[T any](ctx context.Context, eventsCh chan<- T, maxBufferSize int) (chan T, func(), func()) {
-	backfillCtx, signalBackfillDone := context.WithCancel(ctx)
-	watcherCh := make(chan T)
-	done := make(chan struct{})
-
-	// The single proxy goroutine that manages all state.
-	go func() {
-		defer close(done)
-		defer func() {
-			// this goroutine can exit prematurely when the parent context is cancelled
-			// this ensures the producer can finish writing and finish the cancellation sequence (closeWatcher is called from the parent)
-			for range watcherCh {
-			}
-		}()
-
-		var queue []T // Use a slice as an internal FIFO queue.
-
-		// Phase 1: Accumulate while we're backfilling
-	acc:
-		for len(queue) < maxBufferSize { // Only accumulate until reaching max buffer size, then block ingestion instead
-			select {
-			case event, ok := <-watcherCh:
-				if !ok {
-					// writeChan was closed, assume that context is done, so the remaining queue will never be sent
-					return
-				}
-				queue = append(queue, event)
-			case <-backfillCtx.Done():
-				break acc
-			}
-		}
-
-		// Check backfill was completed, in case the above loop aborted early
-		<-backfillCtx.Done()
-		if ctx.Err() != nil {
-			return
-		}
-
-		// Phase 2: start flushing while still accepting events from watcherCh
-		for len(queue) > 0 {
-			// Only accept new events from write buffer if the queue has space, blocking the sender (equivalent to a full buffered channel)
-			// cases reading from a nil channel will be ignored
-			var readChan <-chan T
-			if len(queue) < maxBufferSize {
-				readChan = watcherCh
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-readChan: // This case is disabled if readChan is nil (queue is full)
-				if !ok {
-					// watcherCh was closed, assume that context is done, so the remaining queue will never be sent
-					return
-				}
-				queue = append(queue, event)
-			case eventsCh <- queue[0]:
-				// We successfully sent the event, so we can remove it from the queue.
-				queue = queue[1:]
-			}
-		}
-		queue = nil // no longer needed, release the backing array for GC
-
-		// Final phase: when flushing is completed, the original channel is piped to watcherCh
-		for {
-			select {
-			case event, ok := <-watcherCh:
-				if !ok {
-					return // watcherCh was closed.
-				}
-				// Send event directly, blocking until the consumer is ready.
-				select {
-				case eventsCh <- event:
-				case <-ctx.Done():
-					return
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return watcherCh, signalBackfillDone, func() {
-		close(watcherCh)
-		<-done
-	}
-}
-
-type watchKey struct {
-	_ bool // ensure watchKey is NOT zero-sized to get unique pointers
-}
-
-type watcher struct {
-	ch     chan<- watch.Event
-	filter WatchFilter
-}
-
-func (l *ListOptionIndexer) addWatcherLocked(eventCh chan<- watch.Event, filter WatchFilter) *watchKey {
-	key := new(watchKey)
-	l.watchers[key] = &watcher{
-		ch:     eventCh,
-		filter: filter,
-	}
-	return key
-}
-
-func (l *ListOptionIndexer) removeWatcher(key *watchKey) {
-	l.lock.Lock()
-	delete(l.watchers, key)
-	l.lock.Unlock()
 }
 
 /* Core methods */
@@ -731,38 +552,4 @@ func toUnstructuredList(items []any, resourceVersion string) *unstructured.Unstr
 		objectItems[i] = item.(*unstructured.Unstructured).Object
 	}
 	return result
-}
-
-func matchWatch(filter WatchFilter, oldObj any, obj any) bool {
-	if oldObj != nil && filter.matches(oldObj) {
-		return true
-	}
-	return filter.matches(obj)
-}
-
-func (l *ListOptionIndexer) RunGC(ctx context.Context) {
-	if l.gcInterval == 0 || l.gcKeepCount == 0 {
-		return
-	}
-
-	ticker := time.NewTicker(l.gcInterval)
-	defer ticker.Stop()
-
-	logrus.Infof("Started SQL cache garbage collection for %s (interval=%s, keep=%d)", l.GetName(), l.gcInterval, l.gcKeepCount)
-	defer logrus.Infof("Stopped SQL cache garbage collection for %s (interval=%s, keep=%d)", l.GetName(), l.gcInterval, l.gcKeepCount)
-
-	for {
-		select {
-		case <-ticker.C:
-			err := l.WithTransaction(ctx, true, func(tx db.TxClient) error {
-				_, err := tx.Stmt(l.deleteEventsByCountStmt).Exec(l.gcKeepCount)
-				return err
-			})
-			if err != nil {
-				logrus.Errorf("garbage collection for %s: %v", l.GetName(), err)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
 }
