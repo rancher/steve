@@ -3580,6 +3580,7 @@ func Test_watcherWithBackfill(t *testing.T) {
 
 	eventsCh := make(chan int, 10)
 	w, done := watcherWithBackfill(ctx, eventsCh)
+	defer close(w)
 
 	eventsCh <- 1
 	eventsCh <- 2

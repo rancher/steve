@@ -299,6 +299,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	// By early registering this watcher, this channel will buffer any new events while we are still backfilling old events.
 	// When we finish, calling backfillDone will write all events in the buffer, then listen to new events as normal.
 	watcherChannel, backfillDone := watcherWithBackfill(ctx, eventsCh)
+	defer close(watcherChannel)
 
 	l.lock.Lock()
 	latestRV := l.latestRV
@@ -411,7 +412,7 @@ func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
 	return singleResult, err
 }
 
-func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan<- T, func()) {
+func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan T, func()) {
 	backfill, backfillDone := context.WithCancel(ctx)
 	writeChan := make(chan T)
 	buffer := make(chan T, 100)
@@ -434,8 +435,6 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan<
 	}()
 
 	go func() {
-		defer close(writeChan)
-
 		// Wait for backfilling, then flush the buffer into the events chan
 	FlushBuffer:
 		for {
