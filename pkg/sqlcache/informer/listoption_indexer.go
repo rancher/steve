@@ -10,12 +10,13 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/informer/internal/ring"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
@@ -33,6 +34,8 @@ type ListOptionIndexer struct {
 	lock     sync.RWMutex
 	latestRV string
 	watchers map[*watchKey]*watcher
+
+	eventLog *ring.CircularBuffer[*event]
 
 	// gcInterval is how often to run the garbage collection
 	gcInterval time.Duration
@@ -125,6 +128,13 @@ ON CONFLICT(key, label) DO UPDATE SET
 	dropLabelsStmtFmt   = `DROP TABLE IF EXISTS "%s_labels"`
 )
 
+// event mimics watch.Event but replaces uses a metav1.Object instead of runtime.Object, as its guaranteed to be an actual Object, as Bookmark or Error are treated separately
+type event struct {
+	Type     watch.EventType
+	Previous metav1.Object
+	Object   metav1.Object
+}
+
 type ListOptionIndexerOptions struct {
 	// Fields is a list of fields within the object that we want indexed for
 	// filtering & sorting. Each field is specified as a slice.
@@ -164,11 +174,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		indexedFields = append(indexedFields, toColumnName(f))
 	}
 
+	maxEventHistory := opts.GCKeepCount
+	if maxEventHistory <= 0 {
+		maxEventHistory = 1000
+	}
+
 	l := &ListOptionIndexer{
 		Indexer:       i,
 		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
-		watchers:      make(map[*watchKey]*watcher),
+		eventLog:      ring.NewCircularBuffer[*event](maxEventHistory),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
 	l.RegisterAfterAdd(l.addLabels)
@@ -179,7 +194,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterAfterDelete(l.notifyEventDeleted)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
-	l.RegisterBeforeDropAll(l.dropEvents)
+	l.RegisterBeforeDropAll(l.closeEventLog)
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
 	columnDefs := make([]string, len(indexedFields))
@@ -306,89 +321,38 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// We can keep receiving events while replaying older events for the watcher.
-	// By early registering this watcher, this channel will buffer any new events while we are still backfilling old events.
-	// When we finish, calling backfillDone will write all events in the buffer, then listen to new events as normal.
-	const maxBufferSize = 100
-	watcherChannel, backfillDone, closeWatcher := watcherWithBackfill(ctx, eventsCh, maxBufferSize)
-	defer closeWatcher()
+	r := l.eventLog.NewReader()
+	if targetRV := opts.ResourceVersion; targetRV != "" {
+		found := r.Rewind(func(v *event) bool {
+			return v.Object.GetResourceVersion() == targetRV
+		})
+		if !found {
+			return ErrTooOld
+		}
 
-	l.lock.Lock()
-	latestRV := l.latestRV
-	key := l.addWatcherLocked(watcherChannel, opts.Filter)
-	l.lock.Unlock()
-	defer l.removeWatcher(key)
-
-	targetRV := opts.ResourceVersion
-	if targetRV == "" {
-		targetRV = latestRV
+		// Discard the target object, as that's actually the last known resource version, we need to send the following ones
+		if _, err := r.Read(ctx); err != nil {
+			return err
+		}
 	}
 
-	if err := l.WithTransaction(ctx, false, func(tx db.TxClient) error {
-		var rowID int
-		// use a closure to ensure rows is always closed immediately after it's needed
-		if err := func() error {
-			rows, err := l.QueryForRows(ctx, tx.Stmt(l.findEventsRowByRVStmt), targetRV)
-			if err != nil {
-				return err
-			}
-			defer rows.Close()
-
-			if !rows.Next() {
-				// query returned no results
-				if targetRV != latestRV {
-					return ErrTooOld
-				}
+	filter := opts.Filter
+	for {
+		e, err := r.Read(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
 				return nil
 			}
-			if err := rows.Scan(&rowID); err != nil {
-				return fmt.Errorf("failed scan rowid: %w", err)
-			}
-			return nil
-		}(); err != nil {
 			return err
 		}
-
-		// Backfilling previous events from resourceVersion
-		rows, err := l.QueryForRows(ctx, tx.Stmt(l.listEventsAfterStmt), rowID)
-		if err != nil {
-			return err
+		if !filter.matches(e.Previous) && !filter.matches(e.Object) {
+			continue
 		}
-		defer rows.Close()
-
-		var latestRevisionReached bool
-		for !latestRevisionReached && rows.Next() {
-			obj := &unstructured.Unstructured{}
-			eventType, err := l.decryptScanEvent(rows, obj)
-			if err != nil {
-				return fmt.Errorf("scanning event row: %w", err)
-			}
-			if obj.GetResourceVersion() == latestRV {
-				// This iteration will be the last one, as we already reached the last event at the moment we started the loop
-				latestRevisionReached = true
-			}
-			if !opts.Filter.matches(obj) {
-				continue
-			}
-
-			ev := watch.Event{
-				Type:   eventType,
-				Object: obj,
-			}
-			select {
-			case eventsCh <- ev:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		eventsCh <- watch.Event{
+			Type:   e.Type,
+			Object: e.Object.(runtime.Object).DeepCopyObject(),
 		}
-		return rows.Err()
-	}); err != nil {
-		return err
 	}
-	backfillDone()
-
-	<-ctx.Done()
-	return nil
 }
 
 func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) (watch.EventType, error) {
@@ -520,11 +484,11 @@ func (l *ListOptionIndexer) removeWatcher(key *watchKey) {
 
 /* Core methods */
 
-func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, tx db.TxClient) error {
-	return l.notifyEvent(watch.Added, nil, obj, tx)
+func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, _ db.TxClient) error {
+	return l.notifyEvent(watch.Added, nil, obj)
 }
 
-func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx db.TxClient) error {
+func (l *ListOptionIndexer) notifyEventModified(key string, obj any, _ db.TxClient) error {
 	oldObj, exists, err := l.GetByKey(key)
 	if err != nil {
 		return fmt.Errorf("error getting old object: %w", err)
@@ -534,10 +498,10 @@ func (l *ListOptionIndexer) notifyEventModified(key string, obj any, tx db.TxCli
 		return fmt.Errorf("old object %q should be in store but was not", key)
 	}
 
-	return l.notifyEvent(watch.Modified, oldObj, obj, tx)
+	return l.notifyEvent(watch.Modified, oldObj, obj)
 }
 
-func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx db.TxClient) error {
+func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, _ db.TxClient) error {
 	oldObj, exists, err := l.GetByKey(key)
 	if err != nil {
 		return fmt.Errorf("error getting old object: %w", err)
@@ -546,34 +510,31 @@ func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, tx db.TxClie
 	if !exists {
 		return fmt.Errorf("old object %q should be in store but was not", key)
 	}
-	return l.notifyEvent(watch.Deleted, oldObj, obj, tx)
+	return l.notifyEvent(watch.Deleted, oldObj, obj)
 }
 
-func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, obj any, tx db.TxClient) error {
-	acc, err := meta.Accessor(obj)
+func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, old any, current any) error {
+	obj, err := meta.Accessor(current)
 	if err != nil {
 		return err
 	}
 
-	latestRV := acc.GetResourceVersion()
+	var oldObj metav1.Object
+	if old != nil {
+		oldObj, err = meta.Accessor(old)
+		if err != nil {
+			return err
+		}
+	}
 
-	err = l.upsertEvent(tx, eventType, latestRV, obj)
-	if err != nil {
+	latestRV := obj.GetResourceVersion()
+	if err := l.eventLog.Write(&event{
+		Type:     eventType,
+		Previous: oldObj,
+		Object:   obj,
+	}); err != nil {
 		return err
 	}
-
-	l.lock.RLock()
-	for _, watcher := range l.watchers {
-		if !matchWatch(watcher.filter.ID, watcher.filter.Namespace, watcher.filter.Selector, oldObj, obj) {
-			continue
-		}
-
-		watcher.ch <- watch.Event{
-			Type:   eventType,
-			Object: obj.(runtime.Object).DeepCopyObject(),
-		}
-	}
-	l.lock.RUnlock()
 
 	l.lock.Lock()
 	defer l.lock.Unlock()
@@ -581,18 +542,9 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 	return nil
 }
 
-func (l *ListOptionIndexer) upsertEvent(tx db.TxClient, eventType watch.EventType, latestRV string, obj any) error {
-	serialized, err := l.Serialize(obj, l.GetShouldEncrypt())
-	if err != nil {
-		return err
-	}
-	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, serialized.Bytes, serialized.Nonce, serialized.KeyID)
-	return err
-}
-
-func (l *ListOptionIndexer) dropEvents(tx db.TxClient) error {
-	_, err := tx.Stmt(l.dropEventsStmt).Exec()
-	return err
+func (l *ListOptionIndexer) closeEventLog(_ db.TxClient) error {
+	l.eventLog.Close()
+	return nil
 }
 
 // addIndexFields saves sortable/filterable fields into tables
