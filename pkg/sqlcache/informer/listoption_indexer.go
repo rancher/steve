@@ -424,8 +424,6 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan 
 		defer close(buffer)
 		for {
 			select {
-			case <-ctx.Done():
-				return
 			case <-backfill.Done():
 				return
 			case event := <-writeChan:
