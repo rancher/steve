@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -18,9 +19,6 @@ import (
 	"strings"
 	"sync"
 
-	"errors"
-
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/sirupsen/logrus"
 
 	// needed for drivers
@@ -41,14 +39,13 @@ const (
 // Client defines a database client that provides encrypting, decrypting, and database resetting
 type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
-	Prepare(stmt string) *sql.Stmt
-	QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error)
+	Prepare(stmt string) Stmt
+	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
-	Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error
-	CloseStmt(closable Closable) error
+	Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error
 	NewConnection(isTemp bool) (string, error)
 	Encryptor() Encryptor
 	Decryptor() Decryptor
@@ -83,7 +80,7 @@ func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTra
 		return fmt.Errorf("begin tx: %w", err)
 	}
 
-	if err = f(transaction.NewClient(tx)); err != nil {
+	if err = f(NewTxClient(tx)); err != nil {
 		rerr := c.rollback(ctx, tx)
 		return errors.Join(err, rerr)
 	}
@@ -114,7 +111,7 @@ func (c *client) rollback(ctx context.Context, tx *sql.Tx) error {
 }
 
 // WithTransactionFunction is a function that uses a transaction
-type WithTransactionFunction func(tx transaction.Client) error
+type WithTransactionFunction func(tx TxClient) error
 
 // client is the main implementation of Client. Other implementations exist for test purposes
 type client struct {
@@ -130,19 +127,6 @@ type Connection interface {
 	Exec(query string, args ...any) (sql.Result, error)
 	Prepare(query string) (*sql.Stmt, error)
 	Close() error
-}
-
-// Closable Closes an underlying connection and returns an error on failure.
-type Closable interface {
-	Close() error
-}
-
-// Rows represents sql rows. It exposes method to navigate the rows, read their outputs, and close them.
-type Rows interface {
-	Next() bool
-	Err() error
-	Close() error
-	Scan(dest ...any) error
 }
 
 // QueryError encapsulates an error while executing a query
@@ -192,29 +176,26 @@ func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor, useTempDi
 }
 
 // Prepare prepares the given string into a sql statement on the client's connection.
-func (c *client) Prepare(stmt string) *sql.Stmt {
+func (c *client) Prepare(queryString string) Stmt {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
-	prepared, err := c.conn.Prepare(stmt)
+	prepared, err := c.conn.Prepare(queryString)
 	if err != nil {
-		panic(fmt.Errorf("Error preparing statement: %s\n%w", stmt, err))
+		panic(fmt.Errorf("Error preparing statement: %s\n%w", queryString, err))
 	}
-	return prepared
+	return &stmt{
+		Stmt:        prepared,
+		queryString: queryString,
+	}
 }
 
 // QueryForRows queries the given stmt with the given params and returns the resulting rows. The query wil be retried
 // given a sqlite busy error.
-func (c *client) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
+func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
 	return stmt.QueryContext(ctx, params...)
-}
-
-// CloseStmt will call close on the given Closable. It is intended to be used with a sql statement. This function is meant
-// to replace stmt.Close which can cause panics when callers unit-test since there usually is no real underlying connection.
-func (c *client) CloseStmt(closable Closable) error {
-	return closable.Close()
 }
 
 // ReadObjects Scans the given rows, performs any necessary decryption, converts the data to objects of the given type,
@@ -351,7 +332,7 @@ func (c *client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
 
 // Upsert executes an upsert statement encrypting arguments if necessary
 // note the statement should have 4 parameters: key, objBytes, dataNonce, kid
-func (c *client) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (c *client) Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error {
 	objBytes := toBytes(obj)
 	var dataNonce []byte
 	var err error

@@ -7,8 +7,7 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./transaction_mocks_test.go -mock_names Client=MockTXClient github.com/rancher/steve/pkg/sqlcache/db/transaction Stmt,Client
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,TxClient,Stmt
 
 import (
 	"context"
@@ -20,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/rancher/steve/pkg/sqlcache/db"
-	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 
 	"github.com/stretchr/testify/assert"
@@ -80,7 +78,7 @@ func TestAdd(t *testing.T) {
 			})
 
 		var count int
-		store.afterAdd = append(store.afterAdd, func(key string, object any, tx transaction.Client) error {
+		store.afterAdd = append(store.afterAdd, func(key string, object any, tx db.TxClient) error {
 			count++
 			return nil
 		})
@@ -103,7 +101,7 @@ func TestAdd(t *testing.T) {
 				}
 			})
 
-		store.afterAdd = append(store.afterAdd, func(key string, object any, txC transaction.Client) error {
+		store.afterAdd = append(store.afterAdd, func(key string, object any, txC db.TxClient) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Add(testObject)
@@ -202,7 +200,7 @@ func TestUpdate(t *testing.T) {
 			})
 
 		var count int
-		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC transaction.Client) error {
+		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC db.TxClient) error {
 			count++
 			return nil
 		})
@@ -226,7 +224,7 @@ func TestUpdate(t *testing.T) {
 				}
 			})
 
-		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC transaction.Client) error {
+		store.afterUpdate = append(store.afterUpdate, func(key string, object any, txC db.TxClient) error {
 			return fmt.Errorf("error")
 		})
 		err := store.Update(testObject)
@@ -1012,9 +1010,11 @@ func TestAddWithBothUpdates(t *testing.T) {
 	}
 }
 
-func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
-	dbC := NewMockClient(gomock.NewController(t)) // add functionality once store expectation are known
-	txC := NewMockTXClient(gomock.NewController(t))
+func SetupMockDB(t *testing.T) (*MockClient, *MockTxClient) {
+	ctrl := gomock.NewController(t)
+	dbC := NewMockClient(ctrl) // add functionality once store expectation are known
+	txC := NewMockTxClient(ctrl)
+	stmt := NewMockStmt(ctrl)
 	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil, nil)
 	dbC.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 		func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
@@ -1025,13 +1025,13 @@ func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
 		})
 
 	// use stmt mock here
-	dbC.EXPECT().Prepare(fmt.Sprintf(upsertStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
-	dbC.EXPECT().Prepare(fmt.Sprintf(deleteStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
-	dbC.EXPECT().Prepare(fmt.Sprintf(deleteAllStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
-	dbC.EXPECT().Prepare(fmt.Sprintf(dropBaseStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
-	dbC.EXPECT().Prepare(fmt.Sprintf(getStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
-	dbC.EXPECT().Prepare(fmt.Sprintf(listStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
-	dbC.EXPECT().Prepare(fmt.Sprintf(listKeysStmtFmt, "testStoreObject")).Return(&sql.Stmt{})
+	dbC.EXPECT().Prepare(fmt.Sprintf(upsertStmtFmt, "testStoreObject")).Return(stmt)
+	dbC.EXPECT().Prepare(fmt.Sprintf(deleteStmtFmt, "testStoreObject")).Return(stmt)
+	dbC.EXPECT().Prepare(fmt.Sprintf(deleteAllStmtFmt, "testStoreObject")).Return(stmt)
+	dbC.EXPECT().Prepare(fmt.Sprintf(dropBaseStmtFmt, "testStoreObject")).Return(stmt)
+	dbC.EXPECT().Prepare(fmt.Sprintf(getStmtFmt, "testStoreObject")).Return(stmt)
+	dbC.EXPECT().Prepare(fmt.Sprintf(listStmtFmt, "testStoreObject")).Return(stmt)
+	dbC.EXPECT().Prepare(fmt.Sprintf(listKeysStmtFmt, "testStoreObject")).Return(stmt)
 
 	return dbC, txC
 }

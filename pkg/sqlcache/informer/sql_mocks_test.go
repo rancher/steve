@@ -11,11 +11,9 @@ package informer
 
 import (
 	context "context"
-	sql "database/sql"
 	reflect "reflect"
 
 	db "github.com/rancher/steve/pkg/sqlcache/db"
-	transaction "github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -55,20 +53,6 @@ func (m *MockStore) Add(obj any) error {
 func (mr *MockStoreMockRecorder) Add(obj any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockStore)(nil).Add), obj)
-}
-
-// CloseStmt mocks base method.
-func (m *MockStore) CloseStmt(closable db.Closable) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloseStmt", closable)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CloseStmt indicates an expected call of CloseStmt.
-func (mr *MockStoreMockRecorder) CloseStmt(closable any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockStore)(nil).CloseStmt), closable)
 }
 
 // Decryptor mocks base method.
@@ -245,10 +229,10 @@ func (mr *MockStoreMockRecorder) NewConnection(isTemp any) *gomock.Call {
 }
 
 // Prepare mocks base method.
-func (m *MockStore) Prepare(stmt string) *sql.Stmt {
+func (m *MockStore) Prepare(stmt string) db.Stmt {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Prepare", stmt)
-	ret0, _ := ret[0].(*sql.Stmt)
+	ret0, _ := ret[0].(db.Stmt)
 	return ret0
 }
 
@@ -259,14 +243,14 @@ func (mr *MockStoreMockRecorder) Prepare(stmt any) *gomock.Call {
 }
 
 // QueryForRows mocks base method.
-func (m *MockStore) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
+func (m *MockStore) QueryForRows(ctx context.Context, stmt db.Stmt, params ...any) (db.Rows, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, stmt}
 	for _, a := range params {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryForRows", varargs...)
-	ret0, _ := ret[0].(*sql.Rows)
+	ret0, _ := ret[0].(db.Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -339,7 +323,7 @@ func (mr *MockStoreMockRecorder) ReadStrings2(rows any) *gomock.Call {
 }
 
 // RegisterAfterAdd mocks base method.
-func (m *MockStore) RegisterAfterAdd(f func(string, any, transaction.Client) error) {
+func (m *MockStore) RegisterAfterAdd(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterAdd", f)
 }
@@ -351,7 +335,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterAdd(f any) *gomock.Call {
 }
 
 // RegisterAfterDelete mocks base method.
-func (m *MockStore) RegisterAfterDelete(f func(string, any, transaction.Client) error) {
+func (m *MockStore) RegisterAfterDelete(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDelete", f)
 }
@@ -363,7 +347,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterDelete(f any) *gomock.Call {
 }
 
 // RegisterAfterDeleteAll mocks base method.
-func (m *MockStore) RegisterAfterDeleteAll(f func(transaction.Client) error) {
+func (m *MockStore) RegisterAfterDeleteAll(f func(db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterDeleteAll", f)
 }
@@ -375,7 +359,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterDeleteAll(f any) *gomock.Call {
 }
 
 // RegisterAfterUpdate mocks base method.
-func (m *MockStore) RegisterAfterUpdate(f func(string, any, transaction.Client) error) {
+func (m *MockStore) RegisterAfterUpdate(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterAfterUpdate", f)
 }
@@ -387,7 +371,7 @@ func (mr *MockStoreMockRecorder) RegisterAfterUpdate(f any) *gomock.Call {
 }
 
 // RegisterBeforeDropAll mocks base method.
-func (m *MockStore) RegisterBeforeDropAll(f func(transaction.Client) error) {
+func (m *MockStore) RegisterBeforeDropAll(f func(db.TxClient) error) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RegisterBeforeDropAll", f)
 }
@@ -441,7 +425,7 @@ func (mr *MockStoreMockRecorder) Update(obj any) *gomock.Call {
 }
 
 // Upsert mocks base method.
-func (m *MockStore) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
+func (m *MockStore) Upsert(tx db.TxClient, stmt db.Stmt, key string, obj any, shouldEncrypt bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj, shouldEncrypt)
 	ret0, _ := ret[0].(error)
