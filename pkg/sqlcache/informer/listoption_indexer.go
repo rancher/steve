@@ -438,17 +438,25 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan 
 		for {
 			select {
 			case <-ctx.Done():
-				// empty the buffer
-				for range buffer {
-				}
-				return
+				break FlushBuffer
 			case <-backfill.Done():
+				// backfill is a derived context, check that parent is not cancelled too
+				if ctx.Err() != nil {
+					break FlushBuffer
+				}
+
 				event, ok := <-buffer
 				if !ok {
 					break FlushBuffer
 				}
 				eventsChan <- event
 			}
+		}
+		if ctx.Err() != nil {
+			// empty the buffer and exit
+			for range buffer {
+			}
+			return
 		}
 
 		// Finally pipe writeChan (not buffered) to the original eventsChan, as usual
