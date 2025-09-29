@@ -68,7 +68,6 @@ type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 	GetLatestResourceVersion() []string
-	RunGC(context.Context)
 	DropAll(context.Context) error
 }
 
@@ -78,7 +77,7 @@ var newInformer = cache.NewSharedIndexInformer
 // NewInformer returns a new SQLite-backed Informer for the type specified by schema in unstructured.Unstructured form
 // using the specified client
 func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool,
-	typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*Informer, error) {
+	typeGuidance map[string]string, namespaced bool, watchable bool, gcKeepCount int) (*Informer, error) {
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
 		return client.Watch(ctx, options)
 	}
@@ -146,7 +145,6 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 		Fields:       fields,
 		TypeGuidance: typeGuidance,
 		IsNamespaced: namespaced,
-		GCInterval:   gcInterval,
 		GCKeepCount:  gcKeepCount,
 	}
 	loi, err := NewListOptionIndexer(ctx, s, opts)
@@ -167,7 +165,6 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 func (i *Informer) Run(stopCh <-chan struct{}) {
 	var wg wait.Group
 	wg.StartWithChannel(stopCh, i.SharedIndexInformer.Run)
-	wg.StartWithContext(wait.ContextForChannel(stopCh), i.ByOptionsLister.RunGC)
 	wg.Wait()
 }
 
@@ -175,7 +172,6 @@ func (i *Informer) Run(stopCh <-chan struct{}) {
 func (i *Informer) RunWithContext(ctx context.Context) {
 	var wg wait.Group
 	wg.StartWithContext(ctx, i.SharedIndexInformer.RunWithContext)
-	wg.StartWithContext(ctx, i.ByOptionsLister.RunGC)
 	wg.Wait()
 }
 
