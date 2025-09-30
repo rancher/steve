@@ -437,28 +437,20 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan 
 		defer close(done)
 
 		// Wait for backfilling, then flush the buffer into the events chan
-	FlushBuffer:
-		for {
+		<-backfill.Done()
+		for event := range buffer {
 			select {
+			// short-circuit if context is done, to quickly drain the buffer
+			// try writing to eventsChan otherwise
 			case <-ctx.Done():
-				break FlushBuffer
-			case <-backfill.Done():
-				// backfill is a derived context, check that parent is not cancelled too
-				if ctx.Err() != nil {
-					break FlushBuffer
+			default:
+				select {
+				case <-ctx.Done():
+				case eventsChan <- event:
 				}
-
-				event, ok := <-buffer
-				if !ok {
-					break FlushBuffer
-				}
-				eventsChan <- event
 			}
 		}
 		if ctx.Err() != nil {
-			// empty the buffer and exit
-			for range buffer {
-			}
 			return
 		}
 
