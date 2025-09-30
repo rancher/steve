@@ -3579,8 +3579,8 @@ func Test_watcherWithBackfill(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 
 	eventsCh := make(chan int, 10)
-	w, done := watcherWithBackfill(ctx, eventsCh)
-	defer close(w)
+	w, doneCb, closeWatcher := watcherWithBackfill(ctx, eventsCh)
+	defer closeWatcher()
 
 	eventsCh <- 1
 	eventsCh <- 2
@@ -3588,7 +3588,7 @@ func Test_watcherWithBackfill(t *testing.T) {
 	eventsCh <- 3
 	w <- 6
 	eventsCh <- 4
-	done()
+	doneCb()
 
 	time.Sleep(10 * time.Millisecond)
 	w <- 7

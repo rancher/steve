@@ -298,8 +298,8 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	// We can keep receiving events while replaying older events for the watcher.
 	// By early registering this watcher, this channel will buffer any new events while we are still backfilling old events.
 	// When we finish, calling backfillDone will write all events in the buffer, then listen to new events as normal.
-	watcherChannel, backfillDone := watcherWithBackfill(ctx, eventsCh)
-	defer close(watcherChannel)
+	watcherChannel, backfillDone, closeWatcher := watcherWithBackfill(ctx, eventsCh)
+	defer closeWatcher()
 
 	l.lock.Lock()
 	latestRV := l.latestRV
@@ -412,10 +412,11 @@ func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
 	return singleResult, err
 }
 
-func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan T, func()) {
+func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan T, func(), func()) {
 	backfill, backfillDone := context.WithCancel(ctx)
 	writeChan := make(chan T)
 	buffer := make(chan T, 100)
+	done := make(chan struct{})
 
 	// Store any input in the buffer during backfilling.
 	// Immediately stop accepting new events once backfilling completed
@@ -433,6 +434,8 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan 
 	}()
 
 	go func() {
+		defer close(done)
+
 		// Wait for backfilling, then flush the buffer into the events chan
 	FlushBuffer:
 		for {
@@ -469,7 +472,10 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T) (chan 
 			eventsChan <- event
 		}
 	}()
-	return writeChan, backfillDone
+	return writeChan, backfillDone, func() {
+		close(writeChan)
+		<-done
+	}
 }
 
 type watchKey struct {
