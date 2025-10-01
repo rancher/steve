@@ -48,12 +48,17 @@ func StartQueryLogger(ctx context.Context, p string) (QueryLogger, error) {
 		return &NoopQueryLogger{}, nil
 	}
 
-	c := make(logger)
+	c := make(logger, 1)
 	f, err := os.Create(p)
 	if err != nil {
 		return nil, err
 	}
 	go func() {
+		defer func() {
+			// In case there was an error, stop writing and avoid blocking senders
+			for range c {
+			}
+		}()
 		defer f.Close()
 		enc := json.NewEncoder(f)
 		for entry := range c {
