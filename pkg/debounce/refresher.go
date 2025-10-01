@@ -15,30 +15,22 @@ type Refreshable interface {
 
 // DebounceableRefresher is used to debounce multiple attempts to refresh a refreshable type.
 type DebounceableRefresher struct {
-	*sync.Cond
-	scheduled     *time.Timer
-	shouldRefresh bool
+	// timerMu protects the scheduled timer.
+	timerMu   sync.Mutex
+	scheduled *time.Timer
+
+	// A buffered channel of size 1 acts as the trigger. Selective sends (skipped when the buffer is full) allows deduplication
+	trigger chan struct{}
 }
 
 func NewDebounceableRefresher(ctx context.Context, refreshable Refreshable, duration time.Duration) *DebounceableRefresher {
-	dr := &DebounceableRefresher{Cond: sync.NewCond(&sync.Mutex{})}
+	dr := &DebounceableRefresher{
+		trigger: make(chan struct{}, 1),
+	}
 
 	// Refresh loop
 	go func() {
-		for {
-			// Check for condition while holding the lock
-			dr.L.Lock()
-			for !dr.shouldRefresh {
-				// The lock is released while waiting, and acquired when returned
-				dr.Wait()
-				if ctx.Err() != nil {
-					dr.L.Unlock()
-					return
-				}
-			}
-			dr.shouldRefresh = false
-			dr.L.Unlock()
-
+		for range dr.trigger {
 			if err := refreshable.Refresh(); err != nil {
 				logrus.Errorf("failed to refresh with error: %v", err)
 			}
@@ -56,31 +48,34 @@ func NewDebounceableRefresher(ctx context.Context, refreshable Refreshable, dura
 		}
 		for {
 			select {
-			case <-ctx.Done():
-				// Signaling to wake the processing loop in case it's waiting, so it can observe the canceled context
-				dr.signalRefresh()
-				return
 			case <-tick:
-				dr.signalRefresh()
+				dr.triggerRefresh()
+			case <-ctx.Done():
+				close(dr.trigger)
+				return
 			}
 		}
 	}()
+
 	return dr
 }
 
-func (dr *DebounceableRefresher) signalRefresh() {
-	dr.L.Lock()
-	dr.shouldRefresh = true
-	dr.Signal()
-	dr.L.Unlock()
+func (dr *DebounceableRefresher) triggerRefresh() {
+	select {
+	case dr.trigger <- struct{}{}:
+	default: // Channel buffer is closed or full (a refresh is already pending)
+	}
 }
 
 func (dr *DebounceableRefresher) Schedule(after time.Duration) {
-	dr.L.Lock()
-	defer dr.L.Unlock()
+	dr.timerMu.Lock()
+	defer dr.timerMu.Unlock()
 
+	// Stop any previously scheduled timer.
 	if dr.scheduled != nil {
 		dr.scheduled.Stop()
 	}
-	dr.scheduled = time.AfterFunc(after, dr.signalRefresh)
+
+	// Schedule a new timer that will trigger a refresh.
+	dr.scheduled = time.AfterFunc(after, dr.triggerRefresh)
 }
