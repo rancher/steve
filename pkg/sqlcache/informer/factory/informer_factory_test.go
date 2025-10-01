@@ -532,8 +532,9 @@ func TestCacheFor(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 		fields := [][]string{{"something"}}
+		typeGuidance := map[string]string{}
 		expectedGVK := schema.GroupVersionKind{}
-		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
+		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			return nil, fmt.Errorf("fake error")
 		}
 		f := &CacheFactory{
@@ -543,7 +544,7 @@ func TestCacheFor(t *testing.T) {
 			informers:   map[schema.GroupVersionKind]*guardedInformer{},
 		}
 		f.ctx, f.cancel = context.WithCancel(context.Background())
-		_, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true)
+		_, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Error(t, err)
 		err = f.Stop(expectedGVK)
 		assert.NoError(t, err)
