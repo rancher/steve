@@ -15,41 +15,72 @@ type Refreshable interface {
 
 // DebounceableRefresher is used to debounce multiple attempts to refresh a refreshable type.
 type DebounceableRefresher struct {
-	sync.Mutex
-	// Refreshable is any type that can be refreshed. The refresh method should by protected by a mutex internally.
-	Refreshable Refreshable
-	current     context.CancelFunc
-	onCancel    func()
+	*sync.Cond
+	scheduled     *time.Timer
+	shouldRefresh bool
 }
 
-// RefreshAfter requests a refresh after a certain time has passed. Subsequent calls to this method will
-// delay the requested refresh by the new duration. Note that this is a total override of the previous calls - calling
-// RefreshAfter(time.Second * 2) and then immediately calling RefreshAfter(time.Microsecond * 1) will run a refresh
-// in one microsecond
-func (d *DebounceableRefresher) RefreshAfter(duration time.Duration) {
-	d.Lock()
-	defer d.Unlock()
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	if d.current != nil {
-		d.current()
-	}
-	d.current = cancel
+func NewDebounceableRefresher(ctx context.Context, refreshable Refreshable, duration time.Duration) *DebounceableRefresher {
+	dr := &DebounceableRefresher{Cond: sync.NewCond(&sync.Mutex{})}
+
+	// Refresh loop
 	go func() {
-		timer := time.NewTimer(duration)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			// this indicates that the context was cancelled.
-			if d.onCancel != nil {
-				d.onCancel()
+		for {
+			// Check for condition while holding the lock
+			dr.L.Lock()
+			for !dr.shouldRefresh {
+				// The lock is released while waiting, and acquired when returned
+				dr.Wait()
+				if ctx.Err() != nil {
+					dr.L.Unlock()
+					return
+				}
 			}
-		case <-timer.C:
-			// note this can cause multiple refreshes to happen concurrently
-			err := d.Refreshable.Refresh()
-			if err != nil {
+			dr.shouldRefresh = false
+			dr.L.Unlock()
+
+			if err := refreshable.Refresh(); err != nil {
 				logrus.Errorf("failed to refresh with error: %v", err)
 			}
 		}
 	}()
+
+	// Cancellation and scheduling goroutine
+	go func() {
+		// Allow disabling ticker if a negative or zero duration is provided
+		var tick <-chan time.Time
+		if duration > 0 {
+			ticker := time.NewTicker(duration)
+			defer ticker.Stop()
+			tick = ticker.C
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				// Signaling to wake the processing loop in case it's waiting, so it can observe the canceled context
+				dr.signalRefresh()
+				return
+			case <-tick:
+				dr.signalRefresh()
+			}
+		}
+	}()
+	return dr
+}
+
+func (dr *DebounceableRefresher) signalRefresh() {
+	dr.L.Lock()
+	dr.shouldRefresh = true
+	dr.Signal()
+	dr.L.Unlock()
+}
+
+func (dr *DebounceableRefresher) Schedule(after time.Duration) {
+	dr.L.Lock()
+	defer dr.L.Unlock()
+
+	if dr.scheduled != nil {
+		dr.scheduled.Stop()
+	}
+	dr.scheduled = time.AfterFunc(after, dr.signalRefresh)
 }
