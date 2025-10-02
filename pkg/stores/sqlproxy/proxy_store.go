@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -423,10 +424,29 @@ func GetFieldsFromSchema(schema *types.APISchema) [][]string {
 	}
 	colDefs, ok := columns.([]common.ColumnDefinition)
 	if !ok {
-		return nil
+		tableDefs, ok := columns.([]table.Column)
+		if !ok {
+			return nil
+		}
+		colDefs = make([]common.ColumnDefinition, len(tableDefs))
+		for i, td := range tableDefs {
+			// This isn't used right now, but it is used in the PR that tries to identify
+			// numeric fields, so leave it here.
+			tcd := metav1.TableColumnDefinition{
+				Name:        td.Name,
+				Type:        td.Type,
+				Format:      td.Format,
+				Description: td.Description,
+			}
+			colDefs[i] = common.ColumnDefinition{
+				TableColumnDefinition: tcd,
+				Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
+			}
+		}
 	}
 	for _, colDef := range colDefs {
-		field := strings.TrimPrefix(colDef.Field, "$.")
+		field := strings.TrimPrefix(colDef.Field, "$")
+		field = strings.TrimPrefix(field, ".")
 		fields = append(fields, queryhelper.SafeSplit(field))
 	}
 	return fields
