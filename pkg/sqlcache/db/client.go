@@ -37,7 +37,8 @@ const (
 
 	informerObjectCachePerms fs.FileMode = 0o600
 
-	debugQueryLogPathEnvVar = "CATTLE_DEBUG_QUERY_LOG"
+	debugQueryLogPathEnvVar           = "CATTLE_DEBUG_QUERY_LOG"
+	debugQueryIncludeParamsPathEnvVar = "CATTLE_DEBUG_QUERY_INCLUDE_PARAMS"
 )
 
 // Client defines a database client that provides encrypting, decrypting, and database resetting
@@ -178,7 +179,7 @@ func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor
 		return nil, "", err
 	}
 
-	logger, err := logging.StartQueryLogger(ctx, os.Getenv(debugQueryLogPathEnvVar))
+	logger, err := logging.StartQueryLogger(ctx, os.Getenv(debugQueryLogPathEnvVar), os.Getenv(debugQueryIncludeParamsPathEnvVar) == "true")
 	if err != nil {
 		return nil, "", fmt.Errorf("starting query logger: %w", err)
 	}

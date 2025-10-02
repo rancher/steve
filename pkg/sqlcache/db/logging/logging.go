@@ -43,7 +43,7 @@ func (l logger) Log(start time.Time, query string, params []any) {
 	}
 }
 
-func StartQueryLogger(ctx context.Context, p string) (QueryLogger, error) {
+func StartQueryLogger(ctx context.Context, p string, includeParams bool) (QueryLogger, error) {
 	if p == "" {
 		return &NoopQueryLogger{}, nil
 	}
@@ -62,6 +62,9 @@ func StartQueryLogger(ctx context.Context, p string) (QueryLogger, error) {
 		defer f.Close()
 		enc := json.NewEncoder(f)
 		for entry := range c {
+			if !includeParams {
+				entry.Params = nil
+			}
 			if err := enc.Encode(entry); err != nil {
 				fmt.Printf("error writing query log: %+v\n", err)
 				return
