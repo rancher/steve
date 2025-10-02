@@ -414,6 +414,27 @@ func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
 
+func tableColsToCommonCols(tableDefs []table.Column) []common.ColumnDefinition {
+	colDefs := make([]common.ColumnDefinition, len(tableDefs))
+	for i, td := range tableDefs {
+		// This isn't used right now, but it is used in the PR that tries to identify
+		// numeric fields, so leave it here.
+		// Although the `table.Column` and `metav1.TableColumnDefinition` types
+		// are structurally the same, Go doesn't allow a quick way to cast one to the other.
+		tcd := metav1.TableColumnDefinition{
+			Name:        td.Name,
+			Type:        td.Type,
+			Format:      td.Format,
+			Description: td.Description,
+		}
+		colDefs[i] = common.ColumnDefinition{
+			TableColumnDefinition: tcd,
+			Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
+		}
+	}
+	return colDefs
+}
+
 // GetFieldsFromSchema converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 func GetFieldsFromSchema(schema *types.APISchema) [][]string {
@@ -428,21 +449,7 @@ func GetFieldsFromSchema(schema *types.APISchema) [][]string {
 		if !ok {
 			return nil
 		}
-		colDefs = make([]common.ColumnDefinition, len(tableDefs))
-		for i, td := range tableDefs {
-			// This isn't used right now, but it is used in the PR that tries to identify
-			// numeric fields, so leave it here.
-			tcd := metav1.TableColumnDefinition{
-				Name:        td.Name,
-				Type:        td.Type,
-				Format:      td.Format,
-				Description: td.Description,
-			}
-			colDefs[i] = common.ColumnDefinition{
-				TableColumnDefinition: tcd,
-				Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
-			}
-		}
+		colDefs = tableColsToCommonCols(tableDefs)
 	}
 	for _, colDef := range colDefs {
 		field := strings.TrimPrefix(colDef.Field, "$")

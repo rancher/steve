@@ -2,6 +2,7 @@ package sqlproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,24 +10,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/apiserver/pkg/apierror"
+	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor"
 	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 
 	"go.uber.org/mock/gomock"
 
-	"github.com/pkg/errors"
-	"github.com/rancher/apiserver/pkg/apierror"
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/client"
-	"github.com/rancher/wrangler/v3/pkg/schemas"
+	//"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -697,6 +699,58 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
 			assert.Nil(t, err)
 		})
+	}
+}
+
+func TestTableColsToCommonCols(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "table columns are converted to common columns",
+		test: func(t *testing.T) {
+			originalColumns := []table.Column{
+				{
+					Name:        "weight",
+					Field:       "$.metadata.fields[0]",
+					Type:        "integer",
+					Description: "how much the pod weighs",
+				},
+				{
+					Name:        "position",
+					Field:       "$.metadata.fields[1]",
+					Type:        "string",
+					Description: "number of this pod",
+				},
+				{
+					Name:        "favoriteColour",
+					Field:       "$.metadata.fields[3]",
+					Type:        "string",
+					Description: "green of course",
+				},
+			}
+			expectedColumns := []common.ColumnDefinition{
+				{
+					TableColumnDefinition: metav1.TableColumnDefinition{Name: "weight", Type: "integer", Description: "how much the pod weighs"},
+					Field:                 "$.metadata.fields[0]",
+				},
+				{
+					TableColumnDefinition: metav1.TableColumnDefinition{Name: "position", Type: "string", Description: "number of this pod"},
+					Field:                 "$.metadata.fields[1]",
+				},
+				{TableColumnDefinition: metav1.TableColumnDefinition{Name: "favoriteColour", Type: "string", Description: "green of course"},
+					Field: "$.metadata.fields[2]",
+				},
+			}
+			got := tableColsToCommonCols(originalColumns)
+			assert.Equal(t, expectedColumns, got)
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
 }
 
