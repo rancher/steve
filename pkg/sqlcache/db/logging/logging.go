@@ -3,7 +3,6 @@ package logging
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -66,7 +65,7 @@ func StartQueryLogger(ctx context.Context, p string, includeParams bool) (QueryL
 				entry.Params = nil
 			}
 			if err := enc.Encode(entry); err != nil {
-				fmt.Printf("error writing query log: %+v\n", err)
+				logrus.WithError(err).Errorln("error writing query log")
 				return
 			}
 		}
