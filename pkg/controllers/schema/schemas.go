@@ -2,8 +2,8 @@ package schema
 
 import (
 	"context"
+	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -31,6 +31,9 @@ var (
 	}
 )
 
+const refreshDelay = 500 * time.Millisecond
+const alreadySyncingError = "already syncing"
+
 type SchemasHandlerFunc func(schemas *schema2.Collection) error
 
 func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection) error {
@@ -40,14 +43,15 @@ func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection) error {
 type handler struct {
 	sync.Mutex
 
-	ctx       context.Context
-	toSync    int32
-	schemas   *schema2.Collection
-	client    discovery.DiscoveryInterface
-	cols      *common.DynamicColumns
-	crdClient apiextcontrollerv1.CustomResourceDefinitionClient
-	ssar      authorizationv1client.SelfSubjectAccessReviewInterface
-	handler   SchemasHandlerFunc
+	ctx            context.Context
+	refreshing     bool
+	schemas        *schema2.Collection
+	client         discovery.DiscoveryInterface
+	cols           *common.DynamicColumns
+	crdClient      apiextcontrollerv1.CustomResourceDefinitionClient
+	ssar           authorizationv1client.SelfSubjectAccessReviewInterface
+	requestChannel chan struct{}
+	handler        SchemasHandlerFunc
 }
 
 func Register(ctx context.Context,
@@ -60,17 +64,19 @@ func Register(ctx context.Context,
 	schemas *schema2.Collection) {
 
 	h := &handler{
-		ctx:       ctx,
-		cols:      cols,
-		client:    discovery,
-		schemas:   schemas,
-		handler:   schemasHandler,
-		crdClient: crd,
-		ssar:      ssar,
+		ctx:            ctx,
+		cols:           cols,
+		client:         discovery,
+		schemas:        schemas,
+		handler:        schemasHandler,
+		crdClient:      crd,
+		ssar:           ssar,
+		requestChannel: make(chan struct{}),
 	}
 
 	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
 	crd.OnChange(ctx, "schema", h.OnChangeCRD)
+	h.processRequests()
 }
 
 func (h *handler) OnChangeCRD(key string, crd *apiextv1.CustomResourceDefinition) (*apiextv1.CustomResourceDefinition, error) {
@@ -83,15 +89,39 @@ func (h *handler) OnChangeAPIService(key string, api *apiv1.APIService) (*apiv1.
 	return api, nil
 }
 
-func (h *handler) queueRefresh() {
-	atomic.StoreInt32(&h.toSync, 1)
-
+func (h *handler) processRequests() {
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		if err := h.refreshAll(h.ctx); err != nil {
-			logrus.Errorf("failed to sync schemas: %v", err)
-			atomic.StoreInt32(&h.toSync, 1)
+		ticker := time.NewTicker(refreshDelay)
+		// No need to collect the requests. We just need to know if we have a pending request to refresh
+		haveRequests := false
+		for {
+			select {
+			case <-h.ctx.Done():
+				return
+			case <-h.requestChannel:
+				haveRequests = true
+			case <-ticker.C:
+				if haveRequests {
+					err := h.refreshAll(h.ctx)
+					if err == nil {
+						haveRequests = false
+					} else {
+						// Try on the next tick
+						logrus.Errorf("processRequests: failed to sync schemas immediately: %v (will retry after a delay)", err)
+					}
+				}
+			}
 		}
+	}()
+}
+
+// This is a weird kind of queue.
+// The `refreshAll` function just calls a separate schema-tracker,
+// which tracks all pending changes.
+// We're really actually just adding a request to apply global changes to the queue, so we can cull out most change events
+func (h *handler) queueRefresh() {
+	go func() {
+		h.requestChannel <- struct{}{}
 	}()
 }
 
@@ -152,9 +182,14 @@ func (h *handler) refreshAll(ctx context.Context) error {
 	h.Lock()
 	defer h.Unlock()
 
-	if !h.needToSync() {
-		return nil
+	if h.refreshing {
+		// Ignore this attempt - it means this function is still running.
+		return errors.New(alreadySyncingError)
 	}
+	h.refreshing = true
+	defer func() {
+		h.refreshing = false
+	}()
 
 	schemas, err := converter.ToSchemas(h.crdClient, h.client)
 	if err != nil {
@@ -233,9 +268,4 @@ func (h *handler) allowed(ctx context.Context, schema *types.APISchema) (bool, e
 		return false, err
 	}
 	return ssar.Status.Allowed && !ssar.Status.Denied, nil
-}
-
-func (h *handler) needToSync() bool {
-	old := atomic.SwapInt32(&h.toSync, 0)
-	return old == 1
 }
