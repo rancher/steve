@@ -2,6 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"time"
+
+	"github.com/rancher/steve/pkg/sqlcache/db/logging"
 )
 
 // TxClient is an interface over a subset of sql.Tx methods
@@ -16,14 +19,22 @@ type TxClient interface {
 // txClient is the main implementation of TxClient, delegates to sql.Tx
 // other implementations exist for testing purposes
 type txClient struct {
-	tx *sql.Tx
+	tx          *sql.Tx
+	queryLogger logging.QueryLogger
 }
 
-func NewTxClient(tx *sql.Tx) TxClient {
-	return &txClient{tx: tx}
+type TxClientOption func(*txClient)
+
+func NewTxClient(tx *sql.Tx, opts ...TxClientOption) TxClient {
+	c := &txClient{tx: tx, queryLogger: &logging.NoopQueryLogger{}}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c txClient) Exec(query string, args ...any) (sql.Result, error) {
+	defer c.queryLogger.Log(time.Now(), query, args)
 	res, err := c.tx.Exec(query, args...)
 	if err != nil {
 		err = &QueryError{
@@ -36,7 +47,14 @@ func (c txClient) Exec(query string, args ...any) (sql.Result, error) {
 
 func (c txClient) Stmt(s Stmt) Stmt {
 	return &stmt{
+		queryLogger: c.queryLogger,
 		Stmt:        c.tx.Stmt(s.SQLStmt()),
 		queryString: s.GetQueryString(),
+	}
+}
+
+func WithQueryLogger(logger logging.QueryLogger) TxClientOption {
+	return func(c *txClient) {
+		c.queryLogger = logger
 	}
 }

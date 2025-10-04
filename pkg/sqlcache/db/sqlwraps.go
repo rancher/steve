@@ -3,6 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	"github.com/rancher/steve/pkg/sqlcache/db/logging"
 )
 
 // Row implements a subset of the methods provided by sql.Row
@@ -68,9 +71,19 @@ func (r rows) Err() error {
 type stmt struct {
 	*sql.Stmt
 	queryString string
+
+	queryLogger logging.QueryLogger
+}
+
+func (s *stmt) log(startTime time.Time, query string, args []any) {
+	if s.queryLogger == nil {
+		return
+	}
+	s.queryLogger.Log(startTime, query, args)
 }
 
 func (s *stmt) Exec(args ...any) (sql.Result, error) {
+	defer s.log(time.Now(), s.queryString, args)
 	res, err := s.Stmt.Exec(args...)
 	if err != nil {
 		err = &QueryError{
@@ -82,6 +95,7 @@ func (s *stmt) Exec(args ...any) (sql.Result, error) {
 }
 
 func (s *stmt) QueryContext(ctx context.Context, args ...any) (Rows, error) {
+	defer s.log(time.Now(), s.queryString, args)
 	res, err := s.Stmt.QueryContext(ctx, args...)
 	if err != nil {
 		return res, &QueryError{
