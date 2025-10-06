@@ -13,8 +13,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -450,6 +452,7 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 		return dbPath, err
 	}
 	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
+	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
 	c.conn = sqlDB
 	return dbPath, nil
 }
@@ -484,6 +487,64 @@ func extractBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (drive
 		return "", nil
 	}
 	return parts[arg2], nil
+}
+
+// Convert a string representation of memory to a float giving the number of bytes
+// See the `tbl` var for associated values of each suffix
+// Values returned as REAL to allow for large values
+func memoryInBytes(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 string
+	var val float64
+	var finalValue driver.Value
+	finalValue = val
+	switch argTyped := args[0].(type) {
+	case string:
+		arg1 = argTyped
+	case []byte:
+		arg1 = string(argTyped)
+	default:
+		return finalValue, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
+	}
+	rx := `^([0-9]+)(\w{0,2})$`
+	ptn := regexp.MustCompile(rx)
+	m := ptn.FindStringSubmatch(arg1)
+	if m == nil || len(m) != 3 {
+		return finalValue, fmt.Errorf("couldn't parse '%s' as a numeric value", arg1)
+	}
+	tbl := map[string]int{
+		"B": 0,
+		"K": 1,
+		"M": 2,
+		"G": 3,
+		"T": 4,
+		"E": 5,
+	}
+	size, err := strconv.Atoi(m[1])
+	if err != nil {
+		return finalValue, fmt.Errorf("couldn't parse '%s' as a numeric value: %w", arg1, err)
+	}
+	factor := 0
+	base := 1024
+	var finalError error
+	if len(m[2]) > 0 {
+		var ok bool
+		factor, ok = tbl[strings.ToUpper(m[2][0:1])]
+		if !ok {
+			factor = 0
+		}
+		if len(m[2]) > 2 {
+			finalError = fmt.Errorf("numeric value '%s' has an unrecognized suffix '%s'", arg1, m[2])
+		} else if len(m[2]) == 2 {
+			if strings.ToUpper(m[2][1:2]) == "I" {
+				base = 1000
+			} else {
+				finalError = fmt.Errorf("numeric value '%s' has an unrecognized suffix '%s'", arg1, m[2])
+			}
+		}
+	}
+	val = float64(size) * math.Pow(float64(base), float64(factor))
+	finalValue = val
+	return finalValue, finalError
 }
 
 // This acts like "touch" for both existing files and non-existing files.
