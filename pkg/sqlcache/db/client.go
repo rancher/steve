@@ -17,7 +17,6 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"

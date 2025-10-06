@@ -846,6 +846,17 @@ var builtinIntTable = map[schema.GroupVersionKind]map[string]bool{
 	},
 }
 
+var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
+	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
+		"status.allocatable.cpu":    "INT",
+		"status.allocatable.memory": "REAL",
+		"status.allocatable.pods":   "INT",
+		"status.available.cpu":      "INT",
+		"status.available.memory":   "REAL",
+		"status.available.pods":     "INT",
+	},
+}
+
 func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
 	guidance := make(map[string]string)
 	ptn := regexp.MustCompile(`(?i)\bnumber of\b`)
@@ -874,6 +885,12 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 		if colType != "string" {
 			// Strip the parts off separately in case t
 			guidance[trimmedField] = colType
+		}
+	}
+	tg, ok := typeGuidanceTable[gvk]
+	if ok {
+		for k, v := range tg {
+			guidance[k] = v
 		}
 	}
 	return guidance
