@@ -17,7 +17,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
