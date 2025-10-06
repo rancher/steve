@@ -151,6 +151,12 @@ var (
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			{"spec", "internal"},
 			{"spec", "displayName"},
+			{"status", "allocatable", "cpu"},
+			{"status", "allocatable", "memory"},
+			{"status", "allocatable", "pods"},
+			{"status", "available", "cpu"},
+			{"status", "available", "memory"},
+			{"status", "available", "pods"},
 			{"status", "connected"},
 			{"status", "provider"},
 		},
