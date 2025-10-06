@@ -858,6 +858,17 @@ var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	},
 }
 
+var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
+	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
+		"status.allocatable.cpu":    "INT",
+		"status.allocatable.memory": "REAL",
+		"status.allocatable.pods":   "INT",
+		"status.available.cpu":      "INT",
+		"status.available.memory":   "REAL",
+		"status.available.pods":     "INT",
+	},
+}
+
 func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
 	guidance := make(map[string]string)
 	ptn := regexp.MustCompile(`(?i)\bnumber of\b`)
