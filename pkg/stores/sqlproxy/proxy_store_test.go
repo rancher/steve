@@ -1247,8 +1247,7 @@ func TestCreate(t *testing.T) {
 			}
 
 			testStore := Store{
-				clientGetter: &testFactory{
-					Factory:    testClientFactory,
+				clientGetter: &testFactory{Factory: testClientFactory,
 					fakeClient: fakeClient,
 				},
 			}
@@ -1591,8 +1590,7 @@ func TestUpdate(t *testing.T) {
 			}
 
 			testStore := Store{
-				clientGetter: &testFactory{
-					Factory:    testClientFactory,
+				clientGetter: &testFactory{Factory: testClientFactory,
 					fakeClient: fakeClient,
 				},
 			}

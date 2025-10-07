@@ -128,8 +128,8 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 	return ToAPI(schema, obj, warnings, types.ReservedFields), nil
 }
 
-func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition, cont string, revision string, limit int,
-) (*unstructured.UnstructuredList, []types.Warning, error) {
+func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, schema *types.APISchema, partition Partition,
+	cont string, revision string, limit int) (*unstructured.UnstructuredList, []types.Warning, error) {
 	store, err := s.Partitioner.Store(apiOp, partition)
 	if err != nil {
 		return nil, nil, err
@@ -157,7 +157,9 @@ func (s *Store) listPartition(ctx context.Context, apiOp *types.APIRequest, sche
 // List returns a list of objects across all applicable partitions.
 // If pagination parameters are used, it returns a segment of the list.
 func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
-	var result types.APIObjectList
+	var (
+		result types.APIObjectList
+	)
 
 	partitions, err := s.Partitioner.All(apiOp, schema, "list", "")
 	if err != nil {

@@ -443,6 +443,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedTotal      int
 		expectedContToken  string
 		expectedErr        error
+		latestRV           string
 	}
 	obj01_no_labels := map[string]any{
 		"metadata": map[string]any{
@@ -1185,6 +1186,38 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with listOptions.Revision set to lower or equal than latestRV should work",
+		listOptions: sqltypes.ListOptions{
+			Revision: "9999",
+		},
+		latestRV:   "10000",
+		partitions: []partition.Partition{},
+		ns:         "",
+		// setting resource version on unstructured list
+		expectedList: func() *unstructured.UnstructuredList {
+			list := makeList(t)
+			list.SetResourceVersion("10000")
+			return list
+		}(),
+		expectedTotal:     0,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with listOptions.Revision set to higher than latestRV, should return 'unknown revision'",
+		listOptions: sqltypes.ListOptions{
+			Revision: "10000",
+		},
+		latestRV:          "9999",
+		partitions:        []partition.Partition{},
+		ns:                "",
+		expectedList:      &unstructured.UnstructuredList{},
+		expectedTotal:     0,
+		expectedContToken: "",
+		expectedErr:       ErrUnknownRevision,
+	})
+
 	//tests = append(tests, testCase{
 	//	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
 	//	partitions: []partition.Partition{
@@ -1219,6 +1252,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, namespaceList)
+
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -1227,11 +1261,13 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
+			loi.latestRV = test.latestRV
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
 			}
+
 			assert.Nil(t, err)
 
 			assert.Equal(t, test.expectedTotal, total)
