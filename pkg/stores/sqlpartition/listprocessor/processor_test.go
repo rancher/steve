@@ -349,6 +349,37 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() with revision query param",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "revision=3400"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Revision: "3400",
+			Filters:  []sqltypes.OrFilter{},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() with wrong revision query param",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "revision=invalid"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+		errExpected: true,
+		errorText:   "invalid revision query param 400: value invalid for revision query param is not valid",
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() with a labels filter param should create a labels-specific filter.",
 		req: &types.APIRequest{
 			Request: &http.Request{

@@ -78,18 +78,22 @@ var (
 		},
 		gvkKey("", "v1", "Node"): {
 			{"status", "nodeInfo", "kubeletVersion"},
-			{"status", "nodeInfo", "operatingSystem"}},
+			{"status", "nodeInfo", "operatingSystem"},
+		},
 		gvkKey("", "v1", "PersistentVolume"): {
 			{"status", "reason"},
 			{"spec", "persistentVolumeReclaimPolicy"},
 		},
 		gvkKey("", "v1", "PersistentVolumeClaim"): {
-			{"spec", "volumeName"}},
+			{"spec", "volumeName"},
+		},
 		gvkKey("", "v1", "Pod"): {
 			{"spec", "containers", "image"},
-			{"spec", "nodeName"}},
+			{"spec", "nodeName"},
+		},
 		gvkKey("", "v1", "ReplicationController"): {
-			{"spec", "template", "spec", "containers", "image"}},
+			{"spec", "template", "spec", "containers", "image"},
+		},
 		gvkKey("", "v1", "Secret"): {
 			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
 		},
@@ -142,9 +146,11 @@ var (
 			{"status", "releaseName"},
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
-			{"spec", "clusterName"}},
+			{"spec", "clusterName"},
+		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "MachineDeployment"): {
-			{"spec", "clusterName"}},
+			{"spec", "clusterName"},
+		},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			{"spec", "internal"},
 			{"spec", "displayName"},
@@ -161,11 +167,14 @@ var (
 			{"userPrincipalName"},
 		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
-			{"status", "nodeName"}},
+			{"status", "nodeName"},
+		},
 		gvkKey("management.cattle.io", "v3", "NodePool"): {
-			{"spec", "clusterName"}},
+			{"spec", "clusterName"},
+		},
 		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
-			{"spec", "clusterName"}},
+			{"spec", "clusterName"},
+		},
 		gvkKey("management.cattle.io", "v3", "Project"): {
 			{"spec", "clusterName"},
 			{"spec", "displayName"},
@@ -672,9 +681,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 // Create creates a single object in the store.
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
-	var (
-		resp *unstructured.Unstructured
-	)
+	var resp *unstructured.Unstructured
 
 	input := params.Data()
 
@@ -890,6 +897,9 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		if errors.Is(err, informer.ErrInvalidColumn) {
 			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
+		if errors.Is(err, informer.ErrUnknownRevision) {
+			return nil, 0, "", apierror.NewAPIError(validation.ErrorCode{Code: err.Error(), Status: http.StatusBadRequest}, err.Error())
+		}
 		return nil, 0, "", fmt.Errorf("listbyoptions %v: %w", gvk, err)
 	}
 
@@ -910,7 +920,6 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 		eg.Go(func() error {
 			defer cancel()
 			c, err := s.watchByPartition(p, apiOp, schema, wr)
-
 			if err != nil {
 				return err
 			}

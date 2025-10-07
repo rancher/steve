@@ -69,8 +69,10 @@ var (
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
 
-	ErrInvalidColumn    = errors.New("supplied column is invalid")
-	ErrTooOld           = errors.New("resourceversion too old")
+	ErrInvalidColumn   = errors.New("supplied column is invalid")
+	ErrTooOld          = errors.New("resourceversion too old")
+	ErrUnknownRevision = errors.New("unknown revision")
+
 	projectIDFieldLabel = "field.cattle.io/projectId"
 	namespacesDbName    = "_v1_Namespace"
 )
@@ -632,6 +634,14 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryUsesLabels := hasLabelFilter(lo.Filters) || len(lo.ProjectsOrNamespaces.Filters) > 0
 	joinTableIndexByLabelName := make(map[string]int)
 
+	l.latestRVLock.RLock()
+	latestRV := l.latestRV
+	l.latestRVLock.RUnlock()
+
+	if lo.Revision != latestRV {
+		return nil, ErrUnknownRevision
+	}
+
 	// First, what kind of filtering will we be doing?
 	// 1- Intro: SELECT and JOIN clauses
 	// There's a 1:1 correspondence between a base table and its _Fields table
@@ -678,7 +688,6 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				}
 			}
 		}
-
 	}
 
 	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
