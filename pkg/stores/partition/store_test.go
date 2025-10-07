@@ -1569,7 +1569,7 @@ func TestList(t *testing.T) {
 			wantCache: []mockCache{
 				{
 					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
+						cacheKey{
 							chunkSize:    100000,
 							pageSize:     1,
 							accessID:     getAccessID("user1", "roleA"),
@@ -1751,7 +1751,7 @@ func TestList(t *testing.T) {
 			wantCache: []mockCache{
 				{
 					contents: map[cacheKey]*unstructured.UnstructuredList{
-						{
+						cacheKey{
 							chunkSize:    100000,
 							pageSize:     1,
 							accessID:     getAccessID("user1", "roleA"),
@@ -2073,7 +2073,7 @@ func TestList(t *testing.T) {
 					}
 				}
 				if len(test.wantListCalls) > 0 {
-					for name := range store.Partitioner.(mockPartitioner).stores {
+					for name, _ := range store.Partitioner.(mockPartitioner).stores {
 						assert.Equal(t, test.wantListCalls[i][name], store.Partitioner.(mockPartitioner).stores[name].(*mockStore).called)
 					}
 				}
@@ -2083,6 +2083,7 @@ func TestList(t *testing.T) {
 }
 
 func TestListByRevision(t *testing.T) {
+
 	schema := &types.APISchema{Schema: &schemas.Schema{ID: "apple"}}
 	asl := &mockAccessSetLookup{userRoles: []map[string]string{
 		{
@@ -2372,7 +2373,7 @@ func getAccessID(user, role string) string {
 }
 
 var namespaces = map[string]*corev1.Namespace{
-	"n1": {
+	"n1": &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "n1",
 			Labels: map[string]string{
@@ -2380,7 +2381,7 @@ var namespaces = map[string]*corev1.Namespace{
 			},
 		},
 	},
-	"n2": {
+	"n2": &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "n2",
 			Labels: map[string]string{
@@ -2388,7 +2389,7 @@ var namespaces = map[string]*corev1.Namespace{
 			},
 		},
 	},
-	"n3": {
+	"n3": &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "n3",
 			Labels: map[string]string{
@@ -2396,7 +2397,7 @@ var namespaces = map[string]*corev1.Namespace{
 			},
 		},
 	},
-	"n4": {
+	"n4": &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "n4",
 		},
@@ -2412,11 +2413,9 @@ func (m mockNamespaceCache) Get(name string) (*corev1.Namespace, error) {
 func (m mockNamespaceCache) List(selector labels.Selector) ([]*corev1.Namespace, error) {
 	panic("not implemented")
 }
-
 func (m mockNamespaceCache) AddIndexer(indexName string, indexer generic.Indexer[*corev1.Namespace]) {
 	panic("not implemented")
 }
-
 func (m mockNamespaceCache) GetByIndex(indexName, key string) ([]*corev1.Namespace, error) {
 	panic("not implemented")
 }

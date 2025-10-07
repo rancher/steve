@@ -35,22 +35,20 @@ const (
 	notOp = "!"
 )
 
-var (
-	endsWithBracket     = regexp.MustCompile(`^(.+)\[(.+)]$`)
-	mapK8sOpToRancherOp = map[selection.Operator]sqltypes.Op{
-		selection.Equals:           sqltypes.Eq,
-		selection.DoubleEquals:     sqltypes.Eq,
-		selection.PartialEquals:    sqltypes.Eq,
-		selection.NotEquals:        sqltypes.NotEq,
-		selection.NotPartialEquals: sqltypes.NotEq,
-		selection.In:               sqltypes.In,
-		selection.NotIn:            sqltypes.NotIn,
-		selection.Exists:           sqltypes.Exists,
-		selection.DoesNotExist:     sqltypes.NotExists,
-		selection.LessThan:         sqltypes.Lt,
-		selection.GreaterThan:      sqltypes.Gt,
-	}
-)
+var endsWithBracket = regexp.MustCompile(`^(.+)\[(.+)]$`)
+var mapK8sOpToRancherOp = map[selection.Operator]sqltypes.Op{
+	selection.Equals:           sqltypes.Eq,
+	selection.DoubleEquals:     sqltypes.Eq,
+	selection.PartialEquals:    sqltypes.Eq,
+	selection.NotEquals:        sqltypes.NotEq,
+	selection.NotPartialEquals: sqltypes.NotEq,
+	selection.In:               sqltypes.In,
+	selection.NotIn:            sqltypes.NotIn,
+	selection.Exists:           sqltypes.Exists,
+	selection.DoesNotExist:     sqltypes.NotExists,
+	selection.LessThan:         sqltypes.Lt,
+	selection.GreaterThan:      sqltypes.Gt,
+}
 
 type Cache interface {
 	// ListByOptions returns objects according to the specified list options and partitions.
@@ -202,12 +200,12 @@ func parseNamespaceOrProjectFilters(projOrNS string, op sqltypes.Op) sqltypes.Or
 	projOrNs := strings.Split(projOrNS, ",")
 	if len(projOrNs) > 0 {
 		filters = []sqltypes.Filter{
-			{
+			sqltypes.Filter{
 				Field:   []string{"metadata", "name"},
 				Matches: projOrNs,
 				Op:      op,
 			},
-			{
+			sqltypes.Filter{
 				Field:   []string{"metadata", "labels", projectIDFieldLabel},
 				Matches: projOrNs,
 				Op:      op,
