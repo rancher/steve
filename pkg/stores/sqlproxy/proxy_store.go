@@ -867,6 +867,15 @@ var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 		"status.available.memory":   "REAL",
 		"status.available.pods":     "INT",
 	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
+		"metadata.fields[2]": "INT", // name: Data
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
+		"metadata.fields[1]": "INT", // name: Secrets
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
+		"metadata.fields[1]": "INT", // name: Data
+	},
 }
 
 func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
@@ -884,11 +893,6 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 		if colType == "integer" || colType == "boolean" || ptn.MatchString(td.Description) {
 			//TODO: What do "REAL" (float) types look like?
 			colType = "INT"
-		} else {
-			field1, ok := builtinIntTable[gvk]
-			if ok && field1[trimmedField] {
-				colType = "INT"
-			}
 		}
 		if colType != "string" {
 			// Strip the parts off separately in case t
