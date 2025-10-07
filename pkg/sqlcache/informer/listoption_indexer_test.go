@@ -151,7 +151,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		// create events table
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		// create field table
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" INT`)).Return(nil, nil)
 		// create field table indexes
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
@@ -169,6 +169,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		opts := ListOptionIndexerOptions{
 			Fields:       fields,
+			TypeGuidance: map[string]string{"something": "INT"},
 			IsNamespaced: true,
 		}
 		loi, err := NewListOptionIndexer(context.Background(), store, opts)

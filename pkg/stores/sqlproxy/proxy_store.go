@@ -449,13 +449,13 @@ func getFieldAndColInfo(schema *types.APISchema, gvk schema.GroupVersionKind) ([
 	var fields [][]string
 	columns := attributes.Columns(schema)
 	if columns == nil {
-		return fields, nil, nil
+		return fields, nil, map[string]string{}
 	}
 	colDefs, ok := columns.([]common.ColumnDefinition)
 	if !ok {
 		tableDefs, ok := columns.([]table.Column)
 		if !ok {
-			return fields, nil, nil
+			return fields, nil, map[string]string{}
 		}
 		colDefs = tableColsToCommonCols(tableDefs)
 	}
