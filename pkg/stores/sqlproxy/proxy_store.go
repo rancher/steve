@@ -380,10 +380,9 @@ func (s *Store) initializeNamespaceCache() error {
 	}
 
 	gvk := attributes.GVK(&nsSchema)
-	fields, cols, _ := getFieldAndColInfo(&nsSchema, gvk)
+	fields, cols, typeGuidance := getFieldAndColInfo(&nsSchema, gvk)
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
-	noTypeGuidance := map[string]string{}
 
 	// get the type-specific transform func
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema))
@@ -397,7 +396,7 @@ func (s *Store) initializeNamespaceCache() error {
 		transformFunc,
 		tableClient,
 		gvk,
-		noTypeGuidance,
+		typeGuidance,
 		false,
 		true)
 	if err != nil {
