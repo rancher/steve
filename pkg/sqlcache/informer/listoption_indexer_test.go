@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -2042,12 +2043,17 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 					"memory": memory,
 					"pods":   fmt.Sprintf("%d", podCount),
 				},
-				"requested": map[string]string{
-					"cpu":    fmt.Sprintf("%d", cpuCountAvailable),
-					"memory": memory,
-					"pods":   fmt.Sprintf("%d", podCountAvailable),
-				},
 			},
+		}
+		lastDigit := name[len(name)-1:]
+		val, err := strconv.Atoi(lastDigit)
+		if err == nil && val%2 == 1 {
+			newMap := map[string]string{"cpu": fmt.Sprintf("%d", cpuCountAvailable),
+				"memory": memory,
+				"pods":   fmt.Sprintf("%d", podCountAvailable),
+			}
+			statusMap := h1["status"].(map[string]any)
+			statusMap["requested"] = any(newMap)
 		}
 		return h1
 	}
@@ -2145,7 +2151,39 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				[]sqltypes.Filter{
 					{
 						Field:   []string{"status", "allocatable", "memory"},
-						Matches: []string{"8388608"},
+						Matches: []string{"8M"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj04),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "sorting on memory does a naive ascii sort",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"status", "allocatable", "memory"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList:  makeList(t, obj01, obj08, obj02, obj05, obj03, obj07, obj06, obj04),
+		expectedTotal: len(allObjects),
+	})
+	tests = append(tests, testCase{
+		description: "filtering on available pod-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "available", "pods"},
+						Matches: []string{"24"},
 						Op:      sqltypes.Eq,
 					},
 				},
@@ -2156,21 +2194,22 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		expectedTotal: 1,
 	})
 	tests = append(tests, testCase{
-		description: "sorting on memory works",
-		listOptions: sqltypes.ListOptions{
-			SortList: sqltypes.SortList{
-				SortDirectives: []sqltypes.Sort{
+		description: "filtering on available cpu-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
 					{
-						Fields: []string{"spec", "rules", "0", "host"},
-						Order:  sqltypes.ASC,
+						Field:   []string{"status", "available", "cpu"},
+						Matches: []string{"1", "3"},
+						Op:      sqltypes.In,
 					},
 				},
 			},
 		},
-		expectedList:  makeList(t, obj04, obj03, obj01, obj02),
-		expectedTotal: len(allObjects),
+		},
+		expectedList:  makeList(t, obj07, obj05),
+		expectedTotal: 2,
 	})
-	t.Parallel()
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -2191,6 +2230,11 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+			//if test.description == "filtering on available pod-count works" {
+			//	fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
+			//} else {
+			//	defer cleanTempFiles(dbPath)
+			//}
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -2199,6 +2243,9 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
+			//if test.description == "filtering on available pod-count works" {
+			//	fmt.Println("QQQ: stop here")
+			//}
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)

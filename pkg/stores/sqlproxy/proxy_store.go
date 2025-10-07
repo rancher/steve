@@ -834,18 +834,6 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-var builtinIntTable = map[schema.GroupVersionKind]map[string]bool{
-	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
-		"metadata.fields[2]": true, // name: Data
-	},
-	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
-		"metadata.fields[1]": true, // name: Secrets
-	},
-	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
-		"metadata.fields[1]": true, // name: Data
-	},
-}
-
 var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
 		"status.allocatable.cpu":    "INT",
@@ -854,6 +842,15 @@ var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 		"status.available.cpu":      "INT",
 		"status.available.memory":   "REAL",
 		"status.available.pods":     "INT",
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
+		"metadata.fields[2]": "INT", // name: Data
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
+		"metadata.fields[1]": "INT", // name: Secrets
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
+		"metadata.fields[1]": "INT", // name: Data
 	},
 }
 
@@ -870,17 +867,8 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 		trimmedField := strings.TrimPrefix(col.Field, "$")
 		trimmedField = strings.TrimPrefix(trimmedField, ".")
 		if colType == "integer" || colType == "boolean" || ptn.MatchString(td.Description) {
+			//TODO: What do "REAL" (float) types look like?
 			colType = "INT"
-		} else {
-			field1, ok := builtinIntTable[gvk]
-			if ok && field1[trimmedField] {
-				colType = "INT"
-			}
-		} else {
-			field1, ok := builtinIntTable[gvk]
-			if ok && field1[trimmedField] {
-				colType = "INT"
-			}
 		}
 		if colType != "string" {
 			// Strip the parts off separately in case t
