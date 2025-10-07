@@ -204,10 +204,9 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	go func() {
 		select {
 		case <-ctx.Done():
-			close(waitCh)
 		case <-gi.ctx.Done():
-			close(waitCh)
 		}
+		close(waitCh)
 	}()
 
 	if !cache.WaitForCacheSync(waitCh, gi.informer.HasSynced) {
