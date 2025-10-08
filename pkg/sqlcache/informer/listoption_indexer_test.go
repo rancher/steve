@@ -1242,7 +1242,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				fmt.Println("Stop here")
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, namespaceList)
-
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -1260,7 +1259,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-
 			assert.Nil(t, err)
 
 			assert.Equal(t, test.expectedTotal, total)
