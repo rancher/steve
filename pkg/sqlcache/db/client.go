@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rancher/steve/pkg/sqlcache/db/logging"
+
 	"github.com/sirupsen/logrus"
 
 	// needed for drivers
@@ -34,6 +36,9 @@ const (
 	InformerObjectCacheDBPath     = InformerObjectCacheDBPathRoot + ".db"
 
 	informerObjectCachePerms fs.FileMode = 0o600
+
+	debugQueryLogPathEnvVar           = "CATTLE_DEBUG_QUERY_LOG"
+	debugQueryIncludeParamsPathEnvVar = "CATTLE_DEBUG_QUERY_INCLUDE_PARAMS"
 )
 
 // Client defines a database client that provides encrypting, decrypting, and database resetting
@@ -80,7 +85,7 @@ func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTra
 		return fmt.Errorf("begin tx: %w", err)
 	}
 
-	if err = f(NewTxClient(tx)); err != nil {
+	if err = f(NewTxClient(tx, WithQueryLogger(c.queryLogger))); err != nil {
 		rerr := c.rollback(ctx, tx)
 		return errors.Join(err, rerr)
 	}
@@ -119,6 +124,8 @@ type client struct {
 	connLock  sync.RWMutex
 	encryptor Encryptor
 	decryptor Decryptor
+
+	queryLogger logging.QueryLogger
 }
 
 // Connection represents a connection pool.
@@ -158,7 +165,7 @@ type Decryptor interface {
 }
 
 // NewClient returns a client and the path to the database. If the given connection is nil then a default one will be created.
-func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool) (Client, string, error) {
+func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool) (Client, string, error) {
 	client := &client{
 		encryptor: encryptor,
 		decryptor: decryptor,
@@ -171,6 +178,12 @@ func NewClient(c Connection, encryptor Encryptor, decryptor Decryptor, useTempDi
 	if err != nil {
 		return nil, "", err
 	}
+
+	logger, err := logging.StartQueryLogger(ctx, os.Getenv(debugQueryLogPathEnvVar), os.Getenv(debugQueryIncludeParamsPathEnvVar) == "true")
+	if err != nil {
+		return nil, "", fmt.Errorf("starting query logger: %w", err)
+	}
+	client.queryLogger = logger
 
 	return client, dbPath, nil
 }

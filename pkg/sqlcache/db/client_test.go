@@ -24,6 +24,7 @@ type testStoreObject struct {
 }
 
 func TestNewClient(t *testing.T) {
+	ctx := t.Context()
 	type testCase struct {
 		description string
 		test        func(t *testing.T)
@@ -41,7 +42,7 @@ func TestNewClient(t *testing.T) {
 			encryptor: e,
 			decryptor: d,
 		}
-		client, _, err := NewClient(c, e, d, false)
+		client, _, err := NewClient(ctx, c, e, d, false)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedClient, client)
 	},
@@ -579,7 +580,7 @@ func SetupMockRows(t *testing.T) *MockRows {
 func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) Client {
 	t.Helper()
 	// No need to specify temp dir for this client because the connection is mocked
-	c, _, err := NewClient(connection, encryptor, decryptor, false)
+	c, _, err := NewClient(t.Context(), connection, encryptor, decryptor, false)
 	if err != nil {
 		t.Fatal(err)
 	}

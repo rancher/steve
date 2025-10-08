@@ -39,7 +39,7 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		return nil, "", err
 	}
 
-	db, dbPath, err := db.NewClient(nil, m, m, true)
+	db, dbPath, err := db.NewClient(ctx, nil, m, m, true)
 	if err != nil {
 		return nil, "", err
 	}
