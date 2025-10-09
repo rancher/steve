@@ -1362,6 +1362,21 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 			expectedListAscObjs:  []map[string]any{obj01, obj11, obj05},
 			expectedListDescObjs: []map[string]any{obj05, obj11, obj01},
 		})
+	// This is what's going on with the sorting on a non-numeric value stored as an INT:
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" from _v1_ConfigMap_fields order by "metadata.favoriteFruit";
+	//obj05|130raspberries
+	//obj01|14banana
+	//obj11|9lime
+
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields order by "metadata.favoriteFruit";
+	//obj05|131
+	//obj01|15
+	//obj11|10
+
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields order by "metadata.favoriteFruit" + 1;
+	//obj11|10
+	//obj01|15
+	//obj05|131
 	tests = append(tests,
 		testCase{description: "TestNewListOptionIndexerTypeGuidance() with type-guidance as int on a non-number sorts as string",
 			opts: ListOptionIndexerOptions{
