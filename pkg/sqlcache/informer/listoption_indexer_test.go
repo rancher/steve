@@ -1197,7 +1197,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		// setting resource version on unstructured list
 		expectedList: func() *unstructured.UnstructuredList {
 			list := makeList(t)
-			list.SetResourceVersion("10000")
+			list.SetResourceVersion("9999")
 			return list
 		}(),
 		expectedTotal:     0,
