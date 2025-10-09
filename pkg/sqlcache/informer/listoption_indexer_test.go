@@ -1187,7 +1187,25 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "ListByOptions() with listOptions.Revision set to lower or equal than latestRV should work",
+		description: "ListByOptions() with listOptions.Revision set equals to latestRV should work",
+		listOptions: sqltypes.ListOptions{
+			Revision: "9999",
+		},
+		latestRV:   "9999",
+		partitions: []partition.Partition{},
+		ns:         "",
+		// setting resource version on unstructured list
+		expectedList: func() *unstructured.UnstructuredList {
+			list := makeList(t)
+			list.SetResourceVersion("10000")
+			return list
+		}(),
+		expectedTotal:     0,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with listOptions.Revision set to lower than latestRV should work",
 		listOptions: sqltypes.ListOptions{
 			Revision: "9999",
 		},
