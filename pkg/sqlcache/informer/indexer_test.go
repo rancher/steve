@@ -63,7 +63,6 @@ func TestNewIndexer(t *testing.T) {
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any())
 		store.EXPECT().Prepare(fmt.Sprintf(deleteIndicesFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(dropIndicesFmt, storeName))
-		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listByIndexFmt, storeName, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listKeyByIndexFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listIndexValuesFmt, storeName))
@@ -184,6 +183,7 @@ func TestAfterUpsert(t *testing.T) {
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(ctrl)
 		addIndexStmt := NewMockStmt(ctrl)
+		dbName := "name"
 		indexer := &Indexer{
 			ctx:   context.Background(),
 			Store: store,
@@ -191,13 +191,18 @@ func TestAfterUpsert(t *testing.T) {
 				"a": func(obj interface{}) ([]string, error) {
 					return []string{objKey}, nil
 				},
+				"b": func(obj interface{}) ([]string, error) {
+					return []string{objKey}, nil
+				},
 			},
 		}
 		key := "somekey"
 		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
 		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
-		client.EXPECT().Stmt(indexer.addIndexStmt).Return(addIndexStmt)
-		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, nil)
+		store.EXPECT().GetName().Return(dbName)
+		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?), (?, ?, ?)")).Return(addIndexStmt)
+		client.EXPECT().Stmt(addIndexStmt).Return(addIndexStmt)
+		addIndexStmt.EXPECT().Exec("a", objKey, key, "b", objKey, key).Return(nil, nil)
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.Nil(t, err)
@@ -232,6 +237,7 @@ func TestAfterUpsert(t *testing.T) {
 		deleteIndicesStmt := NewMockStmt(ctrl)
 		addIndexStmt := NewMockStmt(ctrl)
 		objKey := "key"
+		dbName := "name"
 		indexer := &Indexer{
 			ctx:   context.Background(),
 			Store: store,
@@ -244,7 +250,9 @@ func TestAfterUpsert(t *testing.T) {
 		key := "somekey"
 		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
 		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
-		client.EXPECT().Stmt(indexer.addIndexStmt).Return(addIndexStmt)
+		store.EXPECT().GetName().Return(dbName)
+		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?)")).Return(addIndexStmt)
+		client.EXPECT().Stmt(addIndexStmt).Return(addIndexStmt)
 		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, fmt.Errorf("error"))
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
