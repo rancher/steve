@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
-	watch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -1262,7 +1262,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, namespaceList)
 			defer cleanTempFiles(dbPath)
-			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
 				err = loi.Add(&item)
@@ -1283,6 +1282,139 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
+func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
+	obj01 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj01",
+			"namespace":        "ns-a",
+			"someNumericValue": "1",
+			"favoriteFruit":    "14banana",
+		},
+	}
+	obj05 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj05",
+			"namespace":        "ns-a",
+			"someNumericValue": "5",
+			"favoriteFruit":    "130raspberries",
+		},
+	}
+	obj11 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj11",
+			"namespace":        "ns-a",
+			"someNumericValue": "11",
+			"favoriteFruit":    "9lime",
+		},
+	}
+	// construct the source list so it isn't sorted either ASC or DESC
+	allObjects := []map[string]any{
+		obj01,
+		obj11,
+		obj05,
+	}
+	ns_a := map[string]any{
+		"metadata": map[string]any{
+			"name": "ns-a",
+		},
+	}
+
+	itemList := makeList(t, allObjects...)
+	namespaceList := makeList(t, ns_a)
+	fields := [][]string{
+		{"metadata", "someNumericValue"},
+		{"metadata", "favoriteFruit"},
+	}
+	type testCase struct {
+		description          string
+		opts                 ListOptionIndexerOptions
+		sortFields           []string
+		expectedListAscObjs  []map[string]any
+		expectedListDescObjs []map[string]any
+	}
+
+	var tests []testCase
+	tests = append(tests,
+		testCase{
+			description: "TestNewListOptionIndexerTypeGuidance() with type-guidance sorts numerically",
+			opts: ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+				TypeGuidance: map[string]string{
+					"metadata.someNumericValue": "INT",
+				},
+			},
+			sortFields:           []string{"metadata", "someNumericValue"},
+			expectedListAscObjs:  []map[string]any{obj01, obj05, obj11},
+			expectedListDescObjs: []map[string]any{obj11, obj05, obj01},
+		})
+	tests = append(tests,
+		testCase{description: "TestNewListOptionIndexerTypeGuidance() without type-guidance sorts as strings",
+			opts: ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			},
+			sortFields:           []string{"metadata", "someNumericValue"},
+			expectedListAscObjs:  []map[string]any{obj01, obj11, obj05},
+			expectedListDescObjs: []map[string]any{obj05, obj11, obj01},
+		})
+	tests = append(tests,
+		testCase{description: "TestNewListOptionIndexerTypeGuidance() with type-guidance as int on a non-number sorts as string",
+			opts: ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+				TypeGuidance: map[string]string{
+					"metadata.favoriteFruit": "INT",
+				},
+			},
+			sortFields:           []string{"metadata", "favoriteFruit"},
+			expectedListAscObjs:  []map[string]any{obj05, obj01, obj11},
+			expectedListDescObjs: []map[string]any{obj11, obj01, obj05},
+		})
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			loi, dbPath, err := makeListOptionIndexer(t.Context(), test.opts, false, namespaceList)
+			defer cleanTempFiles(dbPath)
+			require.NoError(t, err)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				require.NoError(t, err)
+			}
+
+			expectedList := makeList(t, test.expectedListAscObjs...)
+			list, total, _, err := loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
+				SortList: sqltypes.SortList{
+					SortDirectives: []sqltypes.Sort{
+						{
+							Fields: test.sortFields,
+							Order:  sqltypes.ASC,
+						},
+					},
+				},
+			}, []partition.Partition{{All: true}}, "")
+			require.NoError(t, err)
+			assert.Equal(t, 3, total)
+			assert.Equal(t, expectedList, list)
+
+			expectedList = makeList(t, test.expectedListDescObjs...)
+			list, total, _, err = loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
+				SortList: sqltypes.SortList{
+					SortDirectives: []sqltypes.Sort{
+						{
+							Fields: test.sortFields,
+							Order:  sqltypes.DESC,
+						},
+					},
+				},
+			}, []partition.Partition{{All: true}}, "")
+			require.NoError(t, err)
+			assert.Equal(t, 3, total)
+			assert.Equal(t, expectedList, list)
 		})
 	}
 }
