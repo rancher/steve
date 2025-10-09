@@ -224,6 +224,7 @@ var (
 	}
 	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
+	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v3", Kind: "Cluster"}
 	namespaceProjectLabelDep = sqltypes.ExternalLabelDependency{
 		SourceGVK:            gvkKey("", "v1", "Namespace"),
 		SourceLabelName:      "field.cattle.io/projectId",
@@ -236,11 +237,36 @@ var (
 		ExternalDependencies:      nil,
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
 	}
+
+	// Now sort provisioned.cattle.io.clusters based on their associated mgmt.cattle.io spec values
+	// We might need to pull in the `memoryRaw` fields as well
+	// Remember to index these fields in the database.
+	provisionedClusterDependencies = func() []sqltypes.ExternalDependency {
+		x := make([]sqltypes.ExternalDependency, 6)
+		for i, field := range []string{"status.allocatable.cpu", "status.allocatable.memory", "status.allocatable.pods", "status.available.cpu", "status.available.memory", "status.available.pods"} {
+			x[i] = sqltypes.ExternalDependency{
+				SourceGVK:            gvkKey("provisioning.cattle.io", "v3", "Cluster"),
+				SourceFieldName:      "status.clusterName",
+				TargetGVK:            gvkKey("management.cattle.io", "v3", "Cluster"),
+				TargetKeyFieldName:   "id",
+				TargetFinalFieldName: field,
+			}
+		}
+		return x
+	}()
+	pcioClusterUpdates = sqltypes.ExternalGVKUpdates{
+		AffectedGVK:               pcioClusterGvk,
+		ExternalDependencies:      provisionedClusterDependencies,
+		ExternalLabelDependencies: nil,
+	}
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
 		mcioProjectGvk: &namespaceUpdates,
+		pcioClusterGvk: &pcioClusterUpdates,
 	}
+	// When a namespace is updated, we need to pull in changes from mcio into the namespaces table
 	selfGVKDependencies = sqltypes.ExternalGVKDependency{
-		namespaceGVK: &namespaceUpdates,
+		namespaceGVK:   &namespaceUpdates,
+		pcioClusterGvk: &pcioClusterUpdates,
 	}
 )
 
