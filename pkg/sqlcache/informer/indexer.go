@@ -26,7 +26,7 @@ const (
 			key TEXT NOT NULL REFERENCES "%[1]s"(key) ON DELETE CASCADE,
 			PRIMARY KEY (name, value, key)
         )`
-	createIndexFmt = `CREATE INDEX IF NOT EXISTS "%[1]s_indices_index" ON "%[1]s_indices"(name, value)`
+	createIndexFmt = `CREATE INDEX IF NOT EXISTS "%[1]s_indices_key_fk_index" ON "%[1]s_indices"(key)`
 
 	deleteIndicesFmt = `DELETE FROM "%s_indices" WHERE key = ?`
 	dropIndicesFmt   = `DROP TABLE IF EXISTS "%s_indices"`
