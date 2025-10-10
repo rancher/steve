@@ -298,7 +298,7 @@ func (s *Store) GetByKey(key string) (item any, exists bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	result, err := s.ReadObjects(rows, s.typ, s.shouldEncrypt)
+	result, err := s.ReadObjects(rows, s.typ)
 	if err != nil {
 		return nil, false, err
 	}
@@ -320,9 +320,13 @@ func (s *Store) Add(obj any) error {
 	if err != nil {
 		return err
 	}
+	serialized, err := s.Serialize(obj, s.shouldEncrypt)
+	if err != nil {
+		return err
+	}
 
 	err = s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
-		if err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt); err != nil {
+		if err := s.Upsert(tx, s.upsertStmt, key, serialized); err != nil {
 			return err
 		}
 		return s.runAfterAdd(key, obj, tx)
@@ -341,12 +345,15 @@ func (s *Store) Update(obj any) error {
 	if err != nil {
 		return err
 	}
+	serialized, err := s.Serialize(obj, s.shouldEncrypt)
+	if err != nil {
+		return err
+	}
 
 	err = s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
-		if err := s.Upsert(tx, s.upsertStmt, key, obj, s.shouldEncrypt); err != nil {
+		if err := s.Upsert(tx, s.upsertStmt, key, serialized); err != nil {
 			return err
 		}
-
 		return s.runAfterUpdate(key, obj, tx)
 	})
 	if err != nil {
@@ -378,7 +385,7 @@ func (s *Store) List() []any {
 	if err != nil {
 		panic(err)
 	}
-	result, err := s.ReadObjects(rows, s.typ, s.shouldEncrypt)
+	result, err := s.ReadObjects(rows, s.typ)
 	if err != nil {
 		panic(fmt.Errorf("error in Store.List: %w", err))
 	}
@@ -433,6 +440,14 @@ func (s *Store) Replace(objects []any, _ string) error {
 
 // replaceByKey will delete the contents of the Store, using instead the given key to obj map
 func (s *Store) replaceByKey(objects map[string]any) error {
+	serializedObjects := make(map[string]db.SerializedObject, len(objects))
+	for key, value := range objects {
+		serialized, err := s.Serialize(value, s.shouldEncrypt)
+		if err != nil {
+			return err
+		}
+		serializedObjects[key] = serialized
+	}
 	return s.WithTransaction(s.ctx, true, func(txC db.TxClient) error {
 		if _, err := txC.Stmt(s.deleteAllStmt).Exec(); err != nil {
 			return err
@@ -443,7 +458,7 @@ func (s *Store) replaceByKey(objects map[string]any) error {
 		}
 
 		for key, obj := range objects {
-			if err := s.Upsert(txC, s.upsertStmt, key, obj, s.shouldEncrypt); err != nil {
+			if err := s.Upsert(txC, s.upsertStmt, key, serializedObjects[key]); err != nil {
 				return err
 			}
 			if err := s.runAfterAdd(key, obj, txC); err != nil {

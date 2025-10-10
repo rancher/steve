@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -22,10 +21,10 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/db/logging"
 
 	"github.com/sirupsen/logrus"
+	"modernc.org/sqlite"
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
-	sqlite "modernc.org/sqlite"
 )
 
 const (
@@ -46,14 +45,14 @@ type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
 	Prepare(stmt string) Stmt
 	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error)
-	ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error)
+	ReadObjects(rows Rows, typ reflect.Type) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
-	Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error
+	Upsert(tx TxClient, stmt Stmt, key string, obj SerializedObject) error
 	NewConnection(isTemp bool) (string, error)
-	Encryptor() Encryptor
-	Decryptor() Decryptor
+	Serialize(obj any, encrypt bool) (SerializedObject, error)
+	Deserialize(SerializedObject, any) error
 }
 
 // WithTransaction runs f within a transaction.
@@ -124,6 +123,7 @@ type client struct {
 	connLock  sync.RWMutex
 	encryptor Encryptor
 	decryptor Decryptor
+	encoding  encoding
 
 	queryLogger logging.QueryLogger
 }
@@ -164,11 +164,17 @@ type Decryptor interface {
 	Decrypt([]byte, []byte, uint32) ([]byte, error)
 }
 
+type ClientOption func(*client)
+
 // NewClient returns a client and the path to the database. If the given connection is nil then a default one will be created.
-func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool) (Client, string, error) {
+func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool, opts ...ClientOption) (Client, string, error) {
 	client := &client{
 		encryptor: encryptor,
 		decryptor: decryptor,
+		encoding:  defaultEncoding,
+	}
+	for _, o := range opts {
+		o(client)
 	}
 	if c != nil {
 		client.conn = c
@@ -213,21 +219,21 @@ func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Ro
 
 // ReadObjects Scans the given rows, performs any necessary decryption, converts the data to objects of the given type,
 // and returns a slice of those objects.
-func (c *client) ReadObjects(rows Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error) {
+func (c *client) ReadObjects(rows Rows, typ reflect.Type) ([]any, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
 	var result []any
 	for rows.Next() {
-		data, err := c.decryptScan(rows, shouldDecrypt)
+		row, err := c.readRow(rows)
 		if err != nil {
 			return nil, closeRowsOnError(rows, err)
 		}
-		singleResult, err := fromBytes(data, typ)
-		if err != nil {
+		dest := reflect.New(typ.Elem()).Interface()
+		if err := c.Deserialize(row, dest); err != nil {
 			return nil, closeRowsOnError(rows, err)
 		}
-		result = append(result, singleResult.Elem().Interface())
+		result = append(result, dest)
 	}
 	err := rows.Err()
 	if err != nil {
@@ -326,67 +332,66 @@ func (c *client) ReadInt(rows Rows) (int, error) {
 	return result, nil
 }
 
-func (c *client) decryptScan(rows Rows, shouldDecrypt bool) ([]byte, error) {
-	var data, dataNonce sql.RawBytes
-	var kid uint32
-	err := rows.Scan(&data, &dataNonce, &kid)
-	if err != nil {
-		return nil, err
+type SerializedObject struct {
+	Bytes sql.RawBytes
+	// only set if encrypted
+	Nonce sql.RawBytes
+	KeyID uint32
+}
+
+func (s SerializedObject) encrypted() bool {
+	return len(s.Nonce) > 0
+}
+
+func (c *client) readRow(rows Rows) (SerializedObject, error) {
+	var obj SerializedObject
+	if err := rows.Scan(&obj.Bytes, &obj.Nonce, &obj.KeyID); err != nil {
+		return SerializedObject{}, err
 	}
-	if c.decryptor != nil && shouldDecrypt {
-		decryptedData, err := c.decryptor.Decrypt(data, dataNonce, kid)
-		if err != nil {
-			return nil, err
-		}
-		return decryptedData, nil
-	}
-	return data, nil
+	return obj, nil
 }
 
-// Upsert executes an upsert statement encrypting arguments if necessary
-// note the statement should have 4 parameters: key, objBytes, dataNonce, kid
-func (c *client) Upsert(tx TxClient, stmt Stmt, key string, obj any, shouldEncrypt bool) error {
-	objBytes := toBytes(obj)
-	var dataNonce []byte
-	var err error
-	var kid uint32
-	if c.encryptor != nil && shouldEncrypt {
-		objBytes, dataNonce, kid, err = c.encryptor.Encrypt(objBytes)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = tx.Stmt(stmt).Exec(key, objBytes, dataNonce, kid)
-	return err
-}
-
-func (c *client) Encryptor() Encryptor {
-	return c.encryptor
-}
-
-func (c *client) Decryptor() Decryptor {
-	return c.decryptor
-}
-
-// toBytes encodes an object to a byte slice
-func toBytes(obj any) []byte {
+func (c *client) Serialize(obj any, encrypt bool) (SerializedObject, error) {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(obj)
-	if err != nil {
-		panic(fmt.Errorf("error while gobbing object: %w", err))
+	if err := c.encoding.Encode(&buf, obj); err != nil {
+		return SerializedObject{}, err
 	}
-	bb := buf.Bytes()
-	return bb
+
+	if !encrypt {
+		return SerializedObject{Bytes: buf.Bytes()}, nil
+	}
+
+	if c.encryptor == nil {
+		return SerializedObject{}, fmt.Errorf("cannot encrypt object object without encryptor")
+	}
+	data, nonce, kid, err := c.encryptor.Encrypt(buf.Bytes())
+	if err != nil {
+		return SerializedObject{}, err
+	}
+
+	return SerializedObject{Bytes: data, Nonce: nonce, KeyID: kid}, nil
 }
 
-// fromBytes decodes an object from a byte slice
-func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
-	dec := gob.NewDecoder(bytes.NewReader(buf))
-	singleResult := reflect.New(typ)
-	err := dec.DecodeValue(singleResult)
-	return singleResult, err
+func (c *client) Deserialize(serialized SerializedObject, dest any) error {
+	if !serialized.encrypted() {
+		return c.encoding.Decode(bytes.NewReader(serialized.Bytes), dest)
+	}
+
+	if c.encryptor == nil {
+		return fmt.Errorf("cannot deserialize encrypted object without decryptor")
+	}
+	data, err := c.decryptor.Decrypt(serialized.Bytes, serialized.Nonce, serialized.KeyID)
+	if err != nil {
+		return err
+	}
+	return c.encoding.Decode(bytes.NewReader(data), dest)
+}
+
+// Upsert executes an upsert statement
+// note the statement should have 4 parameters: key, objBytes, dataNonce, kid
+func (c *client) Upsert(tx TxClient, stmt Stmt, key string, serialized SerializedObject) error {
+	_, err := tx.Stmt(stmt).Exec(key, serialized.Bytes, serialized.Nonce, serialized.KeyID)
+	return err
 }
 
 // closeRowsOnError closes the sql.Rows object and wraps errors if needed

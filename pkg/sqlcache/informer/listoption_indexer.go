@@ -1,14 +1,12 @@
 package informer
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"maps"
-	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -341,30 +339,19 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		defer rows.Close()
 
 		for rows.Next() {
-			typ, buf, err := l.decryptScanEvent(rows)
+			obj := &unstructured.Unstructured{}
+			eventType, err := l.decryptScanEvent(rows, obj)
 			if err != nil {
 				return fmt.Errorf("scanning event row: %w", err)
 			}
-
-			example := &unstructured.Unstructured{}
-			val, err := fromBytes(buf, reflect.TypeOf(example))
-			if err != nil {
-				return fmt.Errorf("decoding event object: %w", err)
-			}
-
-			obj, ok := val.Elem().Interface().(runtime.Object)
-			if !ok {
-				continue
-			}
-
 			filter := opts.Filter
 			if !matchFilter(filter.ID, filter.Namespace, filter.Selector, obj) {
 				continue
 			}
 
 			events = append(events, watch.Event{
-				Type:   watch.EventType(typ),
-				Object: val.Elem().Interface().(runtime.Object),
+				Type:   eventType,
+				Object: obj,
 			})
 		}
 
@@ -393,40 +380,17 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	return nil
 }
 
-func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows) (watch.EventType, []byte, error) {
+func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) (watch.EventType, error) {
 	var typ, rv string
-	var event, eventNonce sql.RawBytes
-	var kid uint32
-	err := rows.Scan(&typ, &rv, &event, &eventNonce, &kid)
-	if err != nil {
-		return watch.Error, nil, err
+	var serialized db.SerializedObject
+	if err := rows.Scan(&typ, &rv, &serialized.Bytes, &serialized.Nonce, &serialized.KeyID); err != nil {
+		return watch.Error, err
 	}
-	if l.Decryptor() != nil && l.GetShouldEncrypt() {
-		decryptedData, err := l.Decryptor().Decrypt(event, eventNonce, kid)
-		if err != nil {
-			return watch.Error, nil, err
-		}
-		return watch.EventType(typ), decryptedData, nil
-	}
-	return watch.EventType(typ), event, nil
-}
+	if err := l.Deserialize(serialized, into); err != nil {
+		return watch.Error, err
 
-func toBytes(obj any) []byte {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(obj)
-	if err != nil {
-		panic(fmt.Errorf("error while gobbing object: %w", err))
 	}
-	bb := buf.Bytes()
-	return bb
-}
-
-func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
-	dec := gob.NewDecoder(bytes.NewReader(buf))
-	singleResult := reflect.New(typ)
-	err := dec.DecodeValue(singleResult)
-	return singleResult, err
+	return watch.EventType(typ), nil
 }
 
 type watchKey struct {
@@ -519,18 +483,11 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 }
 
 func (l *ListOptionIndexer) upsertEvent(tx db.TxClient, eventType watch.EventType, latestRV string, obj any) error {
-	objBytes := toBytes(obj)
-	var dataNonce []byte
-	var err error
-	var kid uint32
-	if l.Encryptor() != nil && l.GetShouldEncrypt() {
-		objBytes, dataNonce, kid, err = l.Encryptor().Encrypt(objBytes)
-		if err != nil {
-			return err
-		}
+	serialized, err := l.Serialize(obj, l.GetShouldEncrypt())
+	if err != nil {
+		return err
 	}
-
-	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, objBytes, dataNonce, kid)
+	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, serialized.Bytes, serialized.Nonce, serialized.KeyID)
 	return err
 }
 
@@ -891,7 +848,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		}
 		elapsed := time.Since(now)
 		logLongQuery(elapsed, queryInfo.query, queryInfo.params)
-		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
+		items, err = l.ReadObjects(rows, l.GetType())
 		if err != nil {
 			return fmt.Errorf("read objects: %w", err)
 		}
