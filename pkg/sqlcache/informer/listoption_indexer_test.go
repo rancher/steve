@@ -8,6 +8,7 @@ package informer
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"math"
@@ -2296,6 +2297,8 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		return h1
 	}
 	ctx := context.Background()
+	gob.Register(map[string]string{})
+	//gob.Register([]interface{}{})
 
 	type testCase struct {
 		description string
