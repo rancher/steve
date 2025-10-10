@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -11,8 +12,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Mocks for this test are generated with the following command.
@@ -24,6 +29,7 @@ type testStoreObject struct {
 }
 
 func TestNewClient(t *testing.T) {
+	ctx := t.Context()
 	type testCase struct {
 		description string
 		test        func(t *testing.T)
@@ -40,8 +46,9 @@ func TestNewClient(t *testing.T) {
 			conn:      c,
 			encryptor: e,
 			decryptor: d,
+			encoding:  defaultEncoding,
 		}
-		client, _, err := NewClient(c, e, d, false)
+		client, _, err := NewClient(ctx, c, e, d, false)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedClient, client)
 	},
@@ -97,8 +104,9 @@ func TestQueryObjects(t *testing.T) {
 
 	var tests []testCase
 
-	testObject := testStoreObject{Id: "something", Val: "a"}
+	testObject := &testStoreObject{Id: "something", Val: "a"}
 	var keyId uint32 = math.MaxUint32
+	fmt.Println(reflect.TypeOf(testObject).Name())
 
 	// Tests with shouldEncryptSet to false
 	tests = append(tests, testCase{description: "Query objects, with one row, and no errors", test: func(t *testing.T) {
@@ -117,7 +125,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		items, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		items, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.Nil(t, err)
 		assert.Equal(t, 1, len(items))
 	},
@@ -137,7 +145,7 @@ func TestQueryObjects(t *testing.T) {
 		d.EXPECT().Decrypt(toBytes(testObject), toBytes(testObject), keyId).Return(nil, fmt.Errorf("error"))
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		_, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.NotNil(t, err)
 	},
 	})
@@ -150,7 +158,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Scan(gomock.Any()).Return(fmt.Errorf("error"))
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		_, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.NotNil(t, err)
 	},
 	})
@@ -170,7 +178,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(fmt.Errorf("error"))
 		client := SetupClient(t, c, e, d)
-		_, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.NotNil(t, err)
 	},
 	})
@@ -183,7 +191,7 @@ func TestQueryObjects(t *testing.T) {
 		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
-		items, err := client.ReadObjects(r, reflect.TypeOf(testObject), true)
+		items, err := client.ReadObjects(r, reflect.TypeOf(testObject))
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(items))
 	},
@@ -396,8 +404,10 @@ func TestUpsert(t *testing.T) {
 
 	var tests []testCase
 
-	testObject := testStoreObject{Id: "something", Val: "a"}
-	var keyID uint32 = 5
+	testObjectBytes := []byte("objbytes")
+	testNonce := []byte("nonce")
+	keyID := uint32(5)
+	serialized := SerializedObject{Bytes: testObjectBytes, Nonce: testNonce, KeyID: keyID}
 
 	// Tests with shouldEncryptSet to true
 	tests = append(tests, testCase{description: "Upsert() with no errors", test: func(t *testing.T) {
@@ -408,27 +418,10 @@ func TestUpsert(t *testing.T) {
 		client := SetupClient(t, c, e, d)
 		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
-		testObjBytes := toBytes(testObject)
-		testByteValue := []byte("something")
-		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
 		txC.EXPECT().Stmt(stmt).Return(stmt)
-		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, nil)
-		err := client.Upsert(txC, stmt, "somekey", testObject, true)
-		assert.Nil(t, err)
-	},
-	})
-	tests = append(tests, testCase{description: "Upsert() with Encrypt() error", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-
-		client := SetupClient(t, c, e, d)
-		txC := NewMockTxClient(gomock.NewController(t))
-		sqlStmt := &stmt{}
-		testObjBytes := toBytes(testObject)
-		e.EXPECT().Encrypt(testObjBytes).Return(nil, nil, uint32(0), fmt.Errorf("error"))
-		err := client.Upsert(txC, sqlStmt, "somekey", testObject, true)
-		assert.NotNil(t, err)
+		stmt.EXPECT().Exec("somekey", testObjectBytes, testNonce, keyID).Return(nil, nil)
+		err := client.Upsert(txC, stmt, "somekey", serialized)
+		assert.NoError(t, err)
 	},
 	})
 	tests = append(tests, testCase{description: "Upsert() with StmtExec() error", test: func(t *testing.T) {
@@ -439,29 +432,11 @@ func TestUpsert(t *testing.T) {
 		client := SetupClient(t, c, e, d)
 		txC := NewMockTxClient(gomock.NewController(t))
 		stmt := NewMockStmt(gomock.NewController(t))
-		testObjBytes := toBytes(testObject)
-		testByteValue := []byte("something")
-		e.EXPECT().Encrypt(testObjBytes).Return(testByteValue, testByteValue, keyID, nil)
 		txC.EXPECT().Stmt(stmt).Return(stmt)
-		stmt.EXPECT().Exec("somekey", testByteValue, testByteValue, keyID).Return(nil, fmt.Errorf("error"))
-		err := client.Upsert(txC, stmt, "somekey", testObject, true)
-		assert.NotNil(t, err)
-	},
-	})
-	tests = append(tests, testCase{description: "Upsert() with no errors and shouldEncrypt false", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		d := SetupMockDecryptor(t)
-		e := SetupMockEncryptor(t)
+		stmt.EXPECT().Exec("somekey", testObjectBytes, testNonce, keyID).Return(nil, fmt.Errorf("error"))
 
-		client := SetupClient(t, c, e, d)
-		txC := NewMockTxClient(gomock.NewController(t))
-		stmt := NewMockStmt(gomock.NewController(t))
-		var testByteValue []byte
-		testObjBytes := toBytes(testObject)
-		txC.EXPECT().Stmt(stmt).Return(stmt)
-		stmt.EXPECT().Exec("somekey", testObjBytes, testByteValue, uint32(0)).Return(nil, nil)
-		err := client.Upsert(txC, stmt, "somekey", testObject, false)
-		assert.Nil(t, err)
+		err := client.Upsert(txC, stmt, "somekey", serialized)
+		assert.Error(t, err)
 	},
 	})
 	t.Parallel()
@@ -579,7 +554,7 @@ func SetupMockRows(t *testing.T) *MockRows {
 func SetupClient(t *testing.T, connection Connection, encryptor Encryptor, decryptor Decryptor) Client {
 	t.Helper()
 	// No need to specify temp dir for this client because the connection is mocked
-	c, _, err := NewClient(connection, encryptor, decryptor, false)
+	c, _, err := NewClient(t.Context(), connection, encryptor, decryptor, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,4 +590,71 @@ func assertFileHasPermissions(t *testing.T, fname string, wantPerms fs.FileMode)
 	assert.Equal(t, wantPerms.String(), info.Mode().Perm().String())
 
 	return true
+}
+
+func toBytes(obj any) []byte {
+	var buf bytes.Buffer
+	if err := defaultEncoding.Encode(&buf, obj); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
+}
+
+func Test_client_serialization(t *testing.T) {
+	testObject := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "test",
+			Annotations: map[string]string{"annotation": "test"},
+			Labels:      map[string]string{"label": "test"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:  "test",
+				Image: "testimage",
+				VolumeMounts: []corev1.VolumeMount{{
+					Name:      "test",
+					MountPath: "/test",
+				}},
+			}},
+			Volumes: []corev1.Volume{{
+				Name: "test",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			}},
+		},
+	}
+	tests := []struct {
+		name     string
+		encoding Encoding
+	}{
+		{name: "gob", encoding: GobEncoding},
+		{name: "json", encoding: JSONEncoding},
+		{name: "json+gzip", encoding: GzippedJSONEncoding},
+		{name: "gob+gzip", encoding: GzippedGobEncoding},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cm, err := encryption.NewManager()
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := &client{
+				encryptor: cm, decryptor: cm,
+			}
+			WithEncoding(tt.encoding)(c)
+			serialized, err := c.Serialize(testObject, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var dest *corev1.Pod
+			if err := c.Deserialize(serialized, &dest); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(testObject, dest); diff != "" {
+				t.Errorf("Deserialize(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
 }

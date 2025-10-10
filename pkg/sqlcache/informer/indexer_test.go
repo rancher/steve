@@ -63,7 +63,6 @@ func TestNewIndexer(t *testing.T) {
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any())
 		store.EXPECT().Prepare(fmt.Sprintf(deleteIndicesFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(dropIndicesFmt, storeName))
-		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listByIndexFmt, storeName, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listKeyByIndexFmt, storeName))
 		store.EXPECT().Prepare(fmt.Sprintf(listIndexValuesFmt, storeName))
@@ -184,6 +183,7 @@ func TestAfterUpsert(t *testing.T) {
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(ctrl)
 		addIndexStmt := NewMockStmt(ctrl)
+		dbName := "name"
 		indexer := &Indexer{
 			ctx:   context.Background(),
 			Store: store,
@@ -191,13 +191,18 @@ func TestAfterUpsert(t *testing.T) {
 				"a": func(obj interface{}) ([]string, error) {
 					return []string{objKey}, nil
 				},
+				"b": func(obj interface{}) ([]string, error) {
+					return []string{objKey}, nil
+				},
 			},
 		}
 		key := "somekey"
 		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
 		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
-		client.EXPECT().Stmt(indexer.addIndexStmt).Return(addIndexStmt)
-		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, nil)
+		store.EXPECT().GetName().Return(dbName)
+		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?), (?, ?, ?)")).Return(addIndexStmt)
+		client.EXPECT().Stmt(addIndexStmt).Return(addIndexStmt)
+		addIndexStmt.EXPECT().Exec("a", objKey, key, "b", objKey, key).Return(nil, nil)
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.Nil(t, err)
@@ -232,6 +237,7 @@ func TestAfterUpsert(t *testing.T) {
 		deleteIndicesStmt := NewMockStmt(ctrl)
 		addIndexStmt := NewMockStmt(ctrl)
 		objKey := "key"
+		dbName := "name"
 		indexer := &Indexer{
 			ctx:   context.Background(),
 			Store: store,
@@ -244,7 +250,9 @@ func TestAfterUpsert(t *testing.T) {
 		key := "somekey"
 		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
 		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
-		client.EXPECT().Stmt(indexer.addIndexStmt).Return(addIndexStmt)
+		store.EXPECT().GetName().Return(dbName)
+		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?)")).Return(addIndexStmt)
+		client.EXPECT().Stmt(addIndexStmt).Return(addIndexStmt)
 		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, fmt.Errorf("error"))
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
@@ -285,8 +293,7 @@ func TestIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject}, nil)
 		objs, err := indexer.Index(indexName, testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{testObject}, objs)
@@ -312,8 +319,7 @@ func TestIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject, testObject}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject, testObject}, nil)
 		objs, err := indexer.Index(indexName, testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{testObject, testObject}, objs)
@@ -339,8 +345,7 @@ func TestIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{}, nil)
 		objs, err := indexer.Index(indexName, testObject)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{}, objs)
@@ -409,8 +414,7 @@ func TestIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, fmt.Errorf("error"))
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject}, fmt.Errorf("error"))
 		_, err := indexer.Index(indexName, testObject)
 		assert.NotNil(t, err)
 	}})
@@ -438,8 +442,7 @@ func TestIndex(t *testing.T) {
 		store.EXPECT().Prepare(fmt.Sprintf(selectQueryFmt, "name", ", ?")).Return(mockStmt)
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey, objKey+"2").Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject}, nil)
 		mockStmt.EXPECT().Close().Return(nil)
 		objs, err := indexer.Index(indexName, testObject)
 		assert.Nil(t, err)
@@ -475,8 +478,7 @@ func TestByIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject}, nil)
 		objs, err := indexer.ByIndex(indexName, objKey)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{testObject}, objs)
@@ -497,8 +499,7 @@ func TestByIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject, testObject}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject, testObject}, nil)
 		objs, err := indexer.ByIndex(indexName, objKey)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{testObject, testObject}, objs)
@@ -519,8 +520,7 @@ func TestByIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{}, nil)
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{}, nil)
 		objs, err := indexer.ByIndex(indexName, objKey)
 		assert.Nil(t, err)
 		assert.Equal(t, []any{}, objs)
@@ -557,8 +557,7 @@ func TestByIndex(t *testing.T) {
 
 		store.EXPECT().QueryForRows(context.Background(), indexer.listByIndexStmt, indexName, objKey).Return(rows, nil)
 		store.EXPECT().GetType().Return(reflect.TypeOf(testObject))
-		store.EXPECT().GetShouldEncrypt().Return(false)
-		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject), false).Return([]any{testObject}, fmt.Errorf("error"))
+		store.EXPECT().ReadObjects(rows, reflect.TypeOf(testObject)).Return([]any{testObject}, fmt.Errorf("error"))
 		_, err := indexer.ByIndex(indexName, objKey)
 		assert.NotNil(t, err)
 	}})

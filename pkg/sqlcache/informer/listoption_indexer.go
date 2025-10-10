@@ -1,14 +1,12 @@
 package informer
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"maps"
-	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -23,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
@@ -53,23 +52,30 @@ type ListOptionIndexer struct {
 	deleteEventsByCountStmt db.Stmt
 	dropEventsStmt          db.Stmt
 	addFieldsStmt           db.Stmt
-	deleteFieldsByKeyStmt   db.Stmt
 	deleteFieldsStmt        db.Stmt
 	dropFieldsStmt          db.Stmt
 	upsertLabelsStmt        db.Stmt
-	deleteLabelsByKeyStmt   db.Stmt
 	deleteLabelsStmt        db.Stmt
 	dropLabelsStmt          db.Stmt
 }
 
 var (
-	defaultIndexedFields    = []string{"metadata.name", "metadata.creationTimestamp"}
-	defaultIndexNamespaced  = "metadata.namespace"
+	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
+	defaultIndexNamespaced = "metadata.namespace"
+	immutableFields        = sets.New(
+		"metadata.creationTimestamp",
+		"metadata.namespace",
+		"metadata.name",
+		"id",
+		"metadata.state.name",
+	)
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
 
-	ErrInvalidColumn    = errors.New("supplied column is invalid")
-	ErrTooOld           = errors.New("resourceversion too old")
+	ErrInvalidColumn   = errors.New("supplied column is invalid")
+	ErrTooOld          = errors.New("resourceversion too old")
+	ErrUnknownRevision = errors.New("unknown revision")
+
 	projectIDFieldLabel = "field.cattle.io/projectId"
 	namespacesDbName    = "_v1_Namespace"
 )
@@ -112,9 +118,10 @@ ON CONFLICT(type, rv) DO UPDATE SET
 	dropEventsFmt = `DROP TABLE IF EXISTS "%s_events"`
 
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
-			key TEXT NOT NULL PRIMARY KEY,
-            %s
-	   )`
+		key TEXT NOT NULL REFERENCES "%s"(key) ON DELETE CASCADE,
+		%s,
+		PRIMARY KEY (key)
+    )`
 	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
 	deleteFieldsFmt      = `DELETE FROM "%s_fields"`
 	dropFieldsFmt        = `DROP TABLE IF EXISTS "%s_fields"`
@@ -134,9 +141,8 @@ INSERT INTO "%s_labels" (key, label, value)
 VALUES (?, ?, ?)
 ON CONFLICT(key, label) DO UPDATE SET
   value = excluded.value`
-	deleteLabelsByKeyStmtFmt = `DELETE FROM "%s_labels" WHERE KEY = ?`
-	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
-	dropLabelsStmtFmt        = `DROP TABLE IF EXISTS "%s_labels"`
+	deleteLabelsStmtFmt = `DELETE FROM "%s_labels"`
+	dropLabelsStmtFmt   = `DROP TABLE IF EXISTS "%s_labels"`
 )
 
 type ListOptionIndexerOptions struct {
@@ -189,8 +195,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterUpdate(l.notifyEventModified)
-	l.RegisterAfterDelete(l.deleteFieldsByKey)
-	l.RegisterAfterDelete(l.deleteLabelsByKey)
 	l.RegisterAfterDelete(l.notifyEventDeleted)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
@@ -204,9 +208,9 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	dbName := db.Sanitize(i.GetName())
-	columns := make([]string, len(indexedFields))
-	qmarks := make([]string, len(indexedFields))
-	setStatements := make([]string, len(indexedFields))
+	columns := make([]string, 0, len(indexedFields))
+	qmarks := make([]string, 0, len(indexedFields))
+	setStatements := make([]string, 0, len(indexedFields))
 
 	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		createEventsTableQuery := fmt.Sprintf(createEventsTableFmt, dbName)
@@ -214,12 +218,12 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return err
 		}
 
-		createFieldsTableQuery := fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", "))
+		createFieldsTableQuery := fmt.Sprintf(createFieldsTableFmt, dbName, dbName, strings.Join(columnDefs, ", "))
 		if _, err := tx.Exec(createFieldsTableQuery); err != nil {
 			return err
 		}
 
-		for index, field := range indexedFields {
+		for _, field := range indexedFields {
 			// create index for field
 			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
 			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
@@ -228,14 +232,17 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 			// format field into column for prepared statement
 			column := fmt.Sprintf(`"%s"`, field)
-			columns[index] = column
+			columns = append(columns, column)
 
 			// add placeholder for column's value in prepared statement
-			qmarks[index] = "?"
+			qmarks = append(qmarks, "?")
 
 			// add formatted set statement for prepared statement
-			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
-			setStatements[index] = setStatement
+			// optimization: avoid SET for fields which cannot change
+			if !immutableFields.Has(field) {
+				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
+				setStatements = append(setStatements, setStatement)
+			}
 		}
 		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
 		if _, err := tx.Exec(createLabelsTableQuery); err != nil {
@@ -259,19 +266,21 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.deleteEventsByCountStmt = l.Prepare(fmt.Sprintf(deleteEventsByCountFmt, dbName, dbName))
 	l.dropEventsStmt = l.Prepare(fmt.Sprintf(dropEventsFmt, dbName))
 
+	addFieldsOnConflict := "NOTHING"
+	if len(setStatements) > 0 {
+		addFieldsOnConflict = "UPDATE SET " + strings.Join(setStatements, ", ")
+	}
 	l.addFieldsStmt = l.Prepare(fmt.Sprintf(
-		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO UPDATE SET %s`,
+		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO %s`,
 		dbName,
 		strings.Join(columns, ", "),
 		strings.Join(qmarks, ", "),
-		strings.Join(setStatements, ", "),
+		addFieldsOnConflict,
 	))
-	l.deleteFieldsByKeyStmt = l.Prepare(fmt.Sprintf(`DELETE FROM "%s_fields" WHERE key = ?`, dbName))
 	l.deleteFieldsStmt = l.Prepare(fmt.Sprintf(deleteFieldsFmt, dbName))
 	l.dropFieldsStmt = l.Prepare(fmt.Sprintf(dropFieldsFmt, dbName))
 
 	l.upsertLabelsStmt = l.Prepare(fmt.Sprintf(upsertLabelsStmtFmt, dbName))
-	l.deleteLabelsByKeyStmt = l.Prepare(fmt.Sprintf(deleteLabelsByKeyStmtFmt, dbName))
 	l.deleteLabelsStmt = l.Prepare(fmt.Sprintf(deleteLabelsStmtFmt, dbName))
 	l.dropLabelsStmt = l.Prepare(fmt.Sprintf(dropLabelsStmtFmt, dbName))
 
@@ -338,32 +347,22 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 
 		var latestRevisionReached bool
 		for !latestRevisionReached && rows.Next() {
-			typ, buf, err := l.decryptScanEvent(rows)
+			obj := &unstructured.Unstructured{}
+			eventType, err := l.decryptScanEvent(rows, obj)
 			if err != nil {
 				return fmt.Errorf("scanning event row: %w", err)
-			}
-
-			example := &unstructured.Unstructured{}
-			val, err := fromBytes(buf, reflect.TypeOf(example))
-			if err != nil {
-				return fmt.Errorf("decoding event object: %w", err)
-			}
-
-			obj, ok := val.Elem().Interface().(*unstructured.Unstructured)
-			if !ok {
-				continue
 			}
 			if obj.GetResourceVersion() == latestRV {
 				// This iteration will be the last one, as we already reached the last event at the moment we started the loop
 				latestRevisionReached = true
 			}
-
 			filter := opts.Filter
 			if !matchFilter(filter.ID, filter.Namespace, filter.Selector, obj) {
 				continue
 			}
+
 			eventsCh <- watch.Event{
-				Type:   typ,
+				Type:   eventType,
 				Object: obj,
 			}
 		}
@@ -377,40 +376,17 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	return nil
 }
 
-func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows) (watch.EventType, []byte, error) {
+func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) (watch.EventType, error) {
 	var typ, rv string
-	var event, eventNonce sql.RawBytes
-	var kid uint32
-	err := rows.Scan(&typ, &rv, &event, &eventNonce, &kid)
-	if err != nil {
-		return watch.Error, nil, err
+	var serialized db.SerializedObject
+	if err := rows.Scan(&typ, &rv, &serialized.Bytes, &serialized.Nonce, &serialized.KeyID); err != nil {
+		return watch.Error, err
 	}
-	if l.Decryptor() != nil && l.GetShouldEncrypt() {
-		decryptedData, err := l.Decryptor().Decrypt(event, eventNonce, kid)
-		if err != nil {
-			return watch.Error, nil, err
-		}
-		return watch.EventType(typ), decryptedData, nil
-	}
-	return watch.EventType(typ), event, nil
-}
+	if err := l.Deserialize(serialized, into); err != nil {
+		return watch.Error, err
 
-func toBytes(obj any) []byte {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(obj)
-	if err != nil {
-		panic(fmt.Errorf("error while gobbing object: %w", err))
 	}
-	bb := buf.Bytes()
-	return bb
-}
-
-func fromBytes(buf sql.RawBytes, typ reflect.Type) (reflect.Value, error) {
-	dec := gob.NewDecoder(bytes.NewReader(buf))
-	singleResult := reflect.New(typ)
-	err := dec.DecodeValue(singleResult)
-	return singleResult, err
+	return watch.EventType(typ), nil
 }
 
 // watcherWithBackfill creates a proxy channel that buffers events during a "backfill" phase
@@ -579,18 +555,11 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 }
 
 func (l *ListOptionIndexer) upsertEvent(tx db.TxClient, eventType watch.EventType, latestRV string, obj any) error {
-	objBytes := toBytes(obj)
-	var dataNonce []byte
-	var err error
-	var kid uint32
-	if l.Encryptor() != nil && l.GetShouldEncrypt() {
-		objBytes, dataNonce, kid, err = l.Encryptor().Encrypt(objBytes)
-		if err != nil {
-			return err
-		}
+	serialized, err := l.Serialize(obj, l.GetShouldEncrypt())
+	if err != nil {
+		return err
 	}
-
-	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, objBytes, dataNonce, kid)
+	_, err = tx.Stmt(l.upsertEventsStmt).Exec(latestRV, eventType, serialized.Bytes, serialized.Nonce, serialized.KeyID)
 	return err
 }
 
@@ -640,13 +609,6 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TxClient) error
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteFieldsByKey(key string, _ any, tx db.TxClient) error {
-	args := []any{key}
-
-	_, err := tx.Stmt(l.deleteFieldsByKeyStmt).Exec(args...)
-	return err
-}
-
 func (l *ListOptionIndexer) deleteFields(tx db.TxClient) error {
 	_, err := tx.Stmt(l.deleteFieldsStmt).Exec()
 	return err
@@ -654,11 +616,6 @@ func (l *ListOptionIndexer) deleteFields(tx db.TxClient) error {
 
 func (l *ListOptionIndexer) dropFields(tx db.TxClient) error {
 	_, err := tx.Stmt(l.dropFieldsStmt).Exec()
-	return err
-}
-
-func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx db.TxClient) error {
-	_, err := tx.Stmt(l.deleteLabelsByKeyStmt).Exec(key)
 	return err
 }
 
@@ -702,6 +659,26 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryInfo := &QueryInfo{}
 	queryUsesLabels := hasLabelFilter(lo.Filters) || len(lo.ProjectsOrNamespaces.Filters) > 0
 	joinTableIndexByLabelName := make(map[string]int)
+
+	l.lock.RLock()
+	latestRV := l.latestRV
+	l.lock.RUnlock()
+
+	if len(lo.Revision) > 0 {
+		currentRevision, err := strconv.ParseInt(latestRV, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		requestRevision, err := strconv.ParseInt(lo.Revision, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		if currentRevision < requestRevision {
+			return nil, ErrUnknownRevision
+		}
+	}
 
 	// First, what kind of filtering will we be doing?
 	// 1- Intro: SELECT and JOIN clauses
@@ -749,7 +726,6 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 				}
 			}
 		}
-
 	}
 
 	if len(lo.ProjectsOrNamespaces.Filters) > 0 {
@@ -944,7 +920,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		}
 		elapsed := time.Since(now)
 		logLongQuery(elapsed, queryInfo.query, queryInfo.params)
-		items, err = l.ReadObjects(rows, l.GetType(), l.GetShouldEncrypt())
+		items, err = l.ReadObjects(rows, l.GetType())
 		if err != nil {
 			return fmt.Errorf("read objects: %w", err)
 		}

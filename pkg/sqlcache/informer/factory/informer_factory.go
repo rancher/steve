@@ -100,11 +100,12 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbClient, _, err := db.NewClient(nil, m, m, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	dbClient, _, err := db.NewClient(ctx, nil, m, m, false)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	return &CacheFactory{
 		ctx:    ctx,
 		cancel: cancel,
@@ -203,10 +204,9 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	go func() {
 		select {
 		case <-ctx.Done():
-			close(waitCh)
 		case <-gi.ctx.Done():
-			close(waitCh)
 		}
+		close(waitCh)
 	}()
 
 	if !cache.WaitForCacheSync(waitCh, gi.informer.HasSynced) {
@@ -267,11 +267,15 @@ func (f *CacheFactory) Stop(gvk schema.GroupVersionKind) error {
 	// Wait for all informers to have exited
 	gi.wg.Wait()
 
-	// DropAll needs its own context because the context from the informer
-	// is canceled
-	err := gi.informer.DropAll(context.Background())
-	if err != nil {
-		return fmt.Errorf("dropall %q: %w", gvk, err)
+	// Since we hold the lock on gi.stopMutex, we do not need to also hold
+	// onto gi.informersMutex
+	if gi.informer != nil {
+		// DropAll needs its own context because the context from the informer
+		// is canceled
+		err := gi.informer.DropAll(context.Background())
+		if err != nil {
+			return fmt.Errorf("dropall %q: %w", gvk, err)
+		}
 	}
 
 	return nil

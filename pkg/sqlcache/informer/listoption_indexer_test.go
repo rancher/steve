@@ -39,7 +39,7 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		return nil, "", err
 	}
 
-	db, dbPath, err := db.NewClient(nil, m, m, true)
+	db, dbPath, err := db.NewClient(ctx, nil, m, m, true)
 	if err != nil {
 		return nil, "", err
 	}
@@ -144,14 +144,14 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(1)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		// create events table
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		// create field table
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		// create field table indexes
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
@@ -223,7 +223,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(1)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
@@ -260,12 +260,12 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(1)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, fmt.Errorf("error"))
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
@@ -307,12 +307,12 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(1)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
@@ -358,12 +358,12 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		store.EXPECT().RegisterAfterAdd(gomock.Any()).Times(3)
 		store.EXPECT().RegisterAfterUpdate(gomock.Any()).Times(3)
-		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(3)
+		store.EXPECT().RegisterAfterDelete(gomock.Any()).Times(1)
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
@@ -430,6 +430,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedTotal      int
 		expectedContToken  string
 		expectedErr        error
+		latestRV           string
 	}
 	obj01_no_labels := map[string]any{
 		"metadata": map[string]any{
@@ -1172,6 +1173,56 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		expectedContToken: "",
 		expectedErr:       nil,
 	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with listOptions.Revision set equals to latestRV should work",
+		listOptions: sqltypes.ListOptions{
+			Revision: "9999",
+		},
+		latestRV:   "9999",
+		partitions: []partition.Partition{},
+		ns:         "",
+		// setting resource version on unstructured list
+		expectedList: func() *unstructured.UnstructuredList {
+			list := makeList(t)
+			list.SetResourceVersion("9999")
+			return list
+		}(),
+		expectedTotal:     0,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with listOptions.Revision set to lower than latestRV should work",
+		listOptions: sqltypes.ListOptions{
+			Revision: "9999",
+		},
+		latestRV:   "10000",
+		partitions: []partition.Partition{},
+		ns:         "",
+		// setting resource version on unstructured list
+		expectedList: func() *unstructured.UnstructuredList {
+			list := makeList(t)
+			list.SetResourceVersion("10000")
+			return list
+		}(),
+		expectedTotal:     0,
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with listOptions.Revision set to higher than latestRV, should return 'unknown revision'",
+		listOptions: sqltypes.ListOptions{
+			Revision: "10000",
+		},
+		latestRV:          "9999",
+		partitions:        []partition.Partition{},
+		ns:                "",
+		expectedList:      &unstructured.UnstructuredList{},
+		expectedTotal:     0,
+		expectedContToken: "",
+		expectedErr:       ErrUnknownRevision,
+	})
+
 	//tests = append(tests, testCase{
 	//	description: "ListByOptions with a Namespace Partition should select only items where metadata.namespace is equal to Namespace and all other conditions are met",
 	//	partitions: []partition.Partition{
@@ -1220,6 +1271,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				fmt.Println("Stop here")
 			}
 
+			loi.latestRV = test.latestRV
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
