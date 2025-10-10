@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"reflect"
 	"regexp"
 	"slices"
@@ -1464,6 +1465,8 @@ mainLoop:
 				return result, nil
 			}
 		default:
+			//fmt.Fprintf(os.Stderr, "QQQ: field:%s, subField: %d, name: %s, type:%v\n", field, i, subField,
+			//	reflect.TypeOf(obj).String())
 			return nil, fmt.Errorf("[listoption indexer] failed to parse subfields: %v", subFields)
 		}
 	}

@@ -2468,12 +2468,11 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
-			//if test.description == "filtering on available pod-count works" {
-			//	fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
-			//} else {
-			//	defer cleanTempFiles(dbPath)
-			//}
-			defer cleanTempFiles(dbPath)
+			if test.description == "filtering on memory works" {
+				fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
+			} else {
+				defer cleanTempFiles(dbPath)
+			}
 			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
@@ -2481,9 +2480,9 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			//if test.description == "filtering on available pod-count works" {
-			//	fmt.Println("QQQ: stop here")
-			//}
+			if test.description == "filtering on memory works" {
+				fmt.Println("QQQ: stop here")
+			}
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
