@@ -1311,11 +1311,40 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 			"favoriteFruit":    "9lime",
 		},
 	}
+	// obj17: favoriteFruit is entered as a string
+	// obj18: favoriteFruit is entered as an integer
+	obj17 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj17",
+			"namespace":        "ns-a",
+			"someNumericValue": "17",
+			"favoriteFruit":    "17",
+		},
+	}
+	obj18 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj18",
+			"namespace":        "ns-a",
+			"someNumericValue": "18",
+			"favoriteFruit":    18,
+		},
+	}
+	obj100 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj100",
+			"namespace":        "ns-a",
+			"someNumericValue": "100",
+			"favoriteFruit":    "guava",
+		},
+	}
 	// construct the source list so it isn't sorted either ASC or DESC
 	allObjects := []map[string]any{
+		obj18,
 		obj01,
 		obj11,
 		obj05,
+		obj17,
+		obj100,
 	}
 	ns_a := map[string]any{
 		"metadata": map[string]any{
@@ -1340,7 +1369,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	var tests []testCase
 	tests = append(tests,
 		testCase{
-			description: "TestNewListOptionIndexerTypeGuidance() with type-guidance sorts numerically",
+			description: "TestNewListOptionIndexerTypeGuidance() with type-guidance INT on non-ints sorts as string",
 			opts: ListOptionIndexerOptions{
 				Fields:       fields,
 				IsNamespaced: true,
@@ -1349,8 +1378,8 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 				},
 			},
 			sortFields:           []string{"metadata", "someNumericValue"},
-			expectedListAscObjs:  []map[string]any{obj01, obj05, obj11},
-			expectedListDescObjs: []map[string]any{obj11, obj05, obj01},
+			expectedListAscObjs:  []map[string]any{obj01, obj05, obj11, obj17, obj18, obj100},
+			expectedListDescObjs: []map[string]any{obj100, obj18, obj17, obj11, obj05, obj01},
 		})
 	tests = append(tests,
 		testCase{description: "TestNewListOptionIndexerTypeGuidance() without type-guidance sorts as strings",
@@ -1359,23 +1388,38 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 				IsNamespaced: true,
 			},
 			sortFields:           []string{"metadata", "someNumericValue"},
-			expectedListAscObjs:  []map[string]any{obj01, obj11, obj05},
-			expectedListDescObjs: []map[string]any{obj05, obj11, obj01},
+			expectedListAscObjs:  []map[string]any{obj01, obj100, obj11, obj17, obj18, obj05},
+			expectedListDescObjs: []map[string]any{obj05, obj18, obj17, obj11, obj100, obj01},
 		})
-	// This is what's going on with the sorting on a non-numeric value stored as an INT:
-	//sqlite> select "metadata.name", "metadata.favoriteFruit" from _v1_ConfigMap_fields order by "metadata.favoriteFruit";
+	// This is what's going on with the sorting on a non-numeric value stored as an INT
+	// Because some values are non-numeric, sorting is by ASCII
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" from _v1_ConfigMap_fields
+	//        order by "metadata.favoriteFruit";
+	//obj17|17
+	//obj18|18
 	//obj05|130raspberries
 	//obj01|14banana
 	//obj11|9lime
+	//obj100|guava
 
-	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields order by "metadata.favoriteFruit";
+	// Sorting is still by ascii -- adding 1 to the value in display shows that
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields
+	//        order by "metadata.favoriteFruit";
+	//obj17|18
+	//obj18|19
 	//obj05|131
 	//obj01|15
 	//obj11|10
+	//obj100|1
 
-	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields order by "metadata.favoriteFruit" + 1;
+	// This one forces numeric sorting
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields
+	//        order by "metadata.favoriteFruit" + 1;
+	//obj100|1
 	//obj11|10
 	//obj01|15
+	//obj17|18
+	//obj18|19
 	//obj05|131
 	tests = append(tests,
 		testCase{description: "TestNewListOptionIndexerTypeGuidance() with type-guidance as int on a non-number sorts as string",
@@ -1387,8 +1431,8 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 				},
 			},
 			sortFields:           []string{"metadata", "favoriteFruit"},
-			expectedListAscObjs:  []map[string]any{obj05, obj01, obj11},
-			expectedListDescObjs: []map[string]any{obj11, obj01, obj05},
+			expectedListAscObjs:  []map[string]any{obj17, obj18, obj05, obj01, obj11, obj100},
+			expectedListDescObjs: []map[string]any{obj100, obj11, obj01, obj05, obj18, obj17},
 		})
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -1413,7 +1457,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 				},
 			}, []partition.Partition{{All: true}}, "")
 			require.NoError(t, err)
-			assert.Equal(t, 3, total)
+			assert.Equal(t, len(allObjects), total)
 			assert.Equal(t, expectedList, list)
 
 			expectedList = makeList(t, test.expectedListDescObjs...)
@@ -1428,7 +1472,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 				},
 			}, []partition.Partition{{All: true}}, "")
 			require.NoError(t, err)
-			assert.Equal(t, 3, total)
+			assert.Equal(t, len(allObjects), total)
 			assert.Equal(t, expectedList, list)
 		})
 	}
