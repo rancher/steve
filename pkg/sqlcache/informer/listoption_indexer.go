@@ -55,11 +55,9 @@ type ListOptionIndexer struct {
 	deleteEventsByCountStmt db.Stmt
 	dropEventsStmt          db.Stmt
 	addFieldsStmt           db.Stmt
-	deleteFieldsByKeyStmt   db.Stmt
 	deleteFieldsStmt        db.Stmt
 	dropFieldsStmt          db.Stmt
 	upsertLabelsStmt        db.Stmt
-	deleteLabelsByKeyStmt   db.Stmt
 	deleteLabelsStmt        db.Stmt
 	dropLabelsStmt          db.Stmt
 }
@@ -123,9 +121,10 @@ ON CONFLICT(type, rv) DO UPDATE SET
 	dropEventsFmt = `DROP TABLE IF EXISTS "%s_events"`
 
 	createFieldsTableFmt = `CREATE TABLE "%s_fields" (
-			key TEXT NOT NULL PRIMARY KEY,
-            %s
-	   )`
+		key TEXT NOT NULL REFERENCES "%s"(key) ON DELETE CASCADE,
+		%s,
+		PRIMARY KEY (key)
+    )`
 	createFieldsIndexFmt = `CREATE INDEX "%s_%s_index" ON "%s_fields"("%s")`
 	deleteFieldsFmt      = `DELETE FROM "%s_fields"`
 	dropFieldsFmt        = `DROP TABLE IF EXISTS "%s_fields"`
@@ -145,9 +144,8 @@ INSERT INTO "%s_labels" (key, label, value)
 VALUES (?, ?, ?)
 ON CONFLICT(key, label) DO UPDATE SET
   value = excluded.value`
-	deleteLabelsByKeyStmtFmt = `DELETE FROM "%s_labels" WHERE KEY = ?`
-	deleteLabelsStmtFmt      = `DELETE FROM "%s_labels"`
-	dropLabelsStmtFmt        = `DROP TABLE IF EXISTS "%s_labels"`
+	deleteLabelsStmtFmt = `DELETE FROM "%s_labels"`
+	dropLabelsStmtFmt   = `DROP TABLE IF EXISTS "%s_labels"`
 )
 
 type ListOptionIndexerOptions struct {
@@ -200,8 +198,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterUpdate(l.addLabels)
 	l.RegisterAfterUpdate(l.notifyEventModified)
-	l.RegisterAfterDelete(l.deleteFieldsByKey)
-	l.RegisterAfterDelete(l.deleteLabelsByKey)
 	l.RegisterAfterDelete(l.notifyEventDeleted)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
@@ -225,7 +221,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return err
 		}
 
-		createFieldsTableQuery := fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", "))
+		createFieldsTableQuery := fmt.Sprintf(createFieldsTableFmt, dbName, dbName, strings.Join(columnDefs, ", "))
 		if _, err := tx.Exec(createFieldsTableQuery); err != nil {
 			return err
 		}
@@ -284,12 +280,10 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		strings.Join(qmarks, ", "),
 		addFieldsOnConflict,
 	))
-	l.deleteFieldsByKeyStmt = l.Prepare(fmt.Sprintf(`DELETE FROM "%s_fields" WHERE key = ?`, dbName))
 	l.deleteFieldsStmt = l.Prepare(fmt.Sprintf(deleteFieldsFmt, dbName))
 	l.dropFieldsStmt = l.Prepare(fmt.Sprintf(dropFieldsFmt, dbName))
 
 	l.upsertLabelsStmt = l.Prepare(fmt.Sprintf(upsertLabelsStmtFmt, dbName))
-	l.deleteLabelsByKeyStmt = l.Prepare(fmt.Sprintf(deleteLabelsByKeyStmtFmt, dbName))
 	l.deleteLabelsStmt = l.Prepare(fmt.Sprintf(deleteLabelsStmtFmt, dbName))
 	l.dropLabelsStmt = l.Prepare(fmt.Sprintf(dropLabelsStmtFmt, dbName))
 
@@ -586,13 +580,6 @@ func (l *ListOptionIndexer) addLabels(key string, obj any, tx db.TxClient) error
 	return nil
 }
 
-func (l *ListOptionIndexer) deleteFieldsByKey(key string, _ any, tx db.TxClient) error {
-	args := []any{key}
-
-	_, err := tx.Stmt(l.deleteFieldsByKeyStmt).Exec(args...)
-	return err
-}
-
 func (l *ListOptionIndexer) deleteFields(tx db.TxClient) error {
 	_, err := tx.Stmt(l.deleteFieldsStmt).Exec()
 	return err
@@ -600,11 +587,6 @@ func (l *ListOptionIndexer) deleteFields(tx db.TxClient) error {
 
 func (l *ListOptionIndexer) dropFields(tx db.TxClient) error {
 	_, err := tx.Stmt(l.dropFieldsStmt).Exec()
-	return err
-}
-
-func (l *ListOptionIndexer) deleteLabelsByKey(key string, _ any, tx db.TxClient) error {
-	_, err := tx.Stmt(l.deleteLabelsByKeyStmt).Exec(key)
 	return err
 }
 
