@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -148,6 +149,12 @@ var (
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			{"spec", "internal"},
 			{"spec", "displayName"},
+			{"status", "allocatable", "cpu"},
+			{"status", "allocatable", "memory"},
+			{"status", "allocatable", "pods"},
+			{"status", "available", "cpu"},
+			{"status", "available", "memory"},
+			{"status", "available", "pods"},
 			{"status", "connected"},
 			{"status", "provider"},
 		},
@@ -301,7 +308,7 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
+	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (*factory.Cache, error)
 	DoneWithCache(*factory.Cache)
 	Stop(gvk schema.GroupVersionKind) error
 }
@@ -379,19 +386,26 @@ func (s *Store) initializeNamespaceCache() error {
 	}
 
 	gvk := attributes.GVK(&nsSchema)
-	// get fields from schema's columns
-	fields := GetFieldsFromSchema(&nsSchema)
-
+	fields, cols, _ := getFieldAndColInfo(&nsSchema, gvk)
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
-	cols := common.GetColumnDefinitions(&nsSchema)
+	noTypeGuidance := map[string]string{}
 
 	// get the type-specific transform func
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema))
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	nsInformer, err := s.cacheFactory.CacheFor(s.ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, false, true)
+	nsInformer, err := s.cacheFactory.CacheFor(s.ctx,
+		fields,
+		externalGVKDependencies[gvk],
+		selfGVKDependencies[gvk],
+		transformFunc,
+		tableClient,
+		gvk,
+		noTypeGuidance,
+		false,
+		true)
 	if err != nil {
 		return err
 	}
@@ -435,19 +449,20 @@ func tableColsToCommonCols(tableDefs []table.Column) []common.ColumnDefinition {
 	return colDefs
 }
 
-// GetFieldsFromSchema converts object field names from types.APISchema's format into steve's
+// getFieldAndColInfo converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
-func GetFieldsFromSchema(schema *types.APISchema) [][]string {
+// It also returns type info for each field
+func getFieldAndColInfo(schema *types.APISchema, gvk schema.GroupVersionKind) ([][]string, []common.ColumnDefinition, map[string]string) {
 	var fields [][]string
 	columns := attributes.Columns(schema)
 	if columns == nil {
-		return nil
+		return fields, nil, nil
 	}
 	colDefs, ok := columns.([]common.ColumnDefinition)
 	if !ok {
 		tableDefs, ok := columns.([]table.Column)
 		if !ok {
-			return nil
+			return fields, nil, nil
 		}
 		colDefs = tableColsToCommonCols(tableDefs)
 	}
@@ -456,7 +471,9 @@ func GetFieldsFromSchema(schema *types.APISchema) [][]string {
 		field = strings.TrimPrefix(field, ".")
 		fields = append(fields, queryhelper.SafeSplit(field))
 	}
-	return fields
+	typeGuidance := getTypeGuidance(colDefs, gvk)
+
+	return fields, colDefs, typeGuidance
 }
 
 // ByID looks up a single object by its ID.
@@ -620,13 +637,12 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 	// warnings from inside the informer are discarded
 	gvk := attributes.GVK(schema)
-	fields := GetFieldsFromSchema(schema)
+	fields, cols, typeGuidance := getFieldAndColInfo(schema, gvk)
 	fields = append(fields, getFieldForGVK(gvk)...)
-	cols := common.GetColumnDefinitions(schema)
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(schema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(schema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(schema))
+	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(schema))
 	if err != nil {
 		return nil, err
 	}
@@ -817,6 +833,56 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
+var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
+	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
+		"status.allocatable.cpu":    "INT",
+		"status.allocatable.memory": "REAL",
+		"status.allocatable.pods":   "INT",
+		"status.available.cpu":      "INT",
+		"status.available.memory":   "REAL",
+		"status.available.pods":     "INT",
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
+		"metadata.fields[2]": "INT", // name: Data
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
+		"metadata.fields[1]": "INT", // name: Secrets
+	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
+		"metadata.fields[1]": "INT", // name: Data
+	},
+}
+
+func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
+	guidance := make(map[string]string)
+	ptn := regexp.MustCompile(`(?i)\bnumber of\b`)
+	for _, col := range cols {
+		td := col.TableColumnDefinition
+		// These come from k8s.io/kubernetes/pkg/printers/internalversion
+		// Some 'number of' fields are declared to be string, but we want to
+		// sort those numbers numerically (like the POD # of a pod)
+		colType := td.Type
+		// Strip the parts off separately in case there's no '$' at the start
+		trimmedField := strings.TrimPrefix(col.Field, "$")
+		trimmedField = strings.TrimPrefix(trimmedField, ".")
+		if colType == "integer" || colType == "boolean" || ptn.MatchString(td.Description) {
+			//TODO: What do "REAL" (float) types look like?
+			colType = "INT"
+		}
+		if colType != "string" {
+			// Strip the parts off separately in case t
+			guidance[trimmedField] = colType
+		}
+	}
+	tg, ok := typeGuidanceTable[gvk]
+	if ok {
+		for k, v := range tg {
+			guidance[k] = v
+		}
+	}
+	return guidance
+}
+
 // ListByPartitions returns:
 //   - an unstructured list of resources belonging to any of the specified partitions
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
@@ -833,14 +899,15 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return nil, 0, "", err
 	}
 	gvk := attributes.GVK(apiSchema)
-	fields := GetFieldsFromSchema(apiSchema)
+	//TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
+	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
+	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
 	fields = append(fields, getFieldForGVK(gvk)...)
-	cols := common.GetColumnDefinitions(apiSchema)
 
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))
+	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
