@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
-	watch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -151,7 +151,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		// create events table
 		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		// create field table
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" INT`)).Return(nil, nil)
 		// create field table indexes
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
@@ -169,6 +169,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		opts := ListOptionIndexerOptions{
 			Fields:       fields,
+			TypeGuidance: map[string]string{"something": "INT"},
 			IsNamespaced: true,
 		}
 		loi, err := NewListOptionIndexer(context.Background(), store, opts)
@@ -1261,7 +1262,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, namespaceList)
 			defer cleanTempFiles(dbPath)
-			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
 				err = loi.Add(&item)
@@ -1282,6 +1282,198 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
+func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
+	obj01 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj01",
+			"namespace":        "ns-a",
+			"someNumericValue": "1",
+			"favoriteFruit":    "14banana",
+		},
+	}
+	obj05 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj05",
+			"namespace":        "ns-a",
+			"someNumericValue": "5",
+			"favoriteFruit":    "130raspberries",
+		},
+	}
+	obj11 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj11",
+			"namespace":        "ns-a",
+			"someNumericValue": "11",
+			"favoriteFruit":    "9lime",
+		},
+	}
+	// obj17: favoriteFruit is entered as a string
+	// obj18: favoriteFruit is entered as an integer
+	obj17 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj17",
+			"namespace":        "ns-a",
+			"someNumericValue": "17",
+			"favoriteFruit":    "17",
+		},
+	}
+	obj18 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj18",
+			"namespace":        "ns-a",
+			"someNumericValue": "18",
+			"favoriteFruit":    18,
+		},
+	}
+	obj100 := map[string]any{
+		"metadata": map[string]any{
+			"name":             "obj100",
+			"namespace":        "ns-a",
+			"someNumericValue": "100",
+			"favoriteFruit":    "guava",
+		},
+	}
+	// construct the source list so it isn't sorted either ASC or DESC
+	allObjects := []map[string]any{
+		obj18,
+		obj01,
+		obj11,
+		obj05,
+		obj17,
+		obj100,
+	}
+	ns_a := map[string]any{
+		"metadata": map[string]any{
+			"name": "ns-a",
+		},
+	}
+
+	itemList := makeList(t, allObjects...)
+	namespaceList := makeList(t, ns_a)
+	fields := [][]string{
+		{"metadata", "someNumericValue"},
+		{"metadata", "favoriteFruit"},
+	}
+	type testCase struct {
+		description          string
+		opts                 ListOptionIndexerOptions
+		sortFields           []string
+		expectedListAscObjs  []map[string]any
+		expectedListDescObjs []map[string]any
+	}
+
+	var tests []testCase
+	tests = append(tests,
+		testCase{
+			description: "TestNewListOptionIndexerTypeGuidance() with type-guidance INT on non-ints sorts as string",
+			opts: ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+				TypeGuidance: map[string]string{
+					"metadata.someNumericValue": "INT",
+				},
+			},
+			sortFields:           []string{"metadata", "someNumericValue"},
+			expectedListAscObjs:  []map[string]any{obj01, obj05, obj11, obj17, obj18, obj100},
+			expectedListDescObjs: []map[string]any{obj100, obj18, obj17, obj11, obj05, obj01},
+		})
+	tests = append(tests,
+		testCase{description: "TestNewListOptionIndexerTypeGuidance() without type-guidance sorts as strings",
+			opts: ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			},
+			sortFields:           []string{"metadata", "someNumericValue"},
+			expectedListAscObjs:  []map[string]any{obj01, obj100, obj11, obj17, obj18, obj05},
+			expectedListDescObjs: []map[string]any{obj05, obj18, obj17, obj11, obj100, obj01},
+		})
+	// This is what's going on with the sorting on a non-numeric value stored as an INT
+	// Because some values are non-numeric, sorting is by ASCII
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" from _v1_ConfigMap_fields
+	//        order by "metadata.favoriteFruit";
+	//obj17|17
+	//obj18|18
+	//obj05|130raspberries
+	//obj01|14banana
+	//obj11|9lime
+	//obj100|guava
+
+	// Sorting is still by ascii -- adding 1 to the value in display shows that
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields
+	//        order by "metadata.favoriteFruit";
+	//obj17|18
+	//obj18|19
+	//obj05|131
+	//obj01|15
+	//obj11|10
+	//obj100|1
+
+	// This one forces numeric sorting
+	//sqlite> select "metadata.name", "metadata.favoriteFruit" + 1 from _v1_ConfigMap_fields
+	//        order by "metadata.favoriteFruit" + 1;
+	//obj100|1
+	//obj11|10
+	//obj01|15
+	//obj17|18
+	//obj18|19
+	//obj05|131
+	tests = append(tests,
+		testCase{description: "TestNewListOptionIndexerTypeGuidance() with type-guidance as int on a non-number sorts as string",
+			opts: ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+				TypeGuidance: map[string]string{
+					"metadata.favoriteFruit": "INT",
+				},
+			},
+			sortFields:           []string{"metadata", "favoriteFruit"},
+			expectedListAscObjs:  []map[string]any{obj17, obj18, obj05, obj01, obj11, obj100},
+			expectedListDescObjs: []map[string]any{obj100, obj11, obj01, obj05, obj18, obj17},
+		})
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			loi, dbPath, err := makeListOptionIndexer(t.Context(), test.opts, false, namespaceList)
+			defer cleanTempFiles(dbPath)
+			require.NoError(t, err)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				require.NoError(t, err)
+			}
+
+			expectedList := makeList(t, test.expectedListAscObjs...)
+			list, total, _, err := loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
+				SortList: sqltypes.SortList{
+					SortDirectives: []sqltypes.Sort{
+						{
+							Fields: test.sortFields,
+							Order:  sqltypes.ASC,
+						},
+					},
+				},
+			}, []partition.Partition{{All: true}}, "")
+			require.NoError(t, err)
+			assert.Equal(t, len(allObjects), total)
+			assert.Equal(t, expectedList, list)
+
+			expectedList = makeList(t, test.expectedListDescObjs...)
+			list, total, _, err = loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
+				SortList: sqltypes.SortList{
+					SortDirectives: []sqltypes.Sort{
+						{
+							Fields: test.sortFields,
+							Order:  sqltypes.DESC,
+						},
+					},
+				},
+			}, []partition.Partition{{All: true}}, "")
+			require.NoError(t, err)
+			assert.Equal(t, len(allObjects), total)
+			assert.Equal(t, expectedList, list)
 		})
 	}
 }

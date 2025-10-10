@@ -152,6 +152,11 @@ type ListOptionIndexerOptions struct {
 	//
 	// For example, .metadata.resourceVersion should be specified as []string{"metadata", "resourceVersion"}
 	Fields [][]string
+	// Used for specifying types of non-TEXT database fields.
+	// The key is a fully-qualified field name, like 'metadata.fields[1]'.
+	// The value is a type name, most likely "INT" but could be "REAL". The default type is "TEXT",
+	// and we don't (currently) use NULL or BLOB types.
+	TypeGuidance map[string]string
 	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
 	// namespaced
 	IsNamespaced bool
@@ -204,7 +209,12 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropFields)
 	columnDefs := make([]string, len(indexedFields))
 	for index, field := range indexedFields {
-		column := fmt.Sprintf(`"%s" TEXT`, field)
+		typeName := "TEXT"
+		newTypeName, ok := opts.TypeGuidance[field]
+		if ok {
+			typeName = newTypeName
+		}
+		column := fmt.Sprintf(`"%s" %s`, field, typeName)
 		columnDefs[index] = column
 	}
 
