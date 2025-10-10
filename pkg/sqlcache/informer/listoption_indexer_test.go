@@ -2383,29 +2383,29 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				[]sqltypes.Filter{
 					{
 						Field:   []string{"status", "allocatable", "memory"},
-						Matches: []string{"8388608"},
+						Matches: []string{"8M"},
 						Op:      sqltypes.Eq,
 					},
 				},
 			},
 		},
 		},
-		expectedList:  makeList(t, obj05),
+		expectedList:  makeList(t, obj04),
 		expectedTotal: 1,
 	})
 	tests = append(tests, testCase{
-		description: "sorting on memory works",
+		description: "sorting on memory does a naive ascii sort",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
 					{
-						Fields: []string{"spec", "rules", "0", "host"},
+						Fields: []string{"status", "allocatable", "memory"},
 						Order:  sqltypes.ASC,
 					},
 				},
 			},
 		},
-		expectedList:  makeList(t, obj04, obj03, obj01, obj02),
+		expectedList:  makeList(t, obj01, obj08, obj02, obj05, obj03, obj07, obj06, obj04),
 		expectedTotal: len(allObjects),
 	})
 	t.Parallel()
@@ -2430,7 +2430,11 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
-			defer cleanTempFiles(dbPath)
+			if test.description == "filtering on memory works" {
+				fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
+			} else {
+				defer cleanTempFiles(dbPath)
+			}
 			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
@@ -2438,6 +2442,9 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
+			if test.description == "filtering on memory works" {
+				fmt.Println("QQQ: stop here")
+			}
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
