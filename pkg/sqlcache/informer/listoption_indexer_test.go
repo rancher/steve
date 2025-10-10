@@ -2281,12 +2281,17 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 					"memory": memory,
 					"pods":   fmt.Sprintf("%d", podCount),
 				},
-				"available": map[string]string{
-					"cpu":    fmt.Sprintf("%d", cpuCountAvailable),
-					"memory": memory,
-					"pods":   fmt.Sprintf("%d", podCountAvailable),
-				},
 			},
+		}
+		lastDigit := name[len(name)-1:]
+		val, err := strconv.Atoi(lastDigit)
+		if err == nil && val%2 == 1 {
+			newMap := map[string]string{"cpu": fmt.Sprintf("%d", cpuCountAvailable),
+				"memory": memory,
+				"pods":   fmt.Sprintf("%d", podCountAvailable),
+			}
+			statusMap := h1["status"].(map[string]any)
+			statusMap["available"] = any(newMap)
 		}
 		return h1
 	}
@@ -2408,7 +2413,40 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		expectedList:  makeList(t, obj01, obj08, obj02, obj05, obj03, obj07, obj06, obj04),
 		expectedTotal: len(allObjects),
 	})
-	t.Parallel()
+	tests = append(tests, testCase{
+		description: "filtering on available pod-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "available", "pods"},
+						Matches: []string{"24"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj05),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "filtering on available cpu-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "available", "cpu"},
+						Matches: []string{"1", "3"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj07, obj05),
+		expectedTotal: 2,
+	})
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -2430,11 +2468,12 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
-			if test.description == "filtering on memory works" {
-				fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
-			} else {
-				defer cleanTempFiles(dbPath)
-			}
+			//if test.description == "filtering on available pod-count works" {
+			//	fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
+			//} else {
+			//	defer cleanTempFiles(dbPath)
+			//}
+			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
 			for _, item := range itemList.Items {
@@ -2442,9 +2481,9 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			if test.description == "filtering on memory works" {
-				fmt.Println("QQQ: stop here")
-			}
+			//if test.description == "filtering on available pod-count works" {
+			//	fmt.Println("QQQ: stop here")
+			//}
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
