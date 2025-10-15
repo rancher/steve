@@ -2177,12 +2177,12 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		expectedTotal: len(allObjects),
 	})
 	tests = append(tests, testCase{
-		description: "filtering on available pod-count works",
+		description: "filtering on requested pod-count works",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Field:   []string{"status", "available", "pods"},
+						Field:   []string{"status", "requested", "pods"},
 						Matches: []string{"24"},
 						Op:      sqltypes.Eq,
 					},
@@ -2194,12 +2194,12 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		expectedTotal: 1,
 	})
 	tests = append(tests, testCase{
-		description: "filtering on available cpu-count works",
+		description: "filtering on requested cpu-count works",
 		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
 			{
 				[]sqltypes.Filter{
 					{
-						Field:   []string{"status", "available", "cpu"},
+						Field:   []string{"status", "requested", "cpu"},
 						Matches: []string{"1", "3"},
 						Op:      sqltypes.In,
 					},
@@ -2230,7 +2230,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
-			//if test.description == "filtering on available pod-count works" {
+			//if test.description == "filtering on requested pod-count works" {
 			//	fmt.Fprintf(os.Stderr, "QQQ: dbPath: %s\n", dbPath)
 			//} else {
 			//	defer cleanTempFiles(dbPath)
@@ -2243,7 +2243,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			//if test.description == "filtering on available pod-count works" {
+			//if test.description == "filtering on requested pod-count works" {
 			//	fmt.Println("QQQ: stop here")
 			//}
 			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)

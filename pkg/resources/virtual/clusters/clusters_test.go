@@ -303,7 +303,7 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memory": "12K",
 							"pods":   "1",
 						},
-						"available": map[string]interface{}{
+						"requested": map[string]interface{}{
 							"cpu":    "2",
 							"memory": "12Ki",
 							"pods":   "2",
@@ -339,7 +339,7 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memoryRaw": "12K",
 							"pods":      "1",
 						},
-						"available": map[string]interface{}{
+						"requested": map[string]interface{}{
 							"cpu":       "2",
 							"memoryRaw": "12Ki",
 							"memory":    float64(12288),
@@ -377,7 +377,7 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memory": "12M",
 							"pods":   "1",
 						},
-						"available": map[string]interface{}{
+						"requested": map[string]interface{}{
 							"cpu":    "2",
 							"memory": "12Mi",
 							"pods":   "2",
@@ -413,7 +413,7 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memoryRaw": "12M",
 							"pods":      "1",
 						},
-						"available": map[string]interface{}{
+						"requested": map[string]interface{}{
 							"cpu":       "2",
 							"memory":    float64(12582912),
 							"memoryRaw": "12Mi",
@@ -451,7 +451,7 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memory": "12G",
 							"pods":   "1",
 						},
-						"available": map[string]interface{}{
+						"requested": map[string]interface{}{
 							"cpu":    "2",
 							"memory": "12Gi",
 							"pods":   "2",
@@ -487,7 +487,7 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memoryRaw": "12G",
 							"pods":      "1",
 						},
-						"available": map[string]interface{}{
+						"requested": map[string]interface{}{
 							"cpu":       "2",
 							"memory":    float64(12884901888),
 							"memoryRaw": "12Gi",

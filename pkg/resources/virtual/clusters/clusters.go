@@ -14,7 +14,7 @@ import (
 // creates a new virtual `status.connected` boolean field that looks for `type = "Ready"` in any
 // of the status.conditions records.
 //
-// It also converts the annotated status.available.memory and status.allocatable.memory fields into the
+// It also converts the annotated status.requested.memory and status.allocatable.memory fields into the
 // their underlying byte values.
 
 func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
@@ -45,15 +45,7 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 		return obj, err
 	}
 
-	for _, statusName := range []string{"available", "allocatable"} {
-		//availableMemory, ok, err := unstructured.NestedFieldNoCopy(obj.Object, "status", statusName, "memory")
-		//if ok && err == nil {
-		//	unstructured.SetNestedField(obj.Object, availableMemory, "status", statusName, "memoryRaw")
-		//	memoryAsBytes, err := fixMemory(availableMemory.(string))
-		//	if err != nil {
-		//		unstructured.SetNestedField(obj.Object, memoryAsBytes, "status", statusName, "memory")
-		//	}
-		//}
+	for _, statusName := range []string{"requested", "allocatable"} {
 		mapx, ok, err := unstructured.NestedMap(obj.Object, "status", statusName)
 		if ok && err == nil {
 			mem, ok := mapx["memory"]
