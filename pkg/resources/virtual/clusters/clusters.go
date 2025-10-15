@@ -14,7 +14,7 @@ import (
 // creates a new virtual `status.connected` boolean field that looks for `type = "Ready"` in any
 // of the status.conditions records.
 //
-// It also converts the annotated status.requested.memory and status.allocatable.memory fields into the
+// It also converts the annotated status.requested.memory and status.allocatable.memory fields into
 // their underlying byte values.
 
 func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
