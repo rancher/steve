@@ -106,11 +106,17 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 	opts.Filters = filterOpts
 
 	sortKeys := q.Get(sortParam)
+	callsIPFunctionRegex := regexp.MustCompile(`^ip\(.+\)$`)
 	if sortKeys != "" {
 		sortList := *sqltypes.NewSortList()
 		sortParts := strings.Split(sortKeys, ",")
 		for _, sortPart := range sortParts {
 			field := sortPart
+			sortAsIP := false
+			if callsIPFunctionRegex.MatchString(sortPart) {
+				field = sortPart[3 : len(sortPart)-1]
+				sortAsIP = true
+			}
 			if len(field) > 0 {
 				sortOrder := sqltypes.ASC
 				if field[0] == '-' {
@@ -119,8 +125,9 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 				}
 				if len(field) > 0 {
 					sortDirective := sqltypes.Sort{
-						Fields: queryhelper.SafeSplit(field),
-						Order:  sortOrder,
+						Fields:   queryhelper.SafeSplit(field),
+						Order:    sortOrder,
+						SortAsIP: sortAsIP,
 					}
 					sortList.SortDirectives = append(sortList.SortDirectives, sortDirective)
 				}

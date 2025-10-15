@@ -9,9 +9,11 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"reflect"
 	"strconv"
@@ -500,6 +502,38 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 				return "", nil
 			}
 			return parts[arg2], nil
+		},
+	)
+	sqlite.RegisterDeterministicScalarFunction(
+		"inet_aton",
+		1,
+		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			var arg1 string
+			switch argTyped := args[0].(type) {
+			case string:
+				arg1 = argTyped
+			case []byte:
+				arg1 = string(argTyped)
+			default:
+				logrus.Errorf("inet_aton: unsupported type for arg1: expected a string, got :%T", args[0])
+				return int64(0), nil
+			}
+			ip := net.ParseIP(arg1)
+			if ip == nil {
+				logrus.Errorf("inet_aton: invalid IP address: %s", arg1)
+				return int64(0), nil
+			}
+			ipAs4 := ip.To4()
+			if ipAs4 != nil {
+				return int64(binary.BigEndian.Uint32(ipAs4)), nil
+			}
+			// By elimination it must be IPv6 (until IPv[n > 6] comes along one day
+			ipAs16 := ip.To16()
+			if ipAs16 == nil {
+				logrus.Errorf("inet_aton: invalid IPv6 address: %s", arg1)
+				return int64(0), nil
+			}
+			return int64(binary.BigEndian.Uint64(ipAs16)), nil
 		},
 	)
 	c.conn = sqlDB
