@@ -153,9 +153,11 @@ var (
 			{"spec", "displayName"},
 			{"status", "allocatable", "cpu"},
 			{"status", "allocatable", "memory"},
+			{"status", "allocatable", "memoryRaw"},
 			{"status", "allocatable", "pods"},
 			{"status", "requested", "cpu"},
 			{"status", "requested", "memory"},
+			{"status", "requested", "memoryRaw"},
 			{"status", "requested", "pods"},
 			{"status", "connected"},
 			{"status", "provider"},
@@ -836,12 +838,12 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
-		"status.allocatable.cpu":    "INT",
-		"status.allocatable.memory": "REAL",
-		"status.allocatable.pods":   "INT",
-		"status.requested.cpu":      "INT",
-		"status.requested.memory":   "REAL",
-		"status.requested.pods":     "INT",
+		"status.allocatable.cpu":       "INT",
+		"status.allocatable.memoryRaw": "REAL",
+		"status.allocatable.pods":      "INT",
+		"status.requested.cpu":         "INT",
+		"status.requested.memoryRaw":   "REAL",
+		"status.requested.pods":        "INT",
 	},
 	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
 		"metadata.fields[2]": "INT", // name: Data

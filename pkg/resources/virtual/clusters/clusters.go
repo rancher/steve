@@ -54,8 +54,7 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 				if err != nil {
 					return obj, err
 				}
-				mapx["memory"] = memoryAsBytes
-				mapx["memoryRaw"] = mem
+				mapx["memoryRaw"] = memoryAsBytes
 				unstructured.SetNestedMap(obj.Object, mapx, "status", statusName)
 			}
 		}
