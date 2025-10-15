@@ -29,6 +29,7 @@ func TestNewInformer(t *testing.T) {
 	}
 
 	var tests []testCase
+	nilTypeGuidance := map[string]string{}
 
 	tests = append(tests, testCase{description: "NewInformer() with no errors returned, should return no error", test: func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -80,7 +81,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0, 0)
+		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, nilTypeGuidance, true, true, 0, 0)
 		assert.Nil(t, err)
 		assert.NotNil(t, informer.ByOptionsLister)
 		assert.NotNil(t, informer.SharedIndexInformer)
@@ -104,7 +105,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, nilTypeGuidance, true, true, 0, 0)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewIndexer(), should return an error", test: func(t *testing.T) {
@@ -141,7 +142,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, nilTypeGuidance, true, true, 0, 0)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewListOptionIndexer(), should return an error", test: func(t *testing.T) {
@@ -196,7 +197,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, nilTypeGuidance, true, true, 0, 0)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with transform func", test: func(t *testing.T) {
@@ -262,7 +263,7 @@ func TestNewInformer(t *testing.T) {
 		transformFunc := func(input interface{}) (interface{}, error) {
 			return "someoutput", nil
 		}
-		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true, 0, 0)
+		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, nilTypeGuidance, true, true, 0, 0)
 		assert.Nil(t, err)
 		assert.NotNil(t, informer.ByOptionsLister)
 		assert.NotNil(t, informer.SharedIndexInformer)
@@ -298,7 +299,7 @@ func TestNewInformer(t *testing.T) {
 		transformFunc := func(input interface{}) (interface{}, error) {
 			return "someoutput", nil
 		}
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true, 0, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, nilTypeGuidance, true, true, 0, 0)
 		assert.Error(t, err)
 		newInformer = cache.NewSharedIndexInformer
 	}})
