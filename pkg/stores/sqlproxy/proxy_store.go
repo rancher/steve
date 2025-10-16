@@ -152,10 +152,12 @@ var (
 			{"spec", "internal"},
 			{"spec", "displayName"},
 			{"status", "allocatable", "cpu"},
+			{"status", "allocatable", "cpuRaw"},
 			{"status", "allocatable", "memory"},
 			{"status", "allocatable", "memoryRaw"},
 			{"status", "allocatable", "pods"},
 			{"status", "requested", "cpu"},
+			{"status", "requested", "cpuRaw"},
 			{"status", "requested", "memory"},
 			{"status", "requested", "memoryRaw"},
 			{"status", "requested", "pods"},
@@ -838,10 +840,10 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 
 var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
-		"status.allocatable.cpu":       "INT",
+		"status.allocatable.cpuRaw":    "REAL",
 		"status.allocatable.memoryRaw": "REAL",
 		"status.allocatable.pods":      "INT",
-		"status.requested.cpu":         "INT",
+		"status.requested.cpuRaw":      "REAL",
 		"status.requested.memoryRaw":   "REAL",
 		"status.requested.pods":        "INT",
 	},

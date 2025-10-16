@@ -300,7 +300,7 @@ func TestTransformManagedCluster(t *testing.T) {
 						},
 						"allocatable": map[string]interface{}{
 							"cpu":    "1",
-							"memory": "12K",
+							"memory": "12k",
 							"pods":   "1",
 						},
 						"requested": map[string]interface{}{
@@ -335,12 +335,14 @@ func TestTransformManagedCluster(t *testing.T) {
 						"connected": false,
 						"allocatable": map[string]interface{}{
 							"cpu":       "1",
+							"cpuRaw":    float64(1),
 							"memoryRaw": float64(12000),
-							"memory":    "12K",
+							"memory":    "12k",
 							"pods":      "1",
 						},
 						"requested": map[string]interface{}{
 							"cpu":       "2",
+							"cpuRaw":    float64(2),
 							"memory":    "12Ki",
 							"memoryRaw": float64(12288),
 							"pods":      "2",
@@ -373,12 +375,12 @@ func TestTransformManagedCluster(t *testing.T) {
 							},
 						},
 						"allocatable": map[string]interface{}{
-							"cpu":    "1",
+							"cpu":    "200m",
 							"memory": "12M",
 							"pods":   "1",
 						},
 						"requested": map[string]interface{}{
-							"cpu":    "2",
+							"cpu":    "1425m",
 							"memory": "12Mi",
 							"pods":   "2",
 						},
@@ -408,13 +410,15 @@ func TestTransformManagedCluster(t *testing.T) {
 						},
 						"connected": false,
 						"allocatable": map[string]interface{}{
-							"cpu":       "1",
+							"cpu":       "200m",
+							"cpuRaw":    float64(0.2),
 							"memoryRaw": float64(12000000),
 							"memory":    "12M",
 							"pods":      "1",
 						},
 						"requested": map[string]interface{}{
-							"cpu":       "2",
+							"cpu":       "1425m",
+							"cpuRaw":    float64(1.425),
 							"memoryRaw": float64(12582912),
 							"memory":    "12Mi",
 							"pods":      "2",
@@ -483,15 +487,89 @@ func TestTransformManagedCluster(t *testing.T) {
 						"connected": false,
 						"allocatable": map[string]interface{}{
 							"cpu":       "1",
+							"cpuRaw":    float64(1),
 							"memoryRaw": float64(12000000000),
 							"memory":    "12G",
 							"pods":      "1",
 						},
 						"requested": map[string]interface{}{
 							"cpu":       "2",
+							"cpuRaw":    float64(2),
 							"memoryRaw": float64(12884901888),
 							"memory":    "12Gi",
 							"pods":      "2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "unrecognized numbers and suffixes are ignored",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   5,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "c-m-homer",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "homer",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:17Z",
+								"status":         "False",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"allocatable": map[string]interface{}{
+							"cpu":    "",
+							"memory": "12q",
+							"pods":   "1",
+						},
+						"requested": map[string]interface{}{
+							"cpu":    "8@@",
+							"memory": "cheese",
+							"pods":   "2",
+						},
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   5,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "c-m-homer",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "homer",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:52:17Z",
+								"status":         "False",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": false,
+						"allocatable": map[string]interface{}{
+							"cpu":    "",
+							"memory": "12q",
+							"pods":   "1",
+						},
+						"requested": map[string]interface{}{
+							"cpu":    "8@@",
+							"memory": "cheese",
+							"pods":   "2",
 						},
 					},
 				},
