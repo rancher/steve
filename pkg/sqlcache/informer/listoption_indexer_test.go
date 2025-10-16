@@ -2038,7 +2038,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				"name": name,
 			},
 			"status": map[string]any{
-				"allocatable": map[string]string{
+				"allocatable": map[string]any{
 					"cpu":    fmt.Sprintf("%d", cpuCount),
 					"memory": memory,
 					"pods":   fmt.Sprintf("%d", podCount),
@@ -2048,7 +2048,8 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		lastDigit := name[len(name)-1:]
 		val, err := strconv.Atoi(lastDigit)
 		if err == nil && val%2 == 1 {
-			newMap := map[string]string{"cpu": fmt.Sprintf("%d", cpuCountAvailable),
+			newMap := map[string]any{
+				"cpu":    fmt.Sprintf("%d", cpuCountAvailable),
 				"memory": memory,
 				"pods":   fmt.Sprintf("%d", podCountAvailable),
 			}
