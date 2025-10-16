@@ -240,7 +240,7 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
 			}
-			logrus.Debugf("QQQ: non-label-Updated %s[%s].%s to %s",
+			logrus.Tracef("QQQ: non-label-Updated %s[%s].%s to %s",
 				nonLabelDep.SourceGVK,
 				sourceKey,
 				nonLabelDep.TargetFinalFieldName,
