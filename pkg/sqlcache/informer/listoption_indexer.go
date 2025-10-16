@@ -391,9 +391,9 @@ func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) 
 
 // watcherWithBackfill creates a proxy channel that buffers events during a "backfill" phase
 // and then seamlessly transitions to live event processing.
-func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T, maxBufferSize int) (chan T, func(), func()) {
-	backfill, backfillDone := context.WithCancel(ctx)
-	writeChan := make(chan T)
+func watcherWithBackfill[T any](ctx context.Context, eventsCh chan<- T, maxBufferSize int) (chan T, func(), func()) {
+	backfillCtx, signalBackfillDone := context.WithCancel(ctx)
+	watcherCh := make(chan T)
 	done := make(chan struct{})
 
 	// The single proxy goroutine that manages all state.
@@ -401,68 +401,73 @@ func watcherWithBackfill[T any](ctx context.Context, eventsChan chan<- T, maxBuf
 		defer close(done)
 
 		var queue []T // Use a slice as an internal FIFO queue.
-		backfillComplete := false
-		backfillDone := backfill.Done() // allow disabling this case in the below select once observed
 
-		for {
-			// If backfill is done and our queue is empty, we enter the final "Piping" state.
-			// This provides the desired unbuffered behavior.
-			if backfillComplete && len(queue) == 0 {
-				select {
-				case event, ok := <-writeChan:
-					if !ok {
-						return // writeChan was closed.
-					}
-					// Send event directly, blocking until the consumer is ready.
-					select {
-					case eventsChan <- event:
-					case <-ctx.Done():
-						return
-					}
-				case <-ctx.Done():
-					return
-				}
-				continue // Restart the loop in the correct state.
-			}
-
-			// Use nullable channels for disabling cases in the select below depending on the state
-			var readChan <-chan T
-			var outputChan chan<- T
-			var nextEvent T
-
-			// Only accept new events from write buffer if the queue has space, blocking the sender (equivalent to a full buffered channel)
-			if len(queue) < maxBufferSize {
-				readChan = writeChan
-			}
-
-			// Only start flushing the queue if backfill has completed
-			if backfillComplete && len(queue) > 0 {
-				nextEvent = queue[0]
-				outputChan = eventsChan
-			}
-
-			// cases reading from a nil channel will be ignored
+		// Phase 1: Accumulate while we're backfilling
+	acc:
+		for len(queue) < maxBufferSize { // Only accumulate until reaching max buffer size, then block ingestion instead
 			select {
-			case <-ctx.Done():
-				return
-			case <-backfillDone:
-				backfillDone = nil // disable this case after first observed
-				backfillComplete = true
-			case event, ok := <-readChan: // This case is disabled if readChan is nil
+			case event, ok := <-watcherCh:
 				if !ok {
 					// writeChan was closed, assume that context is done, so the remaining queue will never be sent
 					return
 				}
 				queue = append(queue, event)
-			case outputChan <- nextEvent: // This case is disabled if outputChan is nil
+			case <-backfillCtx.Done():
+				break acc
+			}
+		}
+
+		// Check backfill was completed, in case the above loop aborted early
+		<-backfillCtx.Done()
+		if ctx.Err() != nil {
+			return
+		}
+
+		// Phase 2: start flushing while still accepting events from watcherCh
+		for len(queue) > 0 {
+			// Only accept new events from write buffer if the queue has space, blocking the sender (equivalent to a full buffered channel)
+			// cases reading from a nil channel will be ignored
+			var readChan <-chan T
+			if len(queue) < maxBufferSize {
+				readChan = watcherCh
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-readChan: // This case is disabled if readChan is nil (queue is full)
+				if !ok {
+					// watcherCh was closed, assume that context is done, so the remaining queue will never be sent
+					return
+				}
+				queue = append(queue, event)
+			case eventsCh <- queue[0]:
 				// We successfully sent the event, so we can remove it from the queue.
 				queue = queue[1:]
 			}
 		}
+
+		// Final phase: when flushing is completed, the original channel is piped to watcherCh
+		for {
+			select {
+			case event, ok := <-watcherCh:
+				if !ok {
+					return // watcherCh was closed.
+				}
+				// Send event directly, blocking until the consumer is ready.
+				select {
+				case eventsCh <- event:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
 	}()
 
-	return writeChan, backfillDone, func() {
-		close(writeChan)
+	return watcherCh, signalBackfillDone, func() {
+		close(watcherCh)
 		<-done
 	}
 }
