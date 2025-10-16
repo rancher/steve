@@ -1407,7 +1407,6 @@ func getField(a any, field string) (any, error) {
 	var found bool
 	var err error
 	obj = o.Object
-mainLoop:
 	for i, subField := range subFields {
 		switch t := obj.(type) {
 		case map[string]interface{}:
@@ -1422,14 +1421,6 @@ mainLoop:
 				// will need to deal with somehow.
 				return nil, nil
 			}
-		case map[string]string:
-			newVal, found := t[subField]
-			if !found {
-				obj = ""
-			} else {
-				obj = newVal
-			}
-			break mainLoop
 		case []interface{}:
 			if strings.HasPrefix(subField, "[") && strings.HasSuffix(subField, "]") {
 				key, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(subField, "["), "]"))
@@ -1463,8 +1454,6 @@ mainLoop:
 				return result, nil
 			}
 		default:
-			//fmt.Fprintf(os.Stderr, "QQQ: field:%s, subField: %d, name: %s, type:%v\n", field, i, subField,
-			//	reflect.TypeOf(obj).String())
 			return nil, fmt.Errorf("[listoption indexer] failed to parse subfields: %v", subFields)
 		}
 	}
