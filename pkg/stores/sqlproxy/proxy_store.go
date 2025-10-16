@@ -196,8 +196,16 @@ var (
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
 			{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"},
+			{"status", "allocatable", "cpu"},
+			{"status", "allocatable", "memory"},
+			{"status", "allocatable", "memoryRaw"},
+			{"status", "allocatable", "pods"},
 			{"status", "clusterName"},
 			{"status", "provider"},
+			{"status", "requested", "cpu"},
+			{"status", "requested", "memory"},
+			{"status", "requested", "memoryRaw"},
+			{"status", "requested", "pods"},
 		},
 		gvkKey("rke.cattle.io", "v1", "ETCDSnapshot"): {
 			{"snapshotFile", "createdAt"},
@@ -224,7 +232,7 @@ var (
 	}
 	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
-	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v3", Kind: "Cluster"}
+	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
 	namespaceProjectLabelDep = sqltypes.ExternalLabelDependency{
 		SourceGVK:            gvkKey("", "v1", "Namespace"),
 		SourceLabelName:      "field.cattle.io/projectId",
@@ -243,9 +251,9 @@ var (
 	// Remember to index these fields in the database.
 	provisionedClusterDependencies = func() []sqltypes.ExternalDependency {
 		x := make([]sqltypes.ExternalDependency, 6)
-		for i, field := range []string{"status.allocatable.cpu", "status.allocatable.memory", "status.allocatable.pods", "status.available.cpu", "status.available.memory", "status.available.pods"} {
+		for i, field := range []string{"status.allocatable.cpu", "status.allocatable.memory", "status.allocatable.pods", "status.requested.cpu", "status.requested.memory", "status.requested.pods"} {
 			x[i] = sqltypes.ExternalDependency{
-				SourceGVK:            gvkKey("provisioning.cattle.io", "v3", "Cluster"),
+				SourceGVK:            gvkKey("provisioning.cattle.io", "v1", "Cluster"),
 				SourceFieldName:      "status.clusterName",
 				TargetGVK:            gvkKey("management.cattle.io", "v3", "Cluster"),
 				TargetKeyFieldName:   "id",
