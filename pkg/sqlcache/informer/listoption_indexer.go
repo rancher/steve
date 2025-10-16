@@ -1407,7 +1407,6 @@ func getField(a any, field string) (any, error) {
 	var found bool
 	var err error
 	obj = o.Object
-mainLoop:
 	for i, subField := range subFields {
 		switch t := obj.(type) {
 		case map[string]interface{}:
@@ -1417,18 +1416,11 @@ mainLoop:
 				return nil, err
 			}
 			if !found {
-				// particularly with labels/annotation indexes, it is totally possible that some objects won't have these,
-				// so either we this is not an error state or it could be an error state with a type that callers can check for
+				// Particularly with labels/annotation indexes, it is totally possible that some objects won't have these.
+				// So either this is not an error state, or it could be an error state with a type that callers
+				// will need to deal with somehow.
 				return nil, nil
 			}
-		case map[string]string:
-			newVal, found := t[subField]
-			if !found {
-				obj = ""
-			} else {
-				obj = newVal
-			}
-			break mainLoop
 		case []interface{}:
 			if strings.HasPrefix(subField, "[") && strings.HasSuffix(subField, "]") {
 				key, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(subField, "["), "]"))
