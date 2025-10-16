@@ -3,7 +3,6 @@ package informer
 import (
 	"context"
 	"database/sql"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"maps"
@@ -169,11 +168,6 @@ type ListOptionIndexerOptions struct {
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields.
 func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
-	// necessary in order to gob/ungob unstructured.Unstructured objects
-	gob.Register(map[string]interface{}{})
-	gob.Register(map[string]string{})
-	gob.Register([]interface{}{})
-
 	i, err := NewIndexer(ctx, cache.Indexers{}, s)
 	if err != nil {
 		return nil, err
