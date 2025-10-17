@@ -446,6 +446,7 @@ func watcherWithBackfill[T any](ctx context.Context, eventsCh chan<- T, maxBuffe
 				queue = queue[1:]
 			}
 		}
+		queue = nil // no longer needed, release the backing array for GC
 
 		// Final phase: when flushing is completed, the original channel is piped to watcherCh
 		for {
