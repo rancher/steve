@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -1987,6 +1988,244 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 			}
 			fields = append(fields, test.extraIndexedFields...)
 
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+			defer cleanTempFiles(dbPath)
+			assert.NoError(t, err)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				assert.NoError(t, err)
+			}
+
+			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			if test.expectedErr != nil {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedList, list)
+			assert.Equal(t, test.expectedTotal, total)
+			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
+func TestUserDefinedMemoryFunction(t *testing.T) {
+	makeObj := func(name string, cpuCount int, memory string, podCount int) map[string]any {
+		if cpuCount < 1 {
+			cpuCount = 1
+		}
+		if memory == "" {
+			memory = "1Gi"
+		}
+		if podCount < 1 {
+			podCount = 1
+		}
+		cpuCountAvailable := cpuCount - 1
+		if cpuCountAvailable < 1 {
+			cpuCountAvailable = 1
+		}
+		podCountAvailable := podCount - 1
+		if podCountAvailable < 1 {
+			podCountAvailable = 1
+		}
+		h1 := map[string]any{
+			"metadata": map[string]any{
+				"name": name,
+			},
+			"status": map[string]any{
+				"allocatable": map[string]any{
+					"cpu":    fmt.Sprintf("%d", cpuCount),
+					"memory": memory,
+					"pods":   fmt.Sprintf("%d", podCount),
+				},
+			},
+		}
+		lastDigit := name[len(name)-1:]
+		val, err := strconv.Atoi(lastDigit)
+		if err == nil && val%2 == 1 {
+			newMap := map[string]any{
+				"cpu":    fmt.Sprintf("%d", cpuCountAvailable),
+				"memory": memory,
+				"pods":   fmt.Sprintf("%d", podCountAvailable),
+			}
+			statusMap := h1["status"].(map[string]any)
+			statusMap["requested"] = any(newMap)
+		}
+		return h1
+	}
+
+	type testCase struct {
+		description string
+		listOptions sqltypes.ListOptions
+		partitions  []partition.Partition
+		ns          string
+
+		items []*unstructured.Unstructured
+
+		extraIndexedFields [][]string
+		expectedList       *unstructured.UnstructuredList
+		expectedTotal      int
+		expectedContToken  string
+		expectedErr        error
+	}
+
+	obj01 := makeObj("obj01", 8, "1000", 2)
+	obj02 := makeObj("obj02", 7, "12K", 12)
+	obj03 := makeObj("obj03", 6, "3Ki", 3)
+	obj04 := makeObj("obj04", 5, "8M", 13)
+	obj05 := makeObj("obj05", 4, "12Mi", 25)
+	obj06 := makeObj("obj06", 3, "71M", 5)
+	obj07 := makeObj("obj07", 2, "55G", 24)
+	obj08 := makeObj("obj08", 1, "104Gi", 4)
+	allObjects := []map[string]any{obj01, obj02, obj03, obj04, obj05, obj06, obj07, obj08}
+	ctx := context.Background()
+
+	makeList := func(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredList {
+		t.Helper()
+
+		if len(objs) == 0 {
+			return &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+		}
+
+		var items []any
+		for _, obj := range objs {
+			items = append(items, obj)
+		}
+
+		list := &unstructured.Unstructured{
+			Object: map[string]any{
+				"items": items,
+			},
+		}
+
+		itemList, err := list.ToList()
+		require.NoError(t, err)
+
+		return itemList
+	}
+	itemList := makeList(t, allObjects...)
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "filtering on cpu works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "allocatable", "cpu"},
+						Matches: []string{"7"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj02),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "filtering on pod-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "allocatable", "pods"},
+						Matches: []string{"25"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj05),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "filtering on memory works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "allocatable", "memory"},
+						Matches: []string{"8M"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj04),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "sorting on memory does a naive ascii sort",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"status", "allocatable", "memory"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList:  makeList(t, obj01, obj08, obj02, obj05, obj03, obj07, obj06, obj04),
+		expectedTotal: len(allObjects),
+	})
+	tests = append(tests, testCase{
+		description: "filtering on requested pod-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "requested", "pods"},
+						Matches: []string{"24"},
+						Op:      sqltypes.Eq,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj05),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "filtering on requested cpu-count works",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"status", "requested", "cpu"},
+						Matches: []string{"1", "3"},
+						Op:      sqltypes.In,
+					},
+				},
+			},
+		},
+		},
+		expectedList:  makeList(t, obj07, obj05),
+		expectedTotal: 2,
+	})
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			fields := [][]string{
+				{"status", "allocatable", "cpu"},
+				{"status", "allocatable", "memory"},
+				{"status", "allocatable", "pods"},
+				{"status", "requested", "cpu"},
+				{"status", "requested", "memory"},
+				{"status", "requested", "pods"},
+			}
+			fields = append(fields, test.extraIndexedFields...)
+			if len(test.partitions) == 0 {
+				test.partitions = []partition.Partition{{All: true}}
+			}
 			opts := ListOptionIndexerOptions{
 				Fields:       fields,
 				IsNamespaced: true,

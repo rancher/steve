@@ -13,9 +13,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"net"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -469,75 +471,130 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 	if err != nil {
 		return dbPath, err
 	}
-	sqlite.RegisterDeterministicScalarFunction(
-		"extractBarredValue",
-		2,
-		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
-			var arg1 string
-			var arg2 int
-			switch argTyped := args[0].(type) {
-			case string:
-				arg1 = argTyped
-			case []byte:
-				arg1 = string(argTyped)
-			default:
-				return nil, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
-			}
-			var err error
-			switch argTyped := args[1].(type) {
-			case int:
-				arg2 = argTyped
-			case string:
-				arg2, err = strconv.Atoi(argTyped)
-			case []byte:
-				arg2, err = strconv.Atoi(string(argTyped))
-			default:
-				return nil, fmt.Errorf("unsupported type for arg2: expected an int, got: %T", args[0])
-			}
-			if err != nil {
-				return nil, fmt.Errorf("problem with arg2: %w", err)
-			}
-			parts := strings.Split(arg1, "|")
-			if arg2 >= len(parts) || arg2 < 0 {
-				return "", nil
-			}
-			return parts[arg2], nil
-		},
-	)
-	sqlite.RegisterDeterministicScalarFunction(
-		"inet_aton",
-		1,
-		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
-			var arg1 string
-			switch argTyped := args[0].(type) {
-			case string:
-				arg1 = argTyped
-			case []byte:
-				arg1 = string(argTyped)
-			default:
-				logrus.Errorf("inet_aton: unsupported type for arg1: expected a string, got :%T", args[0])
-				return int64(0), nil
-			}
-			ip := net.ParseIP(arg1)
-			if ip == nil {
-				logrus.Errorf("inet_aton: invalid IP address: %s", arg1)
-				return int64(0), nil
-			}
-			ipAs4 := ip.To4()
-			if ipAs4 != nil {
-				return int64(binary.BigEndian.Uint32(ipAs4)), nil
-			}
-			// By elimination it must be IPv6 (until IPv[n > 6] comes along one day
-			ipAs16 := ip.To16()
-			if ipAs16 == nil {
-				logrus.Errorf("inet_aton: invalid IPv6 address: %s", arg1)
-				return int64(0), nil
-			}
-			return int64(binary.BigEndian.Uint64(ipAs16)), nil
-		},
-	)
+	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
+	sqlite.RegisterDeterministicScalarFunction("inet_aton", 1, inetAtoN)
+	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
 	c.conn = sqlDB
 	return dbPath, nil
+}
+
+func extractBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 string
+	var arg2 int
+	switch argTyped := args[0].(type) {
+	case string:
+		arg1 = argTyped
+	case []byte:
+		arg1 = string(argTyped)
+	default:
+		return nil, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
+	}
+	var err error
+	switch argTyped := args[1].(type) {
+	case int:
+		arg2 = argTyped
+	case string:
+		arg2, err = strconv.Atoi(argTyped)
+	case []byte:
+		arg2, err = strconv.Atoi(string(argTyped))
+	default:
+		return nil, fmt.Errorf("unsupported type for arg2: expected an int, got: %T", args[0])
+	}
+	if err != nil {
+		return nil, fmt.Errorf("problem with arg2: %w", err)
+	}
+	parts := strings.Split(arg1, "|")
+	if arg2 >= len(parts) || arg2 < 0 {
+		return "", nil
+	}
+	return parts[arg2], nil
+}
+
+func inetAtoN(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 string
+	switch argTyped := args[0].(type) {
+	case string:
+		arg1 = argTyped
+	case []byte:
+		arg1 = string(argTyped)
+	default:
+		logrus.Errorf("inetAtoN: unsupported type for arg1: expected a string, got :%T", args[0])
+		return int64(0), nil
+	}
+	ip := net.ParseIP(arg1)
+	if ip == nil {
+		logrus.Errorf("inetAtoN: invalid IP address: %s", arg1)
+		return int64(0), nil
+	}
+	ipAs4 := ip.To4()
+	if ipAs4 != nil {
+		return int64(binary.BigEndian.Uint32(ipAs4)), nil
+	}
+	// By elimination it must be IPv6 (until IPv[n > 6] comes along one day
+	ipAs16 := ip.To16()
+	if ipAs16 == nil {
+		logrus.Errorf("inetAtoN: invalid IPv6 address: %s", arg1)
+		return int64(0), nil
+	}
+	return int64(binary.BigEndian.Uint64(ipAs16)), nil
+}
+
+// Convert a string representation of memory to a float giving the number of bytes
+// See the `tbl` var for associated values of each suffix
+// Values returned as REAL to allow for large values
+func memoryInBytes(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 string
+	var val float64
+	var finalValue driver.Value
+	finalValue = val
+	switch argTyped := args[0].(type) {
+	case string:
+		arg1 = argTyped
+	case []byte:
+		arg1 = string(argTyped)
+	default:
+		return finalValue, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
+	}
+	rx := `^([0-9]+)(\w{0,2})$`
+	ptn := regexp.MustCompile(rx)
+	m := ptn.FindStringSubmatch(arg1)
+	if m == nil || len(m) != 3 {
+		return finalValue, fmt.Errorf("couldn't parse '%s' as a numeric value", arg1)
+	}
+	tbl := map[string]int{
+		"B": 0,
+		"K": 1,
+		"M": 2,
+		"G": 3,
+		"T": 4,
+		"E": 5,
+	}
+	size, err := strconv.Atoi(m[1])
+	if err != nil {
+		return finalValue, fmt.Errorf("couldn't parse '%s' as a numeric value: %w", arg1, err)
+	}
+	factor := 0
+	base := 1024
+	var finalError error
+	if len(m[2]) > 0 {
+		var ok bool
+		factor, ok = tbl[strings.ToUpper(m[2][0:1])]
+		if !ok {
+			factor = 0
+		}
+		if len(m[2]) > 2 {
+			finalError = fmt.Errorf("numeric value '%s' has an unrecognized suffix '%s'", arg1, m[2])
+		} else if len(m[2]) == 2 {
+			if strings.ToUpper(m[2][1:2]) == "I" {
+				base = 1000
+			} else {
+				finalError = fmt.Errorf("numeric value '%s' has an unrecognized suffix '%s'", arg1, m[2])
+			}
+		}
+	}
+	val = float64(size) * math.Pow(float64(base), float64(factor))
+	finalValue = val
+	return finalValue, finalError
 }
 
 // This acts like "touch" for both existing files and non-existing files.
