@@ -1055,6 +1055,8 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 	}
 
 	gvk := attributes.GVK(apiSchema)
+	// provisioning.cattle.io.clusters depends on information from management.cattle.io.clusters
+	// so we must initialize this one as well
 	if gvk == pcioClusterGvk {
 		mgmtClusterInf, err := s.cacheFor(ctx, nil, &mgmtClusterSchema)
 		if err != nil {
