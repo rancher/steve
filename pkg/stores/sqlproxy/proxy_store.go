@@ -232,6 +232,16 @@ var (
 			},
 		},
 	}
+	mgmtClusterSchema = types.APISchema{
+		Schema: &schemas.Schema{
+			Attributes: map[string]interface{}{
+				"group":    "management.cattle.io",
+				"version":  "v3",
+				"kind":     "Cluster",
+				"resource": "clusters",
+			},
+		},
+	}
 	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
 	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
@@ -676,21 +686,14 @@ func newWatchers() *Watchers {
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
 	ctx := apiOp.Context()
 
-	// warnings from inside the informer are discarded
-	gvk := attributes.GVK(schema)
-	fields, cols, typeGuidance := getFieldAndColInfo(schema, gvk)
-	fields = append(fields, getFieldForGVK(gvk)...)
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(schema))
-	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(schema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(schema))
+	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
 	// FIXME: This needs to be called when the watch ends, not at the end of
 	// this func. However, there's currently a bug where we don't correctly
 	// shutdown watches, so for now, we do this.
-	defer s.cacheFactory.DoneWithCache(inf)
+	defer doneFn()
 
 	var selector labels.Selector
 	if w.Selector != "" {
@@ -933,27 +936,13 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	ctx, cancel := context.WithCancel(apiOp.Context())
 	defer cancel()
 
-	// warnings from inside the informer are discarded
-	buffer := WarningBuffer{}
-	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
+	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, apiSchema)
 	if err != nil {
 		return nil, 0, "", err
 	}
+	defer doneFn()
+
 	gvk := attributes.GVK(apiSchema)
-	//TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
-	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
-	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
-	fields = append(fields, getFieldForGVK(gvk)...)
-
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
-	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))
-	if err != nil {
-		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
-	}
-	defer s.cacheFactory.DoneWithCache(inf)
-
 	opts, err := listprocessor.ParseQuery(apiOp, gvk.Kind)
 	if err != nil {
 		var apiError *apierror.APIError
@@ -1053,4 +1042,61 @@ func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.API
 		return s.Watch(apiOp, schema, wr)
 	}
 	return s.WatchNames(apiOp, schema, wr, partition.Names)
+}
+
+func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, func(), error) {
+	var doneCacheFns []func()
+	doneCache := func() {
+		length := len(doneCacheFns)
+		for i := range length {
+			fn := doneCacheFns[length-1-i]
+			fn()
+		}
+	}
+
+	gvk := attributes.GVK(apiSchema)
+	if gvk == pcioClusterGvk {
+		mgmtClusterInf, err := s.cacheFor(ctx, nil, &mgmtClusterSchema)
+		if err != nil {
+			return nil, nil, err
+		}
+		doneCacheFns = append(doneCacheFns, func() {
+			s.cacheFactory.DoneWithCache(mgmtClusterInf)
+		})
+	}
+
+	inf, err := s.cacheFor(ctx, apiOp, apiSchema)
+	if err != nil {
+		doneCache()
+		return nil, nil, err
+	}
+	doneCacheFns = append(doneCacheFns, func() {
+		s.cacheFactory.DoneWithCache(inf)
+	})
+
+	return inf, doneCache, nil
+}
+
+func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
+	// warnings from inside the informer are discarded
+	buffer := WarningBuffer{}
+	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	gvk := attributes.GVK(apiSchema)
+	//TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
+	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
+	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
+	fields = append(fields, getFieldForGVK(gvk)...)
+
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
+	tableClient := &tablelistconvert.Client{ResourceInterface: client}
+	ns := attributes.Namespaced(apiSchema)
+	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))
+	if err != nil {
+		return nil, fmt.Errorf("cachefor %v: %w", gvk, err)
+	}
+	return inf, nil
 }
