@@ -2252,6 +2252,8 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 	}
 }
 
+
+
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
 		description           string
