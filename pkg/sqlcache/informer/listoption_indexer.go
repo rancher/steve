@@ -92,7 +92,7 @@ const (
                        event BLOB NOT NULL,
                        eventnonce BLOB,
 	               dekid BLOB,
-                       PRIMARY KEY (type, rv)
+                       PRIMARY KEY (rv, type)
           )`
 	listEventsAfterFmt = `SELECT type, rv, event, eventnonce, dekid
 	       FROM "%s_events"
