@@ -52,7 +52,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 				index := rescommon.GetIndexValueFromString(col.Field)
 				if index == -1 {
-					return nil, fmt.Errorf("field index not found at column.Field struct variable: %s", col.Field)
+					return obj, fmt.Errorf("field index not found at column.Field struct variable: %s", col.Field)
 				}
 
 				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
@@ -61,12 +61,12 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 				}
 
 				if err != nil {
-					return nil, err
+					return obj, err
 				}
 
 				value, cast := curValue[index].(string)
 				if !cast {
-					return nil, fmt.Errorf("could not cast metadata.fields %d to string", index)
+					return obj, fmt.Errorf("could not cast metadata.fields %d to string", index)
 				}
 
 				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
@@ -77,7 +77,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 
 				curValue[index] = fmt.Sprintf("%d", now().Add(-duration).UnixMilli())
 				if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
-					return nil, err
+					return obj, err
 				}
 
 				return obj, nil
