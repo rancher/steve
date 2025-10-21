@@ -505,17 +505,9 @@ func tableColsToCommonCols(tableDefs []table.Column) []common.ColumnDefinition {
 // It also returns type info for each field
 func getFieldAndColInfo(schema *types.APISchema, gvk schema.GroupVersionKind) ([][]string, []common.ColumnDefinition, map[string]string) {
 	var fields [][]string
-	columns := attributes.Columns(schema)
-	if columns == nil {
+	colDefs := common.GetColumnDefinitions(schema)
+	if colDefs == nil {
 		return fields, nil, map[string]string{}
-	}
-	colDefs, ok := columns.([]common.ColumnDefinition)
-	if !ok {
-		tableDefs, ok := columns.([]table.Column)
-		if !ok {
-			return fields, nil, map[string]string{}
-		}
-		colDefs = tableColsToCommonCols(tableDefs)
 	}
 	for _, colDef := range colDefs {
 		field := strings.TrimPrefix(colDef.Field, "$")
