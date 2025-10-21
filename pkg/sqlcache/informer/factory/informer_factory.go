@@ -68,6 +68,14 @@ type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fie
 type Cache struct {
 	informer.ByOptionsLister
 	gvk schema.GroupVersionKind
+	ctx context.Context
+}
+
+// Context gives the context of the factory that created this cache.
+//
+// The context is canceled when the cache is stopped (eg: when the CRD column definition changes)
+func (c *Cache) Context() context.Context {
+	return c.ctx
 }
 
 func (c *Cache) GVK() schema.GroupVersionKind {
@@ -96,11 +104,15 @@ type CacheFactoryOptions struct {
 // NewCacheFactory returns an informer factory instance
 // This is currently called from steve via initial calls to `s.cacheFactory.CacheFor(...)`
 func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
+	return NewCacheFactoryWithContext(context.Background(), opts)
+}
+
+func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (*CacheFactory, error) {
 	m, err := encryption.NewManager()
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	dbClient, _, err := db.NewClient(ctx, nil, m, m, false)
 	if err != nil {
 		cancel()
@@ -214,7 +226,7 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	}
 
 	// At this point the informer is ready, return it
-	return &Cache{ByOptionsLister: gi.informer, gvk: gvk}, nil
+	return &Cache{ByOptionsLister: gi.informer, gvk: gvk, ctx: gi.ctx}, nil
 }
 
 // DoneWithCache must be called for every successful CacheFor call. The Cache should

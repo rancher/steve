@@ -676,16 +676,20 @@ func newWatchers() *Watchers {
 }
 
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	ctx := apiOp.Context()
-
-	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, schema)
+	inf, doneFn, err := s.cacheForWithDeps(apiOp.Context(), apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
-	// FIXME: This needs to be called when the watch ends, not at the end of
-	// this func. However, there's currently a bug where we don't correctly
-	// shutdown watches, so for now, we do this.
-	defer doneFn()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-inf.Context().Done():
+			cancel()
+		case <-apiOp.Context().Done():
+			cancel()
+		}
+	}()
 
 	var selector labels.Selector
 	if w.Selector != "" {
@@ -697,6 +701,8 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 	result := make(chan watch.Event)
 	go func() {
+		defer cancel()
+		defer doneFn()
 		defer close(result)
 
 		idNamespace, _ := kv.RSplit(w.ID, "/")
