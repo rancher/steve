@@ -35,11 +35,10 @@ type ListOptionIndexer struct {
 	namespaced    bool
 	indexedFields []string
 
-	latestRVLock sync.RWMutex
-	latestRV     string
-
-	watchersLock sync.RWMutex
-	watchers     map[*watchKey]*watcher
+	// lock protects both latestRV and watchers
+	lock     sync.RWMutex
+	latestRV string
+	watchers map[*watchKey]*watcher
 
 	// gcInterval is how often to run the garbage collection
 	gcInterval time.Duration
@@ -92,7 +91,7 @@ const (
                        event BLOB NOT NULL,
                        eventnonce BLOB,
 	               dekid BLOB,
-                       PRIMARY KEY (type, rv)
+                       PRIMARY KEY (rv, type)
           )`
 	listEventsAfterFmt = `SELECT type, rv, event, eventnonce, dekid
 	       FROM "%s_events"
@@ -299,28 +298,36 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 func (l *ListOptionIndexer) GetLatestResourceVersion() []string {
 	var latestRV []string
 
-	l.latestRVLock.RLock()
+	l.lock.RLock()
 	latestRV = []string{l.latestRV}
-	l.latestRVLock.RUnlock()
+	l.lock.RUnlock()
 
 	return latestRV
 }
 
 func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error {
-	l.latestRVLock.RLock()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// We can keep receiving events while replaying older events for the watcher.
+	// By early registering this watcher, this channel will buffer any new events while we are still backfilling old events.
+	// When we finish, calling backfillDone will write all events in the buffer, then listen to new events as normal.
+	const maxBufferSize = 100
+	watcherChannel, backfillDone, closeWatcher := watcherWithBackfill(ctx, eventsCh, maxBufferSize)
+	defer closeWatcher()
+
+	l.lock.Lock()
 	latestRV := l.latestRV
-	l.latestRVLock.RUnlock()
+	key := l.addWatcherLocked(watcherChannel, opts.Filter)
+	l.lock.Unlock()
+	defer l.removeWatcher(key)
 
 	targetRV := opts.ResourceVersion
-	if opts.ResourceVersion == "" {
+	if targetRV == "" {
 		targetRV = latestRV
 	}
 
-	var events []watch.Event
-	var key *watchKey
-	// Even though we're not writing in this transaction, we prevent other writes to SQL
-	// because we don't want to add more events while we're backfilling events, so we don't miss events
-	err := l.WithTransaction(ctx, true, func(tx db.TxClient) error {
+	if err := l.WithTransaction(ctx, false, func(tx db.TxClient) error {
 		rowIDRow := tx.Stmt(l.findEventsRowByRVStmt).QueryRowContext(ctx, targetRV)
 		if err := rowIDRow.Err(); err != nil {
 			return err
@@ -343,45 +350,34 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		}
 		defer rows.Close()
 
-		for rows.Next() {
+		var latestRevisionReached bool
+		for !latestRevisionReached && rows.Next() {
 			obj := &unstructured.Unstructured{}
 			eventType, err := l.decryptScanEvent(rows, obj)
 			if err != nil {
 				return fmt.Errorf("scanning event row: %w", err)
+			}
+			if obj.GetResourceVersion() == latestRV {
+				// This iteration will be the last one, as we already reached the last event at the moment we started the loop
+				latestRevisionReached = true
 			}
 			filter := opts.Filter
 			if !matchFilter(filter.ID, filter.Namespace, filter.Selector, obj) {
 				continue
 			}
 
-			events = append(events, watch.Event{
+			eventsCh <- watch.Event{
 				Type:   eventType,
 				Object: obj,
-			})
+			}
 		}
-
-		if err := rows.Err(); err != nil {
-			return err
-		}
-
-		for _, event := range events {
-			eventsCh <- event
-		}
-
-		key = l.addWatcher(eventsCh, opts.Filter)
-		return nil
-	})
-	if err != nil {
-		// We might have added a watcher but the transaction failed in
-		// which case we still want to remove the watcher
-		if key != nil {
-			l.removeWatcher(key)
-		}
+		return rows.Err()
+	}); err != nil {
 		return err
 	}
+	backfillDone()
 
 	<-ctx.Done()
-	l.removeWatcher(key)
 	return nil
 }
 
@@ -398,6 +394,90 @@ func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) 
 	return watch.EventType(typ), nil
 }
 
+// watcherWithBackfill creates a proxy channel that buffers events during a "backfill" phase
+// and then seamlessly transitions to live event processing.
+func watcherWithBackfill[T any](ctx context.Context, eventsCh chan<- T, maxBufferSize int) (chan T, func(), func()) {
+	backfillCtx, signalBackfillDone := context.WithCancel(ctx)
+	watcherCh := make(chan T)
+	done := make(chan struct{})
+
+	// The single proxy goroutine that manages all state.
+	go func() {
+		defer close(done)
+
+		var queue []T // Use a slice as an internal FIFO queue.
+
+		// Phase 1: Accumulate while we're backfilling
+	acc:
+		for len(queue) < maxBufferSize { // Only accumulate until reaching max buffer size, then block ingestion instead
+			select {
+			case event, ok := <-watcherCh:
+				if !ok {
+					// writeChan was closed, assume that context is done, so the remaining queue will never be sent
+					return
+				}
+				queue = append(queue, event)
+			case <-backfillCtx.Done():
+				break acc
+			}
+		}
+
+		// Check backfill was completed, in case the above loop aborted early
+		<-backfillCtx.Done()
+		if ctx.Err() != nil {
+			return
+		}
+
+		// Phase 2: start flushing while still accepting events from watcherCh
+		for len(queue) > 0 {
+			// Only accept new events from write buffer if the queue has space, blocking the sender (equivalent to a full buffered channel)
+			// cases reading from a nil channel will be ignored
+			var readChan <-chan T
+			if len(queue) < maxBufferSize {
+				readChan = watcherCh
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-readChan: // This case is disabled if readChan is nil (queue is full)
+				if !ok {
+					// watcherCh was closed, assume that context is done, so the remaining queue will never be sent
+					return
+				}
+				queue = append(queue, event)
+			case eventsCh <- queue[0]:
+				// We successfully sent the event, so we can remove it from the queue.
+				queue = queue[1:]
+			}
+		}
+		queue = nil // no longer needed, release the backing array for GC
+
+		// Final phase: when flushing is completed, the original channel is piped to watcherCh
+		for {
+			select {
+			case event, ok := <-watcherCh:
+				if !ok {
+					return // watcherCh was closed.
+				}
+				// Send event directly, blocking until the consumer is ready.
+				select {
+				case eventsCh <- event:
+				case <-ctx.Done():
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return watcherCh, signalBackfillDone, func() {
+		close(watcherCh)
+		<-done
+	}
+}
+
 type watchKey struct {
 	_ bool // ensure watchKey is NOT zero-sized to get unique pointers
 }
@@ -407,21 +487,19 @@ type watcher struct {
 	filter WatchFilter
 }
 
-func (l *ListOptionIndexer) addWatcher(eventCh chan<- watch.Event, filter WatchFilter) *watchKey {
+func (l *ListOptionIndexer) addWatcherLocked(eventCh chan<- watch.Event, filter WatchFilter) *watchKey {
 	key := new(watchKey)
-	l.watchersLock.Lock()
 	l.watchers[key] = &watcher{
 		ch:     eventCh,
 		filter: filter,
 	}
-	l.watchersLock.Unlock()
 	return key
 }
 
 func (l *ListOptionIndexer) removeWatcher(key *watchKey) {
-	l.watchersLock.Lock()
+	l.lock.Lock()
 	delete(l.watchers, key)
-	l.watchersLock.Unlock()
+	l.lock.Unlock()
 }
 
 /* Core methods */
@@ -468,7 +546,7 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 		return err
 	}
 
-	l.watchersLock.RLock()
+	l.lock.RLock()
 	for _, watcher := range l.watchers {
 		if !matchWatch(watcher.filter.ID, watcher.filter.Namespace, watcher.filter.Selector, oldObj, obj) {
 			continue
@@ -479,10 +557,10 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 			Object: obj.(runtime.Object).DeepCopyObject(),
 		}
 	}
-	l.watchersLock.RUnlock()
+	l.lock.RUnlock()
 
-	l.latestRVLock.Lock()
-	defer l.latestRVLock.Unlock()
+	l.lock.Lock()
+	defer l.lock.Unlock()
 	l.latestRV = latestRV
 	return nil
 }
@@ -593,9 +671,9 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryUsesLabels := hasLabelFilter(lo.Filters) || len(lo.ProjectsOrNamespaces.Filters) > 0
 	joinTableIndexByLabelName := make(map[string]int)
 
-	l.latestRVLock.RLock()
+	l.lock.RLock()
 	latestRV := l.latestRV
-	l.latestRVLock.RUnlock()
+	l.lock.RUnlock()
 
 	if len(lo.Revision) > 0 {
 		currentRevision, err := strconv.ParseInt(latestRV, 10, 64)
@@ -895,9 +973,9 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		continueToken = fmt.Sprintf("%d", offset+limit)
 	}
 
-	l.latestRVLock.RLock()
+	l.lock.RLock()
 	latestRV := l.latestRV
-	l.latestRVLock.RUnlock()
+	l.lock.RUnlock()
 
 	return toUnstructuredList(items, latestRV), total, continueToken, nil
 }
