@@ -35,18 +35,24 @@ func init() {
 	}
 }
 
-func WithEncoding(encoding Encoding) ClientOption {
+func encodingForType(encType Encoding) encoding {
+	switch encType {
+	case GobEncoding:
+		return &gobEncoding{}
+	case JSONEncoding:
+		return jsonEncoding{}
+	case GzippedGobEncoding:
+		return gzipped(&gobEncoding{})
+	case GzippedJSONEncoding:
+		return gzipped(jsonEncoding{})
+	}
+	// unreachable
+	return defaultEncoding
+}
+
+func WithEncoding(encType Encoding) ClientOption {
 	return func(c *client) {
-		switch encoding {
-		case GobEncoding:
-			c.encoding = &gobEncoding{}
-		case JSONEncoding:
-			c.encoding = jsonEncoding{}
-		case GzippedGobEncoding:
-			c.encoding = gzipped(&gobEncoding{})
-		case GzippedJSONEncoding:
-			c.encoding = gzipped(jsonEncoding{})
-		}
+		c.encoding = encodingForType(encType)
 	}
 }
 
@@ -136,10 +142,7 @@ func (j jsonEncoding) Encode(w io.Writer, obj any) error {
 		enc.SetIndent("", strings.Repeat(" ", j.indentLevel))
 	}
 
-	if err := enc.Encode(obj); err != nil {
-		return err
-	}
-	return nil
+	return enc.Encode(obj)
 }
 
 func (j jsonEncoding) Decode(r io.Reader, into any) error {

@@ -97,16 +97,16 @@ func BenchmarkEncodings(b *testing.B) {
 	}
 
 	tests := []struct {
-		name       string
-		encoding   encoding
-		testObject any
+		name     string
+		encoding Encoding
 	}{
-		{name: "gob", encoding: &gobEncoding{}},
-		{name: "json", encoding: &jsonEncoding{}},
-		{name: "gob+gzip", encoding: gzipped(&gobEncoding{})},
-		{name: "json+gzip", encoding: gzipped(&jsonEncoding{})},
+		{name: "gob", encoding: GobEncoding},
+		{name: "json", encoding: JSONEncoding},
+		{name: "gob+gzip", encoding: GzippedGobEncoding},
+		{name: "json+gzip", encoding: GzippedJSONEncoding},
 	}
 	for _, tt := range tests {
+		enc := encodingForType(tt.encoding)
 		for objType, testObject := range map[string]any{
 			"10KB-configmap": cm,
 			"pod":            pod,
@@ -115,7 +115,7 @@ func BenchmarkEncodings(b *testing.B) {
 				b.Run("encoding", func(b *testing.B) {
 					for b.Loop() {
 						w := new(discardWriter)
-						if err := tt.encoding.Encode(w, testObject); err != nil {
+						if err := enc.Encode(w, testObject); err != nil {
 							b.Error(err)
 						}
 						b.ReportMetric(float64(w.count), "bytes")
@@ -123,14 +123,14 @@ func BenchmarkEncodings(b *testing.B) {
 				})
 
 				var buf bytes.Buffer
-				if err := tt.encoding.Encode(&buf, testObject); err != nil {
+				if err := enc.Encode(&buf, testObject); err != nil {
 					b.Fatal(err)
 				}
 				serialized := buf.Bytes()
 				b.Run("decoding", func(b *testing.B) {
 					var dest corev1.ConfigMap
 					for b.Loop() {
-						if err := tt.encoding.Decode(bytes.NewReader(serialized), &dest); err != nil {
+						if err := enc.Decode(bytes.NewReader(serialized), &dest); err != nil {
 							b.Fatal(err)
 						}
 					}
