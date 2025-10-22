@@ -47,6 +47,24 @@ type WatchFilter struct {
 	Namespace string
 }
 
+func (f *WatchFilter) matches(obj metav1.Object) bool {
+	if obj == nil {
+		return false
+	}
+	if f.ID != "" && f.ID != obj.GetName() {
+		return false
+	}
+	if f.Namespace != "" && f.Namespace != obj.GetNamespace() {
+		return false
+	}
+	if f.Selector != nil {
+		if !f.Selector.Matches(labels.Set(obj.GetLabels())) {
+			return false
+		}
+	}
+	return true
+}
+
 type ByOptionsLister interface {
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error)
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error

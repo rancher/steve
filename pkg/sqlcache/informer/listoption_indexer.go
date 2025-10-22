@@ -367,8 +367,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				// This iteration will be the last one, as we already reached the last event at the moment we started the loop
 				latestRevisionReached = true
 			}
-			filter := opts.Filter
-			if !matchFilter(filter.ID, filter.Namespace, filter.Selector, obj) {
+			if !opts.Filter.matches(obj) {
 				continue
 			}
 
@@ -782,34 +781,11 @@ func toUnstructuredList(items []any, resourceVersion string) *unstructured.Unstr
 	return result
 }
 
-func matchWatch(filterName string, filterNamespace string, filterSelector labels.Selector, oldObj any, obj any) bool {
-	matchOld := false
-	if oldObj != nil {
-		matchOld = matchFilter(filterName, filterNamespace, filterSelector, oldObj)
+func matchWatch(filter WatchFilter, oldObj any, obj any) bool {
+	if oldObj != nil && filter.matches(oldObj) {
+		return true
 	}
-	return matchOld || matchFilter(filterName, filterNamespace, filterSelector, obj)
-}
-
-func matchFilter(filterName string, filterNamespace string, filterSelector labels.Selector, obj any) bool {
-	if obj == nil {
-		return false
-	}
-	metadata, err := meta.Accessor(obj)
-	if err != nil {
-		return false
-	}
-	if filterName != "" && filterName != metadata.GetName() {
-		return false
-	}
-	if filterNamespace != "" && filterNamespace != metadata.GetNamespace() {
-		return false
-	}
-	if filterSelector != nil {
-		if !filterSelector.Matches(labels.Set(metadata.GetLabels())) {
-			return false
-		}
-	}
-	return true
+	return filter.matches(obj)
 }
 
 func (l *ListOptionIndexer) RunGC(ctx context.Context) {
