@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -25,6 +26,43 @@ var allEncodings = []struct {
 	{name: "json", encoding: JSONEncoding},
 	{name: "gob+gzip", encoding: GzippedGobEncoding},
 	{name: "json+gzip", encoding: GzippedJSONEncoding},
+}
+
+func TestNonNilEmptySlice(t *testing.T) {
+	t.Parallel()
+
+	testData := map[string]any{
+		"kind": "TestObject",
+		"data": map[string]any{
+			"foo":       "bar",
+			"empty":     []any{}, // but not nil
+			"not-empty": []any{"one", "two", "three"},
+		},
+		"status": map[string]any{
+			"conditions": []any{
+				map[string]any{
+					"type":       "Ready",
+					"also-empty": []any{},
+				},
+			},
+		},
+	}
+	testObject := &unstructured.Unstructured{Object: testData}
+	for _, tt := range allEncodings {
+		enc := encodingForType(tt.encoding)
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := enc.Encode(&buf, testObject); err != nil {
+				t.Fatal(err)
+			}
+			var dest unstructured.Unstructured
+			if err := enc.Decode(bytes.NewReader(buf.Bytes()), &dest); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, testObject.Object, dest.Object)
+			assert.NotNil(t, data.GetValueN(dest.Object, "data", "empty"))
+		})
+	}
 }
 
 func TestEquality(t *testing.T) {
