@@ -197,7 +197,7 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 				// expected, continue without logging
 				return
 			}
-			cache.DefaultWatchErrorHandler(ctx, r, err)
+			cache.DefaultWatchErrorHandler(gi.ctx, r, err)
 		})
 		if err != nil {
 			gi.informerMutex.Unlock()
