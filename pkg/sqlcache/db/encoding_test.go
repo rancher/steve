@@ -13,6 +13,16 @@ import (
 
 var random = rand.New(rand.NewSource(0))
 
+var allEncodings = []struct {
+	name     string
+	encoding Encoding
+}{
+	{name: "gob", encoding: GobEncoding},
+	{name: "json", encoding: JSONEncoding},
+	{name: "gob+gzip", encoding: GzippedGobEncoding},
+	{name: "json+gzip", encoding: GzippedJSONEncoding},
+}
+
 func TestEquality(t *testing.T) {
 	testObject := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -38,23 +48,15 @@ func TestEquality(t *testing.T) {
 			}},
 		},
 	}
-	tests := []struct {
-		name     string
-		encoding encoding
-	}{
-		{name: "gob", encoding: &gobEncoding{}},
-		{name: "json", encoding: &jsonEncoding{}},
-		{name: "gob+gz", encoding: gzipped(&gobEncoding{})},
-		{name: "json+gz", encoding: gzipped(&jsonEncoding{})},
-	}
-	for _, tt := range tests {
+	for _, tt := range allEncodings {
+		enc := encodingForType(tt.encoding)
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			if err := tt.encoding.Encode(&buf, testObject); err != nil {
+			if err := enc.Encode(&buf, testObject); err != nil {
 				t.Fatal(err)
 			}
 			var dest *corev1.Pod
-			if err := tt.encoding.Decode(bytes.NewReader(buf.Bytes()), &dest); err != nil {
+			if err := enc.Decode(bytes.NewReader(buf.Bytes()), &dest); err != nil {
 				t.Fatal(err)
 			}
 			assert.Equal(t, testObject, dest)
@@ -96,26 +98,20 @@ func BenchmarkEncodings(b *testing.B) {
 		},
 	}
 
-	tests := []struct {
-		name     string
-		encoding Encoding
-	}{
-		{name: "gob", encoding: GobEncoding},
-		{name: "json", encoding: JSONEncoding},
-		{name: "gob+gzip", encoding: GzippedGobEncoding},
-		{name: "json+gzip", encoding: GzippedJSONEncoding},
-	}
-	for _, tt := range tests {
+	for _, tt := range allEncodings {
 		enc := encodingForType(tt.encoding)
-		for objType, testObject := range map[string]any{
-			"10KB-configmap": cm,
-			"pod":            pod,
+		for _, tc := range []struct {
+			objType    string
+			testObject any
+		}{
+			{"10KB-configmap", cm},
+			{"pod", pod},
 		} {
-			b.Run(tt.name+"-"+objType, func(b *testing.B) {
+			b.Run(tt.name+"-"+tc.objType, func(b *testing.B) {
 				b.Run("encoding", func(b *testing.B) {
 					for b.Loop() {
 						w := new(discardWriter)
-						if err := enc.Encode(w, testObject); err != nil {
+						if err := enc.Encode(w, tc.testObject); err != nil {
 							b.Error(err)
 						}
 						b.ReportMetric(float64(w.count), "bytes")
@@ -123,7 +119,7 @@ func BenchmarkEncodings(b *testing.B) {
 				})
 
 				var buf bytes.Buffer
-				if err := enc.Encode(&buf, testObject); err != nil {
+				if err := enc.Encode(&buf, tc.testObject); err != nil {
 					b.Fatal(err)
 				}
 				serialized := buf.Bytes()
