@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"reflect"
 	"strings"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type Encoding int
@@ -24,10 +27,13 @@ const (
 
 var defaultEncoding encoding = &gobEncoding{}
 
+type nonNilEmptySlice struct{}
+
 func init() {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
 	gob.Register(map[string]any{})
 	gob.Register([]any{})
+	gob.Register(nonNilEmptySlice{})
 
 	// Allow using JSON encoding during development
 	if enc := os.Getenv("CATTLE_SQL_CACHE_ENCODING"); enc == "json" {
@@ -79,6 +85,11 @@ func (g *gobEncoding) Encode(w io.Writer, obj any) error {
 		g.encoder = gob.NewEncoder(&g.writeBuf)
 	}
 	g.writeBuf.Reset()
+
+	// Apply modifications to bypass limitations in the gob encoding, which will need to be restored when decoding
+	if u, ok := obj.(*unstructured.Unstructured); ok {
+		obj = &unstructured.Unstructured{Object: applyPatches(u.Object)}
+	}
 
 	// gob encoders and decoders share extra types information the first time a certain object type is transferred
 	if err := g.registerTypeIfNeeded(obj); err != nil {
@@ -142,7 +153,17 @@ func (g *gobEncoding) Decode(r io.Reader, into any) error {
 	if _, err := g.readBuf.ReadFrom(r); err != nil {
 		return err
 	}
-	return g.decoder.Decode(into)
+
+	if err := g.decoder.Decode(into); err != nil {
+		return err
+	}
+
+	// Undo the changes applied by applyPatches
+	if u, ok := into.(*unstructured.Unstructured); ok {
+		u.Object = revertPatches(u.Object)
+	}
+
+	return nil
 }
 
 type jsonEncoding struct {
@@ -214,4 +235,49 @@ func (gz *gzipEncoding) Decode(r io.Reader, into any) error {
 		return err
 	}
 	return gzr.Close()
+}
+
+// isSameMap compares if two maps are the same (not their contents)
+func isSameMap[K comparable, V any](m1, m2 map[K]V) bool {
+	return reflect.ValueOf(m1).Pointer() == reflect.ValueOf(m2).Pointer()
+}
+
+// applyPatches modifies the data from an unstructured object before storing in the database to bypass known limitations in gob encoding
+func applyPatches(data map[string]any) map[string]any {
+	changes := make(map[string]any)
+	for k := range data {
+		switch v := data[k].(type) {
+		case map[string]any:
+			if len(v) != 0 {
+				if newValue := applyPatches(v); !isSameMap(v, newValue) {
+					changes[k] = newValue
+				}
+			}
+		case []any:
+			// gob cannot differentiate between nil or non-nil empty slices, so it converts empty slices into null
+			// https://github.com/golang/go/issues/10905
+			if v != nil && len(v) == 0 {
+				changes[k] = nonNilEmptySlice{}
+			}
+		}
+	}
+	if len(changes) == 0 {
+		return data
+	}
+	changed := maps.Clone(data)
+	maps.Copy(changed, changes)
+	return changed
+}
+
+// revertPatches is meant to restore the changes performed by applyPatches
+func revertPatches(data map[string]any) map[string]any {
+	for k := range data {
+		switch v := data[k].(type) {
+		case map[string]any:
+			data[k] = revertPatches(v)
+		case nonNilEmptySlice:
+			data[k] = []any{}
+		}
+	}
+	return data
 }
