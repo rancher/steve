@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -445,15 +446,15 @@ func (i *IntegrationSuite) TestProxyStore() {
 	require.NoError(err)
 
 	foo := &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: "tests.test.cattle.io"},
+		ObjectMeta: metav1.ObjectMeta{Name: "bananas.fruits.cattle.io"},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 			Scope: "Cluster",
-			Group: "test.cattle.io",
+			Group: "fruits.cattle.io",
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     "Test",
-				ListKind: "TestList",
-				Plural:   "tests",
-				Singular: "test",
+				Kind:     "Banana",
+				ListKind: "BananaList",
+				Plural:   "bananas",
+				Singular: "banana",
 			},
 			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
 				{
@@ -486,9 +487,11 @@ func (i *IntegrationSuite) TestProxyStore() {
 		require.NoError(err)
 	}()
 
-	time.Sleep(3 * time.Second)
-
-	testSchema := sf.Schema("test.cattle.io.test")
+	var fruitsSchema *types.APISchema
+	require.EventuallyWithT(func(c *assert.CollectT) {
+		fruitsSchema = sf.Schema("fruits.cattle.io.banana")
+		assert.NotNil(c, fruitsSchema)
+	}, 15*time.Second, 500*time.Millisecond)
 
 	req, err := http.NewRequest("GET", "http://localhost:8080", nil)
 	require.NoError(err)
@@ -496,7 +499,7 @@ func (i *IntegrationSuite) TestProxyStore() {
 	apiOp := &types.APIRequest{
 		Request: req,
 	}
-	ch, err := proxyStore.Watch(apiOp, testSchema, types.WatchRequest{})
+	ch, err := proxyStore.Watch(apiOp, fruitsSchema, types.WatchRequest{})
 	require.NoError(err)
 	require.NotNil(ch)
 
