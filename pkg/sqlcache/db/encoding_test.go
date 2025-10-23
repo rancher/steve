@@ -9,6 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var random = rand.New(rand.NewSource(0))
@@ -24,7 +27,7 @@ var allEncodings = []struct {
 }
 
 func TestEquality(t *testing.T) {
-	testObject := &corev1.Pod{
+	testObject := prepareTestObject(t, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "test",
@@ -47,7 +50,7 @@ func TestEquality(t *testing.T) {
 				},
 			}},
 		},
-	}
+	}, corev1.SchemeGroupVersion.WithKind("Pod"))
 	for _, tt := range allEncodings {
 		enc := encodingForType(tt.encoding)
 		t.Run(tt.name, func(t *testing.T) {
@@ -55,25 +58,25 @@ func TestEquality(t *testing.T) {
 			if err := enc.Encode(&buf, testObject); err != nil {
 				t.Fatal(err)
 			}
-			var dest *corev1.Pod
+			var dest unstructured.Unstructured
 			if err := enc.Decode(bytes.NewReader(buf.Bytes()), &dest); err != nil {
 				t.Fatal(err)
 			}
-			assert.Equal(t, testObject, dest)
+			assert.Equal(t, testObject, &dest)
 		})
 	}
 }
 
 func BenchmarkEncodings(b *testing.B) {
-	cm := &corev1.ConfigMap{
+	cm := prepareTestObject(b, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "test",
 		},
 		// a single entry map with 10K zero characters should account for ~10KB ConfigMap size,
 		Data: generateTestData(10000),
-	}
-	pod := &corev1.Pod{
+	}, corev1.SchemeGroupVersion.WithKind("ConfigMap"))
+	pod := prepareTestObject(b, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "test",
@@ -96,13 +99,13 @@ func BenchmarkEncodings(b *testing.B) {
 				},
 			}},
 		},
-	}
+	}, corev1.SchemeGroupVersion.WithKind("ConfigMap"))
 
 	for _, tt := range allEncodings {
 		enc := encodingForType(tt.encoding)
 		for _, tc := range []struct {
 			objType    string
-			testObject any
+			testObject *unstructured.Unstructured
 		}{
 			{"10KB-configmap", cm},
 			{"pod", pod},
@@ -124,8 +127,8 @@ func BenchmarkEncodings(b *testing.B) {
 				}
 				serialized := buf.Bytes()
 				b.Run("decoding", func(b *testing.B) {
-					var dest corev1.ConfigMap
 					for b.Loop() {
+						var dest unstructured.Unstructured
 						if err := enc.Decode(bytes.NewReader(serialized), &dest); err != nil {
 							b.Fatal(err)
 						}
@@ -134,6 +137,17 @@ func BenchmarkEncodings(b *testing.B) {
 			})
 		}
 	}
+}
+
+func prepareTestObject(t testing.TB, obj runtime.Object, gvk schema.GroupVersionKind) *unstructured.Unstructured {
+	t.Helper()
+	data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uns := &unstructured.Unstructured{Object: data}
+	uns.SetGroupVersionKind(gvk)
+	return uns
 }
 
 type discardWriter struct {
