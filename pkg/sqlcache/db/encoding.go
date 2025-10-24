@@ -78,16 +78,19 @@ func (g *gobEncoding) Encode(w io.Writer, obj any) error {
 	if g.encoder == nil {
 		g.encoder = gob.NewEncoder(&g.writeBuf)
 	}
-
 	g.writeBuf.Reset()
-	if err := g.encoder.Encode(obj); err != nil {
-		return err
-	}
 
+	// gob encoders and decoders share extra types information the first time a certain object type is transferred
 	if err := g.registerTypeIfNeeded(obj); err != nil {
 		return err
 	}
 
+	// Encode to the internal write buffer
+	if err := g.encoder.Encode(obj); err != nil {
+		return err
+	}
+
+	// Finally copy from internal buffer to the destination
 	_, err := g.writeBuf.WriteTo(w)
 	return err
 }
@@ -103,17 +106,22 @@ func (g *gobEncoding) registerTypeIfNeeded(obj any) error {
 	}
 
 	typ := reflect.TypeOf(obj)
-	if _, ok := g.seenTypes[typ]; !ok {
-		g.seenTypes[typ] = struct{}{}
-		// Consume the current write buffer and re-generate it (will produce a smaller version)
-		newObj := reflect.New(typ).Interface()
-		if err := g.Decode(bytes.NewReader(g.writeBuf.Bytes()), newObj); err != nil {
-			return fmt.Errorf("could not decode %T: %w", obj, err)
-		}
-
-		g.writeBuf.Reset()
-		return g.encoder.Encode(obj)
+	if _, ok := g.seenTypes[typ]; ok {
+		return nil
 	}
+
+	if err := g.encoder.Encode(obj); err != nil {
+		return err
+	}
+	defer g.writeBuf.Reset()
+
+	// Decode into a new object to avoid modifying the original. This let the decoder consume the extra headers sent by the encoder only the first time
+	newObj := reflect.New(typ).Interface()
+	if err := g.Decode(bytes.NewReader(g.writeBuf.Bytes()), newObj); err != nil {
+		return fmt.Errorf("could not decode %T: %w", obj, err)
+	}
+
+	g.seenTypes[typ] = struct{}{}
 	return nil
 }
 
