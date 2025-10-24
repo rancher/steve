@@ -755,7 +755,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 	input["apiVersion"], input["kind"] = gvk.ToAPIVersionAndKind()
 
 	buffer := WarningBuffer{}
-	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, namespace, &buffer))
+	k8sClient, err := metricsStore.Wrap(s.clientGetter.Client(apiOp, schema, namespace, &buffer))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -779,7 +779,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 
 	ns := types.Namespace(input)
 	buffer := WarningBuffer{}
-	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, ns, &buffer))
+	k8sClient, err := metricsStore.Wrap(s.clientGetter.Client(apiOp, schema, ns, &buffer))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -850,7 +850,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	}
 
 	buffer := WarningBuffer{}
-	k8sClient, err := metricsStore.Wrap(s.clientGetter.TableClient(apiOp, schema, apiOp.Namespace, &buffer))
+	k8sClient, err := metricsStore.Wrap(s.clientGetter.Client(apiOp, schema, apiOp.Namespace, &buffer))
 	if err != nil {
 		return nil, nil, err
 	}
