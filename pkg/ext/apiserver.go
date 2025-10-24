@@ -78,6 +78,8 @@ type ExtensionAPIServerOptions struct {
 	EffectiveVersion basecompatibility.EffectiveVersion
 
 	SNICerts []dynamiccertificates.SNICertKeyContentProvider
+
+	TargetServiceName string
 }
 
 // ExtensionAPIServer wraps a [genericapiserver.GenericAPIServer] to implement
@@ -204,7 +206,7 @@ func NewExtensionAPIServer(scheme *runtime.Scheme, codecs serializer.CodecFactor
 	}
 
 	completedConfig := config.Complete()
-	genericServer, err := completedConfig.New("imperative-api", genericapiserver.NewEmptyDelegate())
+	genericServer, err := completedConfig.New(opts.TargetServiceName, genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, fmt.Errorf("new: %w", err)
 	}
