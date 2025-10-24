@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,7 +28,15 @@ var allEncodings = []struct {
 }
 
 func TestEquality(t *testing.T) {
-	testObject := prepareTestObject(t, &corev1.Pod{
+	cm := prepareTestObject(t, &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "test",
+		},
+		// a single entry map with 10K zero characters should account for ~10KB ConfigMap size,
+		Data: generateTestData(10000),
+	}, corev1.SchemeGroupVersion.WithKind("ConfigMap"))
+	pod := prepareTestObject(t, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "test",
@@ -35,6 +44,12 @@ func TestEquality(t *testing.T) {
 			Labels:      map[string]string{"label": "test"},
 		},
 		Spec: corev1.PodSpec{
+			Resources: &corev1.ResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("2G"),
+				},
+			},
 			Containers: []corev1.Container{{
 				Name:  "test",
 				Image: "testimage",
@@ -54,15 +69,18 @@ func TestEquality(t *testing.T) {
 	for _, tt := range allEncodings {
 		enc := encodingForType(tt.encoding)
 		t.Run(tt.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			if err := enc.Encode(&buf, testObject); err != nil {
-				t.Fatal(err)
+			for _, testObject := range []*unstructured.Unstructured{cm, pod} {
+				var buf bytes.Buffer
+				if err := enc.Encode(&buf, testObject); err != nil {
+					t.Fatal(err)
+				}
+
+				var dest unstructured.Unstructured
+				if err := enc.Decode(&buf, &dest); err != nil {
+					t.Fatal(err)
+				}
+				assert.Equal(t, testObject, &dest)
 			}
-			var dest unstructured.Unstructured
-			if err := enc.Decode(bytes.NewReader(buf.Bytes()), &dest); err != nil {
-				t.Fatal(err)
-			}
-			assert.Equal(t, testObject, &dest)
 		})
 	}
 }
@@ -84,14 +102,22 @@ func BenchmarkEncodings(b *testing.B) {
 			Labels:      map[string]string{"label": "test"},
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{
-				Name:  "test",
-				Image: "testimage",
-				VolumeMounts: []corev1.VolumeMount{{
-					Name:      "test",
-					MountPath: "/test",
-				}},
-			}},
+			Resources: &corev1.ResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("2G"),
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "test",
+					Image: "testimage",
+					VolumeMounts: []corev1.VolumeMount{{
+						Name:      "test",
+						MountPath: "/test",
+					}},
+				},
+			},
 			Volumes: []corev1.Volume{{
 				Name: "test",
 				VolumeSource: corev1.VolumeSource{
@@ -99,7 +125,7 @@ func BenchmarkEncodings(b *testing.B) {
 				},
 			}},
 		},
-	}, corev1.SchemeGroupVersion.WithKind("ConfigMap"))
+	}, corev1.SchemeGroupVersion.WithKind("Pod"))
 
 	for _, tt := range allEncodings {
 		enc := encodingForType(tt.encoding)
