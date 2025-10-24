@@ -78,10 +78,6 @@ func TestCacheFor(t *testing.T) {
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
 		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
-		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
@@ -106,7 +102,9 @@ func TestCacheFor(t *testing.T) {
 		}()
 		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		// this sleep is critical to the test. It ensure there has been enough time for expected function like Run to be invoked in their go routines.
 		time.Sleep(1 * time.Second)
 		c2, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
@@ -229,10 +227,6 @@ func TestCacheFor(t *testing.T) {
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
 		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
-		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
@@ -253,7 +247,9 @@ func TestCacheFor(t *testing.T) {
 
 		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		time.Sleep(1 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() with no errors returned and encryptAll set to true, should return no error and pass shouldEncrypt as true to newInformer func", test: func(t *testing.T) {
@@ -273,10 +269,6 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
-		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
@@ -302,7 +294,9 @@ func TestCacheFor(t *testing.T) {
 		}()
 		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		time.Sleep(1 * time.Second)
 	}})
 
@@ -328,10 +322,6 @@ func TestCacheFor(t *testing.T) {
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
 		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
-		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
@@ -356,7 +346,9 @@ func TestCacheFor(t *testing.T) {
 		}()
 		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		time.Sleep(1 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() should encrypt management.cattle.io tokens", test: func(t *testing.T) {
@@ -381,10 +373,6 @@ func TestCacheFor(t *testing.T) {
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
 		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
-		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
 			assert.Equal(t, fields, fields)
@@ -409,7 +397,9 @@ func TestCacheFor(t *testing.T) {
 		}()
 		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		time.Sleep(1 * time.Second)
 	}})
 
@@ -433,10 +423,6 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
-		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			// we can't test func == func, so instead we check if the output was as expected
@@ -468,11 +454,11 @@ func TestCacheFor(t *testing.T) {
 			time.Sleep(5 * time.Second)
 			f.Stop(expectedGVK)
 		}()
-		var c *Cache
-		var err error
-		c, err = f.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicClient, expectedGVK, typeGuidance, false, true)
+		c, err := f.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		time.Sleep(1 * time.Second)
 	}})
 	tests = append(tests, testCase{description: "CacheFor() with default max events count", test: func(t *testing.T) {
@@ -492,10 +478,6 @@ func TestCacheFor(t *testing.T) {
 			// need to set this so Run function is not nil
 			SharedIndexInformer: sii,
 			ByOptionsLister:     bloi,
-		}
-		expectedC := &Cache{
-			ByOptionsLister: i,
-			gvk:             expectedGVK,
 		}
 		testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespaced bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error) {
 			assert.Equal(t, client, dynamicClient)
@@ -524,7 +506,9 @@ func TestCacheFor(t *testing.T) {
 		}()
 		c, err := f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, typeGuidance, false, true)
 		assert.Nil(t, err)
-		assert.Equal(t, expectedC, c)
+		assert.Equal(t, i, c.ByOptionsLister)
+		assert.Equal(t, expectedGVK, c.gvk)
+		assert.NotNil(t, c.ctx)
 		time.Sleep(1 * time.Second)
 	}})
 	// Test for panic from https://github.com/rancher/rancher/issues/52124
@@ -549,6 +533,7 @@ func TestCacheFor(t *testing.T) {
 		err = f.Stop(expectedGVK)
 		assert.NoError(t, err)
 	}})
+
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
