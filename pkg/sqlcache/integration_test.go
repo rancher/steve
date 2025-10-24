@@ -10,6 +10,7 @@ import (
 	"time"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/go-logr/logr"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/client"
@@ -41,7 +42,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const testNamespace = "sql-test"
@@ -553,5 +556,9 @@ func createPatch(oldCRD, newCRD *apiextensionsv1.CustomResourceDefinition) ([]by
 }
 
 func TestIntegrationSuite(t *testing.T) {
+	// SetLogger must be called otherwise controller-runtime complains.
+	//
+	// For testing we'll just ignore the logs since they won't be useful
+	ctrl.SetLogger(logr.New(ctrllog.NullLogSink{}))
 	suite.Run(t, new(IntegrationSuite))
 }
