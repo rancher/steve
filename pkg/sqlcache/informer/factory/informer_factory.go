@@ -136,6 +136,12 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 // CacheFor returns an informer for given GVK, using sql store indexed with fields, using the specified client. For virtual fields, they must be added by the transform function
 // and specified by fields to be used for later fields.
 //
+// There's a few context.Context involved. Here's the hierarchy:
+//   - ctx is the context of a request (eg: [net/http.Request.Context]). It is canceled when the request finishes (eg: the client timed out or canceled the request)
+//   - [CacheFactory.ctx] is the context for the cache factory. This is canceled when we no longer need the cache factory
+//   - [guardedInformer.ctx] is the context for a single cache. Its parent is the [CacheFactory.ctx] so that all caches stops when the cache factory stop. We need
+//     a context for a single cache to be able to stop that cache (eg: on schema refresh) without impacting the other caches.
+//
 // Don't forget to call DoneWithCache with the given informer once done with it.
 func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (*Cache, error) {
 	// Second, check if the informer and its accompanying informer-specific mutex exist already in the informers cache
@@ -222,6 +228,12 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	}()
 
 	if !cache.WaitForCacheSync(waitCh, gi.informer.HasSynced) {
+		if gi.ctx.Err() != nil {
+			return nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w", gvk, gi.ctx.Err())
+		}
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("request context canceled while waiting for SQL cache sync for %v: %w", gvk, ctx.Err())
+		}
 		return nil, fmt.Errorf("failed to sync SQLite Informer cache for GVK %v", gvk)
 	}
 
