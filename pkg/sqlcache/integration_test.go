@@ -27,6 +27,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -35,6 +36,7 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -387,25 +389,25 @@ func (i *IntegrationSuite) TestProxyStore() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 
-	require := i.Require()
+	requireT := i.Require()
 	cols, err := common.NewDynamicColumns(i.restCfg)
-	require.NoError(err)
+	requireT.NoError(err)
 
 	cf, err := client.NewFactory(i.restCfg, false)
-	require.NoError(err)
+	requireT.NoError(err)
 
 	baseSchemas := types.EmptyAPISchemas()
 
 	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
 
 	ctrl, err := server.NewController(i.restCfg, nil)
-	require.NoError(err)
+	requireT.NoError(err)
 
 	asl := accesscontrol.NewAccessStore(ctx, true, ctrl.RBAC)
 	sf := schema.NewCollection(ctx, baseSchemas, asl)
 
 	err = resources.DefaultSchemas(ctx, baseSchemas, ccache, cf, sf, "")
-	require.NoError(err)
+	requireT.NoError(err)
 
 	definitions.Register(ctx, baseSchemas, ctrl.K8s.Discovery(),
 		ctrl.CRD.CustomResourceDefinition(), ctrl.API.APIService())
@@ -414,11 +416,11 @@ func (i *IntegrationSuite) TestProxyStore() {
 	summaryCache.Start(ctx)
 
 	cacheFactory, err := factory.NewCacheFactoryWithContext(ctx, factory.CacheFactoryOptions{})
-	require.NoError(err)
+	requireT.NoError(err)
 
 	proxyStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, cacheFactory, true)
-	require.NoError(err)
-	require.NotNil(proxyStore)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
 
 	sqlSchemaTracker := schematracker.NewSchemaTracker(proxyStore)
 
@@ -443,7 +445,7 @@ func (i *IntegrationSuite) TestProxyStore() {
 		sf)
 
 	err = ctrl.Start(ctx)
-	require.NoError(err)
+	requireT.NoError(err)
 
 	foo := &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{Name: "bananas.fruits.cattle.io"},
@@ -480,28 +482,31 @@ func (i *IntegrationSuite) TestProxyStore() {
 	}
 
 	foo, err = ctrl.CRD.CustomResourceDefinition().Create(foo)
-	require.NoError(err)
+	requireT.NoError(err)
 
 	defer func() {
 		err := ctrl.CRD.CustomResourceDefinition().Delete(foo.Name, &metav1.DeleteOptions{})
-		require.NoError(err)
+		requireT.NoError(err)
 	}()
 
-	var fruitsSchema *types.APISchema
-	require.EventuallyWithT(func(c *assert.CollectT) {
+	var (
+		fruitsSchema *types.APISchema
+		ch           chan watch.Event
+	)
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
 		fruitsSchema = sf.Schema("fruits.cattle.io.banana")
-		assert.NotNil(c, fruitsSchema)
+		require.NotNil(c, fruitsSchema)
+
+		req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+		require.NoError(c, err)
+
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		ch, err = proxyStore.Watch(apiOp, fruitsSchema, types.WatchRequest{})
+		require.NoError(c, err)
+		require.NotNil(c, ch)
 	}, 15*time.Second, 500*time.Millisecond)
-
-	req, err := http.NewRequest("GET", "http://localhost:8080", nil)
-	require.NoError(err)
-
-	apiOp := &types.APIRequest{
-		Request: req,
-	}
-	ch, err := proxyStore.Watch(apiOp, fruitsSchema, types.WatchRequest{})
-	require.NoError(err)
-	require.NotNil(ch)
 
 	fooWithColumn := foo.DeepCopy()
 	fooWithColumn.Spec.Versions[0].AdditionalPrinterColumns = []apiextensionsv1.CustomResourceColumnDefinition{
@@ -512,19 +517,22 @@ func (i *IntegrationSuite) TestProxyStore() {
 		},
 	}
 	patch, err := createPatch(foo, fooWithColumn)
-	require.NoError(err, "creating patch")
+	requireT.NoError(err, "creating patch")
 
 	_, err = ctrl.CRD.CustomResourceDefinition().Patch(foo.Name, k8stypes.MergePatchType, patch)
-	require.NoError(err)
+	requireT.NoError(err)
 
 	select {
 	case _, ok := <-ch:
 		if ok {
-			require.Fail("channel should be closed with no events")
+			requireT.Fail("channel should be closed with no events")
 		}
 	case <-time.After(2 * time.Second):
-		require.Fail("expected channel to be closed")
+		requireT.Fail("expected channel to be closed")
 	}
+	cancel()
+	// Stop the registered refresher, otherwise we'll see an error
+	time.Sleep(2 * time.Second)
 }
 
 func createPatch(oldCRD, newCRD *apiextensionsv1.CustomResourceDefinition) ([]byte, error) {
