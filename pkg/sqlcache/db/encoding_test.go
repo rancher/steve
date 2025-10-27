@@ -40,6 +40,7 @@ func TestEquality(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "test",
+			Finalizers:  []string{"cleanup"},
 			Annotations: map[string]string{"annotation": "test"},
 			Labels:      map[string]string{"label": "test"},
 		},

@@ -103,6 +103,11 @@ func (g *gobEncoding) Encode(w io.Writer, obj any) error {
 func (g *gobEncoding) registerTypeIfNeeded(obj any) error {
 	if g.seenTypes == nil {
 		g.seenTypes = make(map[reflect.Type]struct{})
+
+		// gob seems to get confused with arbitrary lists, especially if they contain nested objects. Make sure the proper compiler is created
+		if err := g.registerTypeIfNeeded([]any{map[string]any{}}); err != nil {
+			return nil
+		}
 	}
 
 	typ := reflect.TypeOf(obj)
