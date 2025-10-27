@@ -388,6 +388,12 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 	})
 }
 
+type ResetFunc func(k8sschema.GroupVersionKind) error
+
+func (f ResetFunc) Reset(gvk k8sschema.GroupVersionKind) error {
+	return f(gvk)
+}
+
 func (i *IntegrationSuite) TestProxyStore() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
@@ -425,7 +431,21 @@ func (i *IntegrationSuite) TestProxyStore() {
 	requireT.NoError(err)
 	requireT.NotNil(proxyStore)
 
-	sqlSchemaTracker := schematracker.NewSchemaTracker(proxyStore)
+	resetCh := make(chan struct{}, 10)
+
+	bananaGVK := k8sschema.GroupVersionKind{
+		Group:   "fruits.cattle.io",
+		Version: "v1",
+		Kind:    "Banana",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == bananaGVK {
+			resetCh <- struct{}{}
+		}
+		return nil
+	}))
 
 	onSchemasHandler := func(schemas *schema.Collection) error {
 		var retErr error
@@ -454,16 +474,16 @@ func (i *IntegrationSuite) TestProxyStore() {
 		ObjectMeta: metav1.ObjectMeta{Name: "bananas.fruits.cattle.io"},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 			Scope: "Cluster",
-			Group: "fruits.cattle.io",
+			Group: bananaGVK.Group,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     "Banana",
+				Kind:     bananaGVK.Kind,
 				ListKind: "BananaList",
 				Plural:   "bananas",
 				Singular: "banana",
 			},
 			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
 				{
-					Name: "v1",
+					Name: bananaGVK.Version,
 					Schema: &apiextensionsv1.CustomResourceValidation{
 						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
 							Type: "object",
@@ -491,6 +511,8 @@ func (i *IntegrationSuite) TestProxyStore() {
 		err := ctrl.CRD.CustomResourceDefinition().Delete(foo.Name, &metav1.DeleteOptions{})
 		requireT.NoError(err)
 	}()
+
+	<-resetCh
 
 	var (
 		fruitsSchema *types.APISchema
@@ -525,6 +547,8 @@ func (i *IntegrationSuite) TestProxyStore() {
 	_, err = ctrl.CRD.CustomResourceDefinition().Patch(foo.Name, k8stypes.MergePatchType, patch)
 	requireT.NoError(err)
 
+	<-resetCh
+
 	select {
 	case _, ok := <-ch:
 		if ok {
@@ -533,6 +557,22 @@ func (i *IntegrationSuite) TestProxyStore() {
 	case <-time.After(2 * time.Second):
 		requireT.Fail("expected channel to be closed")
 	}
+
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		fruitsSchema = sf.Schema("fruits.cattle.io.banana")
+		require.NotNil(c, fruitsSchema)
+
+		req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+		require.NoError(c, err)
+
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		ch, err = proxyStore.Watch(apiOp, fruitsSchema, types.WatchRequest{})
+		require.NoError(c, err)
+		require.NotNil(c, ch)
+	}, 15*time.Second, 500*time.Millisecond)
+
 	cancel()
 	// Stop the registered refresher, otherwise we'll see an error
 	time.Sleep(2 * time.Second)
