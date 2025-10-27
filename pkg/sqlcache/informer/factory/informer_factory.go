@@ -68,6 +68,14 @@ type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fie
 type Cache struct {
 	informer.ByOptionsLister
 	gvk schema.GroupVersionKind
+	ctx context.Context
+}
+
+// Context gives the context of the factory that created this cache.
+//
+// The context is canceled when the cache is stopped (eg: when the CRD column definition changes)
+func (c *Cache) Context() context.Context {
+	return c.ctx
 }
 
 func (c *Cache) GVK() schema.GroupVersionKind {
@@ -96,11 +104,15 @@ type CacheFactoryOptions struct {
 // NewCacheFactory returns an informer factory instance
 // This is currently called from steve via initial calls to `s.cacheFactory.CacheFor(...)`
 func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
+	return NewCacheFactoryWithContext(context.Background(), opts)
+}
+
+func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (*CacheFactory, error) {
 	m, err := encryption.NewManager()
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	dbClient, _, err := db.NewClient(ctx, nil, m, m, false)
 	if err != nil {
 		cancel()
@@ -123,6 +135,12 @@ func NewCacheFactory(opts CacheFactoryOptions) (*CacheFactory, error) {
 
 // CacheFor returns an informer for given GVK, using sql store indexed with fields, using the specified client. For virtual fields, they must be added by the transform function
 // and specified by fields to be used for later fields.
+//
+// There's a few context.Context involved. Here's the hierarchy:
+//   - ctx is the context of a request (eg: [net/http.Request.Context]). It is canceled when the request finishes (eg: the client timed out or canceled the request)
+//   - [CacheFactory.ctx] is the context for the cache factory. This is canceled when we no longer need the cache factory
+//   - [guardedInformer.ctx] is the context for a single cache. Its parent is the [CacheFactory.ctx] so that all caches stops when the cache factory stop. We need
+//     a context for a single cache to be able to stop that cache (eg: on schema refresh) without impacting the other caches.
 //
 // Don't forget to call DoneWithCache with the given informer once done with it.
 func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (*Cache, error) {
@@ -185,7 +203,7 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 				// expected, continue without logging
 				return
 			}
-			cache.DefaultWatchErrorHandler(ctx, r, err)
+			cache.DefaultWatchErrorHandler(gi.ctx, r, err)
 		})
 		if err != nil {
 			gi.informerMutex.Unlock()
@@ -210,11 +228,17 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	}()
 
 	if !cache.WaitForCacheSync(waitCh, gi.informer.HasSynced) {
+		if gi.ctx.Err() != nil {
+			return nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w", gvk, gi.ctx.Err())
+		}
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("request context canceled while waiting for SQL cache sync for %v: %w", gvk, ctx.Err())
+		}
 		return nil, fmt.Errorf("failed to sync SQLite Informer cache for GVK %v", gvk)
 	}
 
 	// At this point the informer is ready, return it
-	return &Cache{ByOptionsLister: gi.informer, gvk: gvk}, nil
+	return &Cache{ByOptionsLister: gi.informer, gvk: gvk, ctx: gi.ctx}, nil
 }
 
 // DoneWithCache must be called for every successful CacheFor call. The Cache should
