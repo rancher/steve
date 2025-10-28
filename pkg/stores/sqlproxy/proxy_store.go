@@ -587,24 +587,20 @@ func newWatchers() *Watchers {
 }
 
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	ctx := apiOp.Context()
-
-	// warnings from inside the informer are discarded
-	gvk := attributes.GVK(schema)
-	fields := GetFieldsFromSchema(schema)
-	fields = append(fields, getFieldForGVK(gvk)...)
-	cols := common.GetColumnDefinitions(schema)
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(schema))
-	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(schema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(schema))
+	inf, doneFn, err := s.cacheForWithDeps(apiOp.Context(), apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
-	// FIXME: This needs to be called when the watch ends, not at the end of
-	// this func. However, there's currently a bug where we don't correctly
-	// shutdown watches, so for now, we do this.
-	defer s.cacheFactory.DoneWithCache(inf)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-inf.Context().Done():
+			cancel()
+		case <-apiOp.Context().Done():
+			cancel()
+		}
+	}()
 
 	var selector labels.Selector
 	if w.Selector != "" {
@@ -616,6 +612,8 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 	result := make(chan watch.Event)
 	go func() {
+		defer cancel()
+		defer doneFn()
 		defer close(result)
 
 		idNamespace, _ := kv.RSplit(w.ID, "/")
@@ -797,26 +795,13 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	ctx, cancel := context.WithCancel(apiOp.Context())
 	defer cancel()
 
-	// warnings from inside the informer are discarded
-	buffer := WarningBuffer{}
-	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
+	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, apiSchema)
 	if err != nil {
 		return nil, 0, "", err
 	}
+	defer doneFn()
+
 	gvk := attributes.GVK(apiSchema)
-	fields := GetFieldsFromSchema(apiSchema)
-	fields = append(fields, getFieldForGVK(gvk)...)
-	cols := common.GetColumnDefinitions(apiSchema)
-
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
-	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))
-	if err != nil {
-		return nil, 0, "", fmt.Errorf("cachefor %v: %w", gvk, err)
-	}
-	defer s.cacheFactory.DoneWithCache(inf)
-
 	opts, err := listprocessor.ParseQuery(apiOp, gvk.Kind)
 	if err != nil {
 		var apiError *apierror.APIError
@@ -913,4 +898,48 @@ func (s *Store) watchByPartition(partition partition.Partition, apiOp *types.API
 		return s.Watch(apiOp, schema, wr)
 	}
 	return s.WatchNames(apiOp, schema, wr, partition.Names)
+}
+
+func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, func(), error) {
+	var doneCacheFns []func()
+	doneCache := func() {
+		length := len(doneCacheFns)
+		for i := range length {
+			fn := doneCacheFns[length-1-i]
+			fn()
+		}
+	}
+
+	inf, err := s.cacheFor(ctx, apiOp, apiSchema)
+	if err != nil {
+		doneCache()
+		return nil, nil, err
+	}
+	doneCacheFns = append(doneCacheFns, func() {
+		s.cacheFactory.DoneWithCache(inf)
+	})
+
+	return inf, doneCache, nil
+}
+
+func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
+	// warnings from inside the informer are discarded
+	buffer := WarningBuffer{}
+	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
+	if err != nil {
+		return nil, err
+	}
+	gvk := attributes.GVK(apiSchema)
+	fields := GetFieldsFromSchema(apiSchema)
+	fields = append(fields, getFieldForGVK(gvk)...)
+	cols := common.GetColumnDefinitions(apiSchema)
+
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
+	tableClient := &tablelistconvert.Client{ResourceInterface: client}
+	ns := attributes.Namespaced(apiSchema)
+	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))
+	if err != nil {
+		return nil, err
+	}
+	return inf, nil
 }

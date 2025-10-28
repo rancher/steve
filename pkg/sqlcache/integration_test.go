@@ -2,25 +2,49 @@ package sql
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
+	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/go-logr/logr"
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/client"
+	"github.com/rancher/steve/pkg/clustercache"
+	schemacontroller "github.com/rancher/steve/pkg/controllers/schema"
+	"github.com/rancher/steve/pkg/resources"
+	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/schema/definitions"
+	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/schematracker"
+	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	"github.com/rancher/steve/pkg/stores/sqlproxy"
+	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-
-	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
-	"github.com/rancher/steve/pkg/sqlcache/partition"
-	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const testNamespace = "sql-test"
@@ -33,14 +57,14 @@ type IntegrationSuite struct {
 	suite.Suite
 	testEnv   envtest.Environment
 	clientset kubernetes.Clientset
-	restCfg   rest.Config
+	restCfg   *rest.Config
 }
 
 func (i *IntegrationSuite) SetupSuite() {
 	i.testEnv = envtest.Environment{}
 	restCfg, err := i.testEnv.Start()
 	i.Require().NoError(err, "error when starting env test - this is likely because setup-envtest wasn't done. Check the README for more information")
-	i.restCfg = *restCfg
+	i.restCfg = restCfg
 	clientset, err := kubernetes.NewForConfig(restCfg)
 	i.Require().NoError(err)
 	i.clientset = *clientset
@@ -311,16 +335,16 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make factory: %w", err)
 	}
-	dynamicClient, err := dynamic.NewForConfig(&i.restCfg)
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make dynamicClient: %w", err)
 	}
-	configMapGVK := schema.GroupVersionKind{
+	configMapGVK := k8sschema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",
 		Kind:    "ConfigMap",
 	}
-	configMapGVR := schema.GroupVersionResource{
+	configMapGVR := k8sschema.GroupVersionResource{
 		Group:    "",
 		Version:  "v1",
 		Resource: "configmaps",
@@ -363,6 +387,217 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 	})
 }
 
+type ResetFunc func(k8sschema.GroupVersionKind) error
+
+func (f ResetFunc) Reset(gvk k8sschema.GroupVersionKind) error {
+	return f(gvk)
+}
+
+func (i *IntegrationSuite) TestProxyStore() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+
+	requireT := i.Require()
+	cols, err := common.NewDynamicColumns(i.restCfg)
+	requireT.NoError(err)
+
+	cf, err := client.NewFactory(i.restCfg, false)
+	requireT.NoError(err)
+
+	baseSchemas := types.EmptyAPISchemas()
+
+	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
+
+	ctrl, err := server.NewController(i.restCfg, nil)
+	requireT.NoError(err)
+
+	asl := accesscontrol.NewAccessStore(ctx, true, ctrl.RBAC)
+	sf := schema.NewCollection(ctx, baseSchemas, asl)
+
+	err = resources.DefaultSchemas(ctx, baseSchemas, ccache, cf, sf, "")
+	requireT.NoError(err)
+
+	definitions.Register(ctx, baseSchemas, ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(), ctrl.API.APIService())
+
+	summaryCache := summarycache.New(sf, ccache)
+	summaryCache.Start(ctx)
+
+	cacheFactory, err := factory.NewCacheFactoryWithContext(ctx, factory.CacheFactoryOptions{})
+	requireT.NoError(err)
+
+	proxyStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, cacheFactory, true)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+
+	resetCh := make(chan struct{}, 10)
+
+	bananaGVK := k8sschema.GroupVersionKind{
+		Group:   "fruits.cattle.io",
+		Version: "v1",
+		Kind:    "Banana",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == bananaGVK {
+			resetCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+
+	foo := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "bananas.fruits.cattle.io"},
+		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+			Scope: "Cluster",
+			Group: bananaGVK.Group,
+			Names: apiextensionsv1.CustomResourceDefinitionNames{
+				Kind:     bananaGVK.Kind,
+				ListKind: "BananaList",
+				Plural:   "bananas",
+				Singular: "banana",
+			},
+			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+				{
+					Name: bananaGVK.Version,
+					Schema: &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+							Type: "object",
+							Properties: map[string]apiextensionsv1.JSONSchemaProps{
+								"bar": {
+									Type: "string",
+								},
+								"foo": {
+									Type: "string",
+								},
+							},
+						},
+					},
+					Served:  true,
+					Storage: true,
+				},
+			},
+		},
+	}
+
+	foo, err = ctrl.CRD.CustomResourceDefinition().Create(foo)
+	requireT.NoError(err)
+
+	defer func() {
+		err := ctrl.CRD.CustomResourceDefinition().Delete(foo.Name, &metav1.DeleteOptions{})
+		requireT.NoError(err)
+	}()
+
+	<-resetCh
+
+	var (
+		fruitsSchema *types.APISchema
+		ch           chan watch.Event
+	)
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		fruitsSchema = sf.Schema("fruits.cattle.io.banana")
+		require.NotNil(c, fruitsSchema)
+
+		req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+		require.NoError(c, err)
+
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		ch, err = proxyStore.Watch(apiOp, fruitsSchema, types.WatchRequest{})
+		require.NoError(c, err)
+		require.NotNil(c, ch)
+	}, 15*time.Second, 500*time.Millisecond)
+
+	fooWithColumn := foo.DeepCopy()
+	fooWithColumn.Spec.Versions[0].AdditionalPrinterColumns = []apiextensionsv1.CustomResourceColumnDefinition{
+		{
+			Name:     "Foo",
+			Type:     "string",
+			JSONPath: ".foo",
+		},
+	}
+	patch, err := createPatch(foo, fooWithColumn)
+	requireT.NoError(err, "creating patch")
+
+	_, err = ctrl.CRD.CustomResourceDefinition().Patch(foo.Name, k8stypes.MergePatchType, patch)
+	requireT.NoError(err)
+
+	<-resetCh
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			requireT.Fail("channel should be closed with no events")
+		}
+	case <-time.After(2 * time.Second):
+		requireT.Fail("expected channel to be closed")
+	}
+
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		fruitsSchema = sf.Schema("fruits.cattle.io.banana")
+		require.NotNil(c, fruitsSchema)
+
+		req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+		require.NoError(c, err)
+
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		ch, err = proxyStore.Watch(apiOp, fruitsSchema, types.WatchRequest{})
+		require.NoError(c, err)
+		require.NotNil(c, ch)
+	}, 15*time.Second, 500*time.Millisecond)
+
+	cancel()
+	// Stop the registered refresher, otherwise we'll see an error
+	time.Sleep(2 * time.Second)
+}
+
+func createPatch(oldCRD, newCRD *apiextensionsv1.CustomResourceDefinition) ([]byte, error) {
+	oldCRDRaw, err := json.Marshal(oldCRD)
+	if err != nil {
+		return nil, err
+	}
+	newCRDRaw, err := json.Marshal(newCRD)
+	if err != nil {
+		return nil, err
+	}
+
+	patch, err := jsonpatch.CreateMergePatch(oldCRDRaw, newCRDRaw)
+	if err != nil {
+		return nil, err
+	}
+	return patch, nil
+}
+
 func TestIntegrationSuite(t *testing.T) {
+	// SetLogger must be called otherwise controller-runtime complains.
+	//
+	// For testing we'll just ignore the logs since they won't be useful
+	ctrl.SetLogger(logr.New(ctrllog.NullLogSink{}))
 	suite.Run(t, new(IntegrationSuite))
 }
