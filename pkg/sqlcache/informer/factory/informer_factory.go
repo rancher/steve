@@ -69,6 +69,7 @@ type Cache struct {
 	informer.ByOptionsLister
 	gvk schema.GroupVersionKind
 	ctx context.Context
+	gi  *guardedInformer
 }
 
 // Context gives the context of the factory that created this cache.
@@ -234,7 +235,7 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 	}
 
 	// At this point the informer is ready, return it
-	return &Cache{ByOptionsLister: gi.informer, gvk: gvk, ctx: gi.ctx}, nil
+	return &Cache{ByOptionsLister: gi.informer, gvk: gvk, ctx: gi.ctx, gi: gi}, nil
 }
 
 // DoneWithCache must be called for every successful CacheFor call. The Cache should
@@ -246,17 +247,7 @@ func (f *CacheFactory) DoneWithCache(cache *Cache) {
 		return
 	}
 
-	f.informersMutex.Lock()
-	defer f.informersMutex.Unlock()
-
-	// Note: the informers cache is protected by informersMutex, which we don't want to hold for very long because
-	// that blocks CacheFor for other GVKs, hence not deferring unlock here
-	gi, ok := f.informers[cache.gvk]
-	if !ok {
-		return
-	}
-
-	gi.stopMutex.RUnlock()
+	cache.gi.stopMutex.RUnlock()
 }
 
 // Stop cancels ctx which stops any running informers, assigns a new ctx, resets the GVK-informer cache, and resets
