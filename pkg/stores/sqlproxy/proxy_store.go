@@ -676,20 +676,11 @@ func newWatchers() *Watchers {
 }
 
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	inf, doneFn, err := s.cacheForWithDeps(apiOp.Context(), apiOp, schema)
+	ctx := apiOp.Context()
+	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		select {
-		case <-inf.Context().Done():
-			cancel()
-		case <-apiOp.Context().Done():
-			cancel()
-		}
-	}()
 
 	var selector labels.Selector
 	if w.Selector != "" {
@@ -701,7 +692,6 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 	result := make(chan watch.Event)
 	go func() {
-		defer cancel()
 		defer doneFn()
 		defer close(result)
 
