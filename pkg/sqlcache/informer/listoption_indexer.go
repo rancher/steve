@@ -318,7 +318,7 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 
 	l.lock.Lock()
 	latestRV := l.latestRV
-	key := l.addWatcherLocked(watcherChannel, opts.Filter)
+	key := l.addWatcherLocked(watcherChannel, opts.Filter, cancel)
 	l.lock.Unlock()
 	defer l.removeWatcher(key)
 
@@ -485,13 +485,15 @@ type watchKey struct {
 type watcher struct {
 	ch     chan<- watch.Event
 	filter WatchFilter
+	cancel context.CancelFunc
 }
 
-func (l *ListOptionIndexer) addWatcherLocked(eventCh chan<- watch.Event, filter WatchFilter) *watchKey {
+func (l *ListOptionIndexer) addWatcherLocked(eventCh chan<- watch.Event, filter WatchFilter, cancel context.CancelFunc) *watchKey {
 	key := new(watchKey)
 	l.watchers[key] = &watcher{
 		ch:     eventCh,
 		filter: filter,
+		cancel: cancel,
 	}
 	return key
 }
@@ -552,9 +554,15 @@ func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, oldObj any, o
 			continue
 		}
 
-		watcher.ch <- watch.Event{
+		event := watch.Event{
 			Type:   eventType,
 			Object: obj.(runtime.Object).DeepCopyObject(),
+		}
+		// Avoid blocking producer on faulty watchers
+		select {
+		case watcher.ch <- event:
+		case <-time.After(100 * time.Millisecond):
+			watcher.cancel()
 		}
 	}
 	l.lock.RUnlock()
