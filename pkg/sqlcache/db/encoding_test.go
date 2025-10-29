@@ -63,6 +63,8 @@ func TestEquality(t *testing.T) {
 }
 
 func BenchmarkEncodings(b *testing.B) {
+	// TODO(alejandroruiz): use unstructured.Unstructured, since that's what production code uses
+	//                      current benchmark results are unrealistic for gob because unstructured objects require reflection, unlike these concrete types
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
