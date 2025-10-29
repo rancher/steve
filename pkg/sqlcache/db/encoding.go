@@ -22,7 +22,7 @@ const (
 	GzippedJSONEncoding
 )
 
-var defaultEncoding encoding = &gobEncoding{}
+var defaultEncoding encoding = &jsonEncoding{}
 
 func init() {
 	// necessary in order to gob/ungob unstructured.Unstructured objects
