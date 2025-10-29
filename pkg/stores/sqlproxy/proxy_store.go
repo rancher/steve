@@ -95,6 +95,8 @@ var (
 			{"spec", "template", "spec", "containers", "image"}},
 		gvkKey("", "v1", "Secret"): {
 			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
+			{"spec", "clusterName"},
+			{"spec", "displayName"},
 		},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
@@ -258,6 +260,27 @@ var (
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
 	}
 
+	secretGVK                    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+	secretProjectLabelDisplayDep = sqltypes.ExternalLabelDependency{
+		SourceGVK:            gvkKey("", "v1", "Secret"),
+		SourceLabelName:      "management.cattle.io/project-scoped-secret",
+		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
+		TargetKeyFieldName:   "metadata.name",
+		TargetFinalFieldName: "spec.displayName",
+	}
+	secretProjectLabelClusterDep = sqltypes.ExternalLabelDependency{
+		SourceGVK:            gvkKey("", "v1", "Secret"),
+		SourceLabelName:      "management.cattle.io/project-scoped-secret",
+		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
+		TargetKeyFieldName:   "metadata.name",
+		TargetFinalFieldName: "spec.clusterName",
+	}
+	secretUpdates = sqltypes.ExternalGVKUpdates{
+		AffectedGVK:               secretGVK,
+		ExternalDependencies:      nil,
+		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{secretProjectLabelDisplayDep, secretProjectLabelClusterDep},
+	}
+
 	// Now sort provisioned.cattle.io.clusters based on their associated mgmt.cattle.io spec values
 	// We might need to pull in the `memoryRaw` fields as well
 	// Remember to index these fields in the database.
@@ -279,14 +302,18 @@ var (
 		ExternalDependencies:      provisionedClusterDependencies,
 		ExternalLabelDependencies: nil,
 	}
+
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
 		mcioProjectGvk: &namespaceUpdates,
 		pcioClusterGvk: &pcioClusterUpdates,
+		secretGVK:      &secretUpdates,
 	}
-	// When a namespace is updated, we need to pull in changes from mcio into the namespaces table
+
 	selfGVKDependencies = sqltypes.ExternalGVKDependency{
+		// When a namespace is updated, we need to pull in changes from mcio into the namespaces table
 		namespaceGVK:   &namespaceUpdates,
 		pcioClusterGvk: &pcioClusterUpdates,
+		secretGVK:      &secretUpdates,
 	}
 )
 
