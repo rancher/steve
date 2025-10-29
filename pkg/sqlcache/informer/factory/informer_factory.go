@@ -36,7 +36,6 @@ type CacheFactory struct {
 
 	encryptAll bool
 
-	gcInterval  time.Duration
 	gcKeepCount int
 
 	newInformer newInformer
@@ -63,7 +62,7 @@ type guardedInformer struct {
 	wg     wait.Group
 }
 
-type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespace bool, watchable bool, gcInterval time.Duration, gcKeepCount int) (*informer.Informer, error)
+type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespace bool, watchable bool, gcKeepCount int) (*informer.Informer, error)
 
 type Cache struct {
 	informer.ByOptionsLister
@@ -97,8 +96,9 @@ var defaultEncryptedResourceTypes = map[schema.GroupVersionKind]struct{}{
 
 type CacheFactoryOptions struct {
 	// GCInterval is how often to run the garbage collection
+	// Deprecated: events are not stored in memory using a fixed-length circular list
 	GCInterval time.Duration
-	// GCKeepCount is how many events to keep in _events table when gc runs
+	// GCKeepCount is how many events to keep in memory
 	GCKeepCount int
 }
 
@@ -126,7 +126,6 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 		encryptAll: os.Getenv(EncryptAllEnvVar) == "true",
 		dbClient:   dbClient,
 
-		gcInterval:  opts.GCInterval,
 		gcKeepCount: opts.GCKeepCount,
 
 		newInformer: informer.NewInformer,
@@ -193,7 +192,7 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 		shouldEncrypt := f.encryptAll || encryptResourceAlways
 		// In non-test code this invokes pkg/sqlcache/informer/informer.go: NewInformer()
 		// search for "func NewInformer(ctx"
-		i, err := f.newInformer(gi.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, typeGuidance, namespaced, watchable, f.gcInterval, f.gcKeepCount)
+		i, err := f.newInformer(gi.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, typeGuidance, namespaced, watchable, f.gcKeepCount)
 		if err != nil {
 			gi.informerMutex.Unlock()
 			return nil, err
