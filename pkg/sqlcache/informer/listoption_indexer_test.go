@@ -2252,8 +2252,6 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 	}
 }
 
-
-
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
 		description           string
@@ -4315,4 +4313,34 @@ func Test_watcherWithBackfill(t *testing.T) {
 	}
 
 	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8}, res)
+}
+
+// This test aims to detect a very specific race condition, see https://github.com/rancher/steve/pull/879 for details
+func Test_watcherWithBackfillCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+
+	eventsCh := make(chan int)
+	w, doneCb, closeWatcher := watcherWithBackfill(ctx, eventsCh, 100)
+	defer closeWatcher()
+	doneCb()
+
+	select {
+	case w <- 1:
+		t.Fatal("expected blocking trying to write")
+	default:
+	}
+
+	doneWriting := make(chan struct{})
+	go func() {
+		w <- 1 // should be discarded
+		close(doneWriting)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	cancel()
+	select {
+	case <-doneWriting:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected writing to not block when context is canceled")
+	}
 }
