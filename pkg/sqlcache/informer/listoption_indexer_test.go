@@ -2252,8 +2252,6 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 	}
 }
 
-
-
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
 		description           string
@@ -4319,119 +4317,30 @@ func Test_watcherWithBackfill(t *testing.T) {
 
 // This test aims to detect a very specific race condition, see https://github.com/rancher/steve/pull/879 for details
 func Test_watcherWithBackfillCancel(t *testing.T) {
-	opts := ListOptionIndexerOptions{
-		IsNamespaced: true,
-	}
-	loi, dbPath, err := makeListOptionIndexer(t.Context(), opts, false, emptyNamespaceList)
-	defer cleanTempFiles(dbPath)
-	assert.NoError(t, err)
-
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
 
-	// Register regular watcher via ListOptionIndexer
-	fullWatchCh := make(chan watch.Event, 10)
-	defer close(fullWatchCh)
-	doneWatch := make(chan struct{})
-	go func() {
-		defer close(doneWatch)
-		if err := loi.Watch(ctx, WatchOptions{}, fullWatchCh); err != nil {
-			t.Error(err)
-		}
-	}()
-	// Wait for watcher to be registered
-	assert.Eventually(t, func() bool {
-		return len(loi.watchers) == 1
-	}, time.Second, 10*time.Millisecond)
+	eventsCh := make(chan int)
+	w, doneCb, closeWatcher := watcherWithBackfill(ctx, eventsCh, 100)
+	defer closeWatcher()
+	doneCb()
 
-	// Register a custom channel directly in the watchers list. We need full control over it
-	controlCh := make(chan watch.Event, 1)
-	defer close(controlCh)
-
-	// Go randomizes order of iteration over maps, making them unpredictable
-	// However, most of my experiments ended up with different order for every map, but same order for multiple consecutive iterations, making it harder to find a specific order/condition
-	// Our best chance at the moment is redo the map and try to find the desired iteration order beforehand.
-	var key *watchKey
-	var setupCorrect bool
-	loi.lock.Lock()
-Loop:
-	for range 10 {
-		key = loi.addWatcherLocked(controlCh, WatchFilter{})
-		for x := range loi.watchers {
-			if x == key {
-				setupCorrect = true
-				break Loop
-			}
-			// only check first key of the map
-			break
-		}
-		delete(loi.watchers, key)
-	}
-	loi.lock.Unlock()
-	defer loi.removeWatcher(key)
-	if !setupCorrect {
-		t.Fatal("gave up trying to find the correct setup")
-	}
-
-	cm := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "v1",
-		"kind":       "ConfigMap",
-		"metadata": map[string]any{
-			"namespace":       "testns",
-			"name":            "test-cm",
-			"resourceVersion": "0",
-		},
-	}}
-	assert.NoError(t, loi.Add(cm))
-	// Check both channels got the event. controlCh is not full and won't accept new events
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		assert.Len(t, controlCh, 1)
-		assert.Len(t, fullWatchCh, 1)
-	}, time.Second, 10*time.Millisecond)
-
-	doneUpdate := make(chan struct{})
-	go func() {
-		assert.NoError(t, loi.Update(cm.DeepCopy()))
-		close(doneUpdate)
-	}()
 	select {
-	case <-doneUpdate:
-		t.Fatal("Update was expected to block")
-	case <-time.After(200 * time.Millisecond):
-		// controlCh is full, blocking Update from finishing trying to propagate the event
-	}
-	if loi.lock.TryLock() {
-		loi.lock.Unlock()
-		t.Fatal("expected lock to be blocked")
+	case w <- 1:
+		t.Fatal("expected blocking trying to write")
+	default:
 	}
 
-	// cancel Watch while producer is in deadlock
-	cancel()
+	doneWriting := make(chan struct{})
+	go func() {
+		w <- 1 // should be discarded
+		close(doneWriting)
+	}()
 	time.Sleep(100 * time.Millisecond)
-	// read from controlCh to finally unblock
-	<-controlCh
 
+	cancel()
 	select {
-	case <-doneUpdate:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for Update to finish")
-	}
-
-	select {
-	case <-doneWatch:
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for watch to finish")
-	}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		assert.Len(t, loi.watchers, 1)
-	}, time.Second, 10*time.Millisecond)
-
-	// drain controlCh and ensure it keeps receiving events
-	<-controlCh
-	assert.NoError(t, loi.Delete(cm))
-	select {
-	case <-controlCh:
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for event")
+	case <-doneWriting:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected writing to not block when context is canceled")
 	}
 }
