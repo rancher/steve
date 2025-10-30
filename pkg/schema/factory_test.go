@@ -47,6 +47,15 @@ func TestSchemas(t *testing.T) {
 				errDesired:             false,
 			},
 		},
+		{
+			name: "duplicate verbs do not create duplicate methods",
+			config: schemaTestConfig{
+				permissionVerbs:        []string{"get", "get", "list", "list"},
+				desiredResourceVerbs:   []string{"GET"},
+				desiredCollectionVerbs: []string{"GET"},
+				errDesired:             false,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -154,6 +163,18 @@ func runSchemaTest(t *testing.T, config schemaTestConfig, lookup *mockAccessSetL
 	}
 	for _, verb := range config.desiredCollectionVerbs {
 		assert.Contains(t, testSchema.CollectionMethods, verb, "did not find %s in resource methods %v", verb, testSchema.CollectionMethods)
+	}
+	seenMethod := map[string]struct{}{}
+	for _, m := range testSchema.ResourceMethods {
+		_, exists := seenMethod[m]
+		assert.False(t, exists, "duplicate method found in ResourceMethods: %s", m)
+		seenMethod[m] = struct{}{}
+	}
+	seenMethod = map[string]struct{}{}
+	for _, m := range testSchema.CollectionMethods {
+		_, exists := seenMethod[m]
+		assert.False(t, exists, "duplicate method found in CollectionMethods: %s", m)
+		seenMethod[m] = struct{}{}
 	}
 }
 
