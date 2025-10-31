@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 
@@ -242,31 +243,81 @@ func isSameMap[K comparable, V any](m1, m2 map[K]V) bool {
 	return reflect.ValueOf(m1).Pointer() == reflect.ValueOf(m2).Pointer()
 }
 
+func isSameSlice(s1, s2 []any) bool {
+	return reflect.ValueOf(s1).Pointer() == reflect.ValueOf(s2).Pointer()
+}
+
 // applyPatches modifies the data from an unstructured object before storing in the database to bypass known limitations in gob encoding
 func applyPatches(data map[string]any) map[string]any {
-	changes := make(map[string]any)
+	// Minimize allocations by only cloning data if really needed
+	var updated map[string]any
+	update := func(k string, v any) {
+		if updated == nil {
+			updated = maps.Clone(data)
+		}
+		updated[k] = v
+	}
 	for k := range data {
 		switch v := data[k].(type) {
 		case map[string]any:
 			if len(v) != 0 {
 				if newValue := applyPatches(v); !isSameMap(v, newValue) {
-					changes[k] = newValue
+					update(k, newValue)
 				}
 			}
 		case []any:
 			// gob cannot differentiate between nil or non-nil empty slices, so it converts empty slices into null
 			// https://github.com/golang/go/issues/10905
 			if v != nil && len(v) == 0 {
-				changes[k] = nonNilEmptySlice{}
+				update(k, nonNilEmptySlice{})
+			} else if len(v) > 0 {
+				if newValue := applyPatchesToSlice(v); !isSameSlice(v, newValue) {
+					update(k, newValue)
+				}
 			}
 		}
 	}
-	if len(changes) == 0 {
+	if updated == nil {
 		return data
 	}
-	changed := maps.Clone(data)
-	maps.Copy(changed, changes)
-	return changed
+	return updated
+}
+
+func applyPatchesToSlice(data []any) []any {
+	// Minimize allocations by only cloning data if really needed
+	var updated []any
+	update := func(x int, v any) {
+		if updated == nil {
+			updated = slices.Clone(data)
+		}
+		updated[x] = v
+	}
+
+	for x := range data {
+		switch v := data[x].(type) {
+		case map[string]any:
+			// Rule 1: Recurse into non-empty maps
+			if len(v) > 0 {
+				if newValue := applyPatches(v); !isSameMap(v, newValue) {
+					update(x, newValue)
+				}
+			}
+		case []any:
+			if v != nil && len(v) == 0 {
+				update(x, nonNilEmptySlice{})
+			} else if len(v) > 0 {
+				if newValue := applyPatchesToSlice(v); !isSameSlice(v, newValue) {
+					update(x, newValue)
+				}
+			}
+		}
+	}
+
+	if updated == nil {
+		// no changes
+		return data
+	}
+	return updated
 }
 
 // revertPatches is meant to restore the changes performed by applyPatches
@@ -275,6 +326,22 @@ func revertPatches(data map[string]any) map[string]any {
 		switch v := data[k].(type) {
 		case map[string]any:
 			data[k] = revertPatches(v)
+		case []any:
+			data[k] = revertPatchesInSlice(v)
+		case nonNilEmptySlice:
+			data[k] = []any{}
+		}
+	}
+	return data
+}
+
+func revertPatchesInSlice(data []any) []any {
+	for k := range data {
+		switch v := data[k].(type) {
+		case map[string]any:
+			data[k] = revertPatches(v)
+		case []any:
+			data[k] = revertPatchesInSlice(v)
 		case nonNilEmptySlice:
 			data[k] = []any{}
 		}
