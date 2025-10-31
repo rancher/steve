@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/tinylib/msgp/msgp"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -22,6 +23,7 @@ type Encoding int
 const (
 	GobEncoding Encoding = iota
 	JSONEncoding
+	MsgpackEncoding
 	GzippedGobEncoding
 	GzippedJSONEncoding
 )
@@ -48,6 +50,8 @@ func encodingForType(encType Encoding) encoding {
 		return &gobEncoding{}
 	case JSONEncoding:
 		return jsonEncoding{}
+	case MsgpackEncoding:
+		return msgpackEncoding{}
 	case GzippedGobEncoding:
 		return gzipped(&gobEncoding{})
 	case GzippedJSONEncoding:
@@ -182,6 +186,29 @@ func (j jsonEncoding) Encode(w io.Writer, obj any) error {
 
 func (j jsonEncoding) Decode(r io.Reader, into any) error {
 	return json.NewDecoder(r).Decode(into)
+}
+
+type msgpackEncoding struct{}
+
+func (m msgpackEncoding) Encode(w io.Writer, obj any) error {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("only *unstructured.Unstructured is currently supported, got %T", obj)
+	}
+	return msgp.Encode(w, unstructuredObject(u.Object))
+}
+
+func (m msgpackEncoding) Decode(r io.Reader, into any) error {
+	u, ok := into.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("only *unstructured.Unstructured is currently supported, got %T", into)
+	}
+	var obj unstructuredObject
+	if err := msgp.Decode(r, &obj); err != nil {
+		return err
+	}
+	u.Object = obj
+	return nil
 }
 
 type gzipEncoding struct {
