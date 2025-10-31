@@ -24,6 +24,7 @@ var allEncodings = []struct {
 }{
 	{name: "gob", encoding: GobEncoding},
 	{name: "json", encoding: JSONEncoding},
+	{name: "msgpack", encoding: MsgpackEncoding},
 	{name: "gob+gzip", encoding: GzippedGobEncoding},
 	{name: "json+gzip", encoding: GzippedJSONEncoding},
 }
