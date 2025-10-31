@@ -28,7 +28,7 @@ const (
 	GzippedJSONEncoding
 )
 
-var defaultEncoding encoding = &gobEncoding{}
+var defaultEncoding = encodingForType(MsgpackEncoding)
 
 type nonNilEmptySlice struct{}
 
@@ -65,7 +65,7 @@ func encodingForType(encType Encoding) encoding {
 		return gzipped(jsonEncoding{})
 	}
 	// unreachable
-	return defaultEncoding
+	return msgpackEncoding{}
 }
 
 func WithEncoding(encType Encoding) ClientOption {
