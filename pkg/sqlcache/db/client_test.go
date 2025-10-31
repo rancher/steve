@@ -18,6 +18,7 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Mocks for this test are generated with the following command.
@@ -104,7 +105,13 @@ func TestQueryObjects(t *testing.T) {
 
 	var tests []testCase
 
-	testObject := &testStoreObject{Id: "something", Val: "a"}
+	testObject := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"id":  "something",
+			"val": "a",
+		},
+	}
+	testObjectSerialized := toBytes(t, testObject)
 	var keyId uint32 = math.MaxUint32
 	fmt.Println(reflect.TypeOf(testObject).Name())
 
@@ -116,11 +123,11 @@ func TestQueryObjects(t *testing.T) {
 		r := SetupMockRows(t)
 		r.EXPECT().Next().Return(true)
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
-			*a[0].(*sql.RawBytes) = toBytes(testObject)
-			*a[1].(*sql.RawBytes) = toBytes(testObject)
+			*a[0].(*sql.RawBytes) = testObjectSerialized
+			*a[1].(*sql.RawBytes) = testObjectSerialized
 			*a[2].(*uint32) = keyId
 		})
-		d.EXPECT().Decrypt(toBytes(testObject), toBytes(testObject), keyId).Return(toBytes(testObject), nil)
+		d.EXPECT().Decrypt(testObjectSerialized, testObjectSerialized, keyId).Return(testObjectSerialized, nil)
 		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(nil)
@@ -137,12 +144,11 @@ func TestQueryObjects(t *testing.T) {
 		r := SetupMockRows(t)
 		r.EXPECT().Next().Return(true)
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
-			*a[0].(*sql.RawBytes) = toBytes(testObject)
-			*a[1].(*sql.RawBytes) = toBytes(
-				testObject)
+			*a[0].(*sql.RawBytes) = testObjectSerialized
+			*a[1].(*sql.RawBytes) = testObjectSerialized
 			*a[2].(*uint32) = keyId
 		})
-		d.EXPECT().Decrypt(toBytes(testObject), toBytes(testObject), keyId).Return(nil, fmt.Errorf("error"))
+		d.EXPECT().Decrypt(testObjectSerialized, testObjectSerialized, keyId).Return(nil, fmt.Errorf("error"))
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
 		_, err := client.ReadObjects(r, reflect.TypeOf(testObject))
@@ -169,11 +175,11 @@ func TestQueryObjects(t *testing.T) {
 		r := SetupMockRows(t)
 		r.EXPECT().Next().Return(true)
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
-			*a[0].(*sql.RawBytes) = toBytes(testObject)
-			*a[1].(*sql.RawBytes) = toBytes(testObject)
+			*a[0].(*sql.RawBytes) = testObjectSerialized
+			*a[1].(*sql.RawBytes) = testObjectSerialized
 			*a[2].(*uint32) = keyId
 		})
-		d.EXPECT().Decrypt(toBytes(testObject), toBytes(testObject), keyId).Return(toBytes(testObject), nil)
+		d.EXPECT().Decrypt(testObjectSerialized, testObjectSerialized, keyId).Return(testObjectSerialized, nil)
 		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(fmt.Errorf("error"))
@@ -221,7 +227,7 @@ func TestQueryStrings(t *testing.T) {
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
 			for _, v := range a {
 				vk := v.(*string)
-				*vk = string(toBytes(testObject.Id))
+				*vk = testObject.Id
 			}
 		})
 		r.EXPECT().Err().Return(nil)
@@ -255,7 +261,7 @@ func TestQueryStrings(t *testing.T) {
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
 			for _, v := range a {
 				vk := v.(*string)
-				*vk = string(toBytes(testObject.Id))
+				*vk = testObject.Id
 			}
 		})
 		r.EXPECT().Next().Return(false)
@@ -275,7 +281,7 @@ func TestQueryStrings(t *testing.T) {
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
 			for _, v := range a {
 				vk := v.(*string)
-				*vk = string(toBytes(testObject.Id))
+				*vk = testObject.Id
 			}
 		})
 		r.EXPECT().Err().Return(nil)
@@ -592,10 +598,12 @@ func assertFileHasPermissions(t *testing.T, fname string, wantPerms fs.FileMode)
 	return true
 }
 
-func toBytes(obj any) []byte {
+func toBytes(t *testing.T, obj any) []byte {
+	t.Helper()
+
 	var buf bytes.Buffer
 	if err := defaultEncoding.Encode(&buf, obj); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return buf.Bytes()
 }
