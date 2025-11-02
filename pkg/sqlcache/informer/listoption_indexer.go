@@ -377,7 +377,12 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	}
 	backfillDone()
 
-	<-ctx.Done()
+	// Wait for either the request context or the cache's context to exit
+	select {
+	case <-ctx.Done():
+	case <-l.ctx.Done():
+	}
+
 	return nil
 }
 
