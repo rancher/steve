@@ -1,6 +1,6 @@
 package schema
 
-//go:generate mockgen --build_flags=--mod=mod -package fake -destination fake/factory.go "github.com/rancher/steve/pkg/schema" Factory
+//go:generate go tool -modfile ../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package fake -destination fake/factory.go "github.com/rancher/steve/pkg/schema" Factory
 import (
 	"context"
 	"fmt"

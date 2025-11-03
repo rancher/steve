@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package tablelistconvert -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
-//go:generate mockgen --build_flags=--mod=mod -package tablelistconvert -destination ./watch_mocks_test.go k8s.io/apimachinery/pkg/watch Interface
+//go:generate go tool -modfile ../../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package tablelistconvert -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
+//go:generate go tool -modfile ../../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package tablelistconvert -destination ./watch_mocks_test.go k8s.io/apimachinery/pkg/watch Interface
 
 func TestWatch(t *testing.T) {
 	type testCase struct {
