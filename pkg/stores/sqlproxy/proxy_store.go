@@ -587,18 +587,19 @@ func newWatchers() *Watchers {
 }
 
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	inf, doneFn, err := s.cacheForWithDeps(apiOp.Context(), apiOp, schema)
+	ctx := apiOp.Context()
+	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel watch if the informer is shutdown
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		select {
 		case <-inf.Context().Done():
 			cancel()
-		case <-apiOp.Context().Done():
-			cancel()
+		case <-ctx.Done():
 		}
 	}()
 
