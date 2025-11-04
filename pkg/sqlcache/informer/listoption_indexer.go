@@ -420,9 +420,14 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 			if !matchFilter(filter.ID, filter.Namespace, filter.Selector, obj) {
 				continue
 			}
-			eventsCh <- watch.Event{
+			ev := watch.Event{
 				Type:   typ,
 				Object: obj,
+			}
+			select {
+			case eventsCh <- ev:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
 		return rows.Err()
