@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //go:generate go tool -modfile ../../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package listprocessor -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache
@@ -758,8 +759,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. It should sort on the one given" +
-			" sort option should be set",
+		description: "ParseQuery() should sort on the specified sort option",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "sort=metadata.name"},
@@ -781,8 +781,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If one sort param is given primary field " +
-			"and hyphen prefix for field value, sort option should be set with descending order.",
+		description: "ParseQuery() sort option should sort in descending order when a sort param has a hyphen prefix.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "sort=-metadata.name"},
@@ -866,8 +865,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If page param is given, page" +
-			" should be set with assigned value.",
+		description: "ParseQuery() should honor page params.",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "page=3"},
@@ -880,9 +878,9 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 	})
+
 	tests = append(tests, testCase{
-		description: "ParseQuery() with no errors returned should returned no errors. If pagesize param is given, pageSize" +
-			" should be set with assigned value.",
+		description: "ParseQuery() should honor pagesize param",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "pagesize=20"},
@@ -896,15 +894,102 @@ func TestParseQuery(t *testing.T) {
 			},
 		},
 	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should process summary parameter",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=metadata.state.name,metadata.labels.status,metadata.labels[rye/rye/rocco],spec.containers.image[2]"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "state", "name"},
+				[]string{"metadata", "labels", "status"},
+				[]string{"metadata", "labels", "rye/rye/rocco"},
+				[]string{"spec", "containers", "image", "2"},
+			},
+			Filters: make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when more than one summary is given",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=metadata.state.name&summary=metadata.namespace"},
+			},
+		},
+		errExpected: true,
+		errorText:   "got 2 summary parameters, at most 1 is allowed",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summary is given with a filter",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=metadata.name=a&summary=metadata.namespace"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (filter)",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summary is given with a sort param",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=metadata.name=a&summary=metadata.namespace"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (sort)",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summary is given with a page param",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=metadata.namespace&page=5"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (page)",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summary is given with a pagesize param",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "pagesize=6&summary=metadata.namespace"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (pagesize)",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summary is given with no fields to summarize",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary="},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: empty summary parameter doesn't make sense",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summary is given with only commas",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=,,,,"},
+			},
+		},
+		errExpected: true,
+		errorText:   "unable to parse requirement: empty summary parameter doesn't make sense",
+	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			//if test.description == "ParseQuery() with no errors: if projectsornamespaces is not empty, it should return an empty filter array" {
-			//	fmt.Println("stop here")
-			//}
 			lo, err := ParseQuery(test.req, test.gvKind)
 			if test.errExpected {
-				assert.NotNil(t, err)
+				require.NotNil(t, err)
 				if test.errorText != "" {
 					assert.Contains(t, test.errorText, err.Error())
 				}

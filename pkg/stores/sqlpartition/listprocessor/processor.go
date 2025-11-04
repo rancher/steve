@@ -3,6 +3,7 @@ package listprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -28,6 +29,7 @@ const (
 	pageSizeParam           = "pagesize"
 	pageParam               = "page"
 	revisionParam           = "revision"
+	summaryParam            = "summary"
 	projectsOrNamespacesVar = "projectsornamespaces"
 	projectIDFieldLabel     = "field.cattle.io/projectId"
 
@@ -183,6 +185,36 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 				fmt.Sprintf("value %s for revision query param is not valid", revision))
 		}
 		opts.Revision = revision
+	}
+	summaryParams := q[summaryParam]
+	if len(summaryParams) > 1 {
+		return opts, fmt.Errorf("got %d summary parameters, at most 1 is allowed", len(summaryParams))
+	}
+	if len(summaryParams) == 1 {
+		// This works because the concrete syntax of kubernetes labels doesn't allow commas
+		summaries := strings.Split(summaryParams[0], ",")
+		fieldLists := sqltypes.SummaryFieldList{}
+		for _, summary := range summaries {
+			if len(summary) == 0 {
+				return opts, fmt.Errorf("unable to parse requirement: empty summary parameter doesn't make sense")
+			}
+			fieldLists = append(fieldLists, queryhelper.SafeSplit(summary))
+		}
+		if len(fieldLists) == 0 {
+			return opts, fmt.Errorf("unable to parse requirement: summary parameter given with no fields to summarize")
+		}
+		opts.SummaryFieldList = fieldLists
+		otherParams := make([]string, 0, 6)
+		for _, param := range []string{filterParam, sortParam, pageSizeParam, pageParam, projectsOrNamespacesVar, revisionParam} {
+			if q.Get(param) != "" {
+				otherParams = append(otherParams, param)
+			}
+		}
+		if len(otherParams) > 0 {
+			return opts, fmt.Errorf("summary parameters can't appear with other parameters (%s)", strings.Join(otherParams, ", "))
+		}
+	} else if q.Has(summaryParam) {
+		return opts, errors.New("unable to parse requirement: summary parameter given with no fields to summarize")
 	}
 
 	return opts, nil
