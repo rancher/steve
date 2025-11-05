@@ -461,7 +461,8 @@ enabling pprof with `--enable-pprof`.
 go run . --enable-pprof
 ```
 
-It is then possible to use `go tool pprof` to view profiles. For example:
+It is then possible to use `go tool pprof` to view profiles. (You might need
+[graphviz](https://www.graphviz.org/)) For example:
 
 ```
 go tool pprof -no_browser -http localhost:31000 http://localhost:6060/debug/pprof/goroutine
