@@ -57,9 +57,10 @@ type Cache interface {
 	// Specifically:
 	//   - an unstructured list of resources belonging to any of the specified partitions
 	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
+	//   - a summary object, containing the possible values for each field specified in a summary= subquery
 	//   - a continue token, if there are more pages after the returned one
 	//   - an error instead of all of the above if anything went wrong
-	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error)
 }
 
 func k8sOpToRancherOp(k8sOp selection.Operator) (sqltypes.Op, bool, error) {
@@ -204,15 +205,6 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 			return opts, fmt.Errorf("unable to parse requirement: summary parameter given with no fields to summarize")
 		}
 		opts.SummaryFieldList = fieldLists
-		otherParams := make([]string, 0, 6)
-		for _, param := range []string{filterParam, sortParam, pageSizeParam, pageParam, projectsOrNamespacesVar, revisionParam} {
-			if q.Get(param) != "" {
-				otherParams = append(otherParams, param)
-			}
-		}
-		if len(otherParams) > 0 {
-			return opts, fmt.Errorf("summary parameters can't appear with other parameters (%s)", strings.Join(otherParams, ", "))
-		}
 	} else if q.Has(summaryParam) {
 		return opts, errors.New("unable to parse requirement: summary parameter given with no fields to summarize")
 	}

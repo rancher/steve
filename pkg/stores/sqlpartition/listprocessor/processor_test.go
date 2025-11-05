@@ -925,44 +925,97 @@ func TestParseQuery(t *testing.T) {
 		errorText:   "got 2 summary parameters, at most 1 is allowed",
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() should complain when summary is given with a filter",
+		description: "ParseQuery() should allow occurrence of both 'summary' and a filter",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "filter=metadata.name=a&summary=metadata.namespace"},
 			},
 		},
-		errExpected: true,
-		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (filter)",
-	})
-	tests = append(tests, testCase{
-		description: "ParseQuery() should complain when summary is given with a sort param",
-		req: &types.APIRequest{
-			Request: &http.Request{
-				URL: &url.URL{RawQuery: "sort=metadata.name=a&summary=metadata.namespace"},
+		errExpected: false,
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "namespace"},
+			},
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "name"},
+							Op:      sqltypes.Eq,
+							Matches: []string{"a"},
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
 			},
 		},
-		errExpected: true,
-		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (sort)",
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() should complain when summary is given with a page param",
+		description: "ParseQuery() should allow specification of summary with a sort param",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "sort=metadata.name&summary=metadata.namespace"},
+			},
+		},
+		errExpected: false,
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "namespace"},
+			},
+			Filters: []sqltypes.OrFilter{},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should not complain when summary is given with a page param",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "summary=metadata.namespace&page=5"},
 			},
 		},
-		errExpected: true,
-		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (page)",
+		errExpected: false,
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "namespace"},
+			},
+			Filters: []sqltypes.OrFilter{},
+			//SortList: sqltypes.SortList{},
+			Pagination: sqltypes.Pagination{
+				Page: 5,
+			},
+		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() should complain when summary is given with a pagesize param",
+		description: "ParseQuery() should not complain when summary is given with a pagesize param",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "pagesize=6&summary=metadata.namespace"},
 			},
 		},
-		errExpected: true,
-		errorText:   "unable to parse requirement: summary parameters can't appear with other parameters (pagesize)",
+		errExpected: false,
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "namespace"},
+			},
+			Filters: []sqltypes.OrFilter{},
+			//SortList: sqltypes.SortList{},
+			Pagination: sqltypes.Pagination{
+				Page:     1,
+				PageSize: 6,
+			},
+		},
 	})
 	tests = append(tests, testCase{
 		description: "ParseQuery() should complain when summary is given with no fields to summarize",

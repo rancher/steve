@@ -307,11 +307,12 @@ func TestListByPartitions(t *testing.T) {
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
-			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), nil, "", nil)
+			list, total, summary, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
+			assert.Nil(t, summary)
 			assert.Equal(t, "", contToken)
 		},
 	})
@@ -381,7 +382,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 
-			_, _, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -473,12 +474,13 @@ func TestListByPartitions(t *testing.T) {
 			cf.EXPECT().DoneWithCache(c)
 
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
-			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), nil, "", nil)
+			list, total, summary, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
 			assert.Equal(t, "", contToken)
+			assert.Nil(t, summary)
 		},
 	})
 	tests = append(tests, testCase{
@@ -559,7 +561,7 @@ func TestListByPartitions(t *testing.T) {
 				attributes.Namespaced(schema),
 				true).Return(nil, fmt.Errorf("error"))
 
-			_, _, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -647,10 +649,10 @@ func TestListByPartitions(t *testing.T) {
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(nil, 0, nil, "", fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
-			_, _, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -778,8 +780,8 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			listToReturn := &unstructured.UnstructuredList{
 				Items: make([]unstructured.Unstructured, 0, 0),
 			}
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), opts, partitions, "").Return(listToReturn, len(listToReturn.Items), "", nil)
-			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), opts, partitions, "").Return(listToReturn, len(listToReturn.Items), nil, "", nil)
+			_, _, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
 			assert.Nil(t, err)
 		})
 	}
