@@ -129,6 +129,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().GetName().Return(id).AnyTimes()
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
@@ -183,6 +184,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().GetName().Return(id).AnyTimes()
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
@@ -205,6 +207,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
@@ -241,6 +244,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
@@ -287,6 +291,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
@@ -337,6 +342,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		stmt := &sql.Stmt{}
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
