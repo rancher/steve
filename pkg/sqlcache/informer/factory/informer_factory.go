@@ -192,6 +192,8 @@ func (f *CacheFactory) cacheForLocked(ctx context.Context, gi *guardedInformer, 
 		shouldEncrypt := f.encryptAll || encryptResourceAlways
 		i, err := f.newInformer(f.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, f.gcInterval, f.gcKeepCount)
 		if err != nil {
+			gi.informerMutex.Unlock()
+			log.Errorf("Error creating informer for %v: %v", gvk, err)
 			return nil, err
 		}
 
