@@ -213,10 +213,22 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	setStatements := make([]string, len(indexedFields))
 
 	err = l.WithTransaction(ctx, true, func(tx transaction.Client) error {
+		dropEventsQuery := fmt.Sprintf(dropEventsFmt, dbName)
+		_, err = tx.Exec(dropEventsQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: dropEventsQuery, Err: err}
+		}
+
 		createEventsTableQuery := fmt.Sprintf(createEventsTableFmt, dbName)
 		_, err = tx.Exec(createEventsTableQuery)
 		if err != nil {
-			return &db.QueryError{QueryString: createEventsTableFmt, Err: err}
+			return &db.QueryError{QueryString: createEventsTableQuery, Err: err}
+		}
+
+		dropFieldsQuery := fmt.Sprintf(dropFieldsFmt, dbName)
+		_, err = tx.Exec(dropFieldsQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: dropFieldsQuery, Err: err}
 		}
 
 		createFieldsTableQuery := fmt.Sprintf(createFieldsTableFmt, dbName, strings.Join(columnDefs, ", "))
@@ -244,6 +256,13 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
 			setStatements[index] = setStatement
 		}
+
+		dropLabelsQuery := fmt.Sprintf(dropLabelsStmtFmt, dbName)
+		_, err = tx.Exec(dropLabelsQuery)
+		if err != nil {
+			return &db.QueryError{QueryString: dropLabelsQuery, Err: err}
+		}
+
 		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
 		_, err = tx.Exec(createLabelsTableQuery)
 		if err != nil {

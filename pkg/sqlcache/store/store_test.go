@@ -1015,6 +1015,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 func SetupMockDB(t *testing.T) (*MockClient, *MockTXClient) {
 	dbC := NewMockClient(gomock.NewController(t)) // add functionality once store expectation are known
 	txC := NewMockTXClient(gomock.NewController(t))
+	txC.EXPECT().Exec(fmt.Sprintf(dropBaseStmtFmt, "testStoreObject")).Return(nil, nil)
 	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil, nil)
 	dbC.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 		func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {

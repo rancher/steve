@@ -49,6 +49,7 @@ func TestNewIndexer(t *testing.T) {
 		storeName := "someStoreName"
 
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
+		client.EXPECT().Exec(fmt.Sprintf(dropIndicesFmt, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
@@ -97,6 +98,7 @@ func TestNewIndexer(t *testing.T) {
 		}
 		storeName := "someStoreName"
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
+		client.EXPECT().Exec(fmt.Sprintf(dropIndicesFmt, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, fmt.Errorf("error"))
 
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
@@ -121,6 +123,7 @@ func TestNewIndexer(t *testing.T) {
 		}
 		storeName := "someStoreName"
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
+		client.EXPECT().Exec(fmt.Sprintf(dropIndicesFmt, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil, fmt.Errorf("error"))
 
@@ -147,6 +150,7 @@ func TestNewIndexer(t *testing.T) {
 		}
 		storeName := "someStoreName"
 		store.EXPECT().GetName().AnyTimes().Return(storeName)
+		client.EXPECT().Exec(fmt.Sprintf(dropIndicesFmt, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createTableFmt, storeName, storeName)).Return(nil, nil)
 		client.EXPECT().Exec(fmt.Sprintf(createIndexFmt, storeName, storeName)).Return(nil, nil)
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
