@@ -141,7 +141,7 @@ Equality can be specified with either one or two '=' signs.
 The following matches objects called either 'cat' or 'cows':
 
 ```
-filter=metadata.name=cat,metadata.name==cows
+filter=metadata.name=cat,metadata.name=cows
 ```
 
 The following matches objects whose names contain either the substring 'cat' or 'cows':
