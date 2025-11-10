@@ -2,7 +2,8 @@ Steve follows a pre-release (v0.x) strategy of semver. There is no compatibility
 
 | Steve Branch | Steve Minor version | Matching Rancher Version |
 |--------------------------|------------------------------------|------------------------------------------------|
-| main | v0.7 | v2.13 |
+| main | v0.8 | v2.14 |
+| release/v0.7 | v0.7 | v2.13 |
 | release/v0.6 | v0.6 | v2.12 |
 | release/v0.5 | v0.5 | v2.11 |
 | release/v0.4 | v0.4 | v2.10 |
