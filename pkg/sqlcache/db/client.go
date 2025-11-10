@@ -208,7 +208,16 @@ func (c *client) QueryForRows(ctx context.Context, stmt transaction.Stmt, params
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
-	return stmt.QueryContext(ctx, params...)
+	// The underlying sqlite implementation seems to not cleanly close transactions when a query is interrupted
+	// We use context.Background to let the query finish correctly, immediately checking the original context afterward and properly closing Rows if canceled
+	rows, err := stmt.QueryContext(context.Background(), params...)
+	if err != nil {
+		return nil, err
+	} else if ctx.Err() != nil {
+		rows.Close()
+		return nil, ctx.Err()
+	}
+	return rows, nil
 }
 
 // CloseStmt will call close on the given Closable. It is intended to be used with a sql statement. This function is meant
