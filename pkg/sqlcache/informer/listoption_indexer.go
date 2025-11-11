@@ -344,23 +344,32 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	}
 
 	if err := l.WithTransaction(ctx, false, func(tx transaction.Client) error {
-		rowIDRow := tx.Stmt(l.findEventsRowByRVStmt).QueryRowContext(ctx, targetRV)
-		if err := rowIDRow.Err(); err != nil {
-			return &db.QueryError{QueryString: l.findEventsRowByRVQuery, Err: err}
-		}
-
 		var rowID int
-		err := rowIDRow.Scan(&rowID)
-		if errors.Is(err, sql.ErrNoRows) {
-			if targetRV != latestRV {
-				return ErrTooOld
+		// use a closure to ensure rows is always closed immediately after it's needed
+		if err := func() error {
+			rows, err := l.QueryForRows(ctx, tx.Stmt(l.findEventsRowByRVStmt), targetRV)
+			if err != nil {
+				return &db.QueryError{QueryString: l.findEventsRowByRVQuery, Err: err}
 			}
-		} else if err != nil {
-			return fmt.Errorf("failed scan rowid: %w", err)
+			defer rows.Close()
+
+			if !rows.Next() {
+				// query returned no results
+				if targetRV != latestRV {
+					return ErrTooOld
+				}
+				return nil
+			}
+			if err := rows.Scan(&rowID); err != nil {
+				return fmt.Errorf("failed scan rowid: %w", err)
+			}
+			return nil
+		}(); err != nil {
+			return err
 		}
 
 		// Backfilling previous events from resourceVersion
-		rows, err := tx.Stmt(l.listEventsAfterStmt).QueryContext(ctx, rowID)
+		rows, err := l.QueryForRows(ctx, tx.Stmt(l.listEventsAfterStmt), rowID)
 		if err != nil {
 			return &db.QueryError{QueryString: l.listEventsAfterQuery, Err: err}
 		}
@@ -1008,9 +1017,8 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 
 	var items []any
 	err = l.WithTransaction(ctx, false, func(tx transaction.Client) error {
-		txStmt := tx.Stmt(stmt)
 		now := time.Now()
-		rows, err := txStmt.QueryContext(ctx, queryInfo.params...)
+		rows, err := l.QueryForRows(ctx, tx.Stmt(stmt), queryInfo.params...)
 		if err != nil {
 			return &db.QueryError{QueryString: queryInfo.query, Err: err}
 		}
@@ -1030,9 +1038,8 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 					err = errors.Join(err, &db.QueryError{QueryString: queryInfo.countQuery, Err: cerr})
 				}
 			}()
-			txStmt := tx.Stmt(countStmt)
 			now = time.Now()
-			rows, err := txStmt.QueryContext(ctx, queryInfo.countParams...)
+			rows, err := l.QueryForRows(ctx, tx.Stmt(countStmt), queryInfo.countParams...)
 			if err != nil {
 				return &db.QueryError{QueryString: queryInfo.countQuery, Err: err}
 			}
