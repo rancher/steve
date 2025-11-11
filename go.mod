@@ -10,7 +10,7 @@ replace (
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
 	github.com/stretchr/testify => github.com/stretchr/testify v1.10.0
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
-	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
+	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.4
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.34.1
