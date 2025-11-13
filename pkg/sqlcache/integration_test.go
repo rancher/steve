@@ -862,6 +862,41 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 				"rwanda",
 			},
 		},
+		{
+			name:  "filter on original cpu",
+			query: "filter=status.allocatable.cpu=7000m",
+			wantNames: []string{
+				"rwanda",
+			},
+		},
+		{
+			name:  "filter on processed cpu",
+			query: "filter=status.allocatable.cpuRaw=14.25",
+			wantNames: []string{
+				"angola",
+			},
+		},
+		{
+			name:  "filter on original memory",
+			query: "filter=status.allocatable.memory=12Mi",
+			wantNames: []string{
+				"botswana",
+			},
+		},
+		{
+			name:  "filter on processed memory",
+			query: "filter=status.allocatable.memoryRaw=4194304",
+			wantNames: []string{
+				"burundi",
+			},
+		},
+		{
+			name:  "filter on pods",
+			query: "filter=status.allocatable.pods=20",
+			wantNames: []string{
+				"mali",
+			},
+		},
 	}
 
 	// First load the mcio's and pcio's so the shared fields get pushed in
