@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -95,6 +94,8 @@ var (
 			{"spec", "template", "spec", "containers", "image"}},
 		gvkKey("", "v1", "Secret"): {
 			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
+			{"spec", "clusterName"},
+			{"spec", "displayName"},
 		},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},
@@ -258,6 +259,27 @@ var (
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
 	}
 
+	secretGVK                    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+	secretProjectLabelDisplayDep = sqltypes.ExternalLabelDependency{
+		SourceGVK:            gvkKey("", "v1", "Secret"),
+		SourceLabelName:      "management.cattle.io/project-scoped-secret",
+		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
+		TargetKeyFieldName:   "metadata.name",
+		TargetFinalFieldName: "spec.displayName",
+	}
+	secretProjectLabelClusterDep = sqltypes.ExternalLabelDependency{
+		SourceGVK:            gvkKey("", "v1", "Secret"),
+		SourceLabelName:      "management.cattle.io/project-scoped-secret",
+		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
+		TargetKeyFieldName:   "metadata.name",
+		TargetFinalFieldName: "spec.clusterName",
+	}
+	secretUpdates = sqltypes.ExternalGVKUpdates{
+		AffectedGVK:               secretGVK,
+		ExternalDependencies:      nil,
+		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{secretProjectLabelDisplayDep, secretProjectLabelClusterDep},
+	}
+
 	// Now sort provisioned.cattle.io.clusters based on their associated mgmt.cattle.io spec values
 	// We might need to pull in the `memoryRaw` fields as well
 	// Remember to index these fields in the database.
@@ -279,14 +301,18 @@ var (
 		ExternalDependencies:      provisionedClusterDependencies,
 		ExternalLabelDependencies: nil,
 	}
+
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
 		mcioProjectGvk: &namespaceUpdates,
 		pcioClusterGvk: &pcioClusterUpdates,
+		secretGVK:      &secretUpdates,
 	}
-	// When a namespace is updated, we need to pull in changes from mcio into the namespaces table
+
 	selfGVKDependencies = sqltypes.ExternalGVKDependency{
+		// When a namespace is updated, we need to pull in changes from mcio into the namespaces table
 		namespaceGVK:   &namespaceUpdates,
 		pcioClusterGvk: &pcioClusterUpdates,
+		secretGVK:      &secretUpdates,
 	}
 )
 
@@ -479,27 +505,6 @@ func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
 }
 
-func tableColsToCommonCols(tableDefs []table.Column) []common.ColumnDefinition {
-	colDefs := make([]common.ColumnDefinition, len(tableDefs))
-	for i, td := range tableDefs {
-		// This isn't used right now, but it is used in the PR that tries to identify
-		// numeric fields, so leave it here.
-		// Although the `table.Column` and `metav1.TableColumnDefinition` types
-		// are structurally the same, Go doesn't allow a quick way to cast one to the other.
-		tcd := metav1.TableColumnDefinition{
-			Name:        td.Name,
-			Type:        td.Type,
-			Format:      td.Format,
-			Description: td.Description,
-		}
-		colDefs[i] = common.ColumnDefinition{
-			TableColumnDefinition: tcd,
-			Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
-		}
-	}
-	return colDefs
-}
-
 // getFieldAndColInfo converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 // It also returns type info for each field
@@ -676,18 +681,19 @@ func newWatchers() *Watchers {
 }
 
 func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest, client dynamic.ResourceInterface) (chan watch.Event, error) {
-	inf, doneFn, err := s.cacheForWithDeps(apiOp.Context(), apiOp, schema)
+	ctx := apiOp.Context()
+	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, schema)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel watch if the informer is shutdown
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		select {
 		case <-inf.Context().Done():
 			cancel()
-		case <-apiOp.Context().Done():
-			cancel()
+		case <-ctx.Done():
 		}
 	}()
 

@@ -404,6 +404,12 @@ func watcherWithBackfill[T any](ctx context.Context, eventsCh chan<- T, maxBuffe
 	// The single proxy goroutine that manages all state.
 	go func() {
 		defer close(done)
+		defer func() {
+			// this goroutine can exit prematurely when the parent context is cancelled
+			// this ensures the producer can finish writing and finish the cancellation sequence (closeWatcher is called from the parent)
+			for range watcherCh {
+			}
+		}()
 
 		var queue []T // Use a slice as an internal FIFO queue.
 

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,7 +35,7 @@ import (
 
 var emptyNamespaceList = &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
 
-func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, shouldEncrypt bool, nsList *unstructured.UnstructuredList) (*ListOptionIndexer, string, error) {
+func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opts ListOptionIndexerOptions, shouldEncrypt bool, nsList *unstructured.UnstructuredList) (*ListOptionIndexer, string, error) {
 	m, err := encryption.NewManager()
 	if err != nil {
 		return nil, "", err
@@ -45,15 +46,15 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		return nil, "", err
 	}
 	// First create a namespace table so the projectsornamespaces query succeeds
-	gvk := schema.GroupVersionKind{
+	nsGVK := schema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",
 		Kind:    "Namespace",
 	}
 	example := &unstructured.Unstructured{}
-	example.SetGroupVersionKind(gvk)
-	name := informerNameFromGVK(gvk)
-	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, gvk, name, nil, nil)
+	example.SetGroupVersionKind(nsGVK)
+	name := informerNameFromGVK(nsGVK)
+	s, err := store.NewStore(ctx, example, cache.DeletionHandlingMetaNamespaceKeyFunc, db, shouldEncrypt, nsGVK, name, nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -74,11 +75,6 @@ func makeListOptionIndexer(ctx context.Context, opts ListOptionIndexerOptions, s
 		}
 	}
 
-	gvk = schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "ConfigMap",
-	}
 	example = &unstructured.Unstructured{}
 	example.SetGroupVersionKind(gvk)
 	name = informerNameFromGVK(gvk)
@@ -420,6 +416,7 @@ func makeList(t *testing.T, objs ...map[string]any) *unstructured.UnstructuredLi
 
 func TestNewListOptionIndexerEasy(t *testing.T) {
 	ctx := context.Background()
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 
 	type testCase struct {
 		description string
@@ -435,6 +432,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		latestRV           string
 	}
 	obj01_no_labels := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj01_no_labels",
 			"namespace": "ns-a",
@@ -446,6 +445,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj02_milk_saddles := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj02_milk_saddles",
 			"namespace": "ns-a",
@@ -461,6 +462,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj02a_beef_saddles := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj02a_beef_saddles",
 			"namespace": "ns-a",
@@ -476,6 +479,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj02b_milk_shoes := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj02b_milk_shoes",
 			"namespace": "ns-a",
@@ -491,6 +496,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj03_saddles := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj03_saddles",
 			"namespace": "ns-a",
@@ -506,6 +513,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj03a_shoes := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj03a_shoes",
 			"namespace": "ns-a",
@@ -521,6 +530,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj04_milk := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj04_milk",
 			"namespace": "ns-a",
@@ -535,6 +546,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	obj05__guard_lodgepole := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":      "obj05__guard_lodgepole",
 			"namespace": "ns-b",
@@ -558,6 +571,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		obj05__guard_lodgepole,
 	}
 	ns_a := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Namespace",
 		"metadata": map[string]any{
 			"name": "ns-a",
 			"labels": map[string]any{
@@ -566,6 +581,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 		},
 	}
 	ns_b := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Namespace",
 		"metadata": map[string]any{
 			"name": "ns-b",
 			"labels": map[string]any{
@@ -1303,7 +1320,7 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			if test.description == "ListByOptions with a positive projectsornamespaces test should work" {
 				fmt.Println("Stop here")
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, namespaceList)
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, namespaceList)
 			defer cleanTempFiles(dbPath)
 
 			for _, item := range itemList.Items {
@@ -1330,7 +1347,10 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 }
 
 func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
 	obj01 := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":             "obj01",
 			"namespace":        "ns-a",
@@ -1339,6 +1359,8 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 		},
 	}
 	obj05 := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":             "obj05",
 			"namespace":        "ns-a",
@@ -1347,6 +1369,8 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 		},
 	}
 	obj11 := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":             "obj11",
 			"namespace":        "ns-a",
@@ -1357,6 +1381,8 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	// obj17: favoriteFruit is entered as a string
 	// obj18: favoriteFruit is entered as an integer
 	obj17 := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":             "obj17",
 			"namespace":        "ns-a",
@@ -1365,14 +1391,18 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 		},
 	}
 	obj18 := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":             "obj18",
 			"namespace":        "ns-a",
 			"someNumericValue": "18",
-			"favoriteFruit":    18,
+			"favoriteFruit":    int64(18),
 		},
 	}
 	obj100 := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
 		"metadata": map[string]any{
 			"name":             "obj100",
 			"namespace":        "ns-a",
@@ -1390,6 +1420,8 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 		obj100,
 	}
 	ns_a := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Namespace",
 		"metadata": map[string]any{
 			"name": "ns-a",
 		},
@@ -1479,9 +1511,9 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 		})
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			loi, dbPath, err := makeListOptionIndexer(t.Context(), test.opts, false, namespaceList)
-			defer cleanTempFiles(dbPath)
+			loi, dbPath, err := makeListOptionIndexer(t.Context(), gvk, test.opts, false, namespaceList)
 			require.NoError(t, err)
+			defer cleanTempFiles(dbPath)
 
 			for _, item := range itemList.Items {
 				err = loi.Add(&item)
@@ -1521,13 +1553,269 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	}
 }
 
+// Tests to verify we can sort on say pods on `spec.containers.image[i]`
+func TestSortPodsOnArrayAccess(t *testing.T) {
+	ctx := context.Background()
+	podGVK := schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "Pod",
+	}
+	make_pod_obj := func(name, image1, image2 string) map[string]any {
+		containers := make(map[string]any)
+		if image2 != "" {
+			containers["image"] = image1 + "|" + image2
+		} else {
+			containers["image"] = image1
+		}
+		return map[string]any{
+			"metadata": map[string]any{
+				"name":      name,
+				"namespace": "ns-a",
+			},
+			"spec": map[string]any{
+				"containers": containers,
+			},
+		}
+	}
+	canoe_twix_ritter := make_pod_obj("canoe", "twix", "ritter")
+	catamaran_flake_none := make_pod_obj("catamaran", "flake", "")
+	clipper_butterfinger_payday := make_pod_obj("clipper", "butterfinger", "payday")
+	ferry_twix_yorkie := make_pod_obj("ferry", "twix", "yorkie")
+	hydrofoil_coffeecrisp_ritter := make_pod_obj("hydrofoil", "coffeecrisp", "ritter")
+	kayak_butterfinger_rocher := make_pod_obj("kayak", "butterfinger", "rocher")
+	raft_almondjoy_ragusa := make_pod_obj("raft", "almondjoy", "ragusa")
+	schooner_twix_mounds := make_pod_obj("schooner", "twix", "mounds")
+	sloop_snickers_toblerone := make_pod_obj("sloop", "snickers", "toblerone")
+	trawler_butterfinger_aero := make_pod_obj("trawler", "butterfinger", "aero")
+
+	allObjects := []map[string]any{
+		canoe_twix_ritter,
+		catamaran_flake_none,
+		clipper_butterfinger_payday,
+		ferry_twix_yorkie,
+		hydrofoil_coffeecrisp_ritter,
+		kayak_butterfinger_rocher,
+		raft_almondjoy_ragusa,
+		schooner_twix_mounds,
+		sloop_snickers_toblerone,
+		trawler_butterfinger_aero,
+	}
+	ns_a := map[string]any{
+		"metadata": map[string]any{
+			"name": "ns-a",
+		},
+	}
+	ns_b := map[string]any{
+		"metadata": map[string]any{
+			"name": "ns-b",
+		},
+	}
+
+	itemList := makeList(t, allObjects...)
+	namespaceList := makeList(t, ns_a, ns_b)
+	fields := [][]string{
+		{"spec", "containers", "image"},
+	}
+
+	type testCase struct {
+		description   string
+		listOptions   sqltypes.ListOptions
+		expectedList  *unstructured.UnstructuredList
+		expectedTotal int
+	}
+
+	tests := make([]testCase, 0)
+	tests = append(tests, testCase{
+		description: "can select for a specific first image",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"spec", "containers", "image", "0"},
+							Matches: []string{"butterfinger"},
+							Op:      sqltypes.Eq,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList:  makeList(t, clipper_butterfinger_payday, kayak_butterfinger_rocher, trawler_butterfinger_aero),
+		expectedTotal: 3,
+	})
+	tests = append(tests, testCase{
+		description: "can select for a specific second image",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"spec", "containers", "image", "1"},
+							Matches: []string{"toblerone"},
+							Op:      sqltypes.Eq,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList:  makeList(t, sloop_snickers_toblerone),
+		expectedTotal: 1,
+	})
+	tests = append(tests, testCase{
+		description: "can sort on the first image",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "containers", "image", "0"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList: makeList(t,
+			raft_almondjoy_ragusa,
+			clipper_butterfinger_payday,
+			kayak_butterfinger_rocher,
+			trawler_butterfinger_aero,
+			hydrofoil_coffeecrisp_ritter,
+			catamaran_flake_none,
+			sloop_snickers_toblerone,
+			canoe_twix_ritter,
+			ferry_twix_yorkie,
+			schooner_twix_mounds,
+		),
+		expectedTotal: len(allObjects),
+	})
+	tests = append(tests, testCase{
+		description: "can select for any second image",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"spec", "containers", "image", "1"},
+							Matches: []string{""},
+							Op:      sqltypes.NotEq,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList: makeList(t, canoe_twix_ritter,
+			clipper_butterfinger_payday,
+			ferry_twix_yorkie,
+			hydrofoil_coffeecrisp_ritter,
+			kayak_butterfinger_rocher,
+			raft_almondjoy_ragusa,
+			schooner_twix_mounds,
+			sloop_snickers_toblerone,
+			trawler_butterfinger_aero,
+		),
+		expectedTotal: 9,
+	})
+	tests = append(tests, testCase{
+		description: "can sort on the second image (when present)",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"spec", "containers", "image", "1"},
+							Matches: []string{""},
+							Op:      sqltypes.NotEq,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"spec", "containers", "image", "1"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		expectedList: makeList(t,
+			trawler_butterfinger_aero,
+			schooner_twix_mounds,
+			clipper_butterfinger_payday,
+			raft_almondjoy_ragusa,
+			canoe_twix_ritter,
+			hydrofoil_coffeecrisp_ritter,
+			kayak_butterfinger_rocher,
+			sloop_snickers_toblerone,
+			ferry_twix_yorkie,
+		),
+		expectedTotal: 9,
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, podGVK, opts, false, namespaceList)
+			require.NoError(t, err)
+			defer cleanTempFiles(dbPath)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				require.NoError(t, err)
+			}
+			list, total, _, err := loi.ListByOptions(ctx, &test.listOptions, []partition.Partition{{All: true}}, "")
+			require.NoError(t, err)
+
+			assert.Equal(t, test.expectedTotal, total)
+			assert.Equal(t, test.expectedList, list)
+		})
+	}
+}
+
 func TestDropAll(t *testing.T) {
 	ctx := t.Context()
 
+	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, nil)
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, nil)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -1538,6 +1826,7 @@ func TestDropAll(t *testing.T) {
 			},
 		},
 	}
+	obj1.SetGroupVersionKind(gvk)
 	err = loi.Add(obj1)
 	assert.NoError(t, err)
 
@@ -1550,7 +1839,7 @@ func TestDropAll(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func makePseudoRandomList(size int) *unstructured.UnstructuredList {
+func makePseudoRandomList(gvk schema.GroupVersionKind, size int) *unstructured.UnstructuredList {
 	numLength := 1 + int(math.Floor(math.Log10(float64(size))))
 	name_template := fmt.Sprintf("n%%0%dd", numLength)
 	// Make a predictable but randomish list of numbers
@@ -1583,6 +1872,7 @@ func makePseudoRandomList(size int) *unstructured.UnstructuredList {
 				"id": nv + "/" + nsv,
 			},
 		}
+		obj.SetGroupVersionKind(gvk)
 		items[name_val] = obj
 		name_val += name_delta
 		if name_val >= size {
@@ -1596,11 +1886,6 @@ func makePseudoRandomList(size int) *unstructured.UnstructuredList {
 	}
 	ulist := &unstructured.UnstructuredList{
 		Items: items,
-	}
-	gvk := schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "ConfigMap",
 	}
 	ulist.SetGroupVersionKind(gvk)
 	return ulist
@@ -1620,12 +1905,13 @@ func verifyListIsSorted(b *testing.B, list *unstructured.UnstructuredList, size 
 func BenchmarkNamespaceNameList(b *testing.B) {
 	// At 50,000,000 this starts to get very slow
 	size := 10000
-	itemList := makePseudoRandomList(size)
+	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
+	itemList := makePseudoRandomList(gvk, size)
 	ctx := context.Background()
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(b, err)
 	for _, item := range itemList.Items {
@@ -1690,8 +1976,11 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 }
 
 func TestUserDefinedExtractFunction(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	makeObj := func(name string, barSeparatedHosts string) map[string]any {
 		h1 := map[string]any{
+			"apiVersion": gvk.Version,
+			"kind":       gvk.Kind,
 			"metadata": map[string]any{
 				"name": name,
 			},
@@ -1877,7 +2166,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -1900,8 +2189,11 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 }
 
 func TestUserDefinedInetToAnonFunction(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	makeObj := func(name string, ipAddr string) map[string]any {
 		h1 := map[string]any{
+			"apiVersion": gvk.Version,
+			"kind":       gvk.Kind,
 			"metadata": map[string]any{
 				"name": name,
 			},
@@ -1992,7 +2284,7 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -2015,6 +2307,7 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 }
 
 func TestUserDefinedMemoryFunction(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	makeObj := func(name string, cpuCount int, memory string, podCount int) map[string]any {
 		if cpuCount < 1 {
 			cpuCount = 1
@@ -2034,6 +2327,8 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 			podCountAvailable = 1
 		}
 		h1 := map[string]any{
+			"apiVersion": gvk.Version,
+			"kind":       gvk.Kind,
 			"metadata": map[string]any{
 				"name": name,
 			},
@@ -2230,7 +2525,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -2251,8 +2546,6 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 		})
 	}
 }
-
-
 
 func TestConstructQuery(t *testing.T) {
 	type testCase struct {
@@ -3462,6 +3755,7 @@ func TestGetField(t *testing.T) {
 
 func TestWatchEncryption(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 
 	opts := ListOptionIndexerOptions{
 		Fields: [][]string{
@@ -3472,7 +3766,7 @@ func TestWatchEncryption(t *testing.T) {
 		IsNamespaced: true,
 	}
 	// shouldEncrypt = true to ensure we can write + read from encrypted events
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, true, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, true, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -3486,6 +3780,7 @@ func TestWatchEncryption(t *testing.T) {
 			},
 		},
 	}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetResourceVersion("100")
 	foo2 := foo.DeepCopy()
 	foo2.SetResourceVersion("120")
@@ -3549,6 +3844,7 @@ func TestWatchEncryption(t *testing.T) {
 
 func TestWatchMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 
 	opts := ListOptionIndexerOptions{
 		Fields: [][]string{
@@ -3558,7 +3854,7 @@ func TestWatchMany(t *testing.T) {
 		},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -3609,6 +3905,7 @@ func TestWatchMany(t *testing.T) {
 			},
 		},
 	}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetResourceVersion("100")
 	foo2 := foo.DeepCopy()
 	foo2.SetResourceVersion("120")
@@ -3678,6 +3975,7 @@ func TestWatchMany(t *testing.T) {
 }
 
 func TestWatchFilter(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
 	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, filter WatchFilter) (chan watch.Event, chan error) {
 		errCh := make(chan error, 1)
 		eventsCh := make(chan watch.Event, 100)
@@ -3712,6 +4010,7 @@ func TestWatchFilter(t *testing.T) {
 	}
 
 	foo := &unstructured.Unstructured{}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetName("foo")
 	foo.SetNamespace("foo")
 	foo.SetLabels(map[string]string{
@@ -3724,6 +4023,7 @@ func TestWatchFilter(t *testing.T) {
 	})
 
 	bar := &unstructured.Unstructured{}
+	bar.SetGroupVersionKind(gvk)
 	bar.SetName("bar")
 	bar.SetNamespace("bar")
 	bar.SetLabels(map[string]string{
@@ -3815,7 +4115,7 @@ func TestWatchFilter(t *testing.T) {
 				Fields:       [][]string{{"metadata", "somefield"}},
 				IsNamespaced: true,
 			}
-			loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 			defer cleanTempFiles(dbPath)
 			assert.NoError(t, err)
 
@@ -3841,6 +4141,7 @@ func TestWatchFilter(t *testing.T) {
 }
 
 func TestWatchResourceVersion(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
 		errCh := make(chan error, 1)
 		eventsCh := make(chan watch.Event, 100)
@@ -3875,6 +4176,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	}
 
 	foo := &unstructured.Unstructured{}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetResourceVersion("100")
 	foo.SetName("foo")
 	foo.SetNamespace("foo")
@@ -3890,6 +4192,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	})
 
 	bar := &unstructured.Unstructured{}
+	bar.SetGroupVersionKind(gvk)
 	bar.SetResourceVersion("150")
 	bar.SetName("bar")
 	bar.SetNamespace("bar")
@@ -3909,7 +4212,7 @@ func TestWatchResourceVersion(t *testing.T) {
 	opts := ListOptionIndexerOptions{
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, gvk, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -4007,6 +4310,7 @@ func TestWatchResourceVersion(t *testing.T) {
 }
 
 func TestWatchGarbageCollection(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
 	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
 		errCh := make(chan error, 1)
 		eventsCh := make(chan watch.Event, 100)
@@ -4041,6 +4345,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 	}
 
 	foo := &unstructured.Unstructured{}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetResourceVersion("100")
 	foo.SetName("foo")
 
@@ -4048,6 +4353,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 	fooUpdated.SetResourceVersion("120")
 
 	bar := &unstructured.Unstructured{}
+	bar.SetGroupVersionKind(gvk)
 	bar.SetResourceVersion("150")
 	bar.SetName("bar")
 
@@ -4063,7 +4369,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 		GCInterval:  40 * time.Millisecond,
 		GCKeepCount: 2,
 	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, opts, false, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, gvk, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -4169,12 +4475,13 @@ func TestWatchGarbageCollection(t *testing.T) {
 
 func TestNonNumberResourceVersion(t *testing.T) {
 	ctx := context.Background()
+	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
 
 	opts := ListOptionIndexerOptions{
 		Fields:       [][]string{{"metadata", "somefield"}},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -4186,6 +4493,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 			"id": "/foo",
 		},
 	}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetResourceVersion("a")
 	foo2 := foo.DeepCopy()
 	foo2.SetResourceVersion("b")
@@ -4200,6 +4508,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 			"id": "/bar",
 		},
 	}
+	bar.SetGroupVersionKind(gvk)
 	bar.SetResourceVersion("c")
 	err = loi.Add(foo)
 	assert.NoError(t, err)
@@ -4223,6 +4532,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 
 // Test that we don't panic in case the transaction fails but stil manages to add a watcher
 func TestWatchCancel(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
 	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
 		eventsCh := make(chan watch.Event, 1)
 		errCh := make(chan error, 1)
@@ -4241,7 +4551,7 @@ func TestWatchCancel(t *testing.T) {
 		Fields:       [][]string{{"metadata", "somefield"}},
 		IsNamespaced: true,
 	}
-	loi, dbPath, err := makeListOptionIndexer(ctx, opts, false, emptyNamespaceList)
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
 	defer cleanTempFiles(dbPath)
 	assert.NoError(t, err)
 
@@ -4252,6 +4562,7 @@ func TestWatchCancel(t *testing.T) {
 			},
 		},
 	}
+	foo.SetGroupVersionKind(gvk)
 	foo.SetResourceVersion("100")
 
 	foo2 := foo.DeepCopy()
@@ -4315,4 +4626,34 @@ func Test_watcherWithBackfill(t *testing.T) {
 	}
 
 	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8}, res)
+}
+
+// This test aims to detect a very specific race condition, see https://github.com/rancher/steve/pull/879 for details
+func Test_watcherWithBackfillCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+
+	eventsCh := make(chan int)
+	w, doneCb, closeWatcher := watcherWithBackfill(ctx, eventsCh, 100)
+	defer closeWatcher()
+	doneCb()
+
+	select {
+	case w <- 1:
+		t.Fatal("expected blocking trying to write")
+	default:
+	}
+
+	doneWriting := make(chan struct{})
+	go func() {
+		w <- 1 // should be discarded
+		close(doneWriting)
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	cancel()
+	select {
+	case <-doneWriting:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected writing to not block when context is canceled")
+	}
 }

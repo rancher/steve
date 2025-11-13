@@ -29,15 +29,16 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
-	github.com/rancher/apiserver v0.7.6
+	github.com/rancher/apiserver v0.8.0
 	github.com/rancher/dynamiclistener v0.7.2-rc.3
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
 	github.com/rancher/lasso v0.2.5-rc.1
-	github.com/rancher/norman v0.7.1-0.20251002202451-d14394e537ab
+	github.com/rancher/norman v0.8.0
 	github.com/rancher/remotedialer v0.6.0-rc.1
 	github.com/rancher/wrangler/v3 v3.3.0-rc.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
+	github.com/tinylib/msgp v1.5.0
 	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/mock v0.6.0
 	go.yaml.in/yaml/v3 v3.0.4
@@ -99,6 +100,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
