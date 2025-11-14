@@ -20,17 +20,18 @@ type DebounceableRefresher struct {
 	scheduled *time.Timer
 
 	// A buffered channel of size 1 acts as the trigger. Selective sends (skipped when the buffer is full) allows deduplication
-	trigger chan struct{}
+	trigger chan<- struct{}
 }
 
 func NewDebounceableRefresher(ctx context.Context, refreshable Refreshable, duration time.Duration) *DebounceableRefresher {
+	triggerCh := make(chan struct{}, 1)
 	dr := &DebounceableRefresher{
-		trigger: make(chan struct{}, 1),
+		trigger: triggerCh,
 	}
 
 	// Refresh loop
 	go func() {
-		for range dr.trigger {
+		for range triggerCh {
 			if err := refreshable.Refresh(); err != nil {
 				logrus.Errorf("failed to refresh with error: %v", err)
 			}
@@ -39,6 +40,7 @@ func NewDebounceableRefresher(ctx context.Context, refreshable Refreshable, dura
 
 	// Cancellation and scheduling goroutine
 	go func() {
+		defer close(triggerCh)
 		// Allow disabling ticker if a negative or zero duration is provided
 		var tick <-chan time.Time
 		if duration > 0 {
@@ -51,7 +53,7 @@ func NewDebounceableRefresher(ctx context.Context, refreshable Refreshable, dura
 			case <-tick:
 				dr.triggerRefresh()
 			case <-ctx.Done():
-				close(dr.trigger)
+				dr.trigger = nil
 				return
 			}
 		}
