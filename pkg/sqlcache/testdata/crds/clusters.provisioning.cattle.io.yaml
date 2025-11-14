@@ -1,3 +1,8 @@
+---
+# This is for v1 of provisioning.management.cattle.io
+# If a new version comes out there will have to be a new RFE for
+# supporting it, calling for new tests
+
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
