@@ -87,7 +87,7 @@ func (i *IntegrationSuite) TearDownSuite() {
 	i.Require().NoError(err)
 }
 
-func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, cpu, memory string, podCount int) (*unstructured.Unstructured, error) {
+func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, cpu, memory string, podCount int) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -115,13 +115,14 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	}
 	newObj, err := client.Create(ctx, obj, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// This call is needed to get the above status fields stored in the object
-	return client.Update(ctx, newObj, metav1.UpdateOptions{})
+	_, err = client.Update(ctx, newObj, metav1.UpdateOptions{})
+	return err
 }
 
-func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, clusterName string) (*unstructured.Unstructured, error) {
+func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, clusterName string) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -137,13 +138,50 @@ func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	}
 	newObj, err := client.Create(ctx, obj, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	unstructured.SetNestedField(newObj.Object, clusterName, "status", "clusterName")
 	unstructured.SetNestedField(newObj.Object, true, "status", "ready")
 	// This call is needed to get the above status fields stored in the object
 	// PCIO CRDs have subresources, so we call `client.UpdateStatus` instead of `client.Update`
-	return client.UpdateStatus(ctx, newObj, metav1.UpdateOptions{})
+	_, err = client.UpdateStatus(ctx, newObj, metav1.UpdateOptions{})
+	return err
+}
+
+func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, displayName string) error {
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": gvr.Group + "/" + gvr.Version,
+			"kind":       "Project",
+			"metadata": map[string]interface{}{
+				"name":      name,
+				"namespace": testNamespace,
+				"labels": map[string]interface{}{
+					"capitals-and-languages.cattle.io/test": "MCIO",
+				},
+			},
+			"spec": map[string]interface{}{
+				"clusterName": name,
+				"displayName": displayName,
+			},
+		},
+	}
+	_, err := client.Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
+func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, projectLabel string) error {
+	obj := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"field.cattle.io/projectId":             projectLabel,
+				"capitals-and-languages.cattle.io/test": "MCIO",
+			},
+		},
+	}
+	_, err := i.clientset.CoreV1().Namespaces().Create(ctx, obj, metav1.CreateOptions{})
+	return err
 }
 
 func (i *IntegrationSuite) TestSQLCacheFilters() {
@@ -721,45 +759,27 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	mcioClient := dynamicClient.Resource(mcioGVR)
 	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(testNamespace)
 
-	mcioKigaliCpu4Mem1Pod4, err := createMCIO(ctx, mcioClient, mcioGVR, "kigali", "7000m", "900Ki", 17)
+	err = createMCIO(ctx, mcioClient, mcioGVR, "kigali", "7000m", "900Ki", 17)
 	requireT.NoError(err)
-	mcioLuandaCpu5Mem3Pod2, err := createMCIO(ctx, mcioClient, mcioGVR, "luanda", "14250m", "2610Ki", 11)
+	err = createMCIO(ctx, mcioClient, mcioGVR, "luanda", "14250m", "2610Ki", 11)
 	requireT.NoError(err)
-	mcioGaboroneCpu1Mem5Pod3, err := createMCIO(ctx, mcioClient, mcioGVR, "gaborone", "98m", "12Mi", 14)
+	err = createMCIO(ctx, mcioClient, mcioGVR, "gaborone", "98m", "12Mi", 14)
 	requireT.NoError(err)
-	mcioGitegaCpu2Mem4Pod1, err := createMCIO(ctx, mcioClient, mcioGVR, "gitega", "325m", "4Mi", 8)
+	err = createMCIO(ctx, mcioClient, mcioGVR, "gitega", "325m", "4Mi", 8)
 	requireT.NoError(err)
-	mcioBamakoCpu3Mem2Pod5, err := createMCIO(ctx, mcioClient, mcioGVR, "bamako", "700m", "1200Ki", 20)
-	requireT.NoError(err)
-
-	pcioRwandaKigali, err := createPCIO(ctx, pcioClient, pcioGVR, "rwanda", "kigali")
-	requireT.NoError(err)
-	pcioAngolaLuanda, err := createPCIO(ctx, pcioClient, pcioGVR, "angola", "luanda")
-	requireT.NoError(err)
-	pcioBotswanaGaborone, err := createPCIO(ctx, pcioClient, pcioGVR, "botswana", "gaborone")
-	requireT.NoError(err)
-	pcioBurundiGitega, err := createPCIO(ctx, pcioClient, pcioGVR, "burundi", "gitega")
-	requireT.NoError(err)
-	pcioMaliBamako, err := createPCIO(ctx, pcioClient, pcioGVR, "mali", "bamako")
+	err = createMCIO(ctx, mcioClient, mcioGVR, "bamako", "700m", "1200Ki", 20)
 	requireT.NoError(err)
 
-	// Make golang happy we're using these terms
-	var pairs [][2]*unstructured.Unstructured = [][2]*unstructured.Unstructured{
-		[2]*unstructured.Unstructured{pcioRwandaKigali, mcioKigaliCpu4Mem1Pod4},
-		[2]*unstructured.Unstructured{pcioAngolaLuanda, mcioLuandaCpu5Mem3Pod2},
-		[2]*unstructured.Unstructured{pcioBotswanaGaborone, mcioGaboroneCpu1Mem5Pod3},
-		[2]*unstructured.Unstructured{pcioBurundiGitega, mcioGitegaCpu2Mem4Pod1},
-		[2]*unstructured.Unstructured{pcioMaliBamako, mcioBamakoCpu3Mem2Pod5},
-	}
-	for _, unsPair := range pairs {
-		pcio, mcio := unsPair[0], unsPair[1]
-		pcioClusterName, ok, err := unstructured.NestedString(pcio.Object, "status", "clusterName")
-		requireT.NoError(err)
-		requireT.True(ok)
-		mcioName := mcio.GetName()
-		requireT.Equal(pcioClusterName, mcioName)
-		//requireT.Equal(pcio.Object["status"].(map[string]any)["clusterName"], mcio.Object["id"])
-	}
+	err = createPCIO(ctx, pcioClient, pcioGVR, "rwanda", "kigali")
+	requireT.NoError(err)
+	err = createPCIO(ctx, pcioClient, pcioGVR, "angola", "luanda")
+	requireT.NoError(err)
+	err = createPCIO(ctx, pcioClient, pcioGVR, "botswana", "gaborone")
+	requireT.NoError(err)
+	err = createPCIO(ctx, pcioClient, pcioGVR, "burundi", "gitega")
+	requireT.NoError(err)
+	err = createPCIO(ctx, pcioClient, pcioGVR, "mali", "bamako")
+	requireT.NoError(err)
 
 	var mcioSchema *types.APISchema
 	var pcioSchema *types.APISchema
@@ -871,30 +891,6 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 		},
 	}
 
-	// First load the mcio's and pcio's so the shared fields get pushed in
-
-	req, err := http.NewRequest("GET", "http://localhost:8080?sort=metadata.name", nil)
-	requireT.NoError(err)
-	apiOp := &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
-	requireT.NoError(err)
-	i.Assert().Equal(5, num)
-	i.Assert().Equal([]string{"bamako", "gaborone", "gitega", "kigali", "luanda"}, stringsFromULIst(got))
-
-	//TODO: Do we need to create a new request obj each time - I think so, because it's likely
-	// submitting it changes it
-	req, err = http.NewRequest("GET", "http://localhost:8080?sort=metadata.name", nil)
-	requireT.NoError(err)
-	apiOp = &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err = proxyStore.ListByPartitions(apiOp, pcioSchema, []partition.Partition{{Passthrough: true}})
-	requireT.NoError(err)
-	i.Assert().Equal(5, num)
-	i.Assert().Equal([]string{"angola", "botswana", "burundi", "mali", "rwanda"}, stringsFromULIst(got))
-
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
 		test := test
@@ -919,7 +915,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	}
 }
 
-func (i *IntegrationSuite) skipTestNamespaceProjectDependencies() {
+func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 	requireT := i.Require()
@@ -929,35 +925,22 @@ func (i *IntegrationSuite) skipTestNamespaceProjectDependencies() {
 	requireT.NotNil(proxyStore)
 
 	resetMCIOCh := make(chan struct{}, 10)
-	resetPCIOCh := make(chan struct{}, 10)
 
 	mcioGVR := k8sschema.GroupVersionResource{
 		Group:    "management.cattle.io",
 		Version:  "v3",
-		Resource: "clusters",
+		Resource: "projects",
 	}
 	mcioGVK := k8sschema.GroupVersionKind{
 		Group:   "management.cattle.io",
 		Version: "v3",
-		Kind:    "Cluster",
-	}
-	pcioGVR := k8sschema.GroupVersionResource{
-		Group:    "provisioning.cattle.io",
-		Version:  "v1",
-		Resource: "clusters",
-	}
-	pcioGVK := k8sschema.GroupVersionKind{
-		Group:   "provisioning.cattle.io",
-		Version: "v1",
-		Kind:    "Cluster",
+		Kind:    "Project",
 	}
 
 	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
 		proxyStore.Reset(gvk)
 		if gvk == mcioGVK {
 			resetMCIOCh <- struct{}{}
-		} else if gvk == pcioGVK {
-			resetPCIOCh <- struct{}{}
 		}
 		return nil
 	}))
@@ -985,60 +968,33 @@ func (i *IntegrationSuite) skipTestNamespaceProjectDependencies() {
 	err = ctrl.Start(ctx)
 	requireT.NoError(err)
 
+	err = i.createNamespace(ctx, "namibia", "windhoek")
+	requireT.NoError(err)
+	err = i.createNamespace(ctx, "togo", "lome")
+	requireT.NoError(err)
+	err = i.createNamespace(ctx, "nigeria", "abuja")
+	requireT.NoError(err)
+	err = i.createNamespace(ctx, "principe", "saotome")
+	requireT.NoError(err)
+
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	requireT.NoError(err)
-
-	mcioClient := dynamicClient.Resource(mcioGVR)
-	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(testNamespace)
-
-	mcioKigaliCpu4Mem1Pod4, err := createMCIO(ctx, mcioClient, mcioGVR, "kigali", "7000m", "900Ki", 17)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(testNamespace)
+	err = createMCIOProject(ctx, mcioClient, mcioGVR, "windhoek", "afrikaans")
 	requireT.NoError(err)
-	mcioLuandaCpu5Mem3Pod2, err := createMCIO(ctx, mcioClient, mcioGVR, "luanda", "14250m", "2610Ki", 11)
+	err = createMCIOProject(ctx, mcioClient, mcioGVR, "lome", "french")
 	requireT.NoError(err)
-	mcioGaboroneCpu1Mem5Pod3, err := createMCIO(ctx, mcioClient, mcioGVR, "gaborone", "98m", "12Mi", 14)
+	err = createMCIOProject(ctx, mcioClient, mcioGVR, "abuja", "english")
 	requireT.NoError(err)
-	mcioGitegaCpu2Mem4Pod1, err := createMCIO(ctx, mcioClient, mcioGVR, "gitega", "325m", "4Mi", 8)
+	err = createMCIOProject(ctx, mcioClient, mcioGVR, "saotome", "portuguese")
 	requireT.NoError(err)
-	mcioBamakoCpu3Mem2Pod5, err := createMCIO(ctx, mcioClient, mcioGVR, "bamako", "700m", "1200Ki", 20)
-	requireT.NoError(err)
-
-	pcioRwandaKigali, err := createPCIO(ctx, pcioClient, pcioGVR, "rwanda", "kigali")
-	requireT.NoError(err)
-	pcioAngolaLuanda, err := createPCIO(ctx, pcioClient, pcioGVR, "angola", "luanda")
-	requireT.NoError(err)
-	pcioBotswanaGaborone, err := createPCIO(ctx, pcioClient, pcioGVR, "botswana", "gaborone")
-	requireT.NoError(err)
-	pcioBurundiGitega, err := createPCIO(ctx, pcioClient, pcioGVR, "burundi", "gitega")
-	requireT.NoError(err)
-	pcioMaliBamako, err := createPCIO(ctx, pcioClient, pcioGVR, "mali", "bamako")
-	requireT.NoError(err)
-
-	// Make golang happy we're using these terms
-	var pairs [][2]*unstructured.Unstructured = [][2]*unstructured.Unstructured{
-		[2]*unstructured.Unstructured{pcioRwandaKigali, mcioKigaliCpu4Mem1Pod4},
-		[2]*unstructured.Unstructured{pcioAngolaLuanda, mcioLuandaCpu5Mem3Pod2},
-		[2]*unstructured.Unstructured{pcioBotswanaGaborone, mcioGaboroneCpu1Mem5Pod3},
-		[2]*unstructured.Unstructured{pcioBurundiGitega, mcioGitegaCpu2Mem4Pod1},
-		[2]*unstructured.Unstructured{pcioMaliBamako, mcioBamakoCpu3Mem2Pod5},
-	}
-	for _, unsPair := range pairs {
-		pcio, mcio := unsPair[0], unsPair[1]
-		pcioClusterName, ok, err := unstructured.NestedString(pcio.Object, "status", "clusterName")
-		requireT.NoError(err)
-		requireT.True(ok)
-		mcioName := mcio.GetName()
-		requireT.Equal(pcioClusterName, mcioName)
-		//requireT.Equal(pcio.Object["status"].(map[string]any)["clusterName"], mcio.Object["id"])
-	}
 
 	var mcioSchema *types.APISchema
-	var pcioSchema *types.APISchema
 	requireT.EventuallyWithT(func(c *assert.CollectT) {
-		mcioSchema = sf.Schema("management.cattle.io.cluster")
-		pcioSchema = sf.Schema("provisioning.cattle.io.cluster")
+		mcioSchema = sf.Schema("management.cattle.io.project")
 		require.NotNil(c, mcioSchema)
-		require.NotNil(c, pcioSchema)
 	}, 15*time.Second, 500*time.Millisecond)
+	nsSchema := sf.Schema("namespace")
 
 	tests := []struct {
 		name      string
@@ -1047,123 +1003,53 @@ func (i *IntegrationSuite) skipTestNamespaceProjectDependencies() {
 	}{
 		{
 			name:  "sorts by name",
-			query: "sort=metadata.name",
+			query: "sort=metadata.name&filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO",
 			wantNames: []string{
-				"angola",
-				"botswana",
-				"burundi",
-				"mali",
-				"rwanda",
+				"namibia",
+				"nigeria",
+				"principe",
+				"togo",
 			},
 		},
 		{
-			name:  "sorts by cluster-name",
-			query: "sort=status.clusterName,metadata.name",
+			name:  "sorts by field.cattle.io/projectId",
+			query: "filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO&sort=metadata.labels[field.cattle.io/projectId],metadata.name",
 			wantNames: []string{
-				"mali",     // bamako
-				"botswana", // gaborone
-				"burundi",  // gitega
-				"rwanda",   // kigali
-				"angola",   // luanda
+				"nigeria",  // abuja
+				"togo",     // lome
+				"principe", // sao tome
+				"namibia",  // windhoek
 			},
 		},
 		{
-			name:      "sorts by cpu",
-			query:     "sort=status.allocatable.cpuRaw,metadata.name", //TODO: Reinstate raw
-			wantNames: []string{"botswana", "burundi", "mali", "rwanda", "angola"},
-		},
-		{
-			name:      "sorts by memory",
-			query:     "sort=status.allocatable.memoryRaw,metadata.name",
-			wantNames: []string{"rwanda", "mali", "angola", "burundi", "botswana"},
-		},
-		{
-			name:      "sorts by pods",
-			query:     "sort=status.allocatable.pods,metadata.name",
-			wantNames: []string{"burundi", "angola", "botswana", "rwanda", "mali"},
-		},
-		{
-			name:  "misguided sort by raw cpu",
-			query: "sort=status.allocatable.cpu,metadata.name",
+			name:  "sorts by spec.displayName",
+			query: "filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO&sort=spec.displayName,metadata.name",
 			wantNames: []string{
-				"angola",
-				"burundi",
-				"rwanda",
-				"mali",
-				"botswana",
+				"namibia",  // afrikaans
+				"nigeria",  // english
+				"togo",     // french
+				"principe", // portuguese
 			},
 		},
 		{
-			name:  "misguided sort by raw memory",
-			query: "sort=status.allocatable.memory,metadata.name",
+			name:  "filter on spec.displayName",
+			query: "filter=spec.displayName~en&filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO",
 			wantNames: []string{
-				"mali",
-				"botswana",
-				"angola",
-				"burundi",
-				"rwanda",
-			},
-		},
-		{
-			name:  "filter on original cpu",
-			query: "filter=status.allocatable.cpu=7000m",
-			wantNames: []string{
-				"rwanda",
-			},
-		},
-		{
-			name:  "filter on processed cpu",
-			query: "filter=status.allocatable.cpuRaw=14.25",
-			wantNames: []string{
-				"angola",
-			},
-		},
-		{
-			name:  "filter on original memory",
-			query: "filter=status.allocatable.memory=12Mi",
-			wantNames: []string{
-				"botswana",
-			},
-		},
-		{
-			name:  "filter on processed memory",
-			query: "filter=status.allocatable.memoryRaw=4194304",
-			wantNames: []string{
-				"burundi",
-			},
-		},
-		{
-			name:  "filter on pods",
-			query: "filter=status.allocatable.pods=20",
-			wantNames: []string{
-				"mali",
+				"nigeria", // english
+				"togo",    // french
 			},
 		},
 	}
 
-	// First load the mcio's and pcio's so the shared fields get pushed in
-
-	req, err := http.NewRequest("GET", "http://localhost:8080?sort=metadata.name", nil)
+	req, err := http.NewRequest("GET", "http://localhost:8080?sort=metadata.name&filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO", nil)
 	requireT.NoError(err)
 	apiOp := &types.APIRequest{
 		Request: req,
 	}
 	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
 	requireT.NoError(err)
-	i.Assert().Equal(5, num)
-	i.Assert().Equal([]string{"bamako", "gaborone", "gitega", "kigali", "luanda"}, stringsFromULIst(got))
-
-	//TODO: Do we need to create a new request obj each time - I think so, because it's likely
-	// submitting it changes it
-	req, err = http.NewRequest("GET", "http://localhost:8080?sort=metadata.name", nil)
-	requireT.NoError(err)
-	apiOp = &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err = proxyStore.ListByPartitions(apiOp, pcioSchema, []partition.Partition{{Passthrough: true}})
-	requireT.NoError(err)
-	i.Assert().Equal(5, num)
-	i.Assert().Equal([]string{"angola", "botswana", "burundi", "mali", "rwanda"}, stringsFromULIst(got))
+	i.Assert().Equal(4, num)
+	i.Assert().Equal([]string{"abuja", "lome", "saotome", "windhoek"}, stringsFromULIst(got))
 
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
@@ -1175,7 +1061,7 @@ func (i *IntegrationSuite) skipTestNamespaceProjectDependencies() {
 				Request: req,
 			}
 
-			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, pcioSchema, partitions)
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
 			if err != nil {
 				i.Assert().NoError(err)
 				return
