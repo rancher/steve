@@ -49,7 +49,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const testNamespace = "sql-test"
+const defaultTestNamespace = "sql-test"
 const testLabel = "capitals.cattle.io/test"
 const testFilter = "filter=metadata.labels[" + testLabel + "]"
 
@@ -57,6 +57,8 @@ var defaultPartition = partition.Partition{
 	All: true,
 }
 
+// Always use a filter-test instead of a namespace test because some of the resources we care about
+// in this test don't have namespaces, but all resources have labels.
 func getFilteredQuery(query string, labelTest string) string {
 	if strings.Contains(query, testFilter) {
 		return query
@@ -88,7 +90,7 @@ func (i *IntegrationSuite) SetupSuite() {
 	i.clientset = *clientset
 	testNs := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
+			Name: defaultTestNamespace,
 		},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -137,6 +139,28 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	return err
 }
 
+func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName, displayName string) error {
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": gvr.Group + "/" + gvr.Version,
+			"kind":       "Project",
+			"metadata": map[string]interface{}{
+				"name":      name,
+				"namespace": defaultTestNamespace,
+				"labels": map[string]interface{}{
+					testLabel: thisTestLabel,
+				},
+			},
+			"spec": map[string]interface{}{
+				"clusterName": clusterName,
+				"displayName": displayName,
+			},
+		},
+	}
+	_, err := client.Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
 func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName string) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -144,7 +168,7 @@ func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 			"kind":       "Cluster",
 			"metadata": map[string]interface{}{
 				"name":      name,
-				"namespace": testNamespace,
+				"namespace": defaultTestNamespace,
 				"labels": map[string]interface{}{
 					testLabel: thisTestLabel,
 				},
@@ -163,25 +187,17 @@ func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	return err
 }
 
-func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName, displayName string) error {
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": gvr.Group + "/" + gvr.Version,
-			"kind":       "Project",
-			"metadata": map[string]interface{}{
-				"name":      name,
-				"namespace": testNamespace,
-				"labels": map[string]interface{}{
-					testLabel: thisTestLabel,
-				},
-			},
-			"spec": map[string]interface{}{
-				"clusterName": clusterName,
-				"displayName": displayName,
+func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+	obj := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"field.cattle.io/projectId": projectLabel,
+				testLabel:                   thisTestLabel,
 			},
 		},
 	}
-	_, err := client.Create(ctx, obj, metav1.CreateOptions{})
+	_, err := i.clientset.CoreV1().Namespaces().Create(ctx, obj, metav1.CreateOptions{})
 	return err
 }
 
@@ -189,28 +205,14 @@ func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTe
 	obj := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: testNamespace,
+			Namespace: defaultTestNamespace,
 			Labels: map[string]string{
 				"management.cattle.io/project-scoped-secret": projectLabel,
-				testLabel:      thisTestLabel,
-			},
-		},
-	}
-	_, err := i.clientset.CoreV1().Secrets(testNamespace).Create(ctx, obj, metav1.CreateOptions{})
-	return err
-}
-
-func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
-	obj := &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				"field.cattle.io/projectId":             projectLabel,
 				testLabel: thisTestLabel,
 			},
 		},
 	}
-	_, err := i.clientset.CoreV1().Namespaces().Create(ctx, obj, metav1.CreateOptions{})
+	_, err := i.clientset.CoreV1().Secrets(defaultTestNamespace).Create(ctx, obj, metav1.CreateOptions{})
 	return err
 }
 
@@ -221,7 +223,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 		return v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        name,
-				Namespace:   testNamespace,
+				Namespace:   defaultTestNamespace,
 				Annotations: annotations,
 			},
 		}
@@ -229,7 +231,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	createConfigMaps := func(configMaps ...v1.ConfigMap) {
 		for _, configMap := range configMaps {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			configMapClient := i.clientset.CoreV1().ConfigMaps(testNamespace)
+			configMapClient := i.clientset.CoreV1().ConfigMaps(defaultTestNamespace)
 			_, err := configMapClient.Create(ctx, &configMap, metav1.CreateOptions{})
 			require.NoError(err)
 			// avoiding defer in a for loop
@@ -261,7 +263,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	createConfigMaps(notMatches, missing)
 
 	configMapNames := []string{matches.Name, partialMatches.Name, notMatches.Name, missing.Name, specialCharacterMatch.Name, backSlashCharacterMatch.Name}
-	err = i.waitForCacheReady(configMapNames, testNamespace, cache)
+	err = i.waitForCacheReady(configMapNames, defaultTestNamespace, cache)
 	require.NoError(err)
 
 	orFiltersForFilters := func(filters ...sqltypes.Filter) []sqltypes.OrFilter {
@@ -441,7 +443,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 			partitions := []partition.Partition{defaultPartition}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 			defer cancel()
-			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, &options, partitions, testNamespace)
+			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, &options, partitions, defaultTestNamespace)
 			i.Require().NoError(err)
 			// since there's no additional pages, the continue token should be empty
 			i.Require().Equal("", continueToken)
@@ -479,7 +481,7 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		Version:  "v1",
 		Resource: "configmaps",
 	}
-	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(testNamespace)
+	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(defaultTestNamespace)
 	typeGuidance := map[string]string{}
 	cache, err := cacheFactory.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
 	if err != nil {
@@ -730,25 +732,25 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	resetMCIOCh := make(chan struct{}, 10)
 	resetPCIOCh := make(chan struct{}, 10)
 
-	mcioGVR := k8sschema.GroupVersionResource{
-		Group:    "management.cattle.io",
-		Version:  "v3",
-		Resource: "clusters",
-	}
 	mcioGVK := k8sschema.GroupVersionKind{
 		Group:   "management.cattle.io",
 		Version: "v3",
 		Kind:    "Cluster",
 	}
-	pcioGVR := k8sschema.GroupVersionResource{
-		Group:    "provisioning.cattle.io",
-		Version:  "v1",
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
 		Resource: "clusters",
 	}
 	pcioGVK := k8sschema.GroupVersionKind{
 		Group:   "provisioning.cattle.io",
 		Version: "v1",
 		Kind:    "Cluster",
+	}
+	pcioGVR := k8sschema.GroupVersionResource{
+		Group:    "provisioning.cattle.io",
+		Version:  "v1",
+		Resource: "clusters",
 	}
 
 	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
@@ -788,7 +790,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	requireT.NoError(err)
 
 	mcioClient := dynamicClient.Resource(mcioGVR)
-	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(testNamespace)
+	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(defaultTestNamespace)
 
 	mcioInfo := []struct {
 		city   string
@@ -855,40 +857,58 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			},
 		},
 		{
-			name:      "sorts by cpu",
-			query:     "sort=status.allocatable.cpuRaw,metadata.name", //TODO: Reinstate raw
-			wantNames: []string{"botswana", "burundi", "mali", "rwanda", "angola"},
-		},
-		{
-			name:      "sorts by memory",
-			query:     "sort=status.allocatable.memoryRaw,metadata.name",
-			wantNames: []string{"rwanda", "mali", "angola", "burundi", "botswana"},
-		},
-		{
-			name:      "sorts by pods",
-			query:     "sort=status.allocatable.pods,metadata.name",
-			wantNames: []string{"burundi", "angola", "botswana", "rwanda", "mali"},
-		},
-		{
-			name:  "misguided sort by raw cpu",
-			query: "sort=status.allocatable.cpu,metadata.name",
+			name:  "sorts by cpu",
+			query: "sort=status.allocatable.cpuRaw,metadata.name",
 			wantNames: []string{
-				"angola",
-				"burundi",
-				"rwanda",
-				"mali",
-				"botswana",
+				"botswana", // 98m
+				"burundi",  // 325m
+				"mali",     // 700m
+				"rwanda",   // 7000m
+				"angola",   // 14250m
 			},
 		},
 		{
-			name:  "misguided sort by raw memory",
+			name:  "sorts by memory",
+			query: "sort=status.allocatable.memoryRaw,metadata.name",
+			wantNames: []string{
+				"rwanda",   // 900Ki
+				"mali",     // 1200Ki
+				"angola",   // 2610Ki
+				"burundi",  // 4Mi
+				"botswana", // 12Mi
+			},
+		},
+		{
+			name:  "sorts by pods",
+			query: "sort=status.allocatable.pods,metadata.name",
+			wantNames: []string{
+				"burundi",  // 8
+				"angola",   // 11
+				"botswana", // 14
+				"rwanda",   // 17
+				"mali",     // 20
+			},
+		},
+		{
+			name:  "alpha-sort by raw cpu",
+			query: "sort=status.allocatable.cpu,metadata.name",
+			wantNames: []string{
+				"angola",   // 14250m
+				"burundi",  // 325m
+				"rwanda",   // 7000m
+				"mali",     // 700m
+				"botswana", // 98m
+			},
+		},
+		{
+			name:  "alpha-sort by raw memory",
 			query: "sort=status.allocatable.memory,metadata.name",
 			wantNames: []string{
-				"mali",
-				"botswana",
-				"angola",
-				"burundi",
-				"rwanda",
+				"mali",     // 1200Ki
+				"botswana", // 12Mi
+				"angola",   // 2610Ki
+				"burundi",  // 4Mi
+				"rwanda",   // 900Ki
 			},
 		},
 		{
@@ -965,15 +985,15 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 
 	resetMCIOCh := make(chan struct{}, 10)
 
-	mcioGVR := k8sschema.GroupVersionResource{
-		Group:    "management.cattle.io",
-		Version:  "v3",
-		Resource: "projects",
-	}
 	mcioGVK := k8sschema.GroupVersionKind{
 		Group:   "management.cattle.io",
 		Version: "v3",
 		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
 	}
 
 	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
@@ -1019,7 +1039,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	requireT.NoError(err)
-	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(testNamespace)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
 	mcioProjectInfo := [][2]string{
 		{"windhoek", "afrikaans"},
 		{"lome", "french"},
@@ -1118,7 +1138,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	}
 }
 
-func (i *IntegrationSuite) skipTestSecretProjectDependencies() {
+func (i *IntegrationSuite) TestSecretProjectDependencies() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 	requireT := i.Require()
@@ -1130,15 +1150,15 @@ func (i *IntegrationSuite) skipTestSecretProjectDependencies() {
 
 	resetMCIOCh := make(chan struct{}, 10)
 
-	mcioGVR := k8sschema.GroupVersionResource{
-		Group:    "management.cattle.io",
-		Version:  "v3",
-		Resource: "projects",
-	}
 	mcioGVK := k8sschema.GroupVersionKind{
 		Group:   "management.cattle.io",
 		Version: "v3",
 		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
 	}
 
 	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
@@ -1189,7 +1209,7 @@ func (i *IntegrationSuite) skipTestSecretProjectDependencies() {
 	}
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	requireT.NoError(err)
-	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(testNamespace)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
 	for _, info := range projectInfo {
 		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[1], info[2])
 		requireT.NoError(err)
