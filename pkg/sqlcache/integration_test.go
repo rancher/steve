@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,9 +50,23 @@ import (
 )
 
 const testNamespace = "sql-test"
+const testLabel = "capitals.cattle.io/test"
+const testFilter = "filter=metadata.labels[" + testLabel + "]"
 
 var defaultPartition = partition.Partition{
 	All: true,
+}
+
+func getFilteredQuery(query string, labelTest string) string {
+	if strings.Contains(query, testFilter) {
+		return query
+	}
+	continuationToken := "&"
+	if len(query) == 0 {
+		continuationToken = ""
+	}
+	return fmt.Sprintf("%s%s%s=%s", query, continuationToken, testFilter, labelTest)
+
 }
 
 type IntegrationSuite struct {
@@ -87,7 +102,7 @@ func (i *IntegrationSuite) TearDownSuite() {
 	i.Require().NoError(err)
 }
 
-func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, cpu, memory string, podCount int) error {
+func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, cpu, memory string, podCount int) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -95,7 +110,7 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 			"metadata": map[string]interface{}{
 				"name": name,
 				"labels": map[string]interface{}{
-					"capitals.cattle.io/test": "MCIO",
+					testLabel: thisTestLabel,
 				},
 			},
 			"status": map[string]interface{}{
@@ -122,7 +137,7 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	return err
 }
 
-func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, clusterName string) error {
+func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName string) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -131,7 +146,7 @@ func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 				"name":      name,
 				"namespace": testNamespace,
 				"labels": map[string]interface{}{
-					"capitals.cattle.io/test": "PCIO",
+					testLabel: thisTestLabel,
 				},
 			},
 		},
@@ -148,7 +163,7 @@ func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	return err
 }
 
-func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, displayName string) error {
+func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName, displayName string) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -157,11 +172,11 @@ func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gv
 				"name":      name,
 				"namespace": testNamespace,
 				"labels": map[string]interface{}{
-					"capitals-and-languages.cattle.io/test": "MCIO",
+					testLabel: thisTestLabel,
 				},
 			},
 			"spec": map[string]interface{}{
-				"clusterName": name,
+				"clusterName": clusterName,
 				"displayName": displayName,
 			},
 		},
@@ -170,13 +185,28 @@ func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gv
 	return err
 }
 
-func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, projectLabel string) error {
+func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+	obj := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				"management.cattle.io/project-scoped-secret": projectLabel,
+				testLabel:      thisTestLabel,
+			},
+		},
+	}
+	_, err := i.clientset.CoreV1().Secrets(testNamespace).Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
+func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
 	obj := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
 				"field.cattle.io/projectId":             projectLabel,
-				"capitals-and-languages.cattle.io/test": "MCIO",
+				testLabel: thisTestLabel,
 			},
 		},
 	}
@@ -691,6 +721,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 	requireT := i.Require()
+	labelTest := "ProvisioningManagementClusterDependencies"
 
 	cols, ccache, svrController, sf, proxyStore, err := i.setupTest(ctx)
 	requireT.NoError(err)
@@ -759,27 +790,33 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	mcioClient := dynamicClient.Resource(mcioGVR)
 	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(testNamespace)
 
-	err = createMCIO(ctx, mcioClient, mcioGVR, "kigali", "7000m", "900Ki", 17)
-	requireT.NoError(err)
-	err = createMCIO(ctx, mcioClient, mcioGVR, "luanda", "14250m", "2610Ki", 11)
-	requireT.NoError(err)
-	err = createMCIO(ctx, mcioClient, mcioGVR, "gaborone", "98m", "12Mi", 14)
-	requireT.NoError(err)
-	err = createMCIO(ctx, mcioClient, mcioGVR, "gitega", "325m", "4Mi", 8)
-	requireT.NoError(err)
-	err = createMCIO(ctx, mcioClient, mcioGVR, "bamako", "700m", "1200Ki", 20)
-	requireT.NoError(err)
-
-	err = createPCIO(ctx, pcioClient, pcioGVR, "rwanda", "kigali")
-	requireT.NoError(err)
-	err = createPCIO(ctx, pcioClient, pcioGVR, "angola", "luanda")
-	requireT.NoError(err)
-	err = createPCIO(ctx, pcioClient, pcioGVR, "botswana", "gaborone")
-	requireT.NoError(err)
-	err = createPCIO(ctx, pcioClient, pcioGVR, "burundi", "gitega")
-	requireT.NoError(err)
-	err = createPCIO(ctx, pcioClient, pcioGVR, "mali", "bamako")
-	requireT.NoError(err)
+	mcioInfo := []struct {
+		city   string
+		cpu    string
+		memory string
+		pods   int
+	}{
+		{"kigali", "7000m", "900Ki", 17},
+		{"luanda", "14250m", "2610Ki", 11},
+		{"gaborone", "98m", "12Mi", 14},
+		{"gitega", "325m", "4Mi", 8},
+		{"bamako", "700m", "1200Ki", 20},
+	}
+	for _, info := range mcioInfo {
+		err = createMCIO(ctx, mcioClient, mcioGVR, info.city, labelTest, info.cpu, info.memory, info.pods)
+		requireT.NoError(err)
+	}
+	pcioInfo := [][2]string{
+		{"rwanda", "kigali"},
+		{"angola", "luanda"},
+		{"botswana", "gaborone"},
+		{"burundi", "gitega"},
+		{"mali", "bamako"},
+	}
+	for _, info := range pcioInfo {
+		err = createPCIO(ctx, pcioClient, pcioGVR, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
 
 	var mcioSchema *types.APISchema
 	var pcioSchema *types.APISchema
@@ -895,7 +932,8 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	for _, test := range tests {
 		test := test
 		i.Run(test.name, func() {
-			req, err := http.NewRequest("GET", "http://localhost:8080?"+test.query, nil)
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
 			requireT.NoError(err)
 			apiOp := &types.APIRequest{
 				Request: req,
@@ -919,6 +957,172 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 	requireT := i.Require()
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+	labelTest := "NamespaceProjectDependencies"
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	namespaceInfo := [][2]string{
+		{"namibia", "windhoek"},
+		{"togo", "lome"},
+		{"nigeria", "abuja"},
+		{"principe", "saotome"},
+	}
+	for _, info := range namespaceInfo {
+		err = i.createNamespace(ctx, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(testNamespace)
+	mcioProjectInfo := [][2]string{
+		{"windhoek", "afrikaans"},
+		{"lome", "french"},
+		{"abuja", "english"},
+		{"saotome", "portuguese"},
+	}
+	for _, info := range mcioProjectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[0], info[1])
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	nsSchema := sf.Schema("namespace")
+
+	tests := []struct {
+		name      string
+		query     string
+		wantNames []string
+	}{
+		{
+			name:  "sorts by name",
+			query: "sort=metadata.name",
+			wantNames: []string{
+				"namibia",
+				"nigeria",
+				"principe",
+				"togo",
+			},
+		},
+		{
+			name:  "sorts by field.cattle.io/projectId",
+			query: "sort=metadata.labels[field.cattle.io/projectId],metadata.name",
+			wantNames: []string{
+				"nigeria",  // abuja
+				"togo",     // lome
+				"principe", // sao tome
+				"namibia",  // windhoek
+			},
+		},
+		{
+			name:  "sorts by spec.displayName",
+			query: "sort=spec.displayName,metadata.name",
+			wantNames: []string{
+				"namibia",  // afrikaans
+				"nigeria",  // english
+				"togo",     // french
+				"principe", // portuguese
+			},
+		},
+		{
+			name:  "filter on spec.displayName",
+			query: "filter=spec.displayName~en",
+			wantNames: []string{
+				"nigeria", // english
+				"togo",    // french
+			},
+		},
+	}
+
+	req, err := http.NewRequest("GET", "http://localhost:8080?"+getFilteredQuery("sort=metadata.name", labelTest), nil)
+	requireT.NoError(err)
+	apiOp := &types.APIRequest{
+		Request: req,
+	}
+	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
+	requireT.NoError(err)
+	i.Assert().Equal(4, num)
+	i.Assert().Equal([]string{"abuja", "lome", "saotome", "windhoek"}, stringsFromULIst(got))
+
+	partitions := []partition.Partition{defaultPartition}
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+			requireT.NoError(err)
+			apiOp := &types.APIRequest{
+				Request: req,
+			}
+
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
+			if err != nil {
+				i.Assert().NoError(err)
+				return
+			}
+			i.Assert().Equal(len(test.wantNames), total)
+			i.Assert().Equal("", continueToken)
+			i.Assert().Len(got.Items, len(test.wantNames))
+			gotNames := stringsFromULIst(got)
+			i.Assert().Equal(test.wantNames, gotNames)
+		})
+	}
+}
+
+func (i *IntegrationSuite) skipTestSecretProjectDependencies() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+	labelTest := "SecretProjectDependencies"
 
 	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
 	requireT.NoError(err)
@@ -967,34 +1171,36 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 
 	err = ctrl.Start(ctx)
 	requireT.NoError(err)
-
-	err = i.createNamespace(ctx, "namibia", "windhoek")
-	requireT.NoError(err)
-	err = i.createNamespace(ctx, "togo", "lome")
-	requireT.NoError(err)
-	err = i.createNamespace(ctx, "nigeria", "abuja")
-	requireT.NoError(err)
-	err = i.createNamespace(ctx, "principe", "saotome")
-	requireT.NoError(err)
-
+	secretInfo := [][2]string{
+		{"morocco", "rabat"},
+		{"eritrea", "asmara"},
+		{"kenya", "nairobi"},
+		{"benin", "portonovo"},
+	}
+	projectInfo := [][3]string{
+		{"rabat", "arabic", "casablanca"},
+		{"asmara", "tigrinya", "keren"},
+		{"nairobi", "english", "mombasa"},
+		{"portonovo", "french", "cotonou"},
+	}
+	for _, info := range secretInfo {
+		err = i.createSecret(ctx, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	requireT.NoError(err)
 	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(testNamespace)
-	err = createMCIOProject(ctx, mcioClient, mcioGVR, "windhoek", "afrikaans")
-	requireT.NoError(err)
-	err = createMCIOProject(ctx, mcioClient, mcioGVR, "lome", "french")
-	requireT.NoError(err)
-	err = createMCIOProject(ctx, mcioClient, mcioGVR, "abuja", "english")
-	requireT.NoError(err)
-	err = createMCIOProject(ctx, mcioClient, mcioGVR, "saotome", "portuguese")
-	requireT.NoError(err)
+	for _, info := range projectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[1], info[2])
+		requireT.NoError(err)
+	}
 
 	var mcioSchema *types.APISchema
 	requireT.EventuallyWithT(func(c *assert.CollectT) {
 		mcioSchema = sf.Schema("management.cattle.io.project")
 		require.NotNil(c, mcioSchema)
 	}, 15*time.Second, 500*time.Millisecond)
-	nsSchema := sf.Schema("namespace")
+	secretSchema := sf.Schema("secret")
 
 	tests := []struct {
 		name      string
@@ -1003,45 +1209,63 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	}{
 		{
 			name:  "sorts by name",
-			query: "sort=metadata.name&filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO",
+			query: "sort=metadata.name",
 			wantNames: []string{
-				"namibia",
-				"nigeria",
-				"principe",
-				"togo",
+				"benin",
+				"eritrea",
+				"kenya",
+				"morocco",
 			},
 		},
 		{
-			name:  "sorts by field.cattle.io/projectId",
-			query: "filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO&sort=metadata.labels[field.cattle.io/projectId],metadata.name",
+			name:  "sorts by foreign-key label",
+			query: "sort=metadata.labels[management.cattle.io/project-scoped-secret],metadata.name",
 			wantNames: []string{
-				"nigeria",  // abuja
-				"togo",     // lome
-				"principe", // sao tome
-				"namibia",  // windhoek
+				"eritrea", // asmara
+				"kenya",   // nairobi
+				"benin",   // portonovo
+				"morocco", // rabat
 			},
 		},
 		{
-			name:  "sorts by spec.displayName",
-			query: "filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO&sort=spec.displayName,metadata.name",
+			name:  "sorts by spec.displayName (other city)",
+			query: "sort=spec.displayName,metadata.name",
 			wantNames: []string{
-				"namibia",  // afrikaans
-				"nigeria",  // english
-				"togo",     // french
-				"principe", // portuguese
+				"morocco", // casablanca
+				"benin",   // cotonou
+				"eritrea", // keren
+				"kenya",   // mombasa
 			},
 		},
 		{
-			name:  "filter on spec.displayName",
-			query: "filter=spec.displayName~en&filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO",
+			name:  "sorts by spec.clusterName (language)",
+			query: "sort=spec.clusterName,metadata.name",
 			wantNames: []string{
-				"nigeria", // english
-				"togo",    // french
+				"morocco", // arabic
+				"kenya",   // english
+				"benin",   // french
+				"eritrea", // tigrinya
+			},
+		},
+		{
+			name:  "filter on spec.clusterName (language)",
+			query: "filter=spec.clusterName~en",
+			wantNames: []string{
+				"benin", // french
+				"kenya", // english
+			},
+		},
+		{
+			name:  "filter on spec.displayName (other city)",
+			query: "filter=spec.displayName~as",
+			wantNames: []string{
+				"kenya",   // mombasa
+				"morocco", // casablanca
 			},
 		},
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost:8080?sort=metadata.name&filter=metadata.labels[capitals-and-languages.cattle.io/test]=MCIO", nil)
+	req, err := http.NewRequest("GET", "http://localhost:8080?"+getFilteredQuery("sort=metadata.name", labelTest), nil)
 	requireT.NoError(err)
 	apiOp := &types.APIRequest{
 		Request: req,
@@ -1049,19 +1273,20 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
 	requireT.NoError(err)
 	i.Assert().Equal(4, num)
-	i.Assert().Equal([]string{"abuja", "lome", "saotome", "windhoek"}, stringsFromULIst(got))
+	i.Assert().Equal([]string{"asmara", "nairobi", "portonovo", "rabat"}, stringsFromULIst(got))
 
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
 		test := test
 		i.Run(test.name, func() {
-			req, err := http.NewRequest("GET", "http://localhost:8080?"+test.query, nil)
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
 			requireT.NoError(err)
 			apiOp := &types.APIRequest{
 				Request: req,
 			}
 
-			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
 			if err != nil {
 				i.Assert().NoError(err)
 				return
