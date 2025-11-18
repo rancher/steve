@@ -157,10 +157,9 @@ func (u *Handler) ServeAPIUI() http.Handler {
 			} else {
 				parts := strings.SplitN(req.URL.Path, "/", 2)
 				if len(parts) == 2 {
-					http.ServeFile(rw, req, filepath.Join(base, parts[1]))
-				} else {
-					http.NotFound(rw, req)
+					req.URL.Path = parts[1]
 				}
+				http.FileServer(http.Dir(base)).ServeHTTP(rw, req)
 			}
 		})))
 }
