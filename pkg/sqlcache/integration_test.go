@@ -350,7 +350,8 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		Resource: "configmaps",
 	}
 	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(testNamespace)
-	cache, err := cacheFactory.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicResource, configMapGVK, true, true)
+	typeGuidance := map[string]string{}
+	cache, err := cacheFactory.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make cache: %w", err)
 	}
