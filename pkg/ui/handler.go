@@ -127,42 +127,38 @@ func (u *Handler) indexPath() (path string, isURL bool) {
 
 func (u *Handler) apiUIPath() (string, bool) {
 	version := u.apiUIVersionSetting()
-	remotePath := "https://releases.rancher.com/api-ui/"
+	remotePath := fmt.Sprintf("https://releases.rancher.com/api-ui/%s", version)
 
 	switch u.offlineSetting() {
 	case "dynamic":
 		if u.releaseSetting() {
-			return filepath.Join(u.pathSetting(), "api-ui"), false
+			return u.pathSetting(), false
 		}
-		if u.canDownload(fmt.Sprintf("%s/%s/%s", remotePath, version, "ui.min.js")) {
+		if u.canDownload(fmt.Sprintf("%s/%s", remotePath, "ui.min.js")) {
 			return remotePath, true
 		}
-		return filepath.Join(u.pathSetting(), "api-ui"), false
+		return u.pathSetting(), false
 	case "true":
-		return filepath.Join(u.pathSetting(), "api-ui"), false
+		return u.pathSetting(), false
 	default:
 		return remotePath, true
 	}
 }
 
 func (u *Handler) ServeAPIUI() http.Handler {
-	return u.middleware(http.StripPrefix("/api-ui/",
+	return u.middleware(
 		http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			base, isURL := u.apiUIPath()
 			if isURL {
-				remoteURL := base + req.URL.Path
+				reqPath := strings.TrimPrefix(req.URL.Path, "/api-ui/")
+				remoteURL := fmt.Sprintf("%s/%s", base, reqPath)
 				if err := serveRemote(rw, remoteURL); err != nil {
 					logrus.Errorf("failed to fetch asset from %s: %v", remoteURL, err)
 				}
 			} else {
-				parts := strings.SplitN(req.URL.Path, "/", 2)
-				if len(parts) == 2 {
-					http.ServeFile(rw, req, filepath.Join(base, parts[1]))
-				} else {
-					http.NotFound(rw, req)
-				}
+				http.ServeFile(rw, req, filepath.Join(base, req.URL.Path))
 			}
-		})))
+		}))
 }
 
 func (u *Handler) ServeAsset() http.Handler {
