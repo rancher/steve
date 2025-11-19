@@ -2,17 +2,14 @@
 
 set -e
 
-# Get the absolute path of the steve directory (this repo)
 STEVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Initialize variables from environment or defaults
 RANCHER_IMAGE="${RANCHER_IMAGE:-}"
 RANCHER_AGENT_IMAGE="${RANCHER_AGENT_IMAGE:-}"
 CONTAINER_NAME="rancher-server-test"
 BOOTSTRAP_PASSWORD="${CATTLE_BOOTSTRAP_PASSWORD:-admin}"
 SKIP_SETUP=false
 
-# Function to detect Rancher images if not provided
 detect_rancher_images() {
     local rancher_image=$1
     local agent_image=$2
@@ -37,12 +34,10 @@ detect_rancher_images() {
         fi
     fi
     
-    # Return values via global variables (bash limitation)
     RANCHER_IMAGE="${rancher_image}"
     RANCHER_AGENT_IMAGE="${agent_image}"
 }
 
-# Function to cleanup on exit
 cleanup() {
     echo ""
     echo "Cleaning up..."
@@ -55,19 +50,16 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Function to detect the machine's primary IP address
 detect_rancher_ip() {
     local ip=$(hostname -I | awk '{print $1}')
     if [ -z "$ip" ]; then
         echo "Error: Could not determine IP address" >&2
         return 1
     fi
-    # Set global variable
     RANCHER_IP="$ip"
     echo "Using IP address: $RANCHER_IP"
 }
 
-# Function to remove existing container if it exists
 remove_existing_container() {
     local container_name=$1
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
@@ -77,7 +69,6 @@ remove_existing_container() {
     fi
 }
 
-# Function to start Rancher server container
 start_rancher_server() {
     local container_name=$1
     local rancher_image=$2
@@ -111,7 +102,6 @@ start_rancher_server() {
     trap cleanup_logs EXIT
 }
 
-# Function to wait for Rancher to be ready
 wait_for_rancher() {
     local rancher_ip=$1
     local max_wait=${2:-300}  # Default 5 minutes
@@ -157,7 +147,6 @@ wait_for_rancher() {
     return 1
 }
 
-# Function to run the integration test setup
 run_setup() {
     local steve_dir=$1
     local bootstrap_password=$2
@@ -173,20 +162,17 @@ run_setup() {
     echo "Running integration test setup..."
     cd "${steve_dir}/tests/integration/setup"
     
-    # Build setup binary if it doesn't exist
     if [ ! -f "./setup" ] || [ "./setup" -ot "./main.go" ]; then
         echo "Building setup binary..."
         go build -o setup .
     fi
     
-    # Run setup with required environment variables
     export CATTLE_BOOTSTRAP_PASSWORD="${bootstrap_password}"
     export CATTLE_AGENT_IMAGE="${agent_image}"
     export CATTLE_TEST_CONFIG="${steve_dir}/tests/integration/steveapi/steveapi.yaml"
     ./setup
 }
 
-# Function to run integration tests
 run_integration_tests() {
     local steve_dir=$1
     local bootstrap_password=$2
@@ -208,9 +194,7 @@ run_integration_tests() {
     echo "Integration tests completed!"
 }
 
-# Main function
 main() {
-    # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --rancher-image)
@@ -268,5 +252,4 @@ main() {
     run_integration_tests "${STEVE_DIR}" "${BOOTSTRAP_PASSWORD}" "${RANCHER_AGENT_IMAGE}"
 }
 
-# Call main function with all arguments
 main "$@"

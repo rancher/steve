@@ -1,25 +1,19 @@
 name: Test Rancher Integration
 
 on:
-  workflow_dispatch:
-    inputs:
-      rancher_image:
-        description: 'Rancher server image (leave empty to auto-detect)'
-        required: false
-        type: string
-      agent_image:
-        description: 'Rancher agent image (leave empty to auto-detect)'
-        required: false
-        type: string
-      skip_setup:
-        description: 'Skip running the setup program'
-        required: false
-        type: boolean
-        default: false
+  pull_request: {}
+  push:
+    branches:
+    - master
+    - release/*
 
 jobs:
   test-rancher:
-    runs-on: ubuntu-latest
+    runs-on:
+      - runs-on
+      - spot=true
+      - runner=8cpu-linux-amd64
+      - run-id=${{ github.run_id }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
@@ -51,8 +45,6 @@ jobs:
         run: |
           bash scripts/test-rancher.sh
         env:
-          RANCHER_IMAGE: ${{ inputs.rancher_image }}
-          RANCHER_AGENT_IMAGE: ${{ inputs.agent_image }}
           CATTLE_BOOTSTRAP_PASSWORD: admin
         continue-on-error: false
 

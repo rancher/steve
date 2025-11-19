@@ -8,7 +8,7 @@ RANCHER_DIR="/tmp/rancher-build/rancher"
 
 if [ -d "$RANCHER_DIR" ]; then
     echo "Rancher repository already exists at $RANCHER_DIR"
-    echo "Skipping clone. To force a fresh clone, remove the directory first: rm -rf $RANCHER_DIR"
+    echo "Skipping clone"
 else
     echo "Cloning rancher repository to $RANCHER_DIR..."
     mkdir -p "$(dirname "$RANCHER_DIR")"
