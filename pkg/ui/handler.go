@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/rancher/apiserver/pkg/middleware"
@@ -155,12 +154,7 @@ func (u *Handler) ServeAPIUI() http.Handler {
 					logrus.Errorf("failed to fetch asset from %s: %v", remoteURL, err)
 				}
 			} else {
-				parts := strings.SplitN(req.URL.Path, "/", 2)
-				if len(parts) == 2 {
-					http.ServeFile(rw, req, filepath.Join(base, parts[1]))
-				} else {
-					http.NotFound(rw, req)
-				}
+				http.ServeFile(rw, req, filepath.Join(base, req.URL.Path))
 			}
 		})))
 }
