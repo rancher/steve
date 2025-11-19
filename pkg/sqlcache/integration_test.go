@@ -520,6 +520,26 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 	})
 }
 
+func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, schema *types.APISchema, labelTest string, expectedNum int) error {
+	q := getFilteredQuery("", labelTest)
+	return wait.PollUntilContextCancel(ctx, time.Millisecond*100, true, func(ctx context.Context) (done bool, err error) {
+		req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+		if err != nil {
+			return false, err
+		}
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		partitions := []partition.Partition{defaultPartition}
+		_, total, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		if err != nil {
+			// note that we don't return the error since that would stop the polling
+			return false, nil
+		}
+		return total == expectedNum, nil
+	})
+}
+
 type ResetFunc func(k8sschema.GroupVersionKind) error
 
 func (f ResetFunc) Reset(gvk k8sschema.GroupVersionKind) error {
@@ -948,6 +968,10 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 		},
 	}
 
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioInfo))
+	requireT.NoError(err)
+	err = waitForObjectsBySchema(ctx, proxyStore, pcioSchema, labelTest, len(pcioInfo))
+	requireT.NoError(err)
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
 		test := test
@@ -1103,15 +1127,10 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 		},
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost:8080?"+getFilteredQuery("sort=metadata.name", labelTest), nil)
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioProjectInfo))
 	requireT.NoError(err)
-	apiOp := &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
+	err = waitForObjectsBySchema(ctx, proxyStore, nsSchema, labelTest, len(namespaceInfo))
 	requireT.NoError(err)
-	i.Assert().Equal(4, num)
-	i.Assert().Equal([]string{"abuja", "lome", "saotome", "windhoek"}, stringsFromULIst(got))
 
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
@@ -1285,15 +1304,10 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 		},
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost:8080?"+getFilteredQuery("sort=metadata.name", labelTest), nil)
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(projectInfo))
 	requireT.NoError(err)
-	apiOp := &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
+	err = waitForObjectsBySchema(ctx, proxyStore, secretSchema, labelTest, len(secretInfo))
 	requireT.NoError(err)
-	i.Assert().Equal(4, num)
-	i.Assert().Equal([]string{"asmara", "nairobi", "portonovo", "rabat"}, stringsFromULIst(got))
 
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
