@@ -452,6 +452,22 @@ go run main.go
 
 The API can be accessed by navigating to https://localhost:9443/v1.
 
+### Running the pprof server
+
+You can enable the `pprof` http server when running steve as a binary by
+enabling pprof with `--enable-pprof`.
+
+```
+go run . --enable-pprof
+```
+
+It is then possible to use `go tool pprof` to view profiles. (You might need
+[graphviz](https://www.graphviz.org/)) For example:
+
+```
+go tool pprof -no_browser -http localhost:31000 http://localhost:6060/debug/pprof/goroutine
+```
+
 Steve Features
 --------------
 

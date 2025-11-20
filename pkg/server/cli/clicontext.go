@@ -21,6 +21,9 @@ type Config struct {
 	HTTPListenPort  int
 	UIPath          string
 
+	PprofEnabled    bool
+	PprofListenAddr string
+
 	WebhookConfig authcli.WebhookConfig
 }
 
@@ -86,6 +89,16 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       9080,
 			Destination: &config.HTTPListenPort,
+		},
+		&cli.BoolFlag{
+			Name:        "enable-pprof",
+			Value:       false,
+			Destination: &config.PprofEnabled,
+		},
+		&cli.StringFlag{
+			Name:        "pprof-listen-addr",
+			Value:       "localhost:6060",
+			Destination: &config.PprofListenAddr,
 		},
 	}
 
