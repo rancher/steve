@@ -1108,7 +1108,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 			},
 		},
 		{
-			name:  "sorts by spec.displayName",
+			name:  "sorts by spec.displayName (language)",
 			query: "sort=spec.displayName,metadata.name",
 			wantNames: []string{
 				"namibia",  // afrikaans
@@ -1118,7 +1118,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 			},
 		},
 		{
-			name:  "filter on spec.displayName",
+			name:  "filter on spec.displayName (language)",
 			query: "filter=spec.displayName~en",
 			wantNames: []string{
 				"nigeria", // english
