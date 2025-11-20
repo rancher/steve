@@ -462,7 +462,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	}
 }
 
-func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFunc cache.TransformFunc) (*factory.Cache, *factory.CacheFactory, error) {
+func (i *IntegrationSuite) createCacheAndFactory(fieldsToUse [][]string, transformFunc cache.TransformFunc) (*factory.Cache, *factory.CacheFactory, error) {
 	cacheFactory, err := factory.NewCacheFactory(factory.CacheFactoryOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make factory: %w", err)
@@ -482,8 +482,16 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		Resource: "configmaps",
 	}
 	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(defaultTestNamespace)
-	typeGuidance := map[string]string{}
-	cache, err := cacheFactory.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
+	emptyGetFieldsFunc := func() (fields [][]string, typeGuidance map[string]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, isNamespaced bool, transform cache.TransformFunc) {
+		fields = fieldsToUse
+		typeGuidance = map[string]string{}
+		externalUpdateInfo = &sqltypes.ExternalGVKUpdates{}
+		selfUpdateInfo = &sqltypes.ExternalGVKUpdates{}
+		isNamespaced = true
+		transform = transformFunc
+		return
+	}
+	cache, err := cacheFactory.CacheFor(context.Background(), emptyGetFieldsFunc, dynamicResource, configMapGVK, true)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make cache: %w", err)
 	}
@@ -1086,7 +1094,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 		name      string
 		query     string
 		wantNames []string
-	}{
+	}{//PROBLEM
 		{
 			name:  "sorts by name",
 			query: "sort=metadata.name",
@@ -1155,6 +1163,175 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 			i.Assert().Equal(test.wantNames, gotNames)
 		})
 	}
+}
+
+// Comment out the 'ignore' in the function name to run it. Useful only for comparing running
+// times across different branches
+func (i *IntegrationSuite) ignoreTestNamespaceProjectDependenciesWithPseudoBenchmarks() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+	labelTest := "NamespaceProjectDependenciesWithPseudoBenchmarks"
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	namespaceInfo := [][2]string{
+		{"saintkitts", "basseterre"},
+		{"dominicanrepublic", "santodomingo"},
+		{"guadeloupe", "basse-terre"},
+		{"aruba", "oranjestad"},
+	}
+	for _, info := range namespaceInfo {
+		err = i.createNamespace(ctx, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	mcioProjectInfo := [][2]string{
+		{"basseterre", "english"},
+		{"santodomingo", "spanish"},
+		{"basse-terre", "french"},
+		{"oranjestad", "dutch"},
+	}
+	for _, info := range mcioProjectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[0], info[1])
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	nsSchema := sf.Schema("namespace")
+
+	tests := []struct {
+		name      string
+		query     string
+		wantNames []string
+	}{
+		{
+			name:  "sorts by name",
+			query: "sort=metadata.name",
+			wantNames: []string{
+				"aruba",
+				"dominicanrepublic",
+				"guadeloupe",
+				"saintkitts",
+			},
+		},
+		{
+			name:  "sorts by field.cattle.io/projectId",
+			query: "sort=metadata.labels[field.cattle.io/projectId],metadata.name",
+			wantNames: []string{
+				"guadeloupe",        // basse-terre
+				"saintkitts",        // basseterre
+				"aruba",             // oranjestad
+				"dominicanrepublic", // santodomingo
+			},
+		},
+		{
+			name:  "sorts by spec.displayName",
+			query: "sort=spec.displayName,metadata.name",
+			wantNames: []string{
+				"aruba",             // dutch
+				"saintkitts",        // english
+				"guadeloupe",        // french
+				"dominicanrepublic", // spanish
+			},
+		},
+		{
+			name:  "filter on spec.displayName",
+			query: "filter=spec.displayName~en&sort=metadata.name",
+			wantNames: []string{
+				"guadeloupe", // french
+				"saintkitts", // english
+			},
+		},
+	}
+
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioProjectInfo))
+	requireT.NoError(err)
+	err = waitForObjectsBySchema(ctx, proxyStore, nsSchema, labelTest, len(namespaceInfo))
+	requireT.NoError(err)
+
+	partitions := []partition.Partition{defaultPartition}
+	t1 := time.Now()
+	size := 100
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			for _ = range size {
+				req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+				requireT.NoError(err)
+				apiOp := &types.APIRequest{
+					Request: req,
+				}
+
+				got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
+				if err != nil {
+					i.Assert().NoError(err)
+					return
+				}
+				i.Assert().Equal(len(test.wantNames), total)
+				i.Assert().Equal("", continueToken)
+				i.Assert().Len(got.Items, len(test.wantNames))
+				gotNames := stringsFromULIst(got)
+				i.Assert().Equal(test.wantNames, gotNames)
+			}
+		})
+	}
+	t2 := time.Now()
+	// Only shows up when running `go test -v`
+	fmt.Printf("Time to run %d tests: %d msec\n", size, t2.Sub(t1).Milliseconds())
 }
 
 func (i *IntegrationSuite) TestSecretProjectDependencies() {

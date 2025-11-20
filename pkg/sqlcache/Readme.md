@@ -78,7 +78,12 @@ intended to be used as a way of enforcing RBAC.
 		fields := [][]string{{"metadata", "name"}, {"metadata", "namespace"}}
 		opts := &informer.ListOptions{}
 		// gvk should be of type k8s.io/apimachinery/pkg/runtime/schema.GroupVersionKind
-		c, err := cacheFactory.CacheFor(fields, client, gvk)
+		c, err := cacheFactory.CacheFor(context.Context,
+		    getFieldsForGVKFunc, // See pkg/stores/sqlproxy/proxy_store:fieldsForGVK for an example
+		    tableClient,
+		    gvk,
+		    schema,
+		    controllerschema.IsListWatchable(schema))
 		if err != nil {
 			panic(err)
 		}
