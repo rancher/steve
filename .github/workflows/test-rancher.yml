@@ -24,7 +24,6 @@ jobs:
         tool-cache: 'true'
         android: 'true'
         large-packages: 'true'
-        swap-storage: 'true'
         dotnet: 'true'
         haskell: 'true'
 
@@ -46,6 +45,7 @@ jobs:
         k3d version
 
     - name: Build Rancher
+      id: build-rancher
       run: |
         bash scripts/build-rancher.sh
       env:
@@ -56,5 +56,7 @@ jobs:
         bash scripts/test-rancher.sh
       env:
         CATTLE_BOOTSTRAP_PASSWORD: admin
+        RANCHER_IMAGE: ${{ steps.build-rancher.outputs.rancher-image }}
+        RANCHER_AGENT_IMAGE: ${{ steps.build-rancher.outputs.rancher-agent-image }}
       continue-on-error: false
 

@@ -14,28 +14,46 @@ detect_rancher_images() {
     local rancher_image=$1
     local agent_image=$2
     
+    echo "Image detection - Input: rancher_image=${rancher_image}, agent_image=${agent_image}"
+    
     if [ -z "$rancher_image" ] || [ -z "$agent_image" ]; then
         echo "Detecting most recently built Rancher images..."
+        echo "All rancher images:"
+        docker images | grep rancher || echo "No rancher images found"
         
         if [ -z "$rancher_image" ]; then
             local detected_server=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "reference=rancher/rancher" 2>/dev/null | head -n1)
+            if [ -z "$detected_server" ]; then
+                echo "Trying alternative detection method for rancher server..."
+                detected_server=$(docker images rancher/rancher --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | head -n1)
+            fi
             if [ -n "$detected_server" ]; then
                 rancher_image="$detected_server"
                 echo "  Detected rancher server image: ${rancher_image}"
+            else
+                echo "  Warning: Could not detect rancher server image"
             fi
         fi
         
         if [ -z "$agent_image" ]; then
             local detected_agent=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "reference=rancher/rancher-agent" 2>/dev/null | head -n1)
+            if [ -z "$detected_agent" ]; then
+                echo "Trying alternative detection method for rancher agent..."
+                detected_agent=$(docker images rancher/rancher-agent --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | head -n1)
+            fi
             if [ -n "$detected_agent" ]; then
                 agent_image="$detected_agent"
                 echo "  Detected rancher agent image: ${agent_image}"
+            else
+                echo "  Warning: Could not detect rancher agent image"
             fi
         fi
     fi
     
     RANCHER_IMAGE="${rancher_image}"
     RANCHER_AGENT_IMAGE="${agent_image}"
+    
+    echo "Image detection - Final: RANCHER_IMAGE=${RANCHER_IMAGE}, RANCHER_AGENT_IMAGE=${RANCHER_AGENT_IMAGE}"
 }
 
 cleanup() {
