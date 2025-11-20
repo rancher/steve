@@ -1,22 +1,29 @@
 name: Test Rancher Integration
 
 on:
-  workflow_dispatch:
+  pull_request: {}
+  push:
+    branches:
+    - master
+    - release/*
 
 jobs:
   test-rancher:
     runs-on: ubuntu-latest
     steps:
-    - name: Free Disk Space (Ubuntu)
-      uses: jlumbroso/free-disk-space@main
+    - name: Free Disk Space
+      uses: ./.github/actions/free-disk-space
       with:
-        tool-cache: true
-        android: true
-        dotnet: true
-        haskell: true
-        large-packages: true
-        docker-images: true
-        swap-storage: true
+        docker-images: 'true'
+        go-cache: 'true'
+        apt-cache: 'true'
+        build-artifacts: 'true'
+        tool-cache: 'true'
+        android: 'true'
+        large-packages: 'true'
+        swap-storage: 'true'
+        dotnet: 'true'
+        haskell: 'true'
 
     - name: Checkout repository
       uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0

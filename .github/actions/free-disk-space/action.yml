@@ -1,0 +1,271 @@
+name: 'Free Disk Space'
+description: 'Free disk space on Ubuntu runners by cleaning Docker, Go cache, and build artifacts'
+
+inputs:
+  docker-images:
+    description: 'Remove Docker images, containers, volumes, and build cache'
+    required: false
+    default: 'true'
+  go-cache:
+    description: 'Clean Go module cache and build cache'
+    required: false
+    default: 'true'
+  apt-cache:
+    description: 'Clean apt package cache'
+    required: false
+    default: 'true'
+  build-artifacts:
+    description: 'Remove build artifacts from /tmp'
+    required: false
+    default: 'true'
+  android:
+    description: 'Remove Android SDK and tools'
+    required: false
+    default: 'false'
+  large-packages:
+    description: 'Remove large packages (aspnetcore, dotnet, llvm, php, mongodb, mysql, azure-cli, browsers, etc.)'
+    required: false
+    default: 'false'
+  tool-cache:
+    description: 'Remove tool cache (Node, Go, Python, Ruby, etc.) from AGENT_TOOLSDIRECTORY'
+    required: false
+    default: 'false'
+  dotnet:
+    description: 'Remove .NET runtime'
+    required: false
+    default: 'false'
+  haskell:
+    description: 'Remove Haskell runtime'
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Show disk space before cleanup
+      shell: bash
+      run: |
+        echo "=== Disk Space Before Cleanup ==="
+        df -h /
+        echo ""
+        if command -v docker &> /dev/null; then
+          echo "Docker disk usage:"
+          docker system df 2>/dev/null || true
+        fi
+        echo "=================================="
+
+    - name: Clean Docker images, containers, volumes, and build cache
+      if: inputs.docker-images == 'true'
+      shell: bash
+      run: |
+        getAvailableSpace() {
+          df / | awk 'NR==2 {print $4}'
+        }
+        
+        printSavedSpace() {
+          local saved=$1
+          local label=$2
+          if [ $saved -gt 0 ]; then
+            if command -v bc &> /dev/null; then
+              local saved_gb=$(echo "scale=2; $saved/1024/1024" | bc)
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_gb}GiB"
+              echo "********************************************************************************"
+            else
+              local saved_mb=$((saved/1024))
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_mb}MiB"
+              echo "********************************************************************************"
+            fi
+          fi
+        }
+        
+        if command -v docker &> /dev/null; then
+          echo "Cleaning Docker images..."
+          BEFORE=$(getAvailableSpace)
+          sudo docker image prune --all --force || true
+          AFTER=$(getAvailableSpace)
+          SAVED=$((AFTER-BEFORE))
+          printSavedSpace $SAVED "Docker images"
+          
+          echo "Cleaning Docker containers, volumes, and build cache..."
+          docker system prune -af --volumes 2>/dev/null || true
+          docker builder prune -af 2>/dev/null || true
+          echo "Docker cleanup complete"
+        else
+          echo "Docker not available, skipping Docker cleanup"
+        fi
+
+    - name: Remove tool cache
+      if: inputs.tool-cache == 'true'
+      shell: bash
+      run: |
+        getAvailableSpace() {
+          df / | awk 'NR==2 {print $4}'
+        }
+        
+        printSavedSpace() {
+          local saved=$1
+          local label=$2
+          if [ $saved -gt 0 ]; then
+            if command -v bc &> /dev/null; then
+              local saved_gb=$(echo "scale=2; $saved/1024/1024" | bc)
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_gb}GiB"
+              echo "********************************************************************************"
+            else
+              local saved_mb=$((saved/1024))
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_mb}MiB"
+              echo "********************************************************************************"
+            fi
+          fi
+        }
+        
+        if [[ -n "$AGENT_TOOLSDIRECTORY" ]]; then
+          echo "Removing tool cache from $AGENT_TOOLSDIRECTORY..."
+          BEFORE=$(getAvailableSpace)
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          AFTER=$(getAvailableSpace)
+          SAVED=$((AFTER-BEFORE))
+          printSavedSpace $SAVED "Tool cache"
+        else
+          echo "AGENT_TOOLSDIRECTORY not set, skipping tool cache cleanup"
+        fi
+
+    - name: Clean Go module and build cache
+      if: inputs.go-cache == 'true'
+      shell: bash
+      run: |
+        if command -v go &> /dev/null; then
+          echo "Cleaning Go cache..."
+          go clean -modcache -cache -testcache 2>/dev/null || true
+          echo "Go cache cleanup complete"
+        else
+          echo "Go not available, skipping Go cache cleanup"
+        fi
+
+    - name: Clean apt package cache
+      if: inputs.apt-cache == 'true'
+      shell: bash
+      run: |
+        echo "Cleaning apt cache..."
+        sudo apt-get clean 2>/dev/null || true
+        sudo apt-get autoremove -y 2>/dev/null || true
+        echo "Apt cache cleanup complete"
+
+    - name: Remove build artifacts from /tmp
+      if: inputs.build-artifacts == 'true'
+      shell: bash
+      run: |
+        echo "Cleaning /tmp build artifacts..."
+        sudo find /tmp -type f -atime +1 -delete 2>/dev/null || true
+        sudo find /tmp -type d -empty -delete 2>/dev/null || true
+        echo "Build artifacts cleanup complete"
+
+    - name: Remove Android SDK and tools
+      if: inputs.android == 'true'
+      shell: bash
+      run: |
+        echo "Removing Android SDK and tools..."
+        sudo rm -rf /usr/local/lib/android || true
+        echo "Android cleanup complete"
+
+    - name: Remove large packages
+      if: inputs.large-packages == 'true'
+      shell: bash
+      run: |
+        echo "Removing large packages..."
+        sudo apt-get remove -y '^aspnetcore-.*' || echo "::warning::The command [sudo apt-get remove -y '^aspnetcore-.*'] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y '^dotnet-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^dotnet-.*' --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y '^llvm-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^llvm-.*' --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y 'php.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y 'php.*' --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y '^mongodb-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^mongodb-.*' --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y '^mysql-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^mysql-.*' --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y azure-cli google-chrome-stable firefox powershell mono-devel libgl1-mesa-dri --fix-missing || echo "::warning::The command [sudo apt-get remove -y azure-cli google-chrome-stable firefox powershell mono-devel libgl1-mesa-dri --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y google-cloud-sdk --fix-missing || echo "::debug::The command [sudo apt-get remove -y google-cloud-sdk --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get remove -y google-cloud-cli --fix-missing || echo "::debug::The command [sudo apt-get remove -y google-cloud-cli --fix-missing] failed to complete successfully. Proceeding..."
+        sudo apt-get autoremove -y || echo "::warning::The command [sudo apt-get autoremove -y] failed to complete successfully. Proceeding..."
+        sudo apt-get clean || echo "::warning::The command [sudo apt-get clean] failed to complete successfully. Proceeding..."
+        echo "Large packages cleanup complete"
+
+    - name: Remove .NET runtime
+      if: inputs.dotnet == 'true'
+      shell: bash
+      run: |
+        getAvailableSpace() {
+          df / | awk 'NR==2 {print $4}'
+        }
+        
+        printSavedSpace() {
+          local saved=$1
+          local label=$2
+          if [ $saved -gt 0 ]; then
+            if command -v bc &> /dev/null; then
+              local saved_gb=$(echo "scale=2; $saved/1024/1024" | bc)
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_gb}GiB"
+              echo "********************************************************************************"
+            else
+              local saved_mb=$((saved/1024))
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_mb}MiB"
+              echo "********************************************************************************"
+            fi
+          fi
+        }
+        
+        echo "Removing .NET runtime..."
+        BEFORE=$(getAvailableSpace)
+        sudo rm -rf /usr/share/dotnet || true
+        AFTER=$(getAvailableSpace)
+        SAVED=$((AFTER-BEFORE))
+        printSavedSpace $SAVED ".NET runtime"
+
+    - name: Remove Haskell runtime
+      if: inputs.haskell == 'true'
+      shell: bash
+      run: |
+        getAvailableSpace() {
+          df / | awk 'NR==2 {print $4}'
+        }
+        
+        printSavedSpace() {
+          local saved=$1
+          local label=$2
+          if [ $saved -gt 0 ]; then
+            if command -v bc &> /dev/null; then
+              local saved_gb=$(echo "scale=2; $saved/1024/1024" | bc)
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_gb}GiB"
+              echo "********************************************************************************"
+            else
+              local saved_mb=$((saved/1024))
+              echo "********************************************************************************"
+              echo "=> $label: Saved ${saved_mb}MiB"
+              echo "********************************************************************************"
+            fi
+          fi
+        }
+        
+        echo "Removing Haskell runtime..."
+        BEFORE=$(getAvailableSpace)
+        sudo rm -rf /opt/ghc || true
+        sudo rm -rf /usr/local/.ghcup || true
+        AFTER=$(getAvailableSpace)
+        SAVED=$((AFTER-BEFORE))
+        printSavedSpace $SAVED "Haskell runtime"
+
+    - name: Show disk space after cleanup
+      shell: bash
+      run: |
+        echo ""
+        echo "=== Disk Space After Cleanup ==="
+        df -h /
+        echo ""
+        if command -v docker &> /dev/null; then
+          echo "Docker disk usage:"
+          docker system df 2>/dev/null || true
+        fi
+        echo "=================================="
+
