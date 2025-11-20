@@ -33,6 +33,25 @@ fi
 echo "Setting BUILD_SAFE_DIRS=${BUILD_SAFE_DIRS} to allow local replace directive"
 make quick
 
+echo "Loading images from buildx cache to local Docker daemon..."
+echo "Using values: REPO=${REPO}, TAG=${TAG}, OS=${OS}, ARCH=${ARCH}"
+
+# Load rancher server image
+echo "Loading rancher server image from buildx cache..."
+docker buildx build --load \
+    --tag "${REPO}/rancher:${TAG}" \
+    --platform "${OS}/${ARCH}" \
+    --target server \
+    --file ./package/Dockerfile . || echo "Warning: Could not load rancher server image"
+
+# Load rancher agent image
+echo "Loading rancher agent image from buildx cache..."
+docker buildx build --load \
+    --tag "${REPO}/rancher-agent:${TAG}" \
+    --platform "${OS}/${ARCH}" \
+    --target agent \
+    --file ./package/agent/Dockerfile ./package/agent || echo "Warning: Could not load rancher agent image"
+
 echo ""
 echo "Detecting built images..."
 echo "All images:"
