@@ -9,8 +9,7 @@ on:
 
 jobs:
   test-rancher:
-    runs-on:
-      - ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Free Disk Space (Ubuntu)
