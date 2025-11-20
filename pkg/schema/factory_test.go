@@ -222,6 +222,53 @@ func runSchemaTest(t *testing.T, config schemaTestConfig, lookup *mockAccessSetL
 	}
 }
 
+func TestTaintedCacheDoesNotCauseDuplicates(t *testing.T) {
+	// 1. A user with no permissions requests schemas. In a prior version, this incorrectly added a method
+	//    to the base schema.
+	// 2. A second user with permissions requests schemas. They should not see
+	//    duplicate methods, which would happen if they start with the augmented base schema
+	//    and the logic adds the same method again.
+
+	mockLookup := newMockAccessSetLookup()
+	collection := NewCollection(context.TODO(), types.EmptyAPISchemas(), mockLookup)
+	collection.schemas = map[string]*types.APISchema{"namespaces": makeNamespaceSchema()}
+
+	// User A: No permissions. Prior to our refactoring, this would add GET to the base schema
+	userA := &user.DefaultInfo{Name: "user-a"}
+	mockLookup.AddAccessForUser(userA, "get", k8sSchema.GroupResource{Group: "test.k8s.io", Resource: "dummy"}, "*", "*")
+
+	schemasA, err := collection.Schemas(userA)
+	assert.NoError(t, err)
+	nsSchemaA := schemasA.Schemas["namespaces"]
+	assert.NotNil(t, nsSchemaA)
+	// With no perms, should get a GET for list.
+	assert.Len(t, nsSchemaA.CollectionMethods, 1)
+	assert.Equal(t, "GET", nsSchemaA.CollectionMethods[0])
+
+	// User B: Has 'get' permission on namespaces.
+	userB := &user.DefaultInfo{Name: "user-b"}
+	gr := k8sSchema.GroupResource{Group: "", Resource: "namespaces"}
+	mockLookup.AddAccessForUser(userB, "get", gr, "*", "*")
+
+	schemasB, err := collection.Schemas(userB)
+	assert.NoError(t, err)
+	nsSchemaB := schemasB.Schemas["namespaces"]
+	assert.NotNil(t, nsSchemaB)
+
+	assert.Len(t, nsSchemaB.CollectionMethods, 1, "should not have duplicate methods")
+	assert.Equal(t, "GET", nsSchemaB.CollectionMethods[0])
+
+	assert.Len(t, nsSchemaB.ResourceMethods, 1)
+	assert.Equal(t, "GET", nsSchemaB.ResourceMethods[0])
+
+	seenMethod := map[string]struct{}{}
+	for _, m := range nsSchemaB.CollectionMethods {
+		_, exists := seenMethod[m]
+		assert.False(t, exists, "duplicate method found in CollectionMethods: %s", m)
+		seenMethod[m] = struct{}{}
+	}
+}
+
 func makeSchema(resourceType string) *types.APISchema {
 	return &types.APISchema{
 		Schema: &schemas.Schema{
