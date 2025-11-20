@@ -1,11 +1,7 @@
 name: Test Rancher Integration
 
 on:
-  pull_request: {}
-  push:
-    branches:
-    - master
-    - release/*
+  workflow_dispatch:
 
 jobs:
   test-rancher:
