@@ -31,7 +31,7 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 	for _, condition := range conditionsAsArray {
 		conditionMap, ok := condition.(map[string]interface{})
 		if !ok {
-			return obj, fmt.Errorf("failed to parse a condition as a map")
+			return obj, fmt.Errorf("failed to parse a condition (type %t) as a map", condition)
 		}
 		if conditionMap["type"] == "Ready" && conditionMap["status"] == "True" {
 			connectedStatus = true
@@ -54,7 +54,7 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 					mapx["memoryRaw"] = quantity.AsApproximateFloat64()
 					madeChange = true
 				} else {
-					logrus.Errorf("Failed to parse memory quantity %s: %v", mem.(string), err)
+					logrus.Errorf("Failed to parse memory quantity <%v>: %v", mem, err)
 				}
 			}
 			cpu, ok := mapx["cpu"]
@@ -64,7 +64,7 @@ func TransformManagedCluster(obj *unstructured.Unstructured) (*unstructured.Unst
 					mapx["cpuRaw"] = quantity.AsApproximateFloat64()
 					madeChange = true
 				} else {
-					logrus.Errorf("Failed to parse memory quantity %s: %v", mem.(string), err)
+					logrus.Errorf("Failed to parse cpu quantity <%v>: %v", cpu, err)
 				}
 			}
 			if madeChange {

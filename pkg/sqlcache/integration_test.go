@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,10 +49,26 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const testNamespace = "sql-test"
+const defaultTestNamespace = "sql-test"
+const testLabel = "capitals.cattle.io/test"
+const testFilter = "filter=metadata.labels[" + testLabel + "]"
 
 var defaultPartition = partition.Partition{
 	All: true,
+}
+
+// Always use a filter-test instead of a namespace test because some of the resources we care about
+// in this test don't have namespaces, but all resources have labels.
+func getFilteredQuery(query string, labelTest string) string {
+	if strings.Contains(query, testFilter) {
+		return query
+	}
+	continuationToken := "&"
+	if len(query) == 0 {
+		continuationToken = ""
+	}
+	return fmt.Sprintf("%s%s%s=%s", query, continuationToken, testFilter, labelTest)
+
 }
 
 type IntegrationSuite struct {
@@ -73,7 +90,7 @@ func (i *IntegrationSuite) SetupSuite() {
 	i.clientset = *clientset
 	testNs := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
+			Name: defaultTestNamespace,
 		},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -87,7 +104,7 @@ func (i *IntegrationSuite) TearDownSuite() {
 	i.Require().NoError(err)
 }
 
-func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, cpu, memory string, podCount int) (*unstructured.Unstructured, error) {
+func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, cpu, memory string, podCount int) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -95,7 +112,7 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 			"metadata": map[string]interface{}{
 				"name": name,
 				"labels": map[string]interface{}{
-					"capitals.cattle.io/test": "MCIO",
+					testLabel: thisTestLabel,
 				},
 			},
 			"status": map[string]interface{}{
@@ -115,35 +132,88 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	}
 	newObj, err := client.Create(ctx, obj, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// This call is needed to get the above status fields stored in the object
-	return client.Update(ctx, newObj, metav1.UpdateOptions{})
+	_, err = client.Update(ctx, newObj, metav1.UpdateOptions{})
+	return err
 }
 
-func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, clusterName string) (*unstructured.Unstructured, error) {
+func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName, displayName string) error {
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": gvr.Group + "/" + gvr.Version,
+			"kind":       "Project",
+			"metadata": map[string]interface{}{
+				"name":      name,
+				"namespace": defaultTestNamespace,
+				"labels": map[string]interface{}{
+					testLabel: thisTestLabel,
+				},
+			},
+			"spec": map[string]interface{}{
+				"clusterName": clusterName,
+				"displayName": displayName,
+			},
+		},
+	}
+	_, err := client.Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
+func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName string) error {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
 			"kind":       "Cluster",
 			"metadata": map[string]interface{}{
 				"name":      name,
-				"namespace": testNamespace,
+				"namespace": defaultTestNamespace,
 				"labels": map[string]interface{}{
-					"capitals.cattle.io/test": "PCIO",
+					testLabel: thisTestLabel,
 				},
 			},
 		},
 	}
 	newObj, err := client.Create(ctx, obj, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	unstructured.SetNestedField(newObj.Object, clusterName, "status", "clusterName")
 	unstructured.SetNestedField(newObj.Object, true, "status", "ready")
 	// This call is needed to get the above status fields stored in the object
 	// PCIO CRDs have subresources, so we call `client.UpdateStatus` instead of `client.Update`
-	return client.UpdateStatus(ctx, newObj, metav1.UpdateOptions{})
+	_, err = client.UpdateStatus(ctx, newObj, metav1.UpdateOptions{})
+	return err
+}
+
+func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+	obj := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"field.cattle.io/projectId": projectLabel,
+				testLabel:                   thisTestLabel,
+			},
+		},
+	}
+	_, err := i.clientset.CoreV1().Namespaces().Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
+func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+	obj := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: defaultTestNamespace,
+			Labels: map[string]string{
+				"management.cattle.io/project-scoped-secret": projectLabel,
+				testLabel: thisTestLabel,
+			},
+		},
+	}
+	_, err := i.clientset.CoreV1().Secrets(defaultTestNamespace).Create(ctx, obj, metav1.CreateOptions{})
+	return err
 }
 
 func (i *IntegrationSuite) TestSQLCacheFilters() {
@@ -153,7 +223,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 		return v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        name,
-				Namespace:   testNamespace,
+				Namespace:   defaultTestNamespace,
 				Annotations: annotations,
 			},
 		}
@@ -161,7 +231,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	createConfigMaps := func(configMaps ...v1.ConfigMap) {
 		for _, configMap := range configMaps {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			configMapClient := i.clientset.CoreV1().ConfigMaps(testNamespace)
+			configMapClient := i.clientset.CoreV1().ConfigMaps(defaultTestNamespace)
 			_, err := configMapClient.Create(ctx, &configMap, metav1.CreateOptions{})
 			require.NoError(err)
 			// avoiding defer in a for loop
@@ -193,7 +263,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 	createConfigMaps(notMatches, missing)
 
 	configMapNames := []string{matches.Name, partialMatches.Name, notMatches.Name, missing.Name, specialCharacterMatch.Name, backSlashCharacterMatch.Name}
-	err = i.waitForCacheReady(configMapNames, testNamespace, cache)
+	err = i.waitForCacheReady(configMapNames, defaultTestNamespace, cache)
 	require.NoError(err)
 
 	orFiltersForFilters := func(filters ...sqltypes.Filter) []sqltypes.OrFilter {
@@ -373,7 +443,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 			partitions := []partition.Partition{defaultPartition}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 			defer cancel()
-			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, &options, partitions, testNamespace)
+			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, &options, partitions, defaultTestNamespace)
 			i.Require().NoError(err)
 			// since there's no additional pages, the continue token should be empty
 			i.Require().Equal("", continueToken)
@@ -411,7 +481,7 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		Version:  "v1",
 		Resource: "configmaps",
 	}
-	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(testNamespace)
+	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(defaultTestNamespace)
 	typeGuidance := map[string]string{}
 	cache, err := cacheFactory.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
 	if err != nil {
@@ -447,6 +517,26 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 			gotNames.Insert(name)
 		}
 		return wantNames.Equal(gotNames), nil
+	})
+}
+
+func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, schema *types.APISchema, labelTest string, expectedNum int) error {
+	q := getFilteredQuery("", labelTest)
+	return wait.PollUntilContextCancel(ctx, time.Millisecond*100, true, func(ctx context.Context) (done bool, err error) {
+		req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+		if err != nil {
+			return false, err
+		}
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		partitions := []partition.Partition{defaultPartition}
+		_, total, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		if err != nil {
+			// note that we don't return the error since that would stop the polling
+			return false, nil
+		}
+		return total == expectedNum, nil
 	})
 }
 
@@ -653,61 +743,34 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 	requireT := i.Require()
+	labelTest := "ProvisioningManagementClusterDependencies"
 
-	cols, err := common.NewDynamicColumns(i.restCfg)
-	requireT.NoError(err)
-
-	cf, err := client.NewFactory(i.restCfg, false)
-	requireT.NoError(err)
-
-	baseSchemas := types.EmptyAPISchemas()
-
-	ccache := clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
-
-	ctrl, err := server.NewController(i.restCfg, nil)
-	requireT.NoError(err)
-
-	asl := accesscontrol.NewAccessStore(ctx, true, ctrl.RBAC)
-	sf := schema.NewCollection(ctx, baseSchemas, asl)
-
-	err = resources.DefaultSchemas(ctx, baseSchemas, ccache, cf, sf, "")
-	requireT.NoError(err)
-
-	definitions.Register(ctx, baseSchemas, ctrl.K8s.Discovery(),
-		ctrl.CRD.CustomResourceDefinition(), ctrl.API.APIService())
-
-	summaryCache := summarycache.New(sf, ccache)
-	summaryCache.Start(ctx)
-
-	cacheFactory, err := factory.NewCacheFactoryWithContext(ctx, factory.CacheFactoryOptions{})
-	requireT.NoError(err)
-
-	proxyStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, cacheFactory, true)
+	cols, ccache, svrController, sf, proxyStore, err := i.setupTest(ctx)
 	requireT.NoError(err)
 	requireT.NotNil(proxyStore)
 
 	resetMCIOCh := make(chan struct{}, 10)
 	resetPCIOCh := make(chan struct{}, 10)
 
-	mcioGVR := k8sschema.GroupVersionResource{
-		Group:    "management.cattle.io",
-		Version:  "v3",
-		Resource: "clusters",
-	}
 	mcioGVK := k8sschema.GroupVersionKind{
 		Group:   "management.cattle.io",
 		Version: "v3",
 		Kind:    "Cluster",
 	}
-	pcioGVR := k8sschema.GroupVersionResource{
-		Group:    "provisioning.cattle.io",
-		Version:  "v1",
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
 		Resource: "clusters",
 	}
 	pcioGVK := k8sschema.GroupVersionKind{
 		Group:   "provisioning.cattle.io",
 		Version: "v1",
 		Kind:    "Cluster",
+	}
+	pcioGVR := k8sschema.GroupVersionResource{
+		Group:    "provisioning.cattle.io",
+		Version:  "v1",
+		Resource: "clusters",
 	}
 
 	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
@@ -733,60 +796,48 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	}
 	schemacontroller.Register(ctx,
 		cols,
-		ctrl.K8s.Discovery(),
-		ctrl.CRD.CustomResourceDefinition(),
-		ctrl.API.APIService(),
-		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		svrController.K8s.Discovery(),
+		svrController.CRD.CustomResourceDefinition(),
+		svrController.API.APIService(),
+		svrController.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
 		onSchemasHandler,
 		sf)
 
-	err = ctrl.Start(ctx)
+	err = svrController.Start(ctx)
 	requireT.NoError(err)
 
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	requireT.NoError(err)
 
 	mcioClient := dynamicClient.Resource(mcioGVR)
-	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(testNamespace)
+	pcioClient := dynamicClient.Resource(pcioGVR).Namespace(defaultTestNamespace)
 
-	mcioKigaliCpu4Mem1Pod4, err := createMCIO(ctx, mcioClient, mcioGVR, "kigali", "7000m", "900Ki", 17)
-	requireT.NoError(err)
-	mcioLuandaCpu5Mem3Pod2, err := createMCIO(ctx, mcioClient, mcioGVR, "luanda", "14250m", "2610Ki", 11)
-	requireT.NoError(err)
-	mcioGaboroneCpu1Mem5Pod3, err := createMCIO(ctx, mcioClient, mcioGVR, "gaborone", "98m", "12Mi", 14)
-	requireT.NoError(err)
-	mcioGitegaCpu2Mem4Pod1, err := createMCIO(ctx, mcioClient, mcioGVR, "gitega", "325m", "4Mi", 8)
-	requireT.NoError(err)
-	mcioBamakoCpu3Mem2Pod5, err := createMCIO(ctx, mcioClient, mcioGVR, "bamako", "700m", "1200Ki", 20)
-	requireT.NoError(err)
-
-	pcioRwandaKigali, err := createPCIO(ctx, pcioClient, pcioGVR, "rwanda", "kigali")
-	requireT.NoError(err)
-	pcioAngolaLuanda, err := createPCIO(ctx, pcioClient, pcioGVR, "angola", "luanda")
-	requireT.NoError(err)
-	pcioBotswanaGaborone, err := createPCIO(ctx, pcioClient, pcioGVR, "botswana", "gaborone")
-	requireT.NoError(err)
-	pcioBurundiGitega, err := createPCIO(ctx, pcioClient, pcioGVR, "burundi", "gitega")
-	requireT.NoError(err)
-	pcioMaliBamako, err := createPCIO(ctx, pcioClient, pcioGVR, "mali", "bamako")
-	requireT.NoError(err)
-
-	// Make golang happy we're using these terms
-	var pairs [][2]*unstructured.Unstructured = [][2]*unstructured.Unstructured{
-		[2]*unstructured.Unstructured{pcioRwandaKigali, mcioKigaliCpu4Mem1Pod4},
-		[2]*unstructured.Unstructured{pcioAngolaLuanda, mcioLuandaCpu5Mem3Pod2},
-		[2]*unstructured.Unstructured{pcioBotswanaGaborone, mcioGaboroneCpu1Mem5Pod3},
-		[2]*unstructured.Unstructured{pcioBurundiGitega, mcioGitegaCpu2Mem4Pod1},
-		[2]*unstructured.Unstructured{pcioMaliBamako, mcioBamakoCpu3Mem2Pod5},
+	mcioInfo := []struct {
+		city   string
+		cpu    string
+		memory string
+		pods   int
+	}{
+		{"kigali", "7000m", "900Ki", 17},
+		{"luanda", "14250m", "2610Ki", 11},
+		{"gaborone", "98m", "12Mi", 14},
+		{"gitega", "325m", "4Mi", 8},
+		{"bamako", "700m", "1200Ki", 20},
 	}
-	for _, unsPair := range pairs {
-		pcio, mcio := unsPair[0], unsPair[1]
-		pcioClusterName, ok, err := unstructured.NestedString(pcio.Object, "status", "clusterName")
+	for _, info := range mcioInfo {
+		err = createMCIO(ctx, mcioClient, mcioGVR, info.city, labelTest, info.cpu, info.memory, info.pods)
 		requireT.NoError(err)
-		requireT.True(ok)
-		mcioName := mcio.GetName()
-		requireT.Equal(pcioClusterName, mcioName)
-		//requireT.Equal(pcio.Object["status"].(map[string]any)["clusterName"], mcio.Object["id"])
+	}
+	pcioInfo := [][2]string{
+		{"rwanda", "kigali"},
+		{"angola", "luanda"},
+		{"botswana", "gaborone"},
+		{"burundi", "gitega"},
+		{"mali", "bamako"},
+	}
+	for _, info := range pcioInfo {
+		err = createPCIO(ctx, pcioClient, pcioGVR, info[0], labelTest, info[1])
+		requireT.NoError(err)
 	}
 
 	var mcioSchema *types.APISchema
@@ -826,40 +877,58 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			},
 		},
 		{
-			name:      "sorts by cpu",
-			query:     "sort=status.allocatable.cpuRaw,metadata.name", //TODO: Reinstate raw
-			wantNames: []string{"botswana", "burundi", "mali", "rwanda", "angola"},
-		},
-		{
-			name:      "sorts by memory",
-			query:     "sort=status.allocatable.memoryRaw,metadata.name",
-			wantNames: []string{"rwanda", "mali", "angola", "burundi", "botswana"},
-		},
-		{
-			name:      "sorts by pods",
-			query:     "sort=status.allocatable.pods,metadata.name",
-			wantNames: []string{"burundi", "angola", "botswana", "rwanda", "mali"},
-		},
-		{
-			name:  "misguided sort by raw cpu",
-			query: "sort=status.allocatable.cpu,metadata.name",
+			name:  "sorts by cpu",
+			query: "sort=status.allocatable.cpuRaw,metadata.name",
 			wantNames: []string{
-				"angola",
-				"burundi",
-				"rwanda",
-				"mali",
-				"botswana",
+				"botswana", // 98m
+				"burundi",  // 325m
+				"mali",     // 700m
+				"rwanda",   // 7000m
+				"angola",   // 14250m
 			},
 		},
 		{
-			name:  "misguided sort by raw memory",
+			name:  "sorts by memory",
+			query: "sort=status.allocatable.memoryRaw,metadata.name",
+			wantNames: []string{
+				"rwanda",   // 900Ki
+				"mali",     // 1200Ki
+				"angola",   // 2610Ki
+				"burundi",  // 4Mi
+				"botswana", // 12Mi
+			},
+		},
+		{
+			name:  "sorts by pods",
+			query: "sort=status.allocatable.pods,metadata.name",
+			wantNames: []string{
+				"burundi",  // 8
+				"angola",   // 11
+				"botswana", // 14
+				"rwanda",   // 17
+				"mali",     // 20
+			},
+		},
+		{
+			name:  "alpha-sort by raw cpu",
+			query: "sort=status.allocatable.cpu,metadata.name",
+			wantNames: []string{
+				"angola",   // 14250m
+				"burundi",  // 325m
+				"rwanda",   // 7000m
+				"mali",     // 700m
+				"botswana", // 98m
+			},
+		},
+		{
+			name:  "alpha-sort by raw memory",
 			query: "sort=status.allocatable.memory,metadata.name",
 			wantNames: []string{
-				"mali",
-				"botswana",
-				"angola",
-				"burundi",
-				"rwanda",
+				"mali",     // 1200Ki
+				"botswana", // 12Mi
+				"angola",   // 2610Ki
+				"burundi",  // 4Mi
+				"rwanda",   // 900Ki
 			},
 		},
 		{
@@ -899,41 +968,359 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 		},
 	}
 
-	// First load the mcio's and pcio's so the shared fields get pushed in
-
-	req, err := http.NewRequest("GET", "http://localhost:8080?sort=metadata.name", nil)
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioInfo))
 	requireT.NoError(err)
-	apiOp := &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err := proxyStore.ListByPartitions(apiOp, mcioSchema, []partition.Partition{{Passthrough: true}})
+	err = waitForObjectsBySchema(ctx, proxyStore, pcioSchema, labelTest, len(pcioInfo))
 	requireT.NoError(err)
-	i.Assert().Equal(5, num)
-	i.Assert().Equal([]string{"bamako", "gaborone", "gitega", "kigali", "luanda"}, stringsFromULIst(got))
-
-	//TODO: Do we need to create a new request obj each time - I think so, because it's likely
-	// submitting it changes it
-	req, err = http.NewRequest("GET", "http://localhost:8080?sort=metadata.name", nil)
-	requireT.NoError(err)
-	apiOp = &types.APIRequest{
-		Request: req,
-	}
-	got, num, _, err = proxyStore.ListByPartitions(apiOp, pcioSchema, []partition.Partition{{Passthrough: true}})
-	requireT.NoError(err)
-	i.Assert().Equal(5, num)
-	i.Assert().Equal([]string{"angola", "botswana", "burundi", "mali", "rwanda"}, stringsFromULIst(got))
-
 	partitions := []partition.Partition{defaultPartition}
 	for _, test := range tests {
 		test := test
 		i.Run(test.name, func() {
-			req, err := http.NewRequest("GET", "http://localhost:8080?"+test.query, nil)
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
 			requireT.NoError(err)
 			apiOp := &types.APIRequest{
 				Request: req,
 			}
 
 			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, pcioSchema, partitions)
+			if err != nil {
+				i.Assert().NoError(err)
+				return
+			}
+			i.Assert().Equal(len(test.wantNames), total)
+			i.Assert().Equal("", continueToken)
+			i.Assert().Len(got.Items, len(test.wantNames))
+			gotNames := stringsFromULIst(got)
+			i.Assert().Equal(test.wantNames, gotNames)
+		})
+	}
+}
+
+func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+	labelTest := "NamespaceProjectDependencies"
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	namespaceInfo := [][2]string{
+		{"namibia", "windhoek"},
+		{"togo", "lome"},
+		{"nigeria", "abuja"},
+		{"principe", "saotome"},
+	}
+	for _, info := range namespaceInfo {
+		err = i.createNamespace(ctx, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	mcioProjectInfo := [][2]string{
+		{"windhoek", "afrikaans"},
+		{"lome", "french"},
+		{"abuja", "english"},
+		{"saotome", "portuguese"},
+	}
+	for _, info := range mcioProjectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[0], info[1])
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	nsSchema := sf.Schema("namespace")
+
+	tests := []struct {
+		name      string
+		query     string
+		wantNames []string
+	}{
+		{
+			name:  "sorts by name",
+			query: "sort=metadata.name",
+			wantNames: []string{
+				"namibia",
+				"nigeria",
+				"principe",
+				"togo",
+			},
+		},
+		{
+			name:  "sorts by field.cattle.io/projectId",
+			query: "sort=metadata.labels[field.cattle.io/projectId],metadata.name",
+			wantNames: []string{
+				"nigeria",  // abuja
+				"togo",     // lome
+				"principe", // sao tome
+				"namibia",  // windhoek
+			},
+		},
+		{
+			name:  "sorts by spec.displayName",
+			query: "sort=spec.displayName,metadata.name",
+			wantNames: []string{
+				"namibia",  // afrikaans
+				"nigeria",  // english
+				"togo",     // french
+				"principe", // portuguese
+			},
+		},
+		{
+			name:  "filter on spec.displayName",
+			query: "filter=spec.displayName~en",
+			wantNames: []string{
+				"nigeria", // english
+				"togo",    // french
+			},
+		},
+	}
+
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioProjectInfo))
+	requireT.NoError(err)
+	err = waitForObjectsBySchema(ctx, proxyStore, nsSchema, labelTest, len(namespaceInfo))
+	requireT.NoError(err)
+
+	partitions := []partition.Partition{defaultPartition}
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+			requireT.NoError(err)
+			apiOp := &types.APIRequest{
+				Request: req,
+			}
+
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
+			if err != nil {
+				i.Assert().NoError(err)
+				return
+			}
+			i.Assert().Equal(len(test.wantNames), total)
+			i.Assert().Equal("", continueToken)
+			i.Assert().Len(got.Items, len(test.wantNames))
+			gotNames := stringsFromULIst(got)
+			i.Assert().Equal(test.wantNames, gotNames)
+		})
+	}
+}
+
+func (i *IntegrationSuite) TestSecretProjectDependencies() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+	labelTest := "SecretProjectDependencies"
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	secretInfo := [][2]string{
+		{"morocco", "rabat"},
+		{"eritrea", "asmara"},
+		{"kenya", "nairobi"},
+		{"benin", "portonovo"},
+	}
+	projectInfo := [][3]string{
+		{"rabat", "arabic", "casablanca"},
+		{"asmara", "tigrinya", "keren"},
+		{"nairobi", "english", "mombasa"},
+		{"portonovo", "french", "cotonou"},
+	}
+	for _, info := range secretInfo {
+		err = i.createSecret(ctx, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	for _, info := range projectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[1], info[2])
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	secretSchema := sf.Schema("secret")
+
+	tests := []struct {
+		name      string
+		query     string
+		wantNames []string
+	}{
+		{
+			name:  "sorts by name",
+			query: "sort=metadata.name",
+			wantNames: []string{
+				"benin",
+				"eritrea",
+				"kenya",
+				"morocco",
+			},
+		},
+		{
+			name:  "sorts by foreign-key label",
+			query: "sort=metadata.labels[management.cattle.io/project-scoped-secret],metadata.name",
+			wantNames: []string{
+				"eritrea", // asmara
+				"kenya",   // nairobi
+				"benin",   // portonovo
+				"morocco", // rabat
+			},
+		},
+		{
+			name:  "sorts by spec.displayName (other city)",
+			query: "sort=spec.displayName,metadata.name",
+			wantNames: []string{
+				"morocco", // casablanca
+				"benin",   // cotonou
+				"eritrea", // keren
+				"kenya",   // mombasa
+			},
+		},
+		{
+			name:  "sorts by spec.clusterName (language)",
+			query: "sort=spec.clusterName,metadata.name",
+			wantNames: []string{
+				"morocco", // arabic
+				"kenya",   // english
+				"benin",   // french
+				"eritrea", // tigrinya
+			},
+		},
+		{
+			name:  "filter on spec.clusterName (language)",
+			query: "filter=spec.clusterName~en",
+			wantNames: []string{
+				"benin", // french
+				"kenya", // english
+			},
+		},
+		{
+			name:  "filter on spec.displayName (other city)",
+			query: "filter=spec.displayName~as",
+			wantNames: []string{
+				"kenya",   // mombasa
+				"morocco", // casablanca
+			},
+		},
+	}
+
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(projectInfo))
+	requireT.NoError(err)
+	err = waitForObjectsBySchema(ctx, proxyStore, secretSchema, labelTest, len(secretInfo))
+	requireT.NoError(err)
+
+	partitions := []partition.Partition{defaultPartition}
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+			requireT.NoError(err)
+			apiOp := &types.APIRequest{
+				Request: req,
+			}
+
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
 			if err != nil {
 				i.Assert().NoError(err)
 				return
@@ -978,4 +1365,44 @@ func TestIntegrationSuite(t *testing.T) {
 	// For testing we'll just ignore the logs since they won't be useful
 	ctrl.SetLogger(logr.New(ctrllog.NullLogSink{}))
 	suite.Run(t, new(IntegrationSuite))
+}
+
+func (i *IntegrationSuite) setupTest(ctx context.Context) (cols *common.DynamicColumns, ccache clustercache.ClusterCache, svrController *server.Controllers, sf *schema.Collection, proxyStore *sqlproxy.Store, err error) {
+	var cf *client.Factory
+	var cacheFactory *factory.CacheFactory
+
+	if cols, err = common.NewDynamicColumns(i.restCfg); err != nil {
+		return
+	}
+	if cf, err = client.NewFactory(i.restCfg, false); err != nil {
+		return
+	}
+
+	baseSchemas := types.EmptyAPISchemas()
+
+	ccache = clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
+
+	if svrController, err = server.NewController(i.restCfg, nil); err != nil {
+		return
+	}
+
+	asl := accesscontrol.NewAccessStore(ctx, true, svrController.RBAC)
+	sf = schema.NewCollection(ctx, baseSchemas, asl)
+
+	if err = resources.DefaultSchemas(ctx, baseSchemas, ccache, cf, sf, ""); err != nil {
+		return
+	}
+
+	definitions.Register(ctx, baseSchemas, svrController.K8s.Discovery(),
+		svrController.CRD.CustomResourceDefinition(), svrController.API.APIService())
+
+	summaryCache := summarycache.New(sf, ccache)
+	summaryCache.Start(ctx)
+
+	if cacheFactory, err = factory.NewCacheFactoryWithContext(ctx, factory.CacheFactoryOptions{}); err != nil {
+		return
+	}
+
+	proxyStore, err = sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, cacheFactory, true)
+	return
 }

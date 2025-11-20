@@ -66,7 +66,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 
 				value, cast := curValue[index].(string)
 				if !cast {
-					return obj, fmt.Errorf("could not cast metadata.fields %d to string", index)
+					return obj, fmt.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", curValue[index], index)
 				}
 
 				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
@@ -103,7 +103,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 				// If we return an error here, the upstream k8s library will retry a transform, and we don't want that,
 				// as it's likely to loop forever and the server will hang.
 				// Instead, log this error and try the remaining transform functions
-				logrus.Errorf("error in transform: %v", err)
+				logrus.Errorf("error in transform for gvk Kind:%s Group:%s Version:%s, error: %v", gvk.Kind, gvk.Group, gvk.Version, err)
 			}
 			obj = transformed
 		}
