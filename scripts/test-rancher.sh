@@ -147,11 +147,19 @@ wait_for_rancher() {
     return 1
 }
 
-run_setup() {
+export_env_vars() {
     local steve_dir=$1
     local bootstrap_password=$2
     local agent_image=$3
-    local skip_setup=$4
+    
+    export CATTLE_BOOTSTRAP_PASSWORD="${bootstrap_password}"
+    export CATTLE_AGENT_IMAGE="${agent_image}"
+    export CATTLE_TEST_CONFIG="${steve_dir}/tests/integration/steveapi/steveapi.yaml"
+}
+
+run_setup() {
+    local steve_dir=$1
+    local skip_setup=$2
     
     if [ "$skip_setup" = true ]; then
         echo "Skipping integration test setup..."
@@ -167,25 +175,15 @@ run_setup() {
         go build -o setup .
     fi
     
-    export CATTLE_BOOTSTRAP_PASSWORD="${bootstrap_password}"
-    export CATTLE_AGENT_IMAGE="${agent_image}"
-    export CATTLE_TEST_CONFIG="${steve_dir}/tests/integration/steveapi/steveapi.yaml"
     ./setup
 }
 
 run_integration_tests() {
     local steve_dir=$1
-    local bootstrap_password=$2
-    local agent_image=$3
     
     echo ""
     echo "Running integration tests..."
     cd "${steve_dir}"
-    
-    # Export environment variables for tests
-    export CATTLE_BOOTSTRAP_PASSWORD="${bootstrap_password}"
-    export CATTLE_AGENT_IMAGE="${agent_image}"
-    export CATTLE_TEST_CONFIG="${steve_dir}/tests/integration/steveapi/steveapi.yaml"
     
     # Run the tests
     go test -v ./tests/integration/...
@@ -247,9 +245,11 @@ main() {
     
     wait_for_rancher "${RANCHER_IP}" 300 || exit 1
     
-    run_setup "${STEVE_DIR}" "${BOOTSTRAP_PASSWORD}" "${RANCHER_AGENT_IMAGE}" "${SKIP_SETUP}"
+    export_env_vars "${STEVE_DIR}" "${BOOTSTRAP_PASSWORD}" "${RANCHER_AGENT_IMAGE}"
     
-    run_integration_tests "${STEVE_DIR}" "${BOOTSTRAP_PASSWORD}" "${RANCHER_AGENT_IMAGE}"
+    run_setup "${STEVE_DIR}" "${SKIP_SETUP}"
+    
+    run_integration_tests "${STEVE_DIR}"
 }
 
 main "$@"
