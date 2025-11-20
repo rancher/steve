@@ -55,7 +55,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					return obj, fmt.Errorf("field index not found at column.Field struct variable: %s", col.Field)
 				}
 
-				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
+				metadataFields, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
 				if !got {
 					return obj, nil
 				}
@@ -64,19 +64,19 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					return obj, err
 				}
 
-				value, cast := curValue[index].(string)
+				value, cast := metadataFields[index].(string)
 				if !cast {
-					return obj, fmt.Errorf("could not cast metadata.fields %d to string", index)
+					return obj, fmt.Errorf("GetTransformFunc: gvk: %s: could not cast metadata.fields %d to string", gvk, index)
 				}
 
 				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
 				if err != nil {
-					logrus.Errorf("parse timestamp %s, failed with error: %s", value, err)
+					logrus.Errorf("GetTransformFunc: gvk:%s, col:%v: parse timestamp %s, failed with error: %s", gvk, col.Name, value, err)
 					return obj, nil
 				}
 
-				curValue[index] = fmt.Sprintf("%d", now().Add(-duration).UnixMilli())
-				if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
+				metadataFields[index] = fmt.Sprintf("%d", now().Add(-duration).UnixMilli())
+				if err := unstructured.SetNestedSlice(obj.Object, metadataFields, "metadata", "fields"); err != nil {
 					return obj, err
 				}
 
@@ -102,8 +102,9 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 			if err != nil {
 				// If we return an error here, the upstream k8s library will retry a transform, and we don't want that,
 				// as it's likely to loop forever and the server will hang.
-				// Instead, log this error and try the remaining transform functions
+				// Instead, log this error and give up on further transforms
 				logrus.Errorf("error in transform: %v", err)
+				return obj, nil
 			}
 			obj = transformed
 		}
