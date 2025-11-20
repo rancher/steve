@@ -10,10 +10,8 @@ on:
 jobs:
   test-rancher:
     runs-on:
-      - runs-on
-      - spot=true
-      - runner=8cpu-linux-amd64
-      - run-id=${{ github.run_id }}
+      - ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
