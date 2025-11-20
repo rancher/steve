@@ -7,7 +7,7 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,TxClient,Stmt
+//go:generate go tool -modfile ../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,TxClient,Stmt
 
 import (
 	"context"

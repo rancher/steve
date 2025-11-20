@@ -28,7 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package sqlpartition -destination partition_mocks_test.go "github.com/rancher/steve/pkg/stores/sqlpartition" Partitioner,UnstructuredStore
+//go:generate go tool -modfile ../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package sqlpartition -destination partition_mocks_test.go "github.com/rancher/steve/pkg/stores/sqlpartition" Partitioner,UnstructuredStore
 
 func TestList(t *testing.T) {
 	type testCase struct {
