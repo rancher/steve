@@ -10,7 +10,6 @@ on:
 jobs:
   test-rancher:
     runs-on: ubuntu-latest
-
     steps:
     - name: Free Disk Space (Ubuntu)
       uses: jlumbroso/free-disk-space@main
