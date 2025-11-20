@@ -11,6 +11,9 @@ jobs:
   test-rancher:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
     - name: Free Disk Space
       uses: ./.github/actions/free-disk-space
       with:
@@ -24,9 +27,6 @@ jobs:
         swap-storage: 'true'
         dotnet: 'true'
         haskell: 'true'
-
-    - name: Checkout repository
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
 
     - name: Install Go
       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
