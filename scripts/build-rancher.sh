@@ -35,11 +35,17 @@ make quick
 
 echo ""
 echo "Detecting built images..."
-echo "All rancher images:"
+echo "All images:"
+docker images
+echo "--------------------------------"
+echo "Rancher images:"
 docker images | grep rancher || echo "No rancher images found"
+echo "--------------------------------"
 
 RANCHER_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "reference=rancher/rancher" 2>/dev/null | head -n1)
+echo "RANCHER_IMAGE: ${RANCHER_IMAGE}"
 RANCHER_AGENT_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "reference=rancher/rancher-agent" 2>/dev/null | head -n1)
+echo "RANCHER_AGENT_IMAGE: ${RANCHER_AGENT_IMAGE}"
 
 if [ -z "$RANCHER_IMAGE" ]; then
     echo "Warning: Could not detect rancher image"
