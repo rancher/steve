@@ -41,7 +41,7 @@ COMMIT=$(git rev-parse --short HEAD)
 TAG="${TAG:-$(grep -m1 ' TAG:' .github/workflows/pull-request.yml | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/\${{ github.sha }}/$COMMIT/g" | cut -d' ' -f2)}"
 OS="${OS:-linux}"
 ARCH="${ARCH:-amd64}"
-REPO="${REPO:-rancher}"
+REPO="${REPO:-rancher}" 
 
 echo "Using values: REPO=${REPO}, TAG=${TAG}, OS=${OS}, ARCH=${ARCH}"
 
