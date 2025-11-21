@@ -1080,6 +1080,7 @@ func SetupMockDB(t *testing.T) (*MockClient, *MockTxClient) {
 	dbC := NewMockClient(ctrl) // add functionality once store expectation are known
 	txC := NewMockTxClient(ctrl)
 	stmt := NewMockStmt(ctrl)
+	txC.EXPECT().Exec(fmt.Sprintf(dropBaseStmtFmt, "testStoreObject")).Return(nil, nil)
 	txC.EXPECT().Exec(fmt.Sprintf(createTableFmt, "testStoreObject")).Return(nil, nil)
 	dbC.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
 		func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {

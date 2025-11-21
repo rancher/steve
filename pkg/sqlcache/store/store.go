@@ -99,6 +99,11 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 
 	// once multiple informer-factories are needed, this can accept the case where table already exists error is received
 	err := s.WithTransaction(ctx, true, func(tx db.TxClient) error {
+		dropTableQuery := fmt.Sprintf(dropBaseStmtFmt, dbName)
+		if _, err := tx.Exec(dropTableQuery); err != nil {
+			return err
+		}
+
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
 		_, err := tx.Exec(createTableQuery)
 		return err
