@@ -33,7 +33,16 @@ fi
 echo "Setting BUILD_SAFE_DIRS=${BUILD_SAFE_DIRS} to allow local replace directive"
 make quick
 
+echo ""
 echo "Loading images from buildx cache to local Docker daemon..."
+
+# copied from make quick
+COMMIT=$(git rev-parse --short HEAD)
+TAG="${TAG:-$(grep -m1 ' TAG:' .github/workflows/pull-request.yml | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/\${{ github.sha }}/$COMMIT/g" | cut -d' ' -f2)}"
+OS="${OS:-linux}"
+ARCH="${ARCH:-amd64}"
+REPO="${REPO:-rancher}"
+
 echo "Using values: REPO=${REPO}, TAG=${TAG}, OS=${OS}, ARCH=${ARCH}"
 
 # Load rancher server image
