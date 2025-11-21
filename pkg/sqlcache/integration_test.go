@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1094,7 +1095,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 		name      string
 		query     string
 		wantNames []string
-	}{//PROBLEM
+	}{
 		{
 			name:  "sorts by name",
 			query: "sort=metadata.name",
@@ -1165,9 +1166,12 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	}
 }
 
-// Comment out the 'ignore' in the function name to run it. Useful only for comparing running
-// times across different branches
-func (i *IntegrationSuite) ignoreTestNamespaceProjectDependenciesWithPseudoBenchmarks() {
+// Set env-var RUN_PSEUDO_BENCHMARKS to true to run this test.
+func (i *IntegrationSuite) TestNamespaceProjectDependenciesWithPseudoBenchmarks() {
+	runPseudoBenchmarksEnv := os.Getenv("RUN_PSEUDO_BENCHMARKS")
+	if runPseudoBenchmarksEnv == "" || strings.ToLower(runPseudoBenchmarksEnv) == "false" {
+		i.T().Skip("Skipping pseudo benchmarks")
+	}
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
 	requireT := i.Require()
