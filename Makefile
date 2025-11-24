@@ -4,6 +4,12 @@ build:
 build-bin:
 	bash scripts/build-bin.sh
 
+build-rancher:
+	bash scripts/build-rancher.sh
+
+test-rancher:
+	bash scripts/test-rancher.sh
+
 run: build
 	docker run $(DOCKER_ARGS) --rm -p 8989:9080 -it -v ${HOME}/.kube:/root/.kube steve --https-listen-port 0
 

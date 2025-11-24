@@ -1,0 +1,62 @@
+name: Test Rancher Integration
+
+on:
+  pull_request: {}
+  push:
+    branches:
+    - master
+    - release/*
+
+jobs:
+  test-rancher:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+    - name: Free Disk Space
+      uses: ./.github/actions/free-disk-space
+      with:
+        docker-images: 'true'
+        go-cache: 'true'
+        apt-cache: 'true'
+        build-artifacts: 'true'
+        tool-cache: 'true'
+        android: 'true'
+        large-packages: 'true'
+        dotnet: 'true'
+        haskell: 'true'
+
+    - name: Install Go
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install k3d
+      run: |
+        curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+
+    - name: Verify Docker and k3d installation
+      run: |
+        docker --version
+        k3d version
+
+    - name: Build Rancher
+      id: build-rancher
+      run: |
+        bash scripts/build-rancher.sh
+      env:
+        BUILD_SAFE_DIRS: ${{ github.workspace }}
+
+    - name: Test Rancher
+      run: |
+        bash scripts/test-rancher.sh
+      env:
+        CATTLE_BOOTSTRAP_PASSWORD: admin
+        RANCHER_IMAGE: ${{ steps.build-rancher.outputs.rancher-image }}
+        RANCHER_AGENT_IMAGE: ${{ steps.build-rancher.outputs.rancher-agent-image }}
+      continue-on-error: false
+

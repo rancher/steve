@@ -35,3 +35,4 @@ jobs:
       run: make test
     - name: Validate
       run: make validate
+
