@@ -87,6 +87,8 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 			i.Require().NoError(err)
 			defer resp.Body.Close()
 
+			i.Require().Equal(http.StatusOK, resp.StatusCode)
+
 			type Response struct {
 				Data []struct {
 					Metadata struct {
