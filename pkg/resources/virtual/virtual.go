@@ -56,17 +56,13 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 				}
 
 				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
-				if !got {
-					return obj, nil
-				}
-
-				if err != nil {
+				if err != nil || !got {
 					return obj, err
 				}
 
 				value, cast := curValue[index].(string)
 				if !cast {
-					return obj, fmt.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", curValue[index], index)
+					return obj, fmt.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", index, curValue[index])
 				}
 
 				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
