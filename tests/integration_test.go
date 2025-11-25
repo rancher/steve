@@ -87,6 +87,16 @@ func (i *IntegrationSuite) SetupSuite() {
 	// TODO: Make this configurable?
 	i.sqliteDatabaseFile, err = filepath.Abs(db.InformerObjectCacheDBPath)
 	i.Require().NoError(err)
+
+	// TODO: Move to Steve's constructor
+	sqlproxy.TypeGuidanceTable[schema.GroupVersionKind{Group: "fruits.cattle.io", Version: "v1", Kind: "Banana"}] = map[string]string{
+		"number": "INT",
+	}
+	sqlproxy.TypeSpecificIndexedFields["fruits.cattle.io_v1_Banana"] = [][]string{
+		{"color"},
+		{"number"},
+		{"numberString"},
+	}
 }
 
 func (i *IntegrationSuite) TearDownSuite() {
