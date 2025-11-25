@@ -53,7 +53,7 @@ replace (
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/golang/protobuf v1.5.4
-	github.com/google/gnostic-models v0.6.9
+	github.com/google/gnostic-models v0.7.1
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/pborman/uuid v1.2.1
@@ -139,6 +139,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
+	go.yaml.in/yaml/v3 v3.0.3 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/net v0.37.0 // indirect
