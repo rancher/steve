@@ -89,6 +89,8 @@ func (i *IntegrationSuite) testSortScenario(ctx context.Context, scenario string
 			i.Require().NoError(err)
 			defer resp.Body.Close()
 
+			i.Require().Equal(http.StatusOK, resp.StatusCode)
+
 			type Response struct {
 				Data []struct {
 					ID string `json:"id"`
