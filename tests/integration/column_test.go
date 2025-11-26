@@ -111,10 +111,15 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 				i.Require().Len(table[row], len(test.Expected[row]))
 				for fieldIndex := range test.Expected[row] {
 					field := test.Expected[row][fieldIndex]
-					if field == "$timestamp" {
-						_, err := rescommon.ParseTimestampOrHumanReadableDuration(table[row][fieldIndex])
-						i.Require().NoError(err, "expected timestamp (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
-						test.Expected[row][fieldIndex] = table[row][fieldIndex]
+					switch field {
+					case "$duration":
+						_, err := rescommon.ParseHumanReadableDuration(fmt.Sprintf("%v", table[row][fieldIndex]))
+						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
+						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
+					case "$timestamp":
+						_, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", table[row][fieldIndex]))
+						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
+						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
 					}
 				}
 			}
