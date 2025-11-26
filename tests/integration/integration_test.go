@@ -231,9 +231,13 @@ func (i *IntegrationSuite) doManifestWithHeader(ctx context.Context, manifestFil
 	}
 }
 
-func (i *IntegrationSuite) waitForSchema(baseURL string, schema string) {
+func (i *IntegrationSuite) waitForSchema(baseURL string, gvr schema.GroupVersionResource) {
+	schemaID := fmt.Sprintf("%s.%s", gvr.Group, gvr.Resource)
+	if gvr.Group == "" {
+		schemaID = gvr.Resource
+	}
 	i.Require().EventuallyWithT(func(c *assert.CollectT) {
-		url := baseURL + "/v1/schemaDefinitions/" + schema
+		url := baseURL + "/v1/schemaDefinitions/" + schemaID
 		resp, err := http.Get(url)
 		require.NoError(c, err)
 		defer resp.Body.Close()

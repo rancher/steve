@@ -62,7 +62,7 @@ func (i *IntegrationSuite) testSortScenario(ctx context.Context, scenario string
 	defer i.doManifestReversed(ctx, scenarioManifests, i.doDelete)
 
 	for gvr := range gvrs {
-		i.waitForSchema(baseURL, fmt.Sprintf("%s.%s", gvr.Group, gvr.Resource))
+		i.waitForSchema(baseURL, gvr)
 	}
 
 	defer i.maybeStopAndDebug(baseURL)
