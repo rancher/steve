@@ -48,8 +48,6 @@ type IntegrationSuite struct {
 
 func (i *IntegrationSuite) SetupSuite() {
 	logrus.SetLevel(logrus.ErrorLevel)
-	// ctx, cancel := context.WithCancel(context.Background())
-	// i.tearDownFuncs = append(i.tearDownFuncs, cancel)
 
 	ctx := context.Background()
 
