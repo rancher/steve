@@ -55,8 +55,8 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 
 	type ColumnTestConfig struct {
 		Tests []struct {
-			SchemaID string     `yaml:"schemaID"`
-			Expected [][]string `yaml:"expected"`
+			SchemaID string  `yaml:"schemaID"`
+			Expected [][]any `yaml:"expected"`
 		} `json:"tests"`
 	}
 	var columnTestConfig ColumnTestConfig
@@ -92,7 +92,7 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 			type Response struct {
 				Data []struct {
 					Metadata struct {
-						Fields []string `json:"fields"`
+						Fields []any `json:"fields"`
 					} `json:"metadata"`
 				} `json:"data"`
 			}
@@ -102,7 +102,7 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 
 			i.Require().Len(parsed.Data, len(test.Expected))
 
-			var table [][]string
+			var table [][]any
 			for _, row := range parsed.Data {
 				table = append(table, row.Metadata.Fields)
 			}
