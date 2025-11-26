@@ -65,7 +65,7 @@ var (
 	paramScheme = runtime.NewScheme()
 	paramCodec  = runtime.NewParameterCodec(paramScheme)
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
-	typeSpecificIndexedFields = map[string][][]string{
+	TypeSpecificIndexedFields = map[string][][]string{
 		gvkKey("", "v1", "Event"): {
 			{"_type"},
 			{"involvedObject", "kind"},
@@ -498,7 +498,7 @@ func (s *Store) initializeNamespaceCache() error {
 func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
 	fields := [][]string{}
 	fields = append(fields, commonIndexFields...)
-	typeFields := typeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
+	typeFields := TypeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
 	if typeFields != nil {
 		fields = append(fields, typeFields...)
 	}
@@ -884,7 +884,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
+var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
 		"status.allocatable.cpuRaw":    "REAL",
 		"status.allocatable.memoryRaw": "REAL",
@@ -933,7 +933,7 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 			guidance[trimmedField] = colType
 		}
 	}
-	tg, ok := typeGuidanceTable[gvk]
+	tg, ok := TypeGuidanceTable[gvk]
 	if ok {
 		for k, v := range tg {
 			guidance[k] = v
