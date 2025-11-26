@@ -285,7 +285,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -371,7 +371,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -449,7 +449,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			attributes.SetGVK(schema, gvk)
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
@@ -537,7 +537,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -626,7 +626,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
