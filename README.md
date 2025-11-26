@@ -910,7 +910,7 @@ all requests in the table test.
 #### Integration tests
 
 New integration tests for the steve API are located in the `tests/` directory.
-Refer to [tests/README.md](./tests/README.md) for documentation on running and adding these tests.
+Refer to [tests/integration/README.md](./tests/integration/README.md) for documentation on running and adding these tests.
 
 ## Running Tests
 
