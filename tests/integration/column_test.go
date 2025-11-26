@@ -56,6 +56,7 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 	type ColumnTestConfig struct {
 		Tests []struct {
 			SchemaID string  `yaml:"schemaID"`
+			Query    string  `yaml:"query"`
 			Expected [][]any `yaml:"expected"`
 		} `json:"tests"`
 	}
@@ -82,6 +83,9 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 	for _, test := range columnTestConfig.Tests {
 		i.Run(test.SchemaID, func() {
 			url := fmt.Sprintf("%s/v1/%s", baseURL, test.SchemaID)
+			if test.Query != "" {
+				url = fmt.Sprintf("%s?%s", url, test.Query)
+			}
 			fmt.Println(url)
 			resp, err := http.Get(url)
 			i.Require().NoError(err)
