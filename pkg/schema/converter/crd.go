@@ -72,9 +72,29 @@ func forVersion(group, kind string, version v1.CustomResourceDefinitionVersion, 
 		return
 	}
 	attributes.MarkCRD(schema)
-	if len(versionColumns) > 0 {
-		attributes.SetColumns(schema, versionColumns)
+	defaultColumns := []table.Column{
+		{
+			Name:   "Name",
+			Type:   "string",
+			Format: "name",
+			// Not setting description here because we don't set it above, might want to revisit
+			Description: "",
+			Priority:    0,
+			Field:       ".metadata.name",
+		},
 	}
+	if len(versionColumns) == 0 {
+		defaultColumns = append(defaultColumns, table.Column{
+			Name:   "Age",
+			Type:   "date",
+			Format: "",
+			// Not setting description here because we don't set it above, might want to revisit
+			Description: "",
+			Priority:    0,
+			Field:       ".metadata.creationTimestamp",
+		})
+	}
+	attributes.SetColumns(schema, append(defaultColumns, versionColumns...))
 	if version.Schema != nil && version.Schema.OpenAPIV3Schema != nil {
 		schema.Description = version.Schema.OpenAPIV3Schema.Description
 

@@ -170,6 +170,12 @@ func TestAddCustomResources(t *testing.T) {
 							"crd": true,
 							"columns": []table.Column{
 								{
+									Name:   "Name",
+									Field:  ".metadata.name",
+									Type:   "string",
+									Format: "name",
+								},
+								{
 									Name:   "TestColumn",
 									Field:  "TestPath",
 									Type:   "TestType",
