@@ -124,6 +124,9 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 						_, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", table[row][fieldIndex]))
 						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
 						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
+					case "$skip":
+						// Sometimes you just don't care what the value is
+						test.Expected[row][fieldIndex] = table[row][fieldIndex]
 					}
 				}
 			}
