@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -62,7 +61,7 @@ func TableColsToCommonCols(tableDefs []table.Column) []ColumnDefinition {
 		}
 		colDefs[i] = ColumnDefinition{
 			TableColumnDefinition: tcd,
-			Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
+			Field:                 td.Field,
 		}
 	}
 	return colDefs

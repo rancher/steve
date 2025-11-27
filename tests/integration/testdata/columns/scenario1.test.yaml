@@ -10,7 +10,7 @@ tests:
   - [bar, foo, $skip, $duration]
 - schemaID: timestamps.cattle.io.dates
   expected:
-  - [the-date, $skip, $skip, $duration, $skip, $duration, $skip]
+  - [the-date, $duration, $duration, $duration, $timestamp, $duration, $timestamp]
 - schemaID: events
   query: filter=metadata.name=event-1
   expected:
