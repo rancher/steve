@@ -80,7 +80,7 @@ func forVersion(group, kind string, version v1.CustomResourceDefinitionVersion, 
 			// Not setting description here because we don't set it above, might want to revisit
 			Description: "",
 			Priority:    0,
-			Field:       ".metadata.name",
+			Field:       "$.metadata.fields[0]",
 		},
 	}
 	if len(versionColumns) == 0 {
@@ -91,7 +91,7 @@ func forVersion(group, kind string, version v1.CustomResourceDefinitionVersion, 
 			// Not setting description here because we don't set it above, might want to revisit
 			Description: "",
 			Priority:    0,
-			Field:       ".metadata.creationTimestamp",
+			Field:       "$.metadata.fields[1]",
 		})
 	}
 	attributes.SetColumns(schema, append(defaultColumns, versionColumns...))
