@@ -1,18 +1,18 @@
 apiVersion: timestamps.cattle.io/v1
-kind: SingleCol
+kind: Date
 metadata:
   name: a
-date: "2000-12-20T13:30:18Z"
+date: "2024-12-20T13:30:18Z"
 ---
 apiVersion: timestamps.cattle.io/v1
-kind: SingleCol
+kind: Date
 metadata:
   name: b
 # Results in <invalid>
 date: "100-05-20T13:30:18Z"
 ---
 apiVersion: timestamps.cattle.io/v1
-kind: SingleCol
+kind: Date
 metadata:
   name: c
 date: "2000-01-20T13:30:18Z"
