@@ -261,8 +261,11 @@ func (i *IntegrationSuite) TestProxyStore() {
 		require.NoError(c, err)
 		require.Equal(c, http.StatusSwitchingProtocols, resp.StatusCode)
 
-		// Send message to establish watch
-		err = newWsConn.WriteJSON(watchMessage)
+		// Send message to establish watch (without resourceVersion to watch from current state)
+		newWatchMessage := map[string]interface{}{
+			"resourceType": "fruits.cattle.io.oranges",
+		}
+		err = newWsConn.WriteJSON(newWatchMessage)
 		require.NoError(c, err)
 
 		// Close immediately, we just wanted to verify the watch can be established
