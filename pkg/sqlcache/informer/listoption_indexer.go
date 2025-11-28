@@ -172,15 +172,29 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
+	fieldSet := make(map[string]struct{})
+
 	var indexedFields []string
 	for _, f := range defaultIndexedFields {
+		if _, ok := fieldSet[f]; ok {
+			continue
+		}
 		indexedFields = append(indexedFields, f)
+		fieldSet[f] = struct{}{}
 	}
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, defaultIndexNamespaced)
+		if _, ok := fieldSet[defaultIndexNamespaced]; !ok {
+			indexedFields = append(indexedFields, defaultIndexNamespaced)
+			fieldSet[defaultIndexNamespaced] = struct{}{}
+		}
 	}
 	for _, f := range opts.Fields {
-		indexedFields = append(indexedFields, toColumnName(f))
+		name := toColumnName(f)
+		if _, ok := fieldSet[name]; ok {
+			continue
+		}
+		indexedFields = append(indexedFields, name)
+		fieldSet[name] = struct{}{}
 	}
 
 	l := &ListOptionIndexer{
