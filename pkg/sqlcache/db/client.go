@@ -26,6 +26,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
@@ -39,6 +40,8 @@ const (
 	InformerObjectCacheDBPath     = InformerObjectCacheDBPathRoot + ".db"
 
 	informerObjectCachePerms fs.FileMode = 0o600
+
+	maxBeginTXAttemptsOnBusyErrors = 3
 
 	debugQueryLogPathEnvVar           = "CATTLE_DEBUG_QUERY_LOG"
 	debugQueryIncludeParamsPathEnvVar = "CATTLE_DEBUG_QUERY_INCLUDE_PARAMS"
@@ -80,9 +83,7 @@ func (c *client) WithTransaction(ctx context.Context, forWriting bool, f WithTra
 func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error {
 	c.connLock.RLock()
 	// note: this assumes _txlock=immediate in the connection string, see NewConnection
-	tx, err := c.conn.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly: !forWriting,
-	})
+	tx, err := c.beginTX(ctx, forWriting)
 	c.connLock.RUnlock()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -100,6 +101,36 @@ func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTra
 		return err
 	}
 	return nil
+}
+
+// beginTX handles automatic retries for writing transactions for specific error codes.
+// Rationale: in WAL mode, BEGIN IMMEDIATE requires 2 steps: create a read transaction and promote it, which can fail if another thread wrote to the database in the meantime.
+// See https://github.com/rancher/rancher/issues/52872 for more details
+func (c *client) beginTX(ctx context.Context, forWriting bool) (Tx, error) {
+	if !forWriting {
+		return c.conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	}
+
+	var attempts int
+	for {
+		attempts++
+		tx, err := c.conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: false})
+		if err == nil || attempts == maxBeginTXAttemptsOnBusyErrors {
+			return tx, err
+		}
+
+		var serr *sqlite.Error
+		if !errors.As(err, &serr) {
+			return nil, err
+		}
+
+		switch serr.Code() {
+		case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_BUSY_SNAPSHOT:
+			continue
+		default:
+			return nil, err
+		}
+	}
 }
 
 func (c *client) commit(ctx context.Context, tx *sql.Tx) error {
