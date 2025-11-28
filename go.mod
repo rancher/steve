@@ -30,7 +30,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rancher/apiserver v0.7.7
-	github.com/rancher/dynamiclistener v0.7.2-rc.3
+	github.com/rancher/dynamiclistener v0.7.3
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
 	github.com/rancher/lasso v0.2.5-rc.1
 	github.com/rancher/norman v0.7.1-0.20251002202451-d14394e537ab
@@ -54,7 +54,7 @@ require (
 	k8s.io/kube-aggregator v0.34.1
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 	k8s.io/kubernetes v1.33.1
-	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	modernc.org/sqlite v1.40.1
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/yaml v1.6.0
