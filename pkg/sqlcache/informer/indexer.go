@@ -82,6 +82,10 @@ func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer
 	dbName := db.Sanitize(s.GetName())
 
 	err := s.WithTransaction(ctx, true, func(tx db.TxClient) error {
+		dropTableQuery := fmt.Sprintf(dropIndicesFmt, dbName)
+		if _, err := tx.Exec(dropTableQuery); err != nil {
+			return err
+		}
 		createTableQuery := fmt.Sprintf(createTableFmt, dbName)
 		if _, err := tx.Exec(createTableQuery); err != nil {
 			return err
