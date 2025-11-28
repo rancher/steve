@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
@@ -19,6 +20,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // Mocks for this test are generated with the following command.
@@ -526,6 +529,62 @@ func TestNewConnection(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
+	}
+}
+
+func TestWithTransaction_RetryOnBusyError(t *testing.T) {
+	sqliteBusyError := new(sqlite.Error)
+	rf := reflect.ValueOf(sqliteBusyError).Elem().FieldByName("code")
+	wrf := reflect.NewAt(rf.Type(), unsafe.Pointer(rf.UnsafeAddr())).Elem()
+	wrf.Set(reflect.ValueOf(sqlite3.SQLITE_BUSY_SNAPSHOT))
+
+	tests := []struct {
+		forWriting    bool
+		beginTxErrors []error
+		expectedError bool
+	}{
+		{
+			forWriting:    false,
+			beginTxErrors: []error{nil},
+		},
+		{
+			forWriting:    false,
+			beginTxErrors: []error{sqliteBusyError},
+			expectedError: true,
+		},
+		{
+			forWriting:    true,
+			beginTxErrors: []error{nil},
+		},
+		{
+			forWriting:    true,
+			beginTxErrors: []error{sqliteBusyError, nil},
+			expectedError: false,
+		},
+		{
+			forWriting:    true,
+			beginTxErrors: []error{sqliteBusyError, sqliteBusyError, sqliteBusyError},
+			expectedError: true,
+		},
+	}
+	for n, tc := range tests {
+		t.Run(fmt.Sprintf("#%d", n), func(t *testing.T) {
+			c := SetupMockConnection(t)
+			client := SetupClient(t, c, nil, nil)
+			tx := NewMockTx(gomock.NewController(t))
+			tx.EXPECT().Commit().AnyTimes()
+			for _, ret := range tc.beginTxErrors {
+				c.EXPECT().BeginTx(t.Context(), &sql.TxOptions{ReadOnly: !tc.forWriting}).Return(tx, ret)
+			}
+
+			err := client.WithTransaction(t.Context(), tc.forWriting, func(tx TxClient) error { return nil })
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+
 	}
 }
 
