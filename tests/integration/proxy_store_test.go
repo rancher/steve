@@ -80,17 +80,12 @@ func (i *IntegrationSuite) TestProxyStore() {
 	}
 
 	// Create the Orange CRD dynamically using YAML string
-	gvrs := make(map[schema.GroupVersionResource]struct{})
 	i.doManifestString(ctx, orangeCRDManifest, func(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error {
-		gvrs[gvr] = struct{}{}
 		return i.doApply(ctx, obj, gvr)
 	})
 	defer i.doManifestStringReversed(ctx, orangeCRDManifest, i.doDelete)
 
-	// Wait for the schema to be available
-	for gvr := range gvrs {
-		i.waitForSchema(baseURL, gvr)
-	}
+	// Wait for the Orange schema to be available
 	i.waitForSchema(baseURL, orangeGVR)
 
 	// Enable debugging after CRDs are created but before tests start
