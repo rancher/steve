@@ -1,24 +1,51 @@
 package tests
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
+
+const orangeCRDManifest = `
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: oranges.fruits.cattle.io
+spec:
+  scope: Cluster
+  group: fruits.cattle.io
+  names:
+    kind: Orange
+    listKind: OrangeList
+    plural: oranges
+    singular: orange
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          bar:
+            type: string
+          foo:
+            type: string
+    served: true
+    storage: true
+`
 
 // TestProxyStore tests that when a CRD's schema changes, existing watch connections
 // are properly closed and new watches can be established.
@@ -40,62 +67,11 @@ func (i *IntegrationSuite) TestProxyStore() {
 
 	baseURL := httpServer.URL
 
-	orangeGVK := schema.GroupVersionKind{
-		Group:   "fruits.cattle.io",
-		Version: "v1",
-		Kind:    "Orange",
-	}
 	orangeGVR := schema.GroupVersionResource{
 		Group:    "fruits.cattle.io",
 		Version:  "v1",
 		Resource: "oranges",
 	}
-
-	// Create the Orange CRD dynamically
-	orangeCRD := &apiextensionsv1.CustomResourceDefinition{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apiextensions.k8s.io/v1",
-			Kind:       "CustomResourceDefinition",
-		},
-		ObjectMeta: metav1.ObjectMeta{Name: "oranges.fruits.cattle.io"},
-		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Scope: "Cluster",
-			Group: orangeGVK.Group,
-			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     orangeGVK.Kind,
-				ListKind: "OrangeList",
-				Plural:   "oranges",
-				Singular: "orange",
-			},
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name: orangeGVK.Version,
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type: "object",
-							Properties: map[string]apiextensionsv1.JSONSchemaProps{
-								"bar": {
-									Type: "string",
-								},
-								"foo": {
-									Type: "string",
-								},
-							},
-						},
-					},
-					Served:  true,
-					Storage: true,
-				},
-			},
-		},
-	}
-
-	// Create the CRD using the unstructured client
-	crdUnstructured := &unstructured.Unstructured{}
-	crdBytes, err := json.Marshal(orangeCRD)
-	i.Require().NoError(err)
-	err = json.Unmarshal(crdBytes, &crdUnstructured.Object)
-	i.Require().NoError(err)
 
 	crdGVR := schema.GroupVersionResource{
 		Group:    "apiextensions.k8s.io",
@@ -103,37 +79,45 @@ func (i *IntegrationSuite) TestProxyStore() {
 		Resource: "customresourcedefinitions",
 	}
 
-	_, err = i.client.Resource(crdGVR).Create(ctx, crdUnstructured, metav1.CreateOptions{})
-	i.Require().NoError(err)
-
-	defer func() {
-		err := i.client.Resource(crdGVR).Delete(ctx, orangeCRD.Name, metav1.DeleteOptions{})
-		i.Require().NoError(err)
-	}()
+	// Create the Orange CRD dynamically using YAML string
+	gvrs := make(map[schema.GroupVersionResource]struct{})
+	i.doManifestString(ctx, orangeCRDManifest, func(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error {
+		gvrs[gvr] = struct{}{}
+		return i.doApply(ctx, obj, gvr)
+	})
+	defer i.doManifestStringReversed(ctx, orangeCRDManifest, i.doDelete)
 
 	// Wait for the schema to be available
+	for gvr := range gvrs {
+		i.waitForSchema(baseURL, gvr)
+	}
 	i.waitForSchema(baseURL, orangeGVR)
 
-	// Start watching the Orange resources via SSE
+	// Enable debugging after CRDs are created but before tests start
+	defer i.maybeStopAndDebug(baseURL)
+
+	// Start watching the Orange resources via WebSocket
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
 
-	watchURL := baseURL + "/v1/fruits.cattle.io.oranges"
-	watchReq, err := http.NewRequestWithContext(watchCtx, "GET", watchURL, nil)
+	// Convert HTTP URL to WebSocket URL
+	wsURL := strings.Replace(baseURL, "http://", "ws://", 1) + "/v1"
+	dialer := websocket.Dialer{}
+	wsConn, resp, err := dialer.DialContext(watchCtx, wsURL, nil)
 	i.Require().NoError(err)
-	watchReq.Header.Set("Accept", "text/event-stream")
+	i.Require().Equal(http.StatusSwitchingProtocols, resp.StatusCode)
 
-	watchResp, err := http.DefaultClient.Do(watchReq)
+	// Send message to establish watch
+	watchMessage := map[string]string{"resourceType": "fruits.cattle.io.oranges"}
+	err = wsConn.WriteJSON(watchMessage)
 	i.Require().NoError(err)
-	i.Require().Equal(http.StatusOK, watchResp.StatusCode)
 
 	// Channel to signal when watch is closed
 	watchClosed := make(chan struct{})
 	go func() {
 		defer close(watchClosed)
-		reader := bufio.NewReader(watchResp.Body)
 		for {
-			_, err := reader.ReadBytes('\n')
+			_, _, err := wsConn.ReadMessage()
 			if err != nil {
 				// Watch connection closed (expected when CRD is modified)
 				return
@@ -166,7 +150,7 @@ func (i *IntegrationSuite) TestProxyStore() {
 		}
 	}`)
 
-	_, err = i.client.Resource(crdGVR).Patch(ctx, orangeCRD.Name, k8stypes.MergePatchType, patch, metav1.PatchOptions{})
+	_, err = i.client.Resource(crdGVR).Patch(ctx, "oranges.fruits.cattle.io", k8stypes.MergePatchType, patch, metav1.PatchOptions{})
 	i.Require().NoError(err)
 
 	// Wait for the watch to be closed (with timeout)
@@ -178,8 +162,8 @@ func (i *IntegrationSuite) TestProxyStore() {
 		i.Require().Fail("expected watch to be closed after CRD modification")
 	}
 
-	// Close the previous watch response body
-	watchResp.Body.Close()
+	// Close the previous WebSocket connection
+	wsConn.Close()
 
 	// Wait for schema to be updated with new columns
 	i.Require().EventuallyWithT(func(c *assert.CollectT) {
@@ -204,17 +188,15 @@ func (i *IntegrationSuite) TestProxyStore() {
 	defer newWatchCancel()
 
 	i.Require().EventuallyWithT(func(c *assert.CollectT) {
-		newWatchReq, err := http.NewRequestWithContext(newWatchCtx, "GET", watchURL, nil)
+		newWsConn, resp, err := dialer.DialContext(newWatchCtx, wsURL, nil)
 		require.NoError(c, err)
-		newWatchReq.Header.Set("Accept", "text/event-stream")
+		require.Equal(c, http.StatusSwitchingProtocols, resp.StatusCode)
 
-		newWatchResp, err := http.DefaultClient.Do(newWatchReq)
+		// Send message to establish watch
+		err = newWsConn.WriteJSON(watchMessage)
 		require.NoError(c, err)
-		require.Equal(c, http.StatusOK, newWatchResp.StatusCode)
 
 		// Close immediately, we just wanted to verify the watch can be established
-		newWatchResp.Body.Close()
+		newWsConn.Close()
 	}, 15*time.Second, 500*time.Millisecond)
-
-	defer i.maybeStopAndDebug(baseURL)
 }
