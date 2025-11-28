@@ -22,6 +22,7 @@ type schemaTestConfig struct {
 	desiredResourceVerbs   []string
 	desiredCollectionVerbs []string
 	errDesired             bool
+	resourceID             string
 }
 
 func TestSchemas(t *testing.T) {
@@ -56,12 +57,31 @@ func TestSchemas(t *testing.T) {
 				errDesired:             false,
 			},
 		},
+		{
+			name: "namespaces with no explicit access still allows list",
+			config: schemaTestConfig{
+				permissionVerbs:        []string{}, // intentionally empty
+				desiredResourceVerbs:   []string{},
+				desiredCollectionVerbs: []string{"GET"}, // special-case should add this
+				errDesired:             false,
+				resourceID:             "namespaces",
+			},
+		},
+		{
+			name: "namespaces with get behaves normally",
+			config: schemaTestConfig{
+				permissionVerbs:        []string{"get"},
+				desiredResourceVerbs:   []string{"GET"},
+				desiredCollectionVerbs: []string{"GET"},
+				errDesired:             false,
+				resourceID:             "namespaces",
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			// test caching functionality
 			mockLookup := newMockAccessSetLookup()
 			userName := "testUser"
 			testUser := user.DefaultInfo{
@@ -72,13 +92,11 @@ func TestSchemas(t *testing.T) {
 			}
 
 			collection := NewCollection(context.TODO(), types.EmptyAPISchemas(), mockLookup)
-			collection.schemas = map[string]*types.APISchema{"testCRD": makeSchema("testCRD")}
 			runSchemaTest(t, test.config, mockLookup, collection, &testUser)
 		})
 	}
 }
 func TestSchemaCache(t *testing.T) {
-	// Schemas are a frequently used resource. It's important that the cache doesn't have a leak given size/frequency of resource
 	tests := []struct {
 		name   string
 		before schemaTestConfig
@@ -119,7 +137,6 @@ func TestSchemaCache(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			// test caching functionality
 			mockLookup := newMockAccessSetLookup()
 			userName := "testUser"
 			testUser := user.DefaultInfo{
@@ -129,7 +146,6 @@ func TestSchemaCache(t *testing.T) {
 				Extra:  map[string][]string{},
 			}
 			collection := NewCollection(context.TODO(), types.EmptyAPISchemas(), mockLookup)
-			collection.schemas = map[string]*types.APISchema{"testCRD": makeSchema("testCRD")}
 			runSchemaTest(t, test.before, mockLookup, collection, &testUser)
 			assert.Len(t, collection.cache.Keys(), 1, "expected cache to be size 1")
 			mockLookup.Clear()
@@ -140,29 +156,57 @@ func TestSchemaCache(t *testing.T) {
 }
 
 func runSchemaTest(t *testing.T, config schemaTestConfig, lookup *mockAccessSetLookup, collection *Collection, testUser user.Info) {
-	for _, verb := range config.permissionVerbs {
-		lookup.AddAccessForUser(testUser, verb, k8sSchema.GroupResource{Group: testGroup, Resource: "testCRD"}, "*", "*")
+	resourceID := config.resourceID
+	if resourceID == "" {
+		resourceID = "testCRD"
 	}
 
-	collection.schemas = map[string]*types.APISchema{"testCRD": makeSchema("testCRD")}
+	for _, verb := range config.permissionVerbs {
+		gr := k8sSchema.GroupResource{
+			Group:    testGroup,
+			Resource: resourceID,
+		}
+		if resourceID == "namespaces" {
+			gr.Group = ""
+		}
+		lookup.AddAccessForUser(testUser, verb, gr, "*", "*")
+	}
+
+	// some of our mock impls panic if the user has literally no access at all.
+	// seed with a harmless one if the test didn't give us any:
+	if len(config.permissionVerbs) == 0 {
+		lookup.AddAccessForUser(testUser, "get", k8sSchema.GroupResource{
+			Group:    testGroup,
+			Resource: "dummy-resource-for-test",
+		}, "*", "*")
+	}
+
+	// pick schema for this test
+	if resourceID == "namespaces" {
+		collection.schemas = map[string]*types.APISchema{"namespaces": makeNamespaceSchema()}
+	} else {
+		collection.schemas = map[string]*types.APISchema{"testCRD": makeSchema("testCRD")}
+	}
+
 	userSchemas, err := collection.Schemas(testUser)
 	if config.errDesired {
 		assert.Error(t, err, "expected error but none was found")
 	}
 	var testSchema *types.APISchema
 	for schemaName, userSchema := range userSchemas.Schemas {
-		if schemaName == "testCRD" {
+		if schemaName == resourceID || (resourceID == "testCRD" && schemaName == "testCRD") {
 			testSchema = userSchema
 		}
 	}
 	assert.NotNil(t, testSchema, "expected a test schema, but was nil")
 	assert.Len(t, testSchema.ResourceMethods, len(config.desiredResourceVerbs), "did not get as many verbs as expected for resource methods")
-	assert.Len(t, testSchema.CollectionMethods, len(config.desiredCollectionVerbs), "did not get as many verbs as expected for resource methods")
+	assert.Len(t, testSchema.CollectionMethods, len(config.desiredCollectionVerbs), "did not get as many verbs as expected for collection methods")
+
 	for _, verb := range config.desiredResourceVerbs {
 		assert.Contains(t, testSchema.ResourceMethods, verb, "did not find %s in resource methods %v", verb, testSchema.ResourceMethods)
 	}
 	for _, verb := range config.desiredCollectionVerbs {
-		assert.Contains(t, testSchema.CollectionMethods, verb, "did not find %s in resource methods %v", verb, testSchema.CollectionMethods)
+		assert.Contains(t, testSchema.CollectionMethods, verb, "did not find %s in collection methods %v", verb, testSchema.CollectionMethods)
 	}
 	seenMethod := map[string]struct{}{}
 	for _, m := range testSchema.ResourceMethods {
@@ -172,6 +216,53 @@ func runSchemaTest(t *testing.T, config schemaTestConfig, lookup *mockAccessSetL
 	}
 	seenMethod = map[string]struct{}{}
 	for _, m := range testSchema.CollectionMethods {
+		_, exists := seenMethod[m]
+		assert.False(t, exists, "duplicate method found in CollectionMethods: %s", m)
+		seenMethod[m] = struct{}{}
+	}
+}
+
+func TestTaintedCacheDoesNotCauseDuplicates(t *testing.T) {
+	// 1. A user with no permissions requests schemas. In a prior version, this incorrectly added a method
+	//    to the base schema.
+	// 2. A second user with permissions requests schemas. They should not see
+	//    duplicate methods, which would happen if they start with the augmented base schema
+	//    and the logic adds the same method again.
+
+	mockLookup := newMockAccessSetLookup()
+	collection := NewCollection(context.TODO(), types.EmptyAPISchemas(), mockLookup)
+	collection.schemas = map[string]*types.APISchema{"namespaces": makeNamespaceSchema()}
+
+	// User A: No permissions. Prior to our refactoring, this would add GET to the base schema
+	userA := &user.DefaultInfo{Name: "user-a"}
+	mockLookup.AddAccessForUser(userA, "get", k8sSchema.GroupResource{Group: "test.k8s.io", Resource: "dummy"}, "*", "*")
+
+	schemasA, err := collection.Schemas(userA)
+	assert.NoError(t, err)
+	nsSchemaA := schemasA.Schemas["namespaces"]
+	assert.NotNil(t, nsSchemaA)
+	// With no perms, should get a GET for list.
+	assert.Len(t, nsSchemaA.CollectionMethods, 1)
+	assert.Equal(t, "GET", nsSchemaA.CollectionMethods[0])
+
+	// User B: Has 'get' permission on namespaces.
+	userB := &user.DefaultInfo{Name: "user-b"}
+	gr := k8sSchema.GroupResource{Group: "", Resource: "namespaces"}
+	mockLookup.AddAccessForUser(userB, "get", gr, "*", "*")
+
+	schemasB, err := collection.Schemas(userB)
+	assert.NoError(t, err)
+	nsSchemaB := schemasB.Schemas["namespaces"]
+	assert.NotNil(t, nsSchemaB)
+
+	assert.Len(t, nsSchemaB.CollectionMethods, 1, "should not have duplicate methods")
+	assert.Equal(t, "GET", nsSchemaB.CollectionMethods[0])
+
+	assert.Len(t, nsSchemaB.ResourceMethods, 1)
+	assert.Equal(t, "GET", nsSchemaB.ResourceMethods[0])
+
+	seenMethod := map[string]struct{}{}
+	for _, m := range nsSchemaB.CollectionMethods {
 		_, exists := seenMethod[m]
 		assert.False(t, exists, "duplicate method found in CollectionMethods: %s", m)
 		seenMethod[m] = struct{}{}
@@ -193,6 +284,22 @@ func makeSchema(resourceType string) *types.APISchema {
 				"version":  testVersion,
 				"resource": resourceType,
 				"verbs":    []string{"get", "list", "watch", "delete", "update", "create", "patch"},
+			},
+		},
+	}
+}
+
+func makeNamespaceSchema() *types.APISchema {
+	return &types.APISchema{
+		Schema: &schemas.Schema{
+			ID:                "namespaces",
+			CollectionMethods: []string{},
+			ResourceMethods:   []string{},
+			Attributes: map[string]interface{}{
+				"group":    "",
+				"version":  "v1",
+				"resource": "namespaces",
+				"verbs":    []string{"get", "list", "watch"},
 			},
 		},
 	}
