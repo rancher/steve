@@ -96,7 +96,7 @@ func (i *IntegrationSuite) TestProxyStore() {
 	defer watchCancel()
 
 	// Convert HTTP URL to WebSocket URL
-	wsURL := strings.Replace(baseURL, "http://", "ws://", 1) + "/v1"
+	wsURL := strings.Replace(baseURL, "http://", "ws://", 1) + "/v1/subscribe"
 	dialer := websocket.Dialer{}
 	wsConn, resp, err := dialer.DialContext(watchCtx, wsURL, nil)
 	i.Require().NoError(err)
@@ -107,14 +107,23 @@ func (i *IntegrationSuite) TestProxyStore() {
 	err = wsConn.WriteJSON(watchMessage)
 	i.Require().NoError(err)
 
-	// Channel to signal when watch is closed
+	// Channel to signal when watch is closed via resource.stop message
 	watchClosed := make(chan struct{})
 	go func() {
 		defer close(watchClosed)
 		for {
-			_, _, err := wsConn.ReadMessage()
+			_, message, err := wsConn.ReadMessage()
 			if err != nil {
-				// Watch connection closed (expected when CRD is modified)
+				// Connection error
+				return
+			}
+			// Check for resource.stop message
+			var msg map[string]interface{}
+			if err := json.Unmarshal(message, &msg); err != nil {
+				continue
+			}
+			if msg["name"] == "resource.stop" && msg["resourceType"] == "fruits.cattle.io.oranges" {
+				// Watch was closed by the server
 				return
 			}
 		}
