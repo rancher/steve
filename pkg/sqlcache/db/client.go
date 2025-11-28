@@ -133,7 +133,7 @@ func (c *client) beginTX(ctx context.Context, forWriting bool) (Tx, error) {
 	}
 }
 
-func (c *client) commit(ctx context.Context, tx *sql.Tx) error {
+func (c *client) commit(ctx context.Context, tx Tx) error {
 	err := tx.Commit()
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
 		return fmt.Errorf("commit failed due to canceled context")
@@ -141,7 +141,7 @@ func (c *client) commit(ctx context.Context, tx *sql.Tx) error {
 	return err
 }
 
-func (c *client) rollback(ctx context.Context, tx *sql.Tx) error {
+func (c *client) rollback(ctx context.Context, tx Tx) error {
 	err := tx.Rollback()
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
 		return fmt.Errorf("rollback failed due to canceled context")
@@ -165,10 +165,18 @@ type client struct {
 
 // Connection represents a connection pool.
 type Connection interface {
-	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Prepare(query string) (*sql.Stmt, error)
 	Close() error
+}
+
+type connection struct {
+	*sql.DB
+}
+
+func (c *connection) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
+	return c.DB.BeginTx(ctx, opts)
 }
 
 // QueryError encapsulates an error while executing a query
@@ -505,7 +513,7 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
 	sqlite.RegisterDeterministicScalarFunction("inet_aton", 1, inetAtoN)
 	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
-	c.conn = sqlDB
+	c.conn = &connection{sqlDB}
 	return dbPath, nil
 }
 
