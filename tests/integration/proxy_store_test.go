@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
 const orangeCRDManifest = `
@@ -102,13 +101,23 @@ func (i *IntegrationSuite) TestProxyStore() {
 	i.Require().NoError(err)
 	i.Require().Equal(http.StatusSwitchingProtocols, resp.StatusCode)
 
-	// Send message to establish watch
-	watchMessage := map[string]string{"resourceType": "fruits.cattle.io.oranges"}
+	// First, list the oranges to get the resourceVersion for watching
+	orangeList, err := i.client.Resource(orangeGVR).List(ctx, metav1.ListOptions{})
+	i.Require().NoError(err)
+	resourceVersion := orangeList.GetResourceVersion()
+
+	// Send message to establish watch with the resourceVersion
+	watchMessage := map[string]interface{}{
+		"resourceType": "fruits.cattle.io.oranges",
+		"resourceVersion": resourceVersion,
+	}
 	err = wsConn.WriteJSON(watchMessage)
 	i.Require().NoError(err)
 
 	// Channel to signal when watch is closed via resource.stop message
 	watchClosed := make(chan struct{})
+	// Channel to signal when we receive a resource.create notification
+	createReceived := make(chan struct{})
 	go func() {
 		defer close(watchClosed)
 		for {
@@ -117,10 +126,19 @@ func (i *IntegrationSuite) TestProxyStore() {
 				// Connection error
 				return
 			}
-			// Check for resource.stop message
+			// Check for messages
 			var msg map[string]interface{}
 			if err := json.Unmarshal(message, &msg); err != nil {
 				continue
+			}
+			if msg["name"] == "resource.create" && msg["resourceType"] == "fruits.cattle.io.oranges" {
+				// Watch received the create notification
+				select {
+				case <-createReceived:
+					// Already closed
+				default:
+					close(createReceived)
+				}
 			}
 			if msg["name"] == "resource.stop" && msg["resourceType"] == "fruits.cattle.io.oranges" {
 				// Watch was closed by the server
@@ -129,32 +147,79 @@ func (i *IntegrationSuite) TestProxyStore() {
 		}
 	}()
 
-	// Patch the CRD to add an additional printer column
-	patch := []byte(`{
-		"spec": {
-			"versions": [{
-				"name": "v1",
-				"schema": {
-					"openAPIV3Schema": {
-						"type": "object",
-						"properties": {
-							"bar": {"type": "string"},
-							"foo": {"type": "string"}
-						}
-					}
-				},
-				"served": true,
-				"storage": true,
-				"additionalPrinterColumns": [{
-					"name": "Foo",
-					"type": "string",
-					"jsonPath": ".foo"
-				}]
-			}]
-		}
-	}`)
+	// Create an Orange resource to verify the watch is working
+	testOrange := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "fruits.cattle.io/v1",
+			"kind":       "Orange",
+			"metadata": map[string]interface{}{
+				"name": "test-orange",
+			},
+			"foo": "bar",
+		},
+	}
+	_, err = i.client.Resource(orangeGVR).Create(ctx, testOrange, metav1.CreateOptions{})
+	i.Require().NoError(err)
+	defer func() {
+		_ = i.client.Resource(orangeGVR).Delete(ctx, "test-orange", metav1.DeleteOptions{})
+	}()
 
-	_, err = i.client.Resource(crdGVR).Patch(ctx, "oranges.fruits.cattle.io", k8stypes.MergePatchType, patch, metav1.PatchOptions{})
+	// Wait for the create notification to confirm the watch is working
+	select {
+	case <-createReceived:
+		// Watch is confirmed working
+	case <-time.After(10 * time.Second):
+		watchCancel()
+		i.Require().Fail("expected to receive resource.create notification for test-orange")
+	}
+
+	// Patch the CRD to add an additional printer column using Apply with Force
+	patchedCRD := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "oranges.fruits.cattle.io",
+			},
+			"spec": map[string]interface{}{
+				"group": "fruits.cattle.io",
+				"scope": "Cluster",
+				"names": map[string]interface{}{
+					"kind":     "Orange",
+					"listKind": "OrangeList",
+					"plural":   "oranges",
+					"singular": "orange",
+				},
+				"versions": []interface{}{
+					map[string]interface{}{
+						"name": "v1",
+						"schema": map[string]interface{}{
+							"openAPIV3Schema": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"bar": map[string]interface{}{"type": "string"},
+									"foo": map[string]interface{}{"type": "string"},
+								},
+							},
+						},
+						"served":  true,
+						"storage": true,
+						"additionalPrinterColumns": []interface{}{
+							map[string]interface{}{
+								"name":     "Foo",
+								"type":     "string",
+								"jsonPath": ".foo",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err = i.client.Resource(crdGVR).Apply(ctx, "oranges.fruits.cattle.io", patchedCRD, metav1.ApplyOptions{
+		FieldManager: "integration-tests",
+		Force:        true,
+	})
 	i.Require().NoError(err)
 
 	// Wait for the watch to be closed (with timeout)
