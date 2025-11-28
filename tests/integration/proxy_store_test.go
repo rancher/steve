@@ -51,6 +51,19 @@ spec:
 func (i *IntegrationSuite) TestProxyStore() {
 	ctx := i.T().Context()
 
+	// Typed structs for websocket messages
+	type steveListResponse struct {
+		Revision string `json:"revision"`
+	}
+	type watchRequest struct {
+		ResourceType string `json:"resourceType"`
+		Revision     string `json:"revision,omitempty"`
+	}
+	type watchEvent struct {
+		Name         string `json:"name"`
+		ResourceType string `json:"resourceType"`
+	}
+
 	// Create a Steve server with SQL cache enabled
 	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
 		SQLCache: true,
@@ -101,15 +114,24 @@ func (i *IntegrationSuite) TestProxyStore() {
 	i.Require().NoError(err)
 	i.Require().Equal(http.StatusSwitchingProtocols, resp.StatusCode)
 
-	// First, list the oranges to get the resourceVersion for watching
-	orangeList, err := i.client.Resource(orangeGVR).List(ctx, metav1.ListOptions{})
+	// List the oranges using Steve API to get the revision for watching
+	listResp, err := http.Get(baseURL + "/v1/fruits.cattle.io.oranges")
 	i.Require().NoError(err)
-	resourceVersion := orangeList.GetResourceVersion()
+	defer listResp.Body.Close()
+	i.Require().Equal(http.StatusOK, listResp.StatusCode)
 
-	// Send message to establish watch with the resourceVersion
-	watchMessage := map[string]interface{}{
-		"resourceType": "fruits.cattle.io.oranges",
-		"resourceVersion": resourceVersion,
+	listBody, err := io.ReadAll(listResp.Body)
+	i.Require().NoError(err)
+
+	var listResult steveListResponse
+	err = json.Unmarshal(listBody, &listResult)
+	i.Require().NoError(err)
+	revision := listResult.Revision
+
+	// Send message to establish watch with the revision
+	watchMessage := watchRequest{
+		ResourceType: "fruits.cattle.io.oranges",
+		Revision:     revision,
 	}
 	err = wsConn.WriteJSON(watchMessage)
 	i.Require().NoError(err)
@@ -127,11 +149,11 @@ func (i *IntegrationSuite) TestProxyStore() {
 				return
 			}
 			// Check for messages
-			var msg map[string]interface{}
-			if err := json.Unmarshal(message, &msg); err != nil {
+			var event watchEvent
+			if err := json.Unmarshal(message, &event); err != nil {
 				continue
 			}
-			if msg["name"] == "resource.create" && msg["resourceType"] == "fruits.cattle.io.oranges" {
+			if event.Name == "resource.create" && event.ResourceType == "fruits.cattle.io.oranges" {
 				// Watch received the create notification
 				select {
 				case <-createReceived:
@@ -140,7 +162,7 @@ func (i *IntegrationSuite) TestProxyStore() {
 					close(createReceived)
 				}
 			}
-			if msg["name"] == "resource.stop" && msg["resourceType"] == "fruits.cattle.io.oranges" {
+			if event.Name == "resource.stop" && event.ResourceType == "fruits.cattle.io.oranges" {
 				// Watch was closed by the server
 				return
 			}
@@ -261,9 +283,9 @@ func (i *IntegrationSuite) TestProxyStore() {
 		require.NoError(c, err)
 		require.Equal(c, http.StatusSwitchingProtocols, resp.StatusCode)
 
-		// Send message to establish watch (without resourceVersion to watch from current state)
-		newWatchMessage := map[string]interface{}{
-			"resourceType": "fruits.cattle.io.oranges",
+		// Send message to establish watch (without revision to watch from current state)
+		newWatchMessage := watchRequest{
+			ResourceType: "fruits.cattle.io.oranges",
 		}
 		err = newWsConn.WriteJSON(newWatchMessage)
 		require.NoError(c, err)

@@ -286,6 +286,7 @@ func (i *IntegrationSuite) waitForSchema(baseURL string, gvr schema.GroupVersion
 
 func (i *IntegrationSuite) maybeStopAndDebug(baseURL string) {
 	if os.Getenv("INTEGRATION_TEST_DEBUG") == "true" {
+		wsURL := strings.Replace(baseURL, "http://", "ws://", 1) + "/v1/subscribe"
 		fmt.Printf(`###########################
 #
 # Integration tests stopped as requested
@@ -293,11 +294,12 @@ func (i *IntegrationSuite) maybeStopAndDebug(baseURL string) {
 # You can now access the Kubernetes cluster and steve
 #
 # Kubernetes: KUBECONFIG=%s
-# Steve URL: %s
+# Steve URL: %s/v1
+# Steve WebSocket URL: %s
 # SQL cache database: %s
 #
 ###########################
-`, i.kubeconfigFile, baseURL, i.sqliteDatabaseFile)
+`, i.kubeconfigFile, baseURL, wsURL, i.sqliteDatabaseFile)
 		<-i.T().Context().Done()
 		i.Require().FailNow("Troubleshooting done, exiting")
 	}
