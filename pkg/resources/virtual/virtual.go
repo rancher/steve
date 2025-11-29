@@ -56,7 +56,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 				}
 
 				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
-				if err != nil || !got {
+				if err != nil || !got || curValue[index] == nil {
 					return obj, err
 				}
 
