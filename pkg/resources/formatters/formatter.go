@@ -13,7 +13,7 @@ import (
 	"github.com/rancher/norman/types/convert"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/sirupsen/logrus"
-	"helm.sh/helm/v3/pkg/release"
+	"helm.sh/helm/v4/pkg/release"
 	rspb "k8s.io/helm/pkg/proto/hapi/release"
 )
 
