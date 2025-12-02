@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/rancher/apiserver/pkg/middleware"
@@ -127,14 +126,14 @@ func (u *Handler) indexPath() (path string, isURL bool) {
 
 func (u *Handler) apiUIPath() (string, bool) {
 	version := u.apiUIVersionSetting()
-	remotePath := "https://releases.rancher.com/api-ui/"
+	remotePath := fmt.Sprintf("https://releases.rancher.com/api-ui/%s", version)
 
 	switch u.offlineSetting() {
 	case "dynamic":
 		if u.releaseSetting() {
 			return filepath.Join(u.pathSetting(), "api-ui"), false
 		}
-		if u.canDownload(fmt.Sprintf("%s/%s/%s", remotePath, version, "ui.min.js")) {
+		if u.canDownload(fmt.Sprintf("%s/%s", remotePath, "ui.min.js")) {
 			return remotePath, true
 		}
 		return filepath.Join(u.pathSetting(), "api-ui"), false
@@ -150,17 +149,12 @@ func (u *Handler) ServeAPIUI() http.Handler {
 		http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			base, isURL := u.apiUIPath()
 			if isURL {
-				remoteURL := base + req.URL.Path
+				remoteURL := fmt.Sprintf("%s/%s", base, req.URL.Path)
 				if err := serveRemote(rw, remoteURL); err != nil {
 					logrus.Errorf("failed to fetch asset from %s: %v", remoteURL, err)
 				}
 			} else {
-				parts := strings.SplitN(req.URL.Path, "/", 2)
-				if len(parts) == 2 {
-					http.ServeFile(rw, req, filepath.Join(base, parts[1]))
-				} else {
-					http.NotFound(rw, req)
-				}
+				http.ServeFile(rw, req, filepath.Join(base, req.URL.Path))
 			}
 		})))
 }
