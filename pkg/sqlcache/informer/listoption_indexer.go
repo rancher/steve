@@ -382,9 +382,14 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				continue
 			}
 
-			eventsCh <- watch.Event{
+			ev := watch.Event{
 				Type:   eventType,
 				Object: obj,
+			}
+			select {
+			case eventsCh <- ev:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
 		return rows.Err()
