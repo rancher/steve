@@ -765,8 +765,6 @@ func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []str
 	if err != nil {
 		return nil, err
 	}
-	//	qualifiedField := smartJoin(field)
-	//	fmt.Printf("QQQ: ****: Ignoring qualifiedField %s\n", qualifiedField)
 	return l.executeSummaryQueryForField(ctx, queryInfo, field)
 }
 
@@ -881,16 +879,6 @@ func (l *ListOptionIndexer) constructSimpleSummaryQueryForLabelField(fieldParts 
 	return &QueryInfo{query: query, params: args}, nil
 }
 
-/*
-
-		expectedStmt: `WITH w1("metadata.state.name") AS (
-  SELECT f1."metadata.state.name" FROM "something_fields" f1
-    WHERE (f1."queryField1" = ?) OR (f1."metadata.namespace" = ?)
-)
-  SELECT 'metadata.state.name' AS p, COUNT(*) AS c, "metadata.state.name" AS k FROM w1
-    WHERE k != "" GROUP BY k`,
-*/
-
 // Build the SELECT part for the initial WITH block
 func (l *ListOptionIndexer) constructSummaryTestFilters(lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string, dbName string, mainFieldPrefix string, joinTableIndexByLabelName map[string]int) (*filterComponentsT, error) {
 	queryUsesLabels := hasLabelFilter(lo.Filters) || len(lo.ProjectsOrNamespaces.Filters) > 0
@@ -913,7 +901,6 @@ func (l *ListOptionIndexer) constructSummaryTestFilters(lo *sqltypes.ListOptions
 						jtIndex := len(joinTableIndexByLabelName) + 1
 						joinTableIndexByLabelName[labelName] = jtIndex
 						jtPrefix := fmt.Sprintf("lt%d", jtIndex)
-						// joinParts = append(joinParts, joinPart{tableName: labelName, prefix: jtPrefix, onPrefix: mainFieldPrefix})
 						joinParts = append(joinParts,
 							joinPart{joinCommand: "LEFT OUTER JOIN",
 								tableName:      fmt.Sprintf("%s_labels", dbName),
@@ -938,7 +925,12 @@ func (l *ListOptionIndexer) constructSummaryTestFilters(lo *sqltypes.ListOptions
 			jtIndex = i
 		}
 		jtPrefix := fmt.Sprintf("lt%d", jtIndex)
-		joinParts = append(joinParts, joinPart{tableName: namespacesDbName, tableNameAlias: "nsf", onPrefix: mainFieldPrefix, onField: "metadata.namespace", otherPrefix: "nsf", otherField: "metadata.namespace"})
+		joinParts = append(joinParts, joinPart{tableName: namespacesDbName,
+			tableNameAlias: "nsf",
+			onPrefix: mainFieldPrefix,
+			onField: "metadata.namespace",
+			otherPrefix: "nsf",
+			otherField: "metadata.namespace"})
 		joinParts = append(joinParts, joinPart{tableName: fmt.Sprintf("%s_labels", namespacesDbName),
 			tableNameAlias: jtPrefix,
 			onPrefix:       "nsf",
@@ -1070,16 +1062,6 @@ func getLabelColumnNameToDisplay(fieldParts []string) (string, error) {
 	}
 	return columnNameToDisplay, nil
 }
-
-/*
-		args := make([]any, 1)
-		args[0] = lastPart
-		// We can write out the first arg with '%s' because it's been validated.
-		// Because we want the actual field name to end up in a row, we can't use a placeholder.
-		// We could do that with the label, but there's no need to
-		return fmt.Sprintf(`SELECT '%s' AS p, COUNT(*) AS c, value AS k FROM "%s_labels" WHERE label = ? AND k != "" GROUP BY k`, columnNameToDisplay, l.GetName()), args, nil
-}
-*/
 
 func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, mainFieldPrefix string) (string, error) {
 	columnName := toColumnName(fieldParts)
@@ -1478,7 +1460,6 @@ func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, que
 		return nil, err
 	}
 
-	//XXX This isn't quite there but should be close
 	propertyBlock := make(map[string]any)
 	var countsBlock map[string]int
 	for _, item := range items {

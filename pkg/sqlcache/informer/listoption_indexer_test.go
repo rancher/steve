@@ -38,6 +38,18 @@ import (
 
 var emptyNamespaceList = &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
 
+var standardJoinParts = []joinPart{
+		{
+			joinCommand:    "LEFT OUTER JOIN",
+			tableName:      "something_labels",
+			tableNameAlias: "lt1",
+			onPrefix:       "f1",
+			onField:        "key",
+			otherPrefix:    "lt1",
+			otherField:     "key",
+		},
+	}
+
 func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opts ListOptionIndexerOptions, shouldEncrypt bool, nsList *unstructured.UnstructuredList) (*ListOptionIndexer, string, error) {
 	m, err := encryption.NewManager()
 	if err != nil {
@@ -3988,17 +4000,7 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		partitions: []partition.Partition{{All: true}},
 		ns:         "",
 		expectedFilters: &filterComponentsT{
-			joinParts: []joinPart{
-				{
-					joinCommand:    "LEFT OUTER JOIN",
-					tableName:      "something_labels",
-					tableNameAlias: "lt1",
-					onPrefix:       "f1",
-					onField:        "key",
-					otherPrefix:    "lt1",
-					otherField:     "key",
-				},
-			},
+			joinParts: standardJoinParts,
 			whereClauses: []string{`(f1."metadata.queryField1" != ?) OR ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))`},
@@ -4053,17 +4055,7 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		ns:         "",
 		expectedFilters: &filterComponentsT{
 			whereClauses: []string{`lt1.label = ? AND lt1.value LIKE ? ESCAPE '\'`}, //'
-			joinParts: []joinPart{
-				{
-					joinCommand:    "LEFT OUTER JOIN",
-					tableName:      "something_labels",
-					tableNameAlias: "lt1",
-					onPrefix:       "f1",
-					onField:        "key",
-					otherPrefix:    "lt1",
-					otherField:     "key",
-				},
-			},
+			joinParts: standardJoinParts,
 			params:  []any{"kubernetes.io/metadata.name", "%kube%"},
 			isEmpty: false,
 		},
@@ -4096,17 +4088,7 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		partitions: []partition.Partition{{All: true}},
 		ns:         "",
 		expectedFilters: &filterComponentsT{
-			joinParts: []joinPart{
-				{
-					joinCommand:    "LEFT OUTER JOIN",
-					tableName:      "something_labels",
-					tableNameAlias: "lt1",
-					onPrefix:       "f1",
-					onField:        "key",
-					otherPrefix:    "lt1",
-					otherField:     "key",
-				},
-			},
+			joinParts: standardJoinParts,
 			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`,
@@ -4167,17 +4149,6 @@ func TestConstructSummaryQueryForField(t *testing.T) {
 		expectedStmt     string
 		expectedStmtArgs []any
 		expectedErr      string
-	}
-	standardJoinParts := []joinPart{
-		{
-			joinCommand:    "LEFT OUTER JOIN",
-			tableName:      "something_labels",
-			tableNameAlias: "lt1",
-			onPrefix:       "f1",
-			onField:        "key",
-			otherPrefix:    "lt1",
-			otherField:     "key",
-		},
 	}
 
 	var tests []testCase
