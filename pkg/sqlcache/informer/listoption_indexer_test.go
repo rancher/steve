@@ -3130,8 +3130,7 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
+    ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
@@ -3165,8 +3164,7 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
+    ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
@@ -3283,9 +3281,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3314,9 +3311,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3356,13 +3352,11 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt2i1 ON o1.key = lt2i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt2i1 ON f1.key = lt2i1.key
 		WHERE lt2i1.label = ?)) OR (lt2.label = ? AND lt2.value != ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3416,9 +3410,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT IN (?, ?))) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3473,9 +3466,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    (o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,

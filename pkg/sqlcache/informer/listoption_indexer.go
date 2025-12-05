@@ -1902,11 +1902,10 @@ func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter
 		return clause, matches, nil
 	case sqltypes.NotIn:
 		clause1 := fmt.Sprintf(`(lt%d.label = ? AND lt%d.value NOT IN %s)`, index, index, target)
-		clause2 := fmt.Sprintf(`(o.key NOT IN (SELECT o1.key FROM "%s" o1
-		JOIN "%s_fields" f1 ON o1.key = f1.key
+		clause2 := fmt.Sprintf(`(o.key NOT IN (SELECT f1.key FROM "%s_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt%di1 ON nsf1.key = lt%di1.key
-		WHERE lt%di1.label = ?))`, dbName, dbName, index, index, index)
+		WHERE lt%di1.label = ?))`, dbName, index, index, index)
 		matches = append(matches, labelName)
 		clause := fmt.Sprintf("%s OR %s", clause1, clause2)
 		return clause, matches, nil
@@ -1975,10 +1974,9 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, ma
 				dbName, index, newMainFieldPrefix, index,
 				index)
 		} else {
-			clause = fmt.Sprintf(`o.key NOT IN (SELECT o1.key FROM "%s" o1
-		JOIN "%s_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "%s_labels" lt%di1 ON o1.key = lt%di1.key
-		WHERE lt%di1.label = ?)`, dbName, dbName, dbName, index, index, index)
+			clause = fmt.Sprintf(`o.key NOT IN (SELECT f1.key FROM "%s_fields" f1
+		LEFT OUTER JOIN "%s_labels" lt%di1 ON f1.key = lt%di1.key
+		WHERE lt%di1.label = ?)`, dbName, dbName, index, index, index)
 		}
 		return clause, []any{labelName}, nil
 
