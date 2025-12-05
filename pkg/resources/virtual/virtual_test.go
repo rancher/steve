@@ -559,9 +559,6 @@ func TestTransformChain(t *testing.T) {
 			apiVersion := raw.GetAPIVersion()
 			parts := strings.Split(apiVersion, "/")
 			gvk := schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: raw.GetKind()}
-			if test.name == "a non-ready cluster" {
-				fmt.Printf("Stop here")
-			}
 			output, err := tb.GetTransformFunc(gvk, test.columns, test.isCRD)(test.input)
 			require.Equal(t, test.wantOutput, output)
 			if test.wantError {

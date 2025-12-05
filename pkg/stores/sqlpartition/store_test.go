@@ -90,7 +90,7 @@ func TestList(t *testing.T) {
 			}
 			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
 			p.EXPECT().Store().Return(us)
-			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, len(uListToReturn.Items), "", nil)
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(uListToReturn, len(uListToReturn.Items), nil, "", nil)
 			l, err := s.List(req, schema)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedAPIObjList, l)
@@ -127,7 +127,7 @@ func TestList(t *testing.T) {
 			partitions := make([]partition.Partition, 0)
 			p.EXPECT().All(req, schema, "list", "").Return(partitions, nil)
 			p.EXPECT().Store().Return(us)
-			us.EXPECT().ListByPartitions(req, schema, partitions).Return(nil, 0, "", fmt.Errorf("error"))
+			us.EXPECT().ListByPartitions(req, schema, partitions).Return(nil, 0, nil, "", fmt.Errorf("error"))
 			_, err := s.List(req, schema)
 			assert.NotNil(t, err)
 		},
@@ -167,7 +167,7 @@ func (m *mockStore) WatchByPartitions(apiOp *types.APIRequest, schema *types.API
 	panic("implement me")
 }
 
-func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, string, error) {
+func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APISchema, partitions []partition.Partition) ([]unstructured.Unstructured, string, *types.APISummary, string, error) {
 	list := []unstructured.Unstructured{}
 	revision := ""
 	for _, partition := range partitions {
@@ -175,13 +175,13 @@ func (m *mockStore) ListByPartitions(apiOp *types.APIRequest, schema *types.APIS
 		apiOp.Namespace = partition.Namespace
 		partial, _, err := m.List(apiOp, schema)
 		if err != nil {
-			return nil, "", "", err
+			return nil, "", nil, "", err
 		}
 
 		list = append(list, partial.Items...)
 		revision = partial.GetResourceVersion()
 	}
-	return list, revision, "", nil
+	return list, revision, nil, "", nil
 }
 
 func (m *mockStore) List(apiOp *types.APIRequest, schema *types.APISchema) (*unstructured.UnstructuredList, []types.Warning, error) {

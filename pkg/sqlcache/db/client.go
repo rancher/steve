@@ -53,6 +53,7 @@ type Client interface {
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
+	ReadStringIntString(rows Rows) ([][]string, error)
 	Upsert(tx TxClient, stmt Stmt, key string, obj SerializedObject) error
 	NewConnection(isTemp bool) (string, error)
 	Serialize(obj any, encrypt bool) (SerializedObject, error)
@@ -294,6 +295,36 @@ func (c *client) ReadStrings2(rows Rows) ([][]string, error) {
 		}
 
 		result = append(result, []string{key1, key2})
+	}
+	err := rows.Err()
+	if err != nil {
+		return nil, closeRowsOnError(rows, err)
+	}
+
+	err = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ReadStringIntString scans the given rows into (string, string, string) tuples, and then returns a slice of them.
+func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
+	c.connLock.RLock()
+	defer c.connLock.RUnlock()
+
+	var result [][]string
+	for rows.Next() {
+		var val1 string
+		var val2 int
+		var val3 string
+		err := rows.Scan(&val1, &val2, &val3)
+		if err != nil {
+			return nil, closeRowsOnError(rows, err)
+		}
+
+		result = append(result, []string{val1, strconv.Itoa(val2), val3})
 	}
 	err := rows.Err()
 	if err != nil {

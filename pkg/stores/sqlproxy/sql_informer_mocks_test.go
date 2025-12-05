@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	types "github.com/rancher/apiserver/pkg/types"
 	informer "github.com/rancher/steve/pkg/sqlcache/informer"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -74,14 +75,15 @@ func (mr *MockByOptionsListerMockRecorder) GetLatestResourceVersion() *gomock.Ca
 }
 
 // ListByOptions mocks base method.
-func (m *MockByOptionsLister) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockByOptionsLister) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByOptions", ctx, lo, partitions, namespace)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
-	ret2, _ := ret[2].(string)
-	ret3, _ := ret[3].(error)
-	return ret0, ret1, ret2, ret3
+	ret2, _ := ret[2].(*types.APISummary)
+	ret3, _ := ret[3].(string)
+	ret4, _ := ret[4].(error)
+	return ret0, ret1, ret2, ret3, ret4
 }
 
 // ListByOptions indicates an expected call of ListByOptions.
