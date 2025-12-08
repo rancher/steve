@@ -154,15 +154,37 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
+	// We don't properly support multiple columns pointing to the same json
+	// path, but we also want steve to sorta still work since it's a pretty
+	// rare edge case. So we avoid duplicating those columns in the DB since
+	// that would result in an error.
+	//
+	// Some fields are still using the JSON path as the ID which is NOT
+	// unique since Kubernetes allows specifying multiple columns pointing
+	// to the same JSON path.
+	fieldSet := make(map[string]struct{})
+
 	var indexedFields []string
 	for _, f := range defaultIndexedFields {
+		if _, ok := fieldSet[f]; ok {
+			continue
+		}
 		indexedFields = append(indexedFields, f)
+		fieldSet[f] = struct{}{}
 	}
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, defaultIndexNamespaced)
+		if _, ok := fieldSet[defaultIndexNamespaced]; !ok {
+			indexedFields = append(indexedFields, defaultIndexNamespaced)
+			fieldSet[defaultIndexNamespaced] = struct{}{}
+		}
 	}
 	for _, f := range opts.Fields {
-		indexedFields = append(indexedFields, toColumnName(f))
+		name := toColumnName(f)
+		if _, ok := fieldSet[name]; ok {
+			continue
+		}
+		indexedFields = append(indexedFields, name)
+		fieldSet[name] = struct{}{}
 	}
 
 	l := &ListOptionIndexer{
