@@ -44,17 +44,12 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	}
 
 	// Detecting if we need to convert date fields
-	for _, col := range columns {
+	for index, col := range columns {
 		gvkDateFields, gvkFound := rescommon.DateFieldsByGVK[gvk]
 		hasCRDDate := isCRD && col.Type == "date"
 		hasBuiltInDate := gvkFound && slices.Contains(gvkDateFields, col.Name)
 		if hasCRDDate || hasBuiltInDate {
 			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
-				index := rescommon.GetIndexValueFromString(col.Field)
-				if index == -1 {
-					return obj, fmt.Errorf("field index not found at column.Field struct variable: %s", col.Field)
-				}
-
 				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
 				if err != nil || !got || curValue[index] == nil {
 					return obj, err

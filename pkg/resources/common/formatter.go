@@ -244,18 +244,12 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured, isCRD bool) {
 	if request.Schema != nil {
 		cols := GetColumnDefinitions(request.Schema)
-		for _, col := range cols {
+		for index, col := range cols {
 			gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
 
 			hasCRDDateField := isCRD && col.Type == "date"
 			hasGVKDateFieldMapping := gvkFound && slices.Contains(gvkDateFields, col.Name)
 			if hasCRDDateField || hasGVKDateFieldMapping {
-				index := GetIndexValueFromString(col.Field)
-				if index == -1 {
-					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)
-					return
-				}
-
 				curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
 				if err != nil {
 					logrus.Warnf("failed to get metadata.fields slice from unstr.Object: %s", err.Error())
