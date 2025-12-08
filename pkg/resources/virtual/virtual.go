@@ -60,6 +60,10 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					return obj, fmt.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", index, curValue[index])
 				}
 
+				if value == "<invalid>" {
+					return obj, nil
+				}
+
 				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
 				if err != nil {
 					logrus.Errorf("parse timestamp %s, failed with error: %s", value, err)
