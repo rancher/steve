@@ -1,0 +1,113 @@
+apiVersion: catalog.cattle.io/v1
+kind: Operation
+metadata:
+  name: helm-operation-bgqww
+  namespace: default
+status:
+  # action: upgrade
+  # automaticCPTolerations: true
+  command:
+  - helm
+  - upgrade
+  - --history-max=5
+  - --install=true
+  - --labels=catalog.cattle.io/cluster-repo-name=rancher-charts
+  - --namespace=cattle-fleet-system
+  - --reset-values=true
+  - --take-ownership=true
+  - --timeout=5m0s
+  - --values=/home/shell/helm/values-fleet-108.0.0-up0.14.0-rc.1.yaml
+  - --version=108.0.0+up0.14.0-rc.1
+  - --wait=true
+  - fleet
+  - /home/shell/helm/fleet-108.0.0-up0.14.0-rc.1.tgz
+  # conditions:
+  # - lastUpdateTime: "2025-12-08T18:29:58Z"
+  #   status: "False"
+  #   type: Reconciling
+  # - lastUpdateTime: "2025-12-08T18:29:39Z"
+  #   status: "False"
+  #   type: Stalled
+  # namespace: default
+  # observedGeneration: 1
+  # podCreated: true
+  # podName: helm-operation-bgqww
+  # podNamespace: cattle-system
+  # releaseName: fleet
+  # token: lnqrq68h8q7nx5tf4zr5vwwj7d9j8mlghps49d55hdkvtbc4mbqjqx
+# ---
+# apiVersion: catalog.cattle.io/v1
+# kind: Operation
+# metadata:
+#   name: helm-operation-pg5jz
+#   namespace: default
+# status:
+#   action: upgrade
+#   automaticCPTolerations: true
+#   command:
+#   - helm
+#   - upgrade
+#   - --history-max=5
+#   - --install=true
+#   - --labels=catalog.cattle.io/cluster-repo-name=rancher-charts
+#   - --namespace=cattle-fleet-system
+#   - --reset-values=true
+#   - --take-ownership=true
+#   - --timeout=5m0s
+#   - --values=/home/shell/helm/values-fleet-108.0.0-up0.14.0-rc.1.yaml
+#   - --version=108.0.0+up0.14.0-rc.1
+#   - --wait=true
+#   - fleet
+#   - /home/shell/helm/fleet-108.0.0-up0.14.0-rc.1.tgz
+#   conditions:
+#   - lastUpdateTime: "2025-12-08T18:30:07Z"
+#     status: "False"
+#     type: Reconciling
+#   - lastUpdateTime: "2025-12-08T18:30:00Z"
+#     status: "False"
+#     type: Stalled
+#   namespace: default
+#   observedGeneration: 1
+#   podCreated: true
+#   podName: helm-operation-pg5jz
+#   podNamespace: cattle-system
+#   releaseName: fleet
+#   token: clx4b2gmqp82cr8rwsnc255k52tt9pzfz6gkqtjmhq87kd9z74lwjh
+# ---
+# apiVersion: catalog.cattle.io/v1
+# kind: Operation
+# metadata:
+#   name: helm-operation-s56f2
+#   namespace: default
+# status:
+#   action: upgrade
+#   automaticCPTolerations: true
+#   command:
+#   - helm
+#   - upgrade
+#   - --history-max=5
+#   - --install=true
+#   - --labels=catalog.cattle.io/cluster-repo-name=rancher-charts
+#   - --namespace=cattle-fleet-system
+#   - --reset-values=true
+#   - --take-ownership=true
+#   - --timeout=5m0s
+#   - --values=/home/shell/helm/values-fleet-108.0.0-up0.14.0-rc.1.yaml
+#   - --version=108.0.0+up0.14.0-rc.1
+#   - --wait=true
+#   - fleet
+#   - /home/shell/helm/fleet-108.0.0-up0.14.0-rc.1.tgz
+#   conditions:
+#   - lastUpdateTime: "2025-12-08T18:31:11Z"
+#     status: "False"
+#     type: Reconciling
+#   - lastUpdateTime: "2025-12-08T18:31:04Z"
+#     status: "False"
+#     type: Stalled
+#   namespace: default
+#   observedGeneration: 1
+#   podCreated: true
+#   podName: helm-operation-s56f2
+#   podNamespace: cattle-system
+#   releaseName: fleet
+#   token: tck92q8kzbmcwx5cc75rknt5gfdvwgqkh46n475k9rdf7cnnhl2jlp
