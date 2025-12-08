@@ -32,7 +32,7 @@ func TestTableColsToCommonCols(t *testing.T) {
 				},
 				{
 					Name:        "favoriteColour",
-					Field:       "$.metadata.fields[3]",
+					Field:       "$.metadata.fields[2]",
 					Type:        "string",
 					Description: "green of course",
 				},
@@ -46,8 +46,9 @@ func TestTableColsToCommonCols(t *testing.T) {
 					TableColumnDefinition: metav1.TableColumnDefinition{Name: "position", Type: "string", Description: "number of this pod"},
 					Field:                 "$.metadata.fields[1]",
 				},
-				{TableColumnDefinition: metav1.TableColumnDefinition{Name: "favoriteColour", Type: "string", Description: "green of course"},
-					Field: "$.metadata.fields[2]",
+				{
+					TableColumnDefinition: metav1.TableColumnDefinition{Name: "favoriteColour", Type: "string", Description: "green of course"},
+					Field:                 "$.metadata.fields[2]",
 				},
 			}
 			got := TableColsToCommonCols(originalColumns)
