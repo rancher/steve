@@ -141,7 +141,7 @@ Equality can be specified with either one or two '=' signs.
 The following matches objects called either 'cat' or 'cows':
 
 ```
-filter=metadata.name=cat,metadata.name==cows
+filter=metadata.name=cat,metadata.name=cows
 ```
 
 The following matches objects whose names contain either the substring 'cat' or 'cows':
@@ -451,6 +451,22 @@ go run main.go
 ```
 
 The API can be accessed by navigating to https://localhost:9443/v1.
+
+### Running the pprof server
+
+You can enable the `pprof` http server when running steve as a binary by
+enabling pprof with `--enable-pprof`.
+
+```
+go run . --enable-pprof
+```
+
+It is then possible to use `go tool pprof` to view profiles. (You might need
+[graphviz](https://www.graphviz.org/)) For example:
+
+```
+go tool pprof -no_browser -http localhost:31000 http://localhost:6060/debug/pprof/goroutine
+```
 
 Steve Features
 --------------
@@ -909,10 +925,8 @@ all requests in the table test.
 
 #### Integration tests
 
-Integration tests for the steve API are located among the [rancher integration
-tests](ihttps://github.com/rancher/rancher/tree/release/v2.8/tests/v2/integration/steveapi).
-See the documentation included there for running the tests and using them to
-generate API documentation.
+New integration tests for the steve API are located in the `tests/` directory.
+Refer to [tests/integration/README.md](./tests/integration/README.md) for documentation on running and adding these tests.
 
 ## Running Tests
 

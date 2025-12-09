@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -25,11 +24,11 @@ import (
 	"github.com/rancher/steve/pkg/stores/sqlproxy/tablelistconvert"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
+	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
 
 	//"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,9 +45,9 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder
-//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./sql_informer_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer ByOptionsLister
-//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
+//go:generate go tool -modfile ../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder
+//go:generate go tool -modfile ../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package sqlproxy -destination ./sql_informer_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer ByOptionsLister
+//go:generate go tool -modfile ../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package sqlproxy -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
 var c *watch.FakeWatcher
 
@@ -285,7 +284,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -371,7 +370,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -449,7 +448,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			attributes.SetGVK(schema, gvk)
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
@@ -537,7 +536,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -626,7 +625,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			typeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -783,58 +782,6 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
 			assert.Nil(t, err)
 		})
-	}
-}
-
-func TestTableColsToCommonCols(t *testing.T) {
-	type testCase struct {
-		description string
-		test        func(t *testing.T)
-	}
-	var tests []testCase
-	tests = append(tests, testCase{
-		description: "table columns are converted to common columns",
-		test: func(t *testing.T) {
-			originalColumns := []table.Column{
-				{
-					Name:        "weight",
-					Field:       "$.metadata.fields[0]",
-					Type:        "integer",
-					Description: "how much the pod weighs",
-				},
-				{
-					Name:        "position",
-					Field:       "$.metadata.fields[1]",
-					Type:        "string",
-					Description: "number of this pod",
-				},
-				{
-					Name:        "favoriteColour",
-					Field:       "$.metadata.fields[3]",
-					Type:        "string",
-					Description: "green of course",
-				},
-			}
-			expectedColumns := []common.ColumnDefinition{
-				{
-					TableColumnDefinition: metav1.TableColumnDefinition{Name: "weight", Type: "integer", Description: "how much the pod weighs"},
-					Field:                 "$.metadata.fields[0]",
-				},
-				{
-					TableColumnDefinition: metav1.TableColumnDefinition{Name: "position", Type: "string", Description: "number of this pod"},
-					Field:                 "$.metadata.fields[1]",
-				},
-				{TableColumnDefinition: metav1.TableColumnDefinition{Name: "favoriteColour", Type: "string", Description: "green of course"},
-					Field: "$.metadata.fields[2]",
-				},
-			}
-			got := tableColsToCommonCols(originalColumns)
-			assert.Equal(t, expectedColumns, got)
-		},
-	})
-	t.Parallel()
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
 }
 

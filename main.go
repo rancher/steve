@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/rancher/dynamiclistener/server"
@@ -38,6 +40,13 @@ func run(_ *cli.Context) error {
 	s, err := config.ToServer(ctx, debugconfig.SQLCache)
 	if err != nil {
 		return err
+	}
+	if config.PprofEnabled {
+		go func() {
+			if err := http.ListenAndServe(config.PprofListenAddr, nil); err != nil {
+				logrus.Fatalf("pprof server: %v\n", err)
+			}
+		}()
 	}
 	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, &server.ListenOpts{DisplayServerLogs: true})
 }

@@ -217,8 +217,18 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	setStatements := make([]string, 0, len(indexedFields))
 
 	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
+		dropEventsQuery := fmt.Sprintf(dropEventsFmt, dbName)
+		if _, err := tx.Exec(dropEventsQuery); err != nil {
+			return err
+		}
+
 		createEventsTableQuery := fmt.Sprintf(createEventsTableFmt, dbName)
 		if _, err := tx.Exec(createEventsTableQuery); err != nil {
+			return err
+		}
+
+		dropFieldsQuery := fmt.Sprintf(dropFieldsFmt, dbName)
+		if _, err := tx.Exec(dropFieldsQuery); err != nil {
 			return err
 		}
 
@@ -248,6 +258,12 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 				setStatements = append(setStatements, setStatement)
 			}
 		}
+
+		dropLabelsQuery := fmt.Sprintf(dropLabelsStmtFmt, dbName)
+		if _, err := tx.Exec(dropLabelsQuery); err != nil {
+			return err
+		}
+
 		createLabelsTableQuery := fmt.Sprintf(createLabelsTableFmt, dbName, dbName)
 		if _, err := tx.Exec(createLabelsTableQuery); err != nil {
 			return err
@@ -374,9 +390,14 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				continue
 			}
 
-			eventsCh <- watch.Event{
+			ev := watch.Event{
 				Type:   eventType,
 				Object: obj,
+			}
+			select {
+			case eventsCh <- ev:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
 		return rows.Err()

@@ -1,0 +1,16 @@
+schemaID: provisioning.cattle.io.clusters
+tests:
+- query: sort=metadata.name
+  expected:
+  - default/angola
+  - default/botswana
+  - default/burundi
+  - default/mali
+  - default/rwanda
+- query: sort=status.clusterName,metadata.name
+  expected:
+  - default/mali # bamako
+  - default/botswana # gaborone
+  - default/burundi # gitega
+  - default/rwanda # kigali
+  - default/angola # luanda
