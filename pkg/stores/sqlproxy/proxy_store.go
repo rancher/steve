@@ -65,7 +65,7 @@ var (
 	paramScheme = runtime.NewScheme()
 	paramCodec  = runtime.NewParameterCodec(paramScheme)
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
-	typeSpecificIndexedFields = map[string][][]string{
+	TypeSpecificIndexedFields = map[string][][]string{
 		gvkKey("", "v1", "Event"): {
 			{"_type"},
 			{"involvedObject", "kind"},
@@ -284,8 +284,12 @@ var (
 	// We might need to pull in the `memoryRaw` fields as well
 	// Remember to index these fields in the database.
 	provisionedClusterDependencies = func() []sqltypes.ExternalDependency {
-		x := make([]sqltypes.ExternalDependency, 6)
-		for i, field := range []string{"status.allocatable.cpu", "status.allocatable.memory", "status.allocatable.pods", "status.requested.cpu", "status.requested.memory", "status.requested.pods"} {
+		fields := []string{"status.allocatable.cpu", "status.allocatable.cpuRaw",
+			"status.allocatable.memory", "status.allocatable.memoryRaw", "status.allocatable.pods",
+			"status.requested.cpu", "status.requested.cpuRaw",
+			"status.requested.memory", "status.requested.memoryRaw", "status.requested.pods"}
+		x := make([]sqltypes.ExternalDependency, len(fields))
+		for i, field := range fields {
 			x[i] = sqltypes.ExternalDependency{
 				SourceGVK:            gvkKey("provisioning.cattle.io", "v1", "Cluster"),
 				SourceFieldName:      "status.clusterName",
@@ -494,7 +498,7 @@ func (s *Store) initializeNamespaceCache() error {
 func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
 	fields := [][]string{}
 	fields = append(fields, commonIndexFields...)
-	typeFields := typeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
+	typeFields := TypeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
 	if typeFields != nil {
 		fields = append(fields, typeFields...)
 	}
@@ -511,13 +515,12 @@ func gvkKey(group, version, kind string) string {
 func getFieldAndColInfo(schema *types.APISchema, gvk schema.GroupVersionKind) ([][]string, []common.ColumnDefinition, map[string]string) {
 	var fields [][]string
 	colDefs := common.GetColumnDefinitions(schema)
-	if colDefs == nil {
-		return fields, nil, map[string]string{}
-	}
-	for _, colDef := range colDefs {
-		field := strings.TrimPrefix(colDef.Field, "$")
-		field = strings.TrimPrefix(field, ".")
-		fields = append(fields, queryhelper.SafeSplit(field))
+	if colDefs != nil {
+		for _, colDef := range colDefs {
+			field := strings.TrimPrefix(colDef.Field, "$")
+			field = strings.TrimPrefix(field, ".")
+			fields = append(fields, queryhelper.SafeSplit(field))
+		}
 	}
 	typeGuidance := getTypeGuidance(colDefs, gvk)
 
@@ -881,8 +884,16 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-var typeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
+var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
+		"status.allocatable.cpuRaw":    "REAL",
+		"status.allocatable.memoryRaw": "REAL",
+		"status.allocatable.pods":      "INT",
+		"status.requested.cpuRaw":      "REAL",
+		"status.requested.memoryRaw":   "REAL",
+		"status.requested.pods":        "INT",
+	},
+	schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}: {
 		"status.allocatable.cpuRaw":    "REAL",
 		"status.allocatable.memoryRaw": "REAL",
 		"status.allocatable.pods":      "INT",
@@ -922,7 +933,7 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 			guidance[trimmedField] = colType
 		}
 	}
-	tg, ok := typeGuidanceTable[gvk]
+	tg, ok := TypeGuidanceTable[gvk]
 	if ok {
 		for k, v := range tg {
 			guidance[k] = v
