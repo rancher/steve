@@ -115,21 +115,25 @@ func (c *client) beginTX(ctx context.Context, forWriting bool) (Tx, error) {
 	for {
 		attempts++
 		tx, err := c.conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: false})
-		if err == nil || attempts == maxBeginTXAttemptsOnBusyErrors {
-			return tx, err
-		}
-
-		var serr *sqlite.Error
-		if !errors.As(err, &serr) {
+		if err == nil {
+			return tx, nil
+		} else if attempts == maxBeginTXAttemptsOnBusyErrors || !isRetriableSQLiteError(err) {
 			return nil, err
 		}
+	}
+}
 
-		switch serr.Code() {
-		case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_BUSY_SNAPSHOT:
-			continue
-		default:
-			return nil, err
-		}
+func isRetriableSQLiteError(err error) bool {
+	var serr *sqlite.Error
+	if !errors.As(err, &serr) {
+		return false
+	}
+
+	switch serr.Code() {
+	case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_BUSY_SNAPSHOT:
+		return true
+	default:
+		return false
 	}
 }
 
