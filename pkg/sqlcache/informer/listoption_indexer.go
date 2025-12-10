@@ -2,6 +2,7 @@ package informer
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"maps"
@@ -343,32 +344,23 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 	}
 
 	if err := l.WithTransaction(ctx, false, func(tx db.TxClient) error {
-		var rowID int
-		// use a closure to ensure rows is always closed immediately after it's needed
-		if err := func() error {
-			rows, err := l.QueryForRows(ctx, tx.Stmt(l.findEventsRowByRVStmt), targetRV)
-			if err != nil {
-				return err
-			}
-			defer rows.Close()
-
-			if !rows.Next() {
-				// query returned no results
-				if targetRV != latestRV {
-					return ErrTooOld
-				}
-				return nil
-			}
-			if err := rows.Scan(&rowID); err != nil {
-				return fmt.Errorf("failed scan rowid: %w", err)
-			}
-			return nil
-		}(); err != nil {
+		rowIDRow := tx.Stmt(l.findEventsRowByRVStmt).QueryRowContext(ctx, targetRV)
+		if err := rowIDRow.Err(); err != nil {
 			return err
 		}
 
+		var rowID int
+		err := rowIDRow.Scan(&rowID)
+		if errors.Is(err, sql.ErrNoRows) {
+			if targetRV != latestRV {
+				return ErrTooOld
+			}
+		} else if err != nil {
+			return fmt.Errorf("failed scan rowid: %w", err)
+		}
+
 		// Backfilling previous events from resourceVersion
-		rows, err := l.QueryForRows(ctx, tx.Stmt(l.listEventsAfterStmt), rowID)
+		rows, err := tx.Stmt(l.listEventsAfterStmt).QueryContext(ctx, rowID)
 		if err != nil {
 			return err
 		}
@@ -963,7 +955,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 	var items []any
 	err = l.WithTransaction(ctx, false, func(tx db.TxClient) error {
 		now := time.Now()
-		rows, err := l.QueryForRows(ctx, tx.Stmt(stmt), queryInfo.params...)
+		rows, err := tx.Stmt(stmt).QueryContext(ctx, queryInfo.params...)
 		if err != nil {
 			return err
 		}
@@ -983,7 +975,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 				}
 			}()
 			now = time.Now()
-			rows, err := l.QueryForRows(ctx, tx.Stmt(countStmt), queryInfo.countParams...)
+			rows, err := tx.Stmt(countStmt).QueryContext(ctx, queryInfo.countParams...)
 			if err != nil {
 				return err
 			}
