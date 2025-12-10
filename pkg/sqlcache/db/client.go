@@ -218,7 +218,16 @@ func (c *client) QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Ro
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
-	return stmt.QueryContext(ctx, params...)
+	// The underlying sqlite implementation seems to not cleanly close transactions when a query is interrupted
+	// We use context.Background to let the query finish correctly, immediately checking the original context afterward and properly closing Rows if canceled
+	rows, err := stmt.QueryContext(context.Background(), params...)
+	if err != nil {
+		return nil, err
+	} else if ctx.Err() != nil {
+		rows.Close()
+		return nil, ctx.Err()
+	}
+	return rows, nil
 }
 
 // ReadObjects Scans the given rows, performs any necessary decryption, converts the data to objects of the given type,
