@@ -26,9 +26,7 @@ type Rows interface {
 // rationale: allow mocking
 type Stmt interface {
 	Exec(args ...any) (sql.Result, error)
-	Query(args ...any) (*sql.Rows, error)
 	QueryContext(ctx context.Context, args ...any) (Rows, error)
-	QueryRowContext(ctx context.Context, args ...any) Row
 	Close() error
 
 	// SQLStmt unwraps the original sql.Stmt
@@ -38,21 +36,7 @@ type Stmt interface {
 	GetQueryString() string
 }
 
-// row wraps a sql.Row, keeping track of the original query used to produce it
-type row struct {
-	*sql.Row
-	queryString string
-}
-
-// Err wraps the original *sql.Row's Err() with a QueryError
-func (r row) Err() error {
-	if err := r.Row.Err(); err != nil {
-		return &QueryError{QueryString: r.queryString, Err: err}
-	}
-	return nil
-}
-
-// row wraps a sql.Rows, keeping track of the original query used to produce it
+// rows wraps a sql.Rows, keeping track of the original query used to produce it
 type rows struct {
 	*sql.Rows
 	queryString string
@@ -104,10 +88,6 @@ func (s *stmt) QueryContext(ctx context.Context, args ...any) (Rows, error) {
 		}
 	}
 	return rows{Rows: res, queryString: s.queryString}, nil
-}
-
-func (s *stmt) QueryRowContext(ctx context.Context, args ...any) Row {
-	return row{Row: s.Stmt.QueryRowContext(ctx, args...), queryString: s.queryString}
 }
 
 func (s *stmt) Close() error {
