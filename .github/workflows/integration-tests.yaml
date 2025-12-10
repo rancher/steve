@@ -13,7 +13,7 @@ jobs:
     steps:
     - name : Checkout repository
       # https://github.com/actions/checkout/releases/tag/v4.1.1
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
     - name: Install Go
       # https://github.com/actions/setup-go/releases/tag/v5.0.0
@@ -22,7 +22,7 @@ jobs:
         go-version-file: 'go.mod'
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
     - name: Install k3d
       run: |
