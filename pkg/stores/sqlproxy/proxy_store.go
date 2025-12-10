@@ -806,8 +806,8 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 		}
 
 		pType := apitypes.StrategicMergePatchType
-		if apiOp.Request.Header.Get("content-type") == string(apitypes.JSONPatchType) {
-			pType = apitypes.JSONPatchType
+		if contentType := apiOp.Request.Header.Get("Content-Type"); contentType != "" {
+			pType = apitypes.PatchType(contentType)
 		}
 
 		opts := metav1.PatchOptions{}
