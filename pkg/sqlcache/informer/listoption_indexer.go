@@ -927,10 +927,10 @@ func (l *ListOptionIndexer) constructSummaryTestFilters(lo *sqltypes.ListOptions
 		jtPrefix := fmt.Sprintf("lt%d", jtIndex)
 		joinParts = append(joinParts, joinPart{tableName: namespacesDbName,
 			tableNameAlias: "nsf",
-			onPrefix: mainFieldPrefix,
-			onField: "metadata.namespace",
-			otherPrefix: "nsf",
-			otherField: "metadata.namespace"})
+			onPrefix:       mainFieldPrefix,
+			onField:        "metadata.namespace",
+			otherPrefix:    "nsf",
+			otherField:     "metadata.namespace"})
 		joinParts = append(joinParts, joinPart{tableName: fmt.Sprintf("%s_labels", namespacesDbName),
 			tableNameAlias: jtPrefix,
 			onPrefix:       "nsf",
