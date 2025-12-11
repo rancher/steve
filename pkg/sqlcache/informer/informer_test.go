@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -310,12 +311,14 @@ func TestInformerListByOptions(t *testing.T) {
 			}},
 		}
 		expectedTotal := len(expectedList.Items)
+		expectedSummary := (*types.APISummary)(nil)
 		expectedContinueToken := "123"
-		indexer.EXPECT().ListByOptions(context.Background(), &lo, partitions, ns).Return(expectedList, expectedTotal, expectedContinueToken, nil)
-		list, total, continueToken, err := informer.ListByOptions(context.Background(), &lo, partitions, ns)
+		indexer.EXPECT().ListByOptions(context.Background(), &lo, partitions, ns).Return(expectedList, expectedTotal, expectedSummary, expectedContinueToken, nil)
+		list, total, summary, continueToken, err := informer.ListByOptions(context.Background(), &lo, partitions, ns)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedList, list)
 		assert.Equal(t, len(expectedList.Items), total)
+		assert.Nil(t, summary)
 		assert.Equal(t, expectedContinueToken, continueToken)
 	}})
 	tests = append(tests, testCase{description: "ListByOptions() with indexer ListByOptions error, should return error", test: func(t *testing.T) {
@@ -326,8 +329,8 @@ func TestInformerListByOptions(t *testing.T) {
 		lo := sqltypes.ListOptions{}
 		var partitions []partition.Partition
 		ns := "somens"
-		indexer.EXPECT().ListByOptions(context.Background(), &lo, partitions, ns).Return(nil, 0, "", fmt.Errorf("error"))
-		_, _, _, err := informer.ListByOptions(context.Background(), &lo, partitions, ns)
+		indexer.EXPECT().ListByOptions(context.Background(), &lo, partitions, ns).Return(nil, 0, nil, "", fmt.Errorf("error"))
+		_, _, _, _, err := informer.ListByOptions(context.Background(), &lo, partitions, ns)
 		assert.NotNil(t, err)
 	}})
 	t.Parallel()

@@ -8,14 +8,17 @@ package informer
 
 import (
 	"context"
+	//	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -34,6 +37,18 @@ import (
 )
 
 var emptyNamespaceList = &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
+
+var standardJoinParts = []joinPart{
+		{
+			joinCommand:    "LEFT OUTER JOIN",
+			tableName:      "something_labels",
+			tableNameAlias: "lt1",
+			onPrefix:       "f1",
+			onField:        "key",
+			otherPrefix:    "lt1",
+			otherField:     "key",
+		},
+	}
 
 func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opts ListOptionIndexerOptions, shouldEncrypt bool, nsList *unstructured.UnstructuredList) (*ListOptionIndexer, string, error) {
 	m, err := encryption.NewManager()
@@ -1335,9 +1350,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				Fields:       fields,
 				IsNamespaced: true,
 			}
-			if test.description == "ListByOptions with a positive projectsornamespaces test should work" {
-				fmt.Println("Stop here")
-			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, namespaceList)
 			defer cleanTempFiles(dbPath)
 
@@ -1345,12 +1357,8 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				err = loi.Add(&item)
 				assert.NoError(t, err)
 			}
-			if test.description == "ListByOptions with a positive projectsornamespaces test should work" {
-				fmt.Println("Stop here")
-			}
-
 			loi.latestRV = test.latestRV
-			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			list, total, summary, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
@@ -1360,8 +1368,412 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedContToken, contToken)
+			assert.Nil(t, summary)
 		})
 	}
+}
+
+func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
+	ctx := context.Background()
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
+
+	type testCase struct {
+		description string
+		listOptions sqltypes.ListOptions
+		partitions  []partition.Partition
+		ns          string
+
+		extraIndexedFields [][]string
+		expectedList       *unstructured.UnstructuredList
+		expectedTotal      int
+		expectedSummary    *types.APISummary
+		expectedContToken  string
+		expectedErr        error
+		latestRV           string
+	}
+	obj01_no_labels := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj01_no_labels",
+			"namespace": "ns-a",
+			"somefield": "foo",
+			"sortfield": "400",
+		},
+		"status": map[string]any{
+			"podIP": "99.4.5.6",
+		},
+	}
+	obj02_milk_saddles := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj02_milk_saddles",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "100",
+			"labels": map[string]any{
+				"cows":   "milk",
+				"horses": "saddles",
+			},
+		},
+		"status": map[string]any{
+			"podIP": "102.1.2.3",
+		},
+	}
+	obj02a_beef_saddles := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj02a_beef_saddles",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "110",
+			"labels": map[string]any{
+				"cows":   "beef",
+				"horses": "saddles",
+			},
+		},
+		"status": map[string]any{
+			"podIP": "102.99.2.3",
+		},
+	}
+	obj02b_milk_shoes := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj02b_milk_shoes",
+			"namespace": "ns-a",
+			"somefield": "bar",
+			"sortfield": "105",
+			"labels": map[string]any{
+				"cows":   "milk",
+				"horses": "shoes",
+			},
+		},
+		"status": map[string]any{
+			"podIP": "102.103.2.3",
+		},
+	}
+	obj03_saddles := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj03_saddles",
+			"namespace": "ns-a",
+			"somefield": "baz",
+			"sortfield": "200",
+			"labels": map[string]any{
+				"horses": "saddles",
+			},
+		},
+		"status": map[string]any{
+			"podIP":          "77.4.5.6",
+			"someotherfield": "helloworld",
+		},
+	}
+	obj03a_shoes := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj03a_shoes",
+			"namespace": "ns-a",
+			"somefield": "baz",
+			"sortfield": "210",
+			"labels": map[string]any{
+				"horses": "shoes",
+			},
+		},
+		"status": map[string]any{
+			"podIP":          "102.99.99.1",
+			"someotherfield": "helloworld",
+		},
+	}
+	obj04_milk := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj04_milk",
+			"namespace": "ns-a",
+			"somefield": "toto",
+			"sortfield": "200",
+			"labels": map[string]any{
+				"cows": "milk",
+			},
+		},
+		"status": map[string]any{
+			"podIP": "102.99.105.1",
+		},
+	}
+	obj05__guard_lodgepole := map[string]any{
+		"apiVersion": gvk.Version,
+		"kind":       gvk.Kind,
+		"metadata": map[string]any{
+			"name":      "obj05__guard_lodgepole",
+			"namespace": "ns-b",
+			"unknown":   "hi",
+			"labels": map[string]any{
+				"guard.cattle.io": "lodgepole",
+			},
+		},
+		"status": map[string]any{
+			"podIP": "203.1.2.3",
+		},
+	}
+	allObjects := []map[string]any{
+		obj01_no_labels,
+		obj02_milk_saddles,
+		obj02a_beef_saddles,
+		obj02b_milk_shoes,
+		obj03_saddles,
+		obj03a_shoes,
+		obj04_milk,
+		obj05__guard_lodgepole,
+	}
+	ns_a := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Namespace",
+		"metadata": map[string]any{
+			"name": "ns-a",
+			"labels": map[string]any{
+				"guard.cattle.io": "ponderosa",
+			},
+		},
+	}
+	ns_b := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Namespace",
+		"metadata": map[string]any{
+			"name": "ns-b",
+			"labels": map[string]any{
+				"field.cattle.io/projectId": "ns-b",
+			},
+		},
+	}
+
+	itemList := makeList(t, allObjects...)
+	namespaceList := makeList(t, ns_a, ns_b)
+	defaultPartitions := []partition.Partition{{All: true}}
+
+	var tests []testCase
+	var deferredTests []testCase
+	tests = append(tests, testCase{
+		description: "ListByOptions() with a simple summary filter should return the summary",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+			SummaryFieldList: [][]string{{"metadata", "somefield"}},
+		},
+		partitions:    defaultPartitions,
+		ns:            "",
+		expectedList:  itemList,
+		expectedTotal: len(allObjects),
+		expectedSummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				{
+					Property: "metadata.somefield",
+					Counts: map[string]int{
+						"bar":  3,
+						"baz":  2,
+						"foo":  1,
+						"toto": 1,
+					},
+				},
+			},
+		},
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	tests = append(tests, testCase{
+		description: "ListByOptions() with a simple summary filter for labels should return the summary",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+			SummaryFieldList: [][]string{{"metadata", "labels", "horses"}},
+		},
+		partitions:    defaultPartitions,
+		ns:            "",
+		expectedList:  itemList,
+		expectedTotal: len(allObjects),
+		expectedSummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				{
+					Property: "metadata.labels.horses",
+					Counts: map[string]int{
+						"saddles": 3,
+						"shoes":   2,
+					},
+				},
+			},
+		},
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	deferredTests = append(deferredTests, testCase{
+		description: "ListByOptions() should return summary for multiple fields",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+			SummaryFieldList: [][]string{{"metadata", "labels", "horses"}, {"metadata", "somefield"}, {"status", "someotherfield"}},
+		},
+		partitions:    defaultPartitions,
+		ns:            "",
+		expectedList:  itemList,
+		expectedTotal: len(allObjects),
+		expectedSummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				types.SummaryEntry{
+					Property: "metadata.labels.horses",
+					Counts: map[string]int{
+						"saddles": 3,
+						"shoes":   2,
+					},
+				},
+				types.SummaryEntry{
+					Property: "metadata.somefield",
+					Counts: map[string]int{
+						"bar":  3,
+						"baz":  2,
+						"foo":  1,
+						"toto": 1,
+					},
+				},
+				types.SummaryEntry{
+					Property: "status.someotherfield",
+					Counts: map[string]int{
+						"helloworld": 2,
+					},
+				},
+			},
+		},
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+	deferredTests = append(deferredTests, testCase{
+		description: "ListByOptions with options and summary should return a filtered summary",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field: []string{"metadata", "labels", "cows"},
+							Op:    sqltypes.Exists,
+						},
+					},
+				},
+			},
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+			SummaryFieldList: [][]string{{"metadata", "somefield"}, {"metadata", "labels", "cows"}, {"metadata", "labels", "horses"}, {"status", "someotherfield"}},
+		},
+		partitions:    defaultPartitions,
+		ns:            "",
+		expectedList:  makeList(t, obj02_milk_saddles, obj02a_beef_saddles, obj02b_milk_shoes, obj04_milk),
+		expectedTotal: 4,
+		expectedSummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				{
+					Property: "metadata.labels.horses",
+					Counts: map[string]int{
+						"saddles": 2,
+						"shoes":   1,
+					},
+				},
+				{
+					Property: "metadata.somefield",
+					Counts: map[string]int{
+						"bar":  3,
+						"toto": 1,
+					},
+				},
+				{
+					Property: "status.someotherfield",
+					Counts:   map[string]int{},
+				},
+			},
+		},
+		expectedContToken: "",
+		expectedErr:       nil,
+	})
+
+	t.Parallel()
+	assert.True(t, len(deferredTests) > 0)
+
+	// First curl the namespaces to load up the namespace database tables.
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			fields := [][]string{
+				{"metadata", "somefield"},
+				{"status", "someotherfield"},
+				{"status", "podIP"},
+				{"metadata", "unknown"},
+				{"metadata", "sortfield"},
+			}
+			fields = append(fields, test.extraIndexedFields...)
+
+			opts := ListOptionIndexerOptions{
+				Fields:       fields,
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, namespaceList)
+			defer cleanTempFiles(dbPath)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				assert.NoError(t, err)
+			}
+
+			loi.latestRV = test.latestRV
+			list, total, summary, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			if test.expectedErr != nil {
+				assert.Error(t, err)
+				return
+			}
+			require.Nil(t, err)
+			assert.Equal(t, test.expectedTotal, total)
+			wantNames := stringsFromULIst(test.expectedList)
+			gotNames := stringsFromULIst(list)
+			assert.Equal(t, wantNames, gotNames)
+			if slices.Equal(wantNames, gotNames) {
+				assert.Equal(t, test.expectedList, list)
+			}
+			assert.Equal(t, test.expectedSummary, summary)
+			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
+func stringsFromULIst(ulist *unstructured.UnstructuredList) []string {
+	names := make([]string, len(ulist.Items))
+	for i, item := range ulist.Items {
+		names[i] = item.GetName()
+	}
+	return names
 }
 
 func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
@@ -1539,7 +1951,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 			}
 
 			expectedList := makeList(t, test.expectedListAscObjs...)
-			list, total, _, err := loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
+			list, total, summary, _, err := loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
 				SortList: sqltypes.SortList{
 					SortDirectives: []sqltypes.Sort{
 						{
@@ -1552,9 +1964,10 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, len(allObjects), total)
 			assert.Equal(t, expectedList, list)
+			require.Nil(t, summary)
 
 			expectedList = makeList(t, test.expectedListDescObjs...)
-			list, total, _, err = loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
+			list, total, summary, _, err = loi.ListByOptions(t.Context(), &sqltypes.ListOptions{
 				SortList: sqltypes.SortList{
 					SortDirectives: []sqltypes.Sort{
 						{
@@ -1567,6 +1980,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, len(allObjects), total)
 			assert.Equal(t, expectedList, list)
+			require.Nil(t, summary)
 		})
 	}
 }
@@ -1817,11 +2231,11 @@ func TestSortPodsOnArrayAccess(t *testing.T) {
 				err = loi.Add(&item)
 				require.NoError(t, err)
 			}
-			list, total, _, err := loi.ListByOptions(ctx, &test.listOptions, []partition.Partition{{All: true}}, "")
+			list, total, summary, _, err := loi.ListByOptions(ctx, &test.listOptions, []partition.Partition{{All: true}}, "")
 			require.NoError(t, err)
-
 			assert.Equal(t, test.expectedTotal, total)
 			assert.Equal(t, test.expectedList, list)
+			require.Nil(t, summary)
 		})
 	}
 }
@@ -1848,12 +2262,12 @@ func TestDropAll(t *testing.T) {
 	err = loi.Add(obj1)
 	assert.NoError(t, err)
 
-	_, _, _, err = loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+	_, _, _, _, err = loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
 	assert.NoError(t, err)
 
 	loi.DropAll(ctx)
 
-	_, _, _, err = loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+	_, _, _, _, err = loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
 	assert.Error(t, err)
 }
 
@@ -1953,7 +2367,7 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 		}
 		partitions := []partition.Partition{{All: true}}
 		ns := ""
-		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
+		list, total, _, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
 		if err != nil {
 			b.Fatal("error getting data", err)
 		}
@@ -1978,7 +2392,7 @@ func BenchmarkNamespaceNameList(b *testing.B) {
 		}
 		partitions := []partition.Partition{{All: true}}
 		ns := ""
-		list, total, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
+		list, total, _, _, err := loi.ListByOptions(ctx, &listOptions, partitions, ns)
 		if err != nil {
 			b.Fatal("error getting data", err)
 		}
@@ -2193,7 +2607,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			list, total, summary, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
@@ -2201,6 +2615,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedTotal, total)
+			require.Nil(t, summary)
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
@@ -2311,7 +2726,7 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			list, total, summary, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
@@ -2319,6 +2734,7 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedTotal, total)
+			require.Nil(t, summary)
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
@@ -2552,7 +2968,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			list, total, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			list, total, summary, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
@@ -2560,6 +2976,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedList, list)
 			assert.Equal(t, test.expectedTotal, total)
+			require.Nil(t, summary)
 			assert.Equal(t, test.expectedContToken, contToken)
 		})
 	}
@@ -2725,8 +3142,7 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
+    ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
@@ -2760,8 +3176,7 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
+    ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?))))
@@ -2878,9 +3293,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -2909,9 +3323,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -2951,13 +3364,11 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt2i1 ON o1.key = lt2i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt2i1 ON f1.key = lt2i1.key
 		WHERE lt2i1.label = ?)) OR (lt2.label = ? AND lt2.value != ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3011,9 +3422,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    ((o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT IN (?, ?))) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3068,9 +3478,8 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
   WHERE
-    (o.key NOT IN (SELECT o1.key FROM "something" o1
-		JOIN "something_fields" f1 ON o1.key = f1.key
-		LEFT OUTER JOIN "something_labels" lt1i1 ON o1.key = lt1i1.key
+    (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC `,
@@ -3479,9 +3888,6 @@ SELECT o.object, o.objectnonce, o.dekid FROM "something" o
 				Indexer:       i,
 				indexedFields: []string{"metadata.name", "metadata.queryField1", "status.queryField2", "spec.containers.image", "status.podIP", "metadata.namespace"},
 			}
-			if test.description == "TestConstructQuery: handles ProjectOrNamespaces NOT IN" {
-				fmt.Println("stop here")
-			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
 				assert.Equal(t, test.expectedErr, err)
@@ -3492,6 +3898,566 @@ SELECT o.object, o.objectnonce, o.dekid FROM "something" o
 			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
 			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
 			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
+func TestConstructSummaryTestFilters(t *testing.T) {
+	type testCase struct {
+		description       string
+		listOptions       sqltypes.ListOptions
+		partitions        []partition.Partition
+		ns                string
+		expectedFilters   *filterComponentsT
+		expectedErr       string
+		expectedJoinTable map[string]int
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: returns nothing with no filters",
+		listOptions: sqltypes.ListOptions{},
+		partitions:  []partition.Partition{{All: true}},
+		ns:          "",
+		expectedErr: "",
+		expectedFilters: &filterComponentsT{joinParts: make([]joinPart, 0),
+			isEmpty: true},
+	})
+	// filter=metadata.queryField1 - error
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: can propagate an error from filter processing: filter=metadata.queryField1",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "queryField1"},
+						Op:    sqltypes.Exists,
+					},
+				},
+			},
+		}},
+		partitions:  []partition.Partition{{All: true}},
+		ns:          "",
+		expectedErr: "NULL and NOT NULL tests aren't supported for non-label queries",
+	})
+	// filter=metadata.queryField1=toys,metadata.labels.animals=starfish
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: returns JOINs and WHEREs: filter=metadata.queryField1=toys,metadata.labels.animals=starfish",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Eq,
+						Matches: []string{"toys"},
+					},
+					{
+						Field:   []string{"metadata", "labels", "animals"},
+						Op:      sqltypes.Eq,
+						Matches: []string{"starfish"},
+					},
+				},
+			},
+		}},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedFilters: &filterComponentsT{
+			joinParts: []joinPart{
+				{
+					joinCommand:    "LEFT OUTER JOIN",
+					tableName:      "something_labels",
+					tableNameAlias: "lt1",
+					onPrefix:       "f1",
+					onField:        "key",
+					otherPrefix:    "lt1",
+					otherField:     "key",
+				},
+			},
+			whereClauses: []string{`(f1."metadata.queryField1" = ?) OR (lt1.label = ? AND lt1.value = ?)`},
+			params:       []any{"toys", "animals", "starfish"},
+			isEmpty:      false,
+		},
+		expectedJoinTable: map[string]int{"animals": 1},
+	})
+	// filter=metadata.queryField1=books,metadata.labels.pigs!=boars
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: mixed JOINs and WHEREs, prefixes are propagated into negative tests: filter=metadata.queryField1=books,metadata.labels.pigs!=boars",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.NotEq,
+						Matches: []string{"books"},
+					},
+					{
+						Field:   []string{"metadata", "labels", "pigs"},
+						Op:      sqltypes.NotEq,
+						Matches: []string{"boars"},
+					},
+				},
+			},
+		}},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedFilters: &filterComponentsT{
+			joinParts: standardJoinParts,
+			whereClauses: []string{`(f1."metadata.queryField1" != ?) OR ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))`},
+			params:  []any{"books", "pigs", "pigs", "boars"},
+			isEmpty: false,
+		},
+		expectedJoinTable: map[string]int{"pigs": 1},
+	})
+	// filter=metadata.queryField1=boxes,spec.containers.image[3]=sticks
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: handles implicit array indexing, no labels: filter=metadata.queryField1=boxes,spec.containers.image[3]=sticks",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Eq,
+						Matches: []string{"boxes"},
+					},
+					{
+						Field:   []string{"spec", "containers", "image", "3"},
+						Op:      sqltypes.Eq,
+						Matches: []string{"sticks"},
+					},
+				},
+			},
+		}},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedFilters: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.queryField1" = ?) OR (extractBarredValue(f1."spec.containers.image", "3") = ?)`},
+			params:       []any{"boxes", "sticks"},
+			isEmpty:      false,
+		},
+	})
+	// filter=metadata.labels[kubernetes.io/metadata.name]~kube
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: handles complex label filter: filter=metadata.labels[kubernetes.io/metadata.name]~kube",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "labels", "kubernetes.io/metadata.name"},
+						Op:      sqltypes.Eq,
+						Partial: true,
+						Matches: []string{"kube"},
+					},
+				},
+			},
+		}},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedFilters: &filterComponentsT{
+			whereClauses: []string{`lt1.label = ? AND lt1.value LIKE ? ESCAPE '\'`}, //'
+			joinParts: standardJoinParts,
+			params:  []any{"kubernetes.io/metadata.name", "%kube%"},
+			isEmpty: false,
+		},
+		expectedJoinTable: map[string]int{"kubernetes.io/metadata.name": 1},
+	})
+	// filter=metadata.labels.knot!=hitch&filter=metadata.queryField1~g
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: another mixed filter: returns JOINs and WHEREs: filter=metadata.labels.knot!=hitch&filter=metadata.queryField1~g",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "labels", "knot"},
+						Op:      sqltypes.NotEq,
+						Matches: []string{"hitch"},
+					},
+				},
+			},
+			{
+				[]sqltypes.Filter{
+					{
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Eq,
+						Matches: []string{"g"},
+						Partial: true,
+					},
+				},
+			},
+		}},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedFilters: &filterComponentsT{
+			joinParts: standardJoinParts,
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`,
+				`f1."metadata.queryField1" LIKE ? ESCAPE '\'`}, //'
+			params:  []any{"knot", "knot", "hitch", "%g%"},
+			isEmpty: false,
+		},
+		expectedJoinTable: map[string]int{"knot": 1},
+	})
+	t.Parallel()
+	dbName := "something"
+	mainFieldPrefix := "f1"
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			store.EXPECT().GetName().Return("something").AnyTimes()
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"},
+			}
+			joinTableIndexByLabelName := make(map[string]int)
+			filterComponents, err := lii.constructSummaryTestFilters(&test.listOptions, test.partitions, test.ns, dbName, mainFieldPrefix, joinTableIndexByLabelName)
+			if test.expectedErr != "" {
+				assert.EqualError(t, err, test.expectedErr)
+				return
+			}
+			require.Nil(t, err)
+			expectedFilters := test.expectedFilters
+			if expectedFilters.joinParts == nil {
+				expectedFilters.joinParts = make([]joinPart, 0)
+			}
+			if expectedFilters.whereClauses == nil {
+				expectedFilters.whereClauses = make([]string, 0)
+			}
+			if expectedFilters.params == nil {
+				expectedFilters.params = make([]any, 0)
+			}
+			if test.expectedJoinTable == nil {
+				test.expectedJoinTable = make(map[string]int)
+			}
+			assert.Equal(t, test.expectedFilters, filterComponents)
+			assert.Equal(t, test.expectedJoinTable, joinTableIndexByLabelName)
+		})
+	}
+}
+
+func TestConstructSummaryQueryForField(t *testing.T) {
+	type testCase struct {
+		description      string
+		summaryField     []string
+		fieldNum         int
+		mainFieldPrefix  string
+		filterComponents *filterComponentsT
+		joinTableIndex   map[string]int
+		expectedStmt     string
+		expectedStmtArgs []any
+		expectedErr      string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: refused to build a summary on an unrecognized field",
+		summaryField: []string{"metadata", "snorkel"},
+		expectedErr:  fmt.Sprintf("column is invalid [%s]: supplied column is invalid", "metadata.snorkel"),
+	})
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: refused to build a summary on a sql injection",
+		summaryField: []string{"spec", "blip; system('rm -fr /home/hardware/wars);"},
+		// The parser mangles the field name in the error message, but not a big issue
+		expectedErr: fmt.Sprintf("column is invalid [%s]: supplied column is invalid", "spec[blip; system('rm -fr /home/hardware/wars);]"),
+	})
+	// summary=metadata.labels.status
+	tests = append(tests, testCase{
+		description:      "TestConstructSummaryQueryForField: builds a query for a label summary with no filter-components: summary=metadata.labels.status",
+		summaryField:     []string{"metadata", "labels", "status"},
+		fieldNum:         1,
+		filterComponents: &filterComponentsT{isEmpty: true},
+		expectedStmt: `SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, value AS k
+	FROM "something_labels"
+	WHERE label = ? AND k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.queryField1
+	tests = append(tests, testCase{
+		description:      "TestConstructSummaryQueryForField: builds a query for a field summary with no filter-components",
+		summaryField:     []string{"metadata", "queryField1"},
+		fieldNum:         1,
+		filterComponents: &filterComponentsT{isEmpty: true},
+		expectedStmt: `SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, "metadata.queryField1" AS k
+	FROM "something_fields"
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	// summary=spec.containers.image[3]
+	tests = append(tests, testCase{
+		description:      "TestConstructSummaryQueryForField: builds a query for a field summary on an indexed implicit array: summary=spec.containers.image[3]",
+		summaryField:     []string{"spec", "containers", "image", "3"},
+		fieldNum:         1,
+		mainFieldPrefix:  "f1",
+		filterComponents: &filterComponentsT{isEmpty: true},
+		expectedStmt: `SELECT 'spec.containers.image[3]' AS p, COUNT(*) AS c, extractBarredValue("spec.containers.image", 3) AS k
+	FROM "something_fields"
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	// summary=metadata.queryField1&filter=metadata.namespace=cars
+	// As soon as we have a non-empty body build a with-statement
+	tests = append(tests, testCase{
+		description:     "TestConstructSummaryQuery: builds a query for a summary on a standard field with a standard filter: summary=metadata.queryField1&filter=metadata.namespace=cars",
+		summaryField:    []string{"metadata", "queryField1"},
+		fieldNum:        1,
+		mainFieldPrefix: "f1",
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.namespace" = ?)`},
+			params:       []any{"cars"},
+			isEmpty:      false,
+		},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT f1.key, f1."metadata.queryField1" FROM "something_fields" f1
+	WHERE (f1."metadata.namespace" = ?)
+)
+SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"cars"},
+		expectedErr:      "",
+	})
+	// summary=metadata.queryField1&filter=metadata.labels.status=cars
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: builds a query for a summary on a standard field with a labels filter: summary=metadata.queryField1&filter=metadata.labels.status=cars",
+		summaryField: []string{"metadata", "queryField1"},
+		fieldNum:     1,
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{"(lt1.label = ? AND lt1.value = ?)"},
+			joinParts:    standardJoinParts,
+			params:       []any{"status", "cars"},
+		},
+		joinTableIndex: map[string]int{"status": 1},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, f1."metadata.queryField1" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE (lt1.label = ? AND lt1.value = ?)
+)
+SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"status", "cars"},
+		expectedErr:      "",
+	})
+	// summary=spec.containers.image[3]&filter=metadata.namespace=cars&spec.containers.image[2]>0
+	tests = append(tests, testCase{
+		description:     "TestConstructSummaryQueryForField: builds a query for a field summary on an indexed implicit array with complex filters: summary=spec.containers.image[3]&filter=metadata.namespace=cars&spec.containers.image[2]>0",
+		summaryField:    []string{"spec", "containers", "image", "4"},
+		fieldNum:        1,
+		mainFieldPrefix: "f1",
+		joinTableIndex:  map[string]int{},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.queryField1" = ?) OR (extractBarredValue(f1."spec.containers.image", "5") = ?)`},
+			params:       []any{"boxes", "sticks"},
+		},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT f1.key, extractBarredValue(f1."spec.containers.image", 4) FROM "something_fields" f1
+	WHERE (f1."metadata.queryField1" = ?) OR (extractBarredValue(f1."spec.containers.image", "5") = ?)
+)
+SELECT 'spec.containers.image[4]' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"boxes", "sticks"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=metadata.namespace=trains
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: builds a query for a summary on a label field with a std filter: summary=metadata.labels.status&filter=metadata.namespace=trains",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.namespace" = ?)`},
+			params:       []any{"trains"},
+		},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, lt1.value FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE ((f1."metadata.namespace" = ?))
+		AND (lt1.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"trains", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=spec.containers.image[3]=planes
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: builds a query for a label summary with a std filter on an implicit array: summary=metadata.labels.status&filter=spec.containers.image[7]=planes",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(extractBarredValue(f1."spec.containers.image", "7") = ?)`},
+			params:       []any{"planes"},
+		},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, lt1.value FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE ((extractBarredValue(f1."spec.containers.image", "7") = ?))
+		AND (lt1.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"planes", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=metadata.labels.transportation=boats
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: builds a query for a label summary with a label filter: summary=metadata.labels.status&filter=metadata.labels.transportation=boats",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{"(lt1.label = ? AND lt1.value = ?)"},
+			params:       []any{"transportation", "boats"},
+			joinParts:    standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"transportation": 1},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, lt2.value FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((lt1.label = ? AND lt1.value = ?))
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"transportation", "boats", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=metadata.labels.transportation!=jets
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryQuery: builds a query for a label summary with a negative label filter: summary=metadata.labels.status&filter=metadata.labels.transportation!=jets",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`},
+			params:    []any{"transportation", "transportation", "jets"},
+			joinParts: standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"transportation": 1},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, lt2.value FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"transportation", "transportation", "jets", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.atlantic&filter=metadata.labels[kubernetes.io/metadata.name]~kube
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryTestFilters: handles complex label summary/label filter: summary=metadata.labels.atlantic&filter=metadata.labels[kubernetes.io/metadata.name]~kube",
+		summaryField: []string{"metadata", "labels", "atlantic"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`},
+			params:    []any{"kubernetes.io/metadata.name", "kubernetes.io/metadata.name", "kube"},
+			joinParts: standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"kubernetes.io/metadata.name": 1},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, lt2.value FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.atlantic' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"kubernetes.io/metadata.name", "kubernetes.io/metadata.name", "kube", "atlantic"},
+		expectedErr:      "",
+	})
+
+	// summary=metadata.labels.pacific&filter=metadata.labels.knot!=hitch&filter=metadata.queryField1~g
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryTestFilters: handles complex label summary/label filter: summary=metadata.labels.pacific&filter=metadata.labels.knot!=hitch&filter=metadata.queryField1~g",
+		summaryField: []string{"metadata", "labels", "pacific"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`,
+				`f1."metadata.queryField1" LIKE ? ESCAPE '\'`}, //'
+			params:    []any{"knot", "knot", "hitch", "%g%"},
+			joinParts: standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"knot": 1},
+		expectedStmt: `WITH w1(key, finalField) AS (
+	SELECT DISTINCT f1.key, lt2.value FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))
+		AND (f1."metadata.queryField1" LIKE ? ESCAPE '\')
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.pacific' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
+	WHERE k != ""
+	GROUP BY k`,
+		expectedStmtArgs: []any{"knot", "knot", "hitch", "%g%", "pacific"},
+		expectedErr:      "",
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			store.EXPECT().GetName().Return("something").AnyTimes()
+			dbName := "something"
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"},
+			}
+			fieldNum := test.fieldNum
+			if fieldNum == 0 {
+				fieldNum = 1
+			}
+			mainFieldPrefix := test.mainFieldPrefix
+			if mainFieldPrefix == "" {
+				mainFieldPrefix = fmt.Sprintf("f%d", fieldNum)
+			}
+			joinTableIndex := test.joinTableIndex
+			if joinTableIndex == nil {
+				joinTableIndex = map[string]int{}
+			}
+			queryInfo, err := lii.constructSummaryQueryForField(test.summaryField, fieldNum, dbName, test.filterComponents, mainFieldPrefix, joinTableIndex)
+			if test.expectedErr != "" {
+				assert.EqualError(t, err, test.expectedErr)
+				return
+			}
+			require.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			if queryInfo.params == nil {
+				queryInfo.params = []any{}
+			}
+			if test.expectedStmtArgs == nil {
+				test.expectedStmtArgs = []any{}
+			}
+			assert.Equal(t, len(test.expectedStmtArgs), len(queryInfo.params))
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, "", queryInfo.countQuery)
+			assert.Equal(t, 0, len(queryInfo.countParams))
 		})
 	}
 }
@@ -4236,7 +5202,7 @@ func TestWatchResourceVersion(t *testing.T) {
 
 	getRV := func(t *testing.T) string {
 		t.Helper()
-		list, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+		list, _, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
 		assert.NoError(t, err)
 		return list.GetResourceVersion()
 	}
@@ -4393,7 +5359,7 @@ func TestWatchGarbageCollection(t *testing.T) {
 
 	getRV := func(t *testing.T) string {
 		t.Helper()
-		list, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+		list, _, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
 		assert.NoError(t, err)
 		return list.GetResourceVersion()
 	}
@@ -4543,7 +5509,7 @@ func TestNonNumberResourceVersion(t *testing.T) {
 	expectedList, err := expectedUnstructured.ToList()
 	require.NoError(t, err)
 
-	list, _, _, err := loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
+	list, _, _, _, err := loi.ListByOptions(ctx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
 	require.NoError(t, err)
 	assert.Equal(t, expectedList.Items, list.Items)
 }
