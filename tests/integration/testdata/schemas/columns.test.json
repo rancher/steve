@@ -1,0 +1,143 @@
+{
+  "data": [
+    {
+      "id": "columns.cattle.io.clusternocolumn",
+      "attributes": {
+        "columns": [
+          {
+            "name": "Name",
+            "type": "string",
+            "format": "name",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.name"
+          },
+          {
+            "name": "Age",
+            "type": "date",
+            "format": "",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.creationTimestamp"
+          }
+        ]
+      }
+    },
+    {
+      "id": "columns.cattle.io.clustersomecolumn",
+      "attributes": {
+        "columns": [
+          {
+            "name": "Name",
+            "type": "string",
+            "format": "name",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.name"
+          },
+          {
+            "name": "Foo",
+            "type": "string",
+            "format": "",
+            "description": "",
+            "priority": 0,
+            "field": ".foo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "columns.cattle.io.namespacedsomecolumn",
+      "attributes": {
+        "columns": [
+          {
+            "name": "Name",
+            "type": "string",
+            "format": "name",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.name"
+          },
+          {
+            "name": "Foo",
+            "type": "string",
+            "format": "",
+            "description": "",
+            "priority": 0,
+            "field": ".foo"
+          },
+          {
+            "name": "Date",
+            "type": "date",
+            "format": "",
+            "description": "",
+            "priority": 0,
+            "field": ".date"
+          },
+          {
+            "name": "Age",
+            "type": "date",
+            "format": "",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.creationTimestamp"
+          }
+        ]
+      }
+    },
+    {
+      "id": "configmap",
+      "attributes": {
+        "columns": [
+          {
+            "name": "Name",
+            "type": "string",
+            "format": "name",
+            "description": "Name must be unique within a namespace. Is required when creating resources, although some resources may allow a client to request the generation of an appropriate name automatically. Name is primarily intended for creation idempotence and configuration definition. Cannot be updated. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names",
+            "priority": 0,
+            "field": "$.metadata.fields[0]"
+          },
+          {
+            "name": "Data",
+            "type": "string",
+            "format": "",
+            "description": "Data contains the configuration data. Each key must consist of alphanumeric characters, '-', '_' or '.'. Values with non-UTF-8 byte sequences must use the BinaryData field. The keys stored in Data must not overlap with the keys in the BinaryData field, this is enforced during validation process.",
+            "priority": 0,
+            "field": "$.metadata.fields[1]"
+          },
+          {
+            "name": "Age",
+            "type": "string",
+            "format": "",
+            "description": "CreationTimestamp is a timestamp representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations. Clients may not set this value. It is represented in RFC3339 form and is in UTC.\n\nPopulated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+            "priority": 0,
+            "field": "$.metadata.fields[2]"
+          }
+        ]
+      }
+    },
+    {
+      "id": "columns.cattle.io.name",
+      "attributes": {
+        "columns": [
+          {
+            "name": "Name",
+            "type": "string",
+            "format": "name",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.name"
+          },
+          {
+            "name": "Name",
+            "type": "string",
+            "format": "",
+            "description": "",
+            "priority": 0,
+            "field": ".metadata.name"
+          }
+        ]
+      }
+    }
+  ]
+}

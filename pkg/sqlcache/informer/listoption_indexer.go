@@ -55,6 +55,8 @@ type ListOptionIndexer struct {
 	upsertLabelsStmt        db.Stmt
 	deleteLabelsStmt        db.Stmt
 	dropLabelsStmt          db.Stmt
+
+	unsupportedTypeLogged map[string]struct{}
 }
 
 var (
@@ -171,22 +173,45 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
+	// We don't properly support multiple columns pointing to the same json
+	// path, but we also want steve to sorta still work since it's a pretty
+	// rare edge case. So we avoid duplicating those columns in the DB since
+	// that would result in an error.
+	//
+	// Some fields are still using the JSON path as the ID which is NOT
+	// unique since Kubernetes allows specifying multiple columns pointing
+	// to the same JSON path.
+	fieldSet := make(map[string]struct{})
+
 	var indexedFields []string
 	for _, f := range defaultIndexedFields {
+		if _, ok := fieldSet[f]; ok {
+			continue
+		}
 		indexedFields = append(indexedFields, f)
+		fieldSet[f] = struct{}{}
 	}
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, defaultIndexNamespaced)
+		if _, ok := fieldSet[defaultIndexNamespaced]; !ok {
+			indexedFields = append(indexedFields, defaultIndexNamespaced)
+			fieldSet[defaultIndexNamespaced] = struct{}{}
+		}
 	}
 	for _, f := range opts.Fields {
-		indexedFields = append(indexedFields, toColumnName(f))
+		name := toColumnName(f)
+		if _, ok := fieldSet[name]; ok {
+			continue
+		}
+		indexedFields = append(indexedFields, name)
+		fieldSet[name] = struct{}{}
 	}
 
 	l := &ListOptionIndexer{
-		Indexer:       i,
-		namespaced:    opts.IsNamespaced,
-		indexedFields: indexedFields,
-		watchers:      make(map[*watchKey]*watcher),
+		Indexer:               i,
+		namespaced:            opts.IsNamespaced,
+		indexedFields:         indexedFields,
+		watchers:              make(map[*watchKey]*watcher),
+		unsupportedTypeLogged: make(map[string]struct{}),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
 	l.RegisterAfterAdd(l.addLabels)
@@ -631,8 +656,12 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 		case []string:
 			args = append(args, strings.Join(typedValue, "|"))
 		default:
-			err2 := fmt.Errorf("field %v has a non-supported type value: %v", field, value)
-			return err2
+			logKey := fmt.Sprintf("%s/%s", l.GetName(), field)
+			if _, alreadyLogged := l.unsupportedTypeLogged[logKey]; !alreadyLogged {
+				logrus.Errorf("field %q for indexer %q has a non-supported type value: %v", field, l.GetName(), value)
+				l.unsupportedTypeLogged[logKey] = struct{}{}
+			}
+			args = append(args, "")
 		}
 	}
 

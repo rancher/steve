@@ -1,0 +1,4 @@
+schemaID: catalog.cattle.io.operations
+tests:
+- query: filter=metadata.name=helm-operation-bgqww
+  expected: [default/helm-operation-bgqww]
