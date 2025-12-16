@@ -89,18 +89,12 @@ func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTra
 		return fmt.Errorf("begin tx: %w", err)
 	}
 
-	if err = f(NewTxClient(tx, WithQueryLogger(c.queryLogger))); err != nil {
+	if err := f(NewTxClient(tx, WithQueryLogger(c.queryLogger))); err != nil {
 		rerr := c.rollback(ctx, tx)
 		return errors.Join(err, rerr)
 	}
 
-	err = c.commit(ctx, tx)
-	if err != nil {
-		// When the context.Context given to BeginTx is canceled, then the
-		// Tx is rolled back already, so rolling back again could have failed.
-		return err
-	}
-	return nil
+	return c.commit(ctx, tx)
 }
 
 // beginTX handles automatic retries for writing transactions for specific error codes.
@@ -139,6 +133,8 @@ func isRetriableSQLiteError(err error) bool {
 
 func (c *client) commit(ctx context.Context, tx Tx) error {
 	err := tx.Commit()
+	// When the context.Context given to BeginTx is canceled, then the
+	// Tx is rolled back automatically, so rolling back again could have failed.
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
 		return fmt.Errorf("commit failed due to canceled context")
 	}
@@ -147,6 +143,8 @@ func (c *client) commit(ctx context.Context, tx Tx) error {
 
 func (c *client) rollback(ctx context.Context, tx Tx) error {
 	err := tx.Rollback()
+	// When the context.Context given to BeginTx is canceled, then the
+	// Tx is rolled back automatically, so rolling back again could have failed.
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
 		return fmt.Errorf("rollback failed due to canceled context")
 	}
