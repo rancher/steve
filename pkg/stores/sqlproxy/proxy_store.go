@@ -347,9 +347,10 @@ type Cache interface {
 	// Specifically:
 	//   - an unstructured list of resources belonging to any of the specified partitions
 	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
+	//   - a summary object, containing the possible values for each field specified in a summary= subquery
 	//   - a continue token, if there are more pages after the returned one
 	//   - an error instead of all of the above if anything went wrong
-	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -945,33 +946,35 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 // ListByPartitions returns:
 //   - an unstructured list of resources belonging to any of the specified partitions
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
+//   - a summary object, containing the possible values for each field specified in a summary= subquery
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (list *unstructured.UnstructuredList, total int, summary *types.APISummary, continueToken string, err error) {
 	ctx, cancel := context.WithCancel(apiOp.Context())
 	defer cancel()
 
 	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, apiSchema)
 	if err != nil {
-		return nil, 0, "", err
+		return
 	}
 	defer doneFn()
 
 	gvk := attributes.GVK(apiSchema)
-	opts, err := listprocessor.ParseQuery(apiOp, gvk.Kind)
+	var opts sqltypes.ListOptions
+	opts, err = listprocessor.ParseQuery(apiOp, gvk.Kind)
 	if err != nil {
 		var apiError *apierror.APIError
 		if errors.As(err, &apiError) {
 			if apiError.Code.Status == http.StatusNoContent {
-				list := &unstructured.UnstructuredList{}
+				list = &unstructured.UnstructuredList{}
 				resourceVersion := inf.ByOptionsLister.GetLatestResourceVersion()
 				if len(resourceVersion) > 0 {
 					list.SetResourceVersion(resourceVersion[0])
 				}
-				return list, 0, "", nil
+				return
 			}
 		}
-		return nil, 0, "", err
+		return
 	}
 
 	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
@@ -983,7 +986,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		}, "", "") {
 			user, ok := request.UserFrom(apiOp.Request.Context())
 			if !ok {
-				return nil, 0, "", apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
+				err = apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
+				return
 			}
 			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
 				Filters: []sqltypes.Filter{
@@ -997,18 +1001,18 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		}
 	}
 
-	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
+	list, total, summary, continueToken, err = inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
 	if err != nil {
 		if errors.Is(err, informer.ErrInvalidColumn) {
-			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+			err = apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+		} else if errors.Is(err, informer.ErrUnknownRevision) {
+			err = apierror.NewAPIError(validation.ErrorCode{Code: err.Error(), Status: http.StatusBadRequest}, err.Error())
+		} else {
+			err = fmt.Errorf("listbyoptions %v: %w", gvk, err)
 		}
-		if errors.Is(err, informer.ErrUnknownRevision) {
-			return nil, 0, "", apierror.NewAPIError(validation.ErrorCode{Code: err.Error(), Status: http.StatusBadRequest}, err.Error())
-		}
-		return nil, 0, "", fmt.Errorf("listbyoptions %v: %w", gvk, err)
 	}
 
-	return list, total, continueToken, nil
+	return
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
