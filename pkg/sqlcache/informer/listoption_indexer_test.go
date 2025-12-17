@@ -39,16 +39,16 @@ import (
 var emptyNamespaceList = &unstructured.UnstructuredList{Object: map[string]any{"items": []any{}}, Items: []unstructured.Unstructured{}}
 
 var standardJoinParts = []joinPart{
-		{
-			joinCommand:    "LEFT OUTER JOIN",
-			tableName:      "something_labels",
-			tableNameAlias: "lt1",
-			onPrefix:       "f1",
-			onField:        "key",
-			otherPrefix:    "lt1",
-			otherField:     "key",
-		},
-	}
+	{
+		joinCommand:    "LEFT OUTER JOIN",
+		tableName:      "something_labels",
+		tableNameAlias: "lt1",
+		onPrefix:       "f1",
+		onField:        "key",
+		otherPrefix:    "lt1",
+		otherField:     "key",
+	},
+}
 
 func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opts ListOptionIndexerOptions, shouldEncrypt bool, nsList *unstructured.UnstructuredList) (*ListOptionIndexer, string, error) {
 	m, err := encryption.NewManager()
@@ -2570,7 +2570,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 		expectedErr:       nil,
 	})
 	tests = append(tests, testCase{
-		description: "extractBarredValue on item -2 should result in a compile error",
+		description: "extractBarredValue on item -2 should result in a compil error",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
 				SortDirectives: []sqltypes.Sort{
@@ -3017,7 +3017,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (f."metadata.queryField1" IN (?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"somevalue"},
 		expectedErr:      nil,
 	})
@@ -3042,7 +3042,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (f."metadata.queryField1" NOT IN (?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"somevalue"},
 		expectedErr:      nil,
 	})
@@ -3076,8 +3076,8 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" IN (?)) OR (lt1.label = ? AND lt1.value IN (?)))
-  ORDER BY f."metadata.name" ASC `,
+    (nsf."metadata.name" IN (?)) OR (lt1.label = ? AND lt1.value IN (?))
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace"},
 		expectedErr:      nil,
 	})
@@ -3111,8 +3111,8 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" IN (?, ?)) OR (lt1.label = ? AND lt1.value IN (?, ?)))
-  ORDER BY f."metadata.name" ASC `,
+    (nsf."metadata.name" IN (?, ?)) OR (lt1.label = ? AND lt1.value IN (?, ?))
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example"},
 		expectedErr:      nil,
 	})
@@ -3142,11 +3142,11 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+    (nsf."metadata.name" NOT IN (?)) AND ((lt1.label = ? AND lt1.value NOT IN (?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
-		WHERE lt1i1.label = ?))))
-  ORDER BY f."metadata.name" ASC `,
+		WHERE lt1i1.label = ?)))
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace", "field.cattle.io/projectId"},
 		expectedErr:      nil,
 	})
@@ -3176,11 +3176,11 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_fields" nsf ON f."metadata.namespace" = nsf."metadata.name"
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
-    ((nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
+    (nsf."metadata.name" NOT IN (?, ?)) AND ((lt1.label = ? AND lt1.value NOT IN (?, ?)) OR (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
-		WHERE lt1i1.label = ?))))
-  ORDER BY f."metadata.name" ASC `,
+		WHERE lt1i1.label = ?)))
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example", "field.cattle.io/projectId"},
 		expectedErr:      nil,
 	})
@@ -3237,11 +3237,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ? AND lt1.value = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelEqualFull", "somevalue"},
 		expectedErr:      nil,
 	})
@@ -3264,11 +3264,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -3291,13 +3291,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNotEqualFull", "labelNotEqualFull", "somevalue"},
 		expectedErr:      nil,
 	})
@@ -3321,13 +3321,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNotEqualPartial", "labelNotEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -3361,8 +3361,8 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f.key = lt2.key
   WHERE
     ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
@@ -3371,7 +3371,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt2i1 ON f1.key = lt2i1.key
 		WHERE lt2i1.label = ?)) OR (lt2.label = ? AND lt2.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"notEqual1", "notEqual1", "value1", "notEqual2", "notEqual2", "value2"},
 		expectedErr:      nil,
 	})
@@ -3393,11 +3393,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ? AND lt1.value IN (?, ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelIN", "somevalue1", "someValue2"},
 		expectedErr:      nil,
 	})
@@ -3420,13 +3420,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT IN (?, ?))) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNOTIN", "labelNOTIN", "somevalue1", "someValue2"},
 		expectedErr:      nil,
 	})
@@ -3449,11 +3449,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelEXISTS"},
 		expectedErr:      nil,
 	})
@@ -3476,13 +3476,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"labelNOTEXISTS"},
 		expectedErr:      nil,
 	})
@@ -3504,11 +3504,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ? AND lt1.value < ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"numericThing", float64(5)},
 		expectedErr:      nil,
 	})
@@ -3530,11 +3530,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ? AND lt1.value > ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"numericThing", float64(35)},
 		expectedErr:      nil,
 	})
@@ -3559,7 +3559,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"nginx-happy"},
 		expectedErr:      nil,
 	})
@@ -3580,7 +3580,7 @@ func TestConstructQuery(t *testing.T) {
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (FALSE)
+    FALSE
   ORDER BY extractBarredValue(f."spec.containers.image", "16") ASC`,
 		expectedStmtArgs: []any{},
 		expectedErr:      nil,
@@ -3644,11 +3644,11 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     ((lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') OR (f."metadata.queryField1" NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"junta", "%esther%", "%golgi%"},
 		expectedErr:      nil,
 	})
@@ -3691,13 +3691,13 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
-  LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f.key = lt2.key
   WHERE
     ((lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') OR (f."metadata.queryField1" != ?)) AND
     ((lt2.label = ? AND lt2.value IN (?, ?)) OR (f."metadata.queryField1" > ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC `,
+  ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"nectar", "%stash%", "landlady", "lawn", "reba", "coil", float64(2)},
 		expectedErr:      nil,
 	})
@@ -3730,7 +3730,7 @@ func TestConstructQuery(t *testing.T) {
 		ns:         "",
 		expectedStmt: `SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN "something_labels" lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt1 ON f.key = lt1.key
   WHERE
     (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
     (FALSE)
@@ -3757,11 +3757,11 @@ func TestConstructQuery(t *testing.T) {
 SELECT key, value FROM "something_labels"
   WHERE label = ?
 )
-SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN lt1 ON f.key = lt1.key
   WHERE
-    (FALSE)
+    FALSE
   ORDER BY lt1.value ASC NULLS LAST`,
 		expectedStmtArgs: []any{"unbound"},
 		expectedErr:      nil,
@@ -3807,8 +3807,8 @@ SELECT key, value FROM "something_labels"
 )
 SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN lt1 ON o.key = lt1.key
-  LEFT OUTER JOIN "something_labels" lt2 ON o.key = lt2.key
+  LEFT OUTER JOIN lt1 ON f.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f.key = lt2.key
   WHERE
     ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?)) AND
     (FALSE)
@@ -3839,7 +3839,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
-    (FALSE)
+    FALSE
   ORDER BY f."metadata.queryField1" ASC, inet_aton(f."status.podIP") ASC`,
 		expectedStmtArgs: []any{},
 		expectedErr:      nil,
@@ -3867,11 +3867,11 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 SELECT key, value FROM "something_labels"
   WHERE label = ?
 )
-SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
-  LEFT OUTER JOIN lt1 ON o.key = lt1.key
+  LEFT OUTER JOIN lt1 ON f.key = lt1.key
   WHERE
-    (FALSE)
+    FALSE
   ORDER BY lt1.value ASC NULLS LAST, f."status.queryField2" DESC`,
 		expectedStmtArgs: []any{"this"},
 		expectedErr:      nil,
@@ -3972,9 +3972,10 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 					otherField:     "key",
 				},
 			},
-			whereClauses: []string{`(f1."metadata.queryField1" = ?) OR (lt1.label = ? AND lt1.value = ?)`},
-			params:       []any{"toys", "animals", "starfish"},
-			isEmpty:      false,
+			whereClauses:    []string{`(f1."metadata.queryField1" = ?) OR (lt1.label = ? AND lt1.value = ?)`},
+			params:          []any{"toys", "animals", "starfish"},
+			isEmpty:         false,
+			queryUsesLabels: true,
 		},
 		expectedJoinTable: map[string]int{"animals": 1},
 	})
@@ -4004,8 +4005,9 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 			whereClauses: []string{`(f1."metadata.queryField1" != ?) OR ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))`},
-			params:  []any{"books", "pigs", "pigs", "boars"},
-			isEmpty: false,
+			params:          []any{"books", "pigs", "pigs", "boars"},
+			isEmpty:         false,
+			queryUsesLabels: true,
 		},
 		expectedJoinTable: map[string]int{"pigs": 1},
 	})
@@ -4054,10 +4056,11 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		partitions: []partition.Partition{{All: true}},
 		ns:         "",
 		expectedFilters: &filterComponentsT{
-			whereClauses: []string{`lt1.label = ? AND lt1.value LIKE ? ESCAPE '\'`}, //'
-			joinParts: standardJoinParts,
-			params:  []any{"kubernetes.io/metadata.name", "%kube%"},
-			isEmpty: false,
+			whereClauses:    []string{`lt1.label = ? AND lt1.value LIKE ? ESCAPE '\'`}, //'
+			joinParts:       standardJoinParts,
+			params:          []any{"kubernetes.io/metadata.name", "%kube%"},
+			isEmpty:         false,
+			queryUsesLabels: true,
 		},
 		expectedJoinTable: map[string]int{"kubernetes.io/metadata.name": 1},
 	})
@@ -4093,14 +4096,18 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`,
 				`f1."metadata.queryField1" LIKE ? ESCAPE '\'`}, //'
-			params:  []any{"knot", "knot", "hitch", "%g%"},
-			isEmpty: false,
+			params:          []any{"knot", "knot", "hitch", "%g%"},
+			isEmpty:         false,
+			queryUsesLabels: true,
 		},
 		expectedJoinTable: map[string]int{"knot": 1},
 	})
 	t.Parallel()
 	dbName := "something"
 	mainFieldPrefix := "f1"
+	const mainObjectPrefix = "o"
+	const includeSort = false
+	const isSummaryFilter = true
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			store := NewMockStore(gomock.NewController(t))
@@ -4113,7 +4120,7 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 				indexedFields: []string{"metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"},
 			}
 			joinTableIndexByLabelName := make(map[string]int)
-			filterComponents, err := lii.constructSummaryTestFilters(&test.listOptions, test.partitions, test.ns, dbName, mainFieldPrefix, joinTableIndexByLabelName)
+			filterComponents, err := lii.compileQuery(&test.listOptions, test.partitions, test.ns, dbName, mainObjectPrefix, mainFieldPrefix, joinTableIndexByLabelName, includeSort, isSummaryFilter)
 			if test.expectedErr != "" {
 				assert.EqualError(t, err, test.expectedErr)
 				return
