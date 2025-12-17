@@ -845,6 +845,8 @@ func (l *ListOptionIndexer) constructComplexSummaryQueryForField(fieldParts []st
 	withPrefix := fmt.Sprintf("w%d", fieldNum)
 	withParts := make([]string, 0)
 	// We don't use the main key directly, but we need it for SELECT-DISTINCT with the labels table.
+	// Otherwise each instance of <finalField=some-value> will be counted separately for all different keys,
+	// which we don't want.
 	withParts = append(withParts, fmt.Sprintf("WITH %s(key, finalField) AS (\n", withPrefix))
 	withParts = append(withParts, "\tSELECT")
 	if len(filterComponents.joinParts) > 0 || isLabelField {
@@ -877,12 +879,12 @@ func (l *ListOptionIndexer) constructComplexSummaryQueryForField(fieldParts []st
 		withParts = append(withParts, fmt.Sprintf(`  %s "%s" %s ON %s.%s = %s.%s%s`,
 			jp.joinCommand, jp.tableName, jp.tableNameAlias, jp.onPrefix, jp.onField, jp.otherPrefix, jp.otherField, nl))
 	}
-	if len(filterComponents.whereClauses) > 0 {
-		if len(filterComponents.whereClauses) == 1 {
-			withParts = append(withParts, fmt.Sprintf("\tWHERE %s\n", filterComponents.whereClauses[0]))
-		} else {
-			withParts = append(withParts, fmt.Sprintf("\tWHERE (%s)\n", strings.Join(filterComponents.whereClauses, ")\n\t\tAND (")))
-		}
+	switch len(filterComponents.whereClauses) {
+	case 0: // do nothing
+	case 1:
+		withParts = append(withParts, fmt.Sprintf("\tWHERE %s\n", filterComponents.whereClauses[0]))
+	default:
+		withParts = append(withParts, fmt.Sprintf("\tWHERE (%s)\n", strings.Join(filterComponents.whereClauses, ")\n\t\tAND (")))
 	}
 	if filterComponents.limitClause != "" {
 		withParts = append(withParts, "\t"+filterComponents.limitClause+"\n")
@@ -1247,6 +1249,7 @@ func (l *ListOptionIndexer) generateSQL(filterComponents *filterComponentsT, dbN
 	const nl = "\n"
 	comma := ","
 	if len(filterComponents.withParts) > 0 {
+		// These are for any labels that are being sorted on but don't appear in filters
 		query = "WITH "
 		for i, wp := range filterComponents.withParts {
 			if i == len(filterComponents.withParts)-1 {
@@ -1282,6 +1285,8 @@ SELECT key, value FROM "%s_labels"
 	if len(filterComponents.joinParts) > 0 {
 		for _, joinPart := range filterComponents.joinParts {
 			tablePart := ""
+			// If the join is for a view, it means we're joining on a table defined in an above WITH entry,
+			// so there's no actual database table that we're joining on.
 			if !joinPart.isView {
 				tablePart = fmt.Sprintf(" %q", joinPart.tableName)
 			}
