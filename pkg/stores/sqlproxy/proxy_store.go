@@ -1095,8 +1095,18 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 			s.cacheFactory.DoneWithCache(mgmtClusterInf)
 		})
 	} else if gvk == secretGVK {
-		// And v1.secrets also depend on management.cattle.io.clusters
-		secretInf, err := s.cacheFor(ctx, nil, &secretSchema)
+		mcioProjectSchema := types.APISchema{
+			Schema: &schemas.Schema{
+				Attributes: map[string]interface{}{
+					"group":    "management.cattle.io",
+					"version":  "v3",
+					"kind":     "Project",
+					"resource": "projects",
+				},
+			},
+		}
+		// v1.secrets depend on management.cattle.io.projects
+		secretInf, err := s.cacheFor(ctx, nil, &mcioProjectSchema)
 		if err != nil {
 			return nil, nil, err
 		}
