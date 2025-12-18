@@ -40,6 +40,7 @@ type ListTestConfig struct {
 		Expect         []map[string]string `yaml:"expect"`
 		ExpectExcludes bool                `yaml:"expectExcludes"`
 		ExpectContains bool                `yaml:"expectContains"`
+		SQLOnly        bool                `yaml:"sqlOnly"` // Skip in non-SQL mode
 	} `yaml:"tests"`
 }
 
@@ -127,12 +128,9 @@ func (i *IntegrationSuite) runListTest(sqlCache bool) {
 		name := filepath.Base(match)
 		name = strings.TrimSuffix(name, ".test.yaml")
 
-		// Skip pagination tests for SQL mode (they use limit/continue which is non-SQL only)
+		// SQL mode: skip pagination tests (they use limit/continue which is non-SQL only)
+		// Non-SQL mode: run ALL tests including pagination
 		if sqlCache && name == "pagination" {
-			continue
-		}
-		// Skip non-pagination tests for non-SQL mode
-		if !sqlCache && name != "pagination" {
 			continue
 		}
 
@@ -156,6 +154,11 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, testFile string
 	var lastRevision string
 
 	for _, test := range config.Tests {
+		// Skip SQL-only tests when running in non-SQL mode
+		if !sqlCache && test.SQLOnly {
+			continue
+		}
+
 		i.Run(test.Description, func() {
 			query := test.Query
 

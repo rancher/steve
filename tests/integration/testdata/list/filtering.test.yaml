@@ -191,6 +191,7 @@ tests:
   user: user-a
   namespace: test-ns-2
   query: filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=spuds
+  sqlOnly: true
   expect:
   - name: test4
     namespace: test-ns-2
@@ -198,6 +199,7 @@ tests:
   user: user-a
   namespace: test-ns-2
   query: filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=potatoes
+  sqlOnly: true
   expect: []
 - description: user:user-b,namespace:none,query:labelSelector=test-label=2
   user: user-b
