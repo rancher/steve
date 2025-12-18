@@ -1,9 +1,12 @@
 package tests
 
 import (
+	"bufio"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,6 +26,7 @@ import (
 
 var (
 	testdataSecretsDir = filepath.Join("testdata", "secrets")
+	jsonOutputDir      = filepath.Join("testdata", "secrets", "json")
 )
 
 // ListTestConfig defines the structure for list test YAML files
@@ -103,6 +107,18 @@ func (i *IntegrationSuite) runSecretsTest(sqlCache bool) {
 
 	defer i.maybeStopAndDebug(baseURL)
 
+	// Set up JSON output directory and CSV writer
+	var csvWriter *csv.Writer
+	var csvFile *os.File
+	if os.Getenv("SAVE_JSON_RESPONSES") == "true" {
+		var err error
+		csvWriter, csvFile, err = setupJSONOutput()
+		if err == nil && csvFile != nil {
+			defer csvFile.Close()
+			defer csvWriter.Flush()
+		}
+	}
+
 	// Find all test YAML files
 	matches, err := filepath.Glob(filepath.Join(testdataSecretsDir, "*.test.yaml"))
 	i.Require().NoError(err)
@@ -121,12 +137,12 @@ func (i *IntegrationSuite) runSecretsTest(sqlCache bool) {
 		}
 
 		i.Run(name, func() {
-			i.testSecretScenario(ctx, match, baseURL, sqlCache)
+			i.testSecretScenario(ctx, match, baseURL, sqlCache, csvWriter)
 		})
 	}
 }
 
-func (i *IntegrationSuite) testSecretScenario(ctx context.Context, testFile string, baseURL string, sqlCache bool) {
+func (i *IntegrationSuite) testSecretScenario(ctx context.Context, testFile string, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
 	file, err := os.Open(testFile)
 	i.Require().NoError(err)
 	defer file.Close()
@@ -175,13 +191,17 @@ func (i *IntegrationSuite) testSecretScenario(ctx context.Context, testFile stri
 
 			i.Require().Equal(http.StatusOK, resp.StatusCode)
 
+			// Read full response body for JSON saving
+			bodyBytes, err := io.ReadAll(resp.Body)
+			i.Require().NoError(err)
+
 			type Response struct {
 				Data     []responseItem `json:"data"`
 				Continue string         `json:"continue"`
 				Revision string         `json:"revision"`
 			}
 			var parsed Response
-			err = json.NewDecoder(resp.Body).Decode(&parsed)
+			err = json.Unmarshal(bodyBytes, &parsed)
 			i.Require().NoError(err)
 
 			// Store continue token and revision for subsequent tests
@@ -190,6 +210,16 @@ func (i *IntegrationSuite) testSecretScenario(ctx context.Context, testFile stri
 			}
 			if parsed.Revision != "" {
 				lastRevision = parsed.Revision
+			}
+
+			// Save JSON response if csvWriter is provided
+			if csvWriter != nil {
+				jsonResp, err := formatJSONResponse(bodyBytes)
+				if err == nil {
+					jsonFileName := getJSONFileName(test.User, test.Namespace, test.Query)
+					jsonFilePath := filepath.Join(jsonOutputDir, jsonFileName)
+					_ = writeJSONResponse(csvWriter, test.User, url, jsonFilePath, jsonResp)
+				}
 			}
 
 			if test.ExpectContains {
@@ -336,4 +366,96 @@ func (i *IntegrationSuite) assertListExcludes(expected []map[string]string, rece
 		}
 		assert.False(i.T(), found, "unexpected item found: %v", e)
 	}
+}
+
+// JSON output helper functions
+
+func setupJSONOutput() (*csv.Writer, *os.File, error) {
+	// Create JSON output directory
+	err := os.MkdirAll(jsonOutputDir, 0755)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create CSV index file
+	csvPath := filepath.Join(testdataSecretsDir, "output.csv")
+	csvFile, err := os.OpenFile(csvPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	csvWriter := csv.NewWriter(bufio.NewWriter(csvFile))
+	csvWriter.Write([]string{"user", "url", "response"})
+
+	return csvWriter, csvFile, nil
+}
+
+func getJSONFileName(user, ns, query string) string {
+	if user == "" {
+		user = "none"
+	}
+	if ns == "" {
+		ns = "none"
+	}
+	if query == "" {
+		query = "none"
+	} else {
+		query = strings.ReplaceAll(query, "/", "%2F")
+		query = strings.ReplaceAll(query, "?", "%3F")
+		query = strings.ReplaceAll(query, "&", "%26")
+	}
+	return user + "_" + ns + "_" + query + ".json"
+}
+
+func formatJSONResponse(bodyBytes []byte) ([]byte, error) {
+	var mapResp map[string]interface{}
+	err := json.Unmarshal(bodyBytes, &mapResp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Normalize non-deterministic fields for comparison
+	mapResp["revision"] = "100"
+	if _, ok := mapResp["continue"]; ok {
+		mapResp["continue"] = "CONTINUE_TOKEN"
+	}
+
+	// Normalize data items
+	data, ok := mapResp["data"].([]interface{})
+	if ok {
+		for i := range data {
+			item, ok := data[i].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			metadata, ok := item["metadata"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			// Remove non-deterministic fields
+			delete(metadata, "creationTimestamp")
+			delete(metadata, "managedFields")
+			delete(metadata, "uid")
+			delete(metadata, "resourceVersion")
+		}
+		mapResp["data"] = data
+	}
+
+	return json.MarshalIndent(mapResp, "", "  ")
+}
+
+func writeJSONResponse(csvWriter *csv.Writer, user, url, path string, resp []byte) error {
+	jsonFile, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+
+	_, err = jsonFile.Write(resp)
+	if err != nil {
+		return err
+	}
+
+	csvWriter.Write([]string{user, url, fmt.Sprintf("[%s](%s)", filepath.Base(path), path)})
+	return nil
 }
