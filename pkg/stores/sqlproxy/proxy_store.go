@@ -259,7 +259,17 @@ var (
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
 	}
 
-	secretGVK                    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+	secretGVK    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+	secretSchema = types.APISchema{
+		Schema: &schemas.Schema{
+			Attributes: map[string]interface{}{
+				"group":    "",
+				"version":  "v1",
+				"kind":     "Secret",
+				"resource": "secrets",
+			},
+		},
+	}
 	secretProjectLabelDisplayDep = sqltypes.ExternalLabelDependency{
 		SourceGVK:            gvkKey("", "v1", "Secret"),
 		SourceLabelName:      "management.cattle.io/project-scoped-secret",
@@ -1083,6 +1093,15 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 		}
 		doneCacheFns = append(doneCacheFns, func() {
 			s.cacheFactory.DoneWithCache(mgmtClusterInf)
+		})
+	} else if gvk == secretGVK {
+		// And v1.secrets also depend on management.cattle.io.clusters
+		secretInf, err := s.cacheFor(ctx, nil, &secretSchema)
+		if err != nil {
+			return nil, nil, err
+		}
+		doneCacheFns = append(doneCacheFns, func() {
+			s.cacheFactory.DoneWithCache(secretInf)
 		})
 	}
 
