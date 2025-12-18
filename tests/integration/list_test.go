@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	testdataSecretsDir = filepath.Join("testdata", "secrets")
-	jsonOutputDir      = filepath.Join("testdata", "secrets", "json")
+	testdataListDir = filepath.Join("testdata", "list")
+	jsonOutputDir      = filepath.Join("testdata", "list", "json")
 )
 
 // ListTestConfig defines the structure for list test YAML files
@@ -43,15 +43,15 @@ type ListTestConfig struct {
 	} `yaml:"tests"`
 }
 
-func (i *IntegrationSuite) TestSecrets() {
-	i.runSecretsTest(true)  // SQL mode
+func (i *IntegrationSuite) TestList() {
+	i.runListTest(true)  // SQL mode
 }
 
-func (i *IntegrationSuite) TestSecretsNonSQL() {
-	i.runSecretsTest(false) // Non-SQL mode
+func (i *IntegrationSuite) TestListNonSQL() {
+	i.runListTest(false) // Non-SQL mode
 }
 
-func (i *IntegrationSuite) runSecretsTest(sqlCache bool) {
+func (i *IntegrationSuite) runListTest(sqlCache bool) {
 	ctx := i.T().Context()
 
 	// Custom authenticator: use impersonation if header present, otherwise admin
@@ -90,7 +90,7 @@ func (i *IntegrationSuite) runSecretsTest(sqlCache bool) {
 	baseURL := httpServer.URL
 
 	// Apply secrets manifests
-	manifestsFile := filepath.Join(testdataSecretsDir, "secrets.manifests.yaml")
+	manifestsFile := filepath.Join(testdataListDir, "list.manifests.yaml")
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
 	i.doManifest(ctx, manifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
 		gvrs[gvr] = struct{}{}
@@ -120,7 +120,7 @@ func (i *IntegrationSuite) runSecretsTest(sqlCache bool) {
 	}
 
 	// Find all test YAML files
-	matches, err := filepath.Glob(filepath.Join(testdataSecretsDir, "*.test.yaml"))
+	matches, err := filepath.Glob(filepath.Join(testdataListDir, "*.test.yaml"))
 	i.Require().NoError(err)
 
 	for _, match := range matches {
@@ -137,12 +137,12 @@ func (i *IntegrationSuite) runSecretsTest(sqlCache bool) {
 		}
 
 		i.Run(name, func() {
-			i.testSecretScenario(ctx, match, baseURL, sqlCache, csvWriter)
+			i.testListScenario(ctx, match, baseURL, sqlCache, csvWriter)
 		})
 	}
 }
 
-func (i *IntegrationSuite) testSecretScenario(ctx context.Context, testFile string, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
+func (i *IntegrationSuite) testListScenario(ctx context.Context, testFile string, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
 	file, err := os.Open(testFile)
 	i.Require().NoError(err)
 	defer file.Close()
@@ -378,7 +378,7 @@ func setupJSONOutput() (*csv.Writer, *os.File, error) {
 	}
 
 	// Create CSV index file
-	csvPath := filepath.Join(testdataSecretsDir, "output.csv")
+	csvPath := filepath.Join(testdataListDir, "output.csv")
 	csvFile, err := os.OpenFile(csvPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, nil, err
