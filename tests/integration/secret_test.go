@@ -151,6 +151,9 @@ func (i *IntegrationSuite) testSecretScenario(ctx context.Context, testFile stri
 				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
 			}
 
+			// Convert project names to project IDs for projectsornamespaces parameter
+			query = convertProjectsOrNamespaces(query)
+
 			// Convert labelSelector/fieldSelector to filter format for SQL mode
 			if sqlCache {
 				query = convertQueryForSQLCache(query)
@@ -247,6 +250,13 @@ func convertQueryForSQLCache(query string) string {
 	if changed {
 		return strings.Join(parts, "&")
 	}
+	return query
+}
+
+// convertProjectsOrNamespaces - no conversion needed since we use test-prj-X directly
+// This mirrors the logic in steve_api_test.go#L2732-L2751
+func convertProjectsOrNamespaces(query string) string {
+	// No conversion needed - test-prj-X is used directly as the label value
 	return query
 }
 
