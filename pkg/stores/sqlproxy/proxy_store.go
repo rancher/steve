@@ -1106,12 +1106,12 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 			},
 		}
 		// v1.secrets depend on management.cattle.io.projects
-		secretInf, err := s.cacheFor(ctx, nil, &mcioProjectSchema)
+		mcioProjectInf, err := s.cacheFor(ctx, nil, &mcioProjectSchema)
 		if err != nil {
 			return nil, nil, err
 		}
 		doneCacheFns = append(doneCacheFns, func() {
-			s.cacheFactory.DoneWithCache(secretInf)
+			s.cacheFactory.DoneWithCache(mcioProjectInf)
 		})
 	}
 
