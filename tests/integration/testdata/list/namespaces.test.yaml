@@ -1,0 +1,640 @@
+schemaID: secret
+tests:
+- description: user:user-d,namespace:none,query:projectsornamespaces=test-prj-2
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces=test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+- description: user:user-d,namespace:none,query:projectsornamespaces=test-prj-1,test-prj-2
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces=test-prj-1,test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+- description: user:user-d,namespace:none,query:projectsornamespaces=test-ns-1
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-d,namespace:none,query:projectsornamespaces=test-ns-1,test-ns-2
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces=test-ns-1,test-ns-2
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+- description: user:user-d,namespace:none,query:projectsornamespaces=test-prj-2,test-ns-2,test-ns-3
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces=test-prj-2,test-ns-2,test-ns-3
+  expect:
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+- description: user:user-d,namespace:none,query:projectsornamespaces=test-ns-8,test-ns-9
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces=test-ns-8,test-ns-9
+  expect:
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+- description: user:user-d,namespace:none,query:projectsornamespaces!=test-prj-1
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces!=test-prj-1
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+- description: user:user-d,namespace:none,query:projectsornamespaces!=test-prj-1,test-prj-2
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces!=test-prj-1,test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+- description: user:user-d,namespace:none,query:projectsornamespaces!=test-prj-1,test-ns-6,test-ns-8
+  user: user-d
+  namespace: ''
+  query: projectsornamespaces!=test-prj-1,test-ns-6,test-ns-8
+  expect:
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+- description: user:user-d,namespace:test-ns-6,query:projectsornamespaces=test-prj-2
+  user: user-d
+  namespace: test-ns-6
+  query: projectsornamespaces=test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+- description: user:user-d,namespace:test-ns-6,query:projectsornamespaces=test-prj-2
+  user: user-d
+  namespace: test-ns-6
+  query: projectsornamespaces=test-prj-1
+  expect: []
+- description: user:user-d,namespace:test-ns-1,query:projectsornamespaces=test-ns-1,test-ns-2,-test-prj-2,test-ns-7
+  user: user-d
+  namespace: test-ns-1
+  query: projectsornamespaces=test-ns-1,test-ns-2,test-prj-2,test-ns-7
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-d,namespace:test-ns-1,query:projectsornamespaces!=test-prj-1
+  user: user-d
+  namespace: test-ns-1
+  query: projectsornamespaces!=test-prj-1
+  expect: []
+- description: user:user-d,namespace:test-ns-1,query:projectsornamespaces!=test-prj-1,test-prj-2
+  user: user-d
+  namespace: test-ns-1
+  query: projectsornamespaces!=test-prj-1,test-prj-2
+  expect: []
+- description: user:user-e,namespace:none,query:projectsornamespaces=test-prj-2
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces=test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+- description: user:user-e,namespace:none,query:projectsornamespaces=test-prj-1,test-prj-2
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces=test-prj-1,test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+- description: user:user-e,namespace:none,query:projectsornamespaces=test-ns-1
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-e,namespace:none,query:projectsornamespaces=test-ns-1,test-ns-2
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces=test-ns-1,test-ns-2
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+- description: user:user-e,namespace:none,query:projectsornamespaces=test-prj-2,test-ns-2,test-ns-3
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces=test-prj-2,test-ns-2,test-ns-3
+  expect:
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+- description: user:user-e,namespace:none,query:projectsornamespaces=test-ns-8,test-ns-9
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces=test-ns-8,test-ns-9
+  expect:
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+- description: user:user-e,namespace:none,query:projectsornamespaces!=test-prj-1
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces!=test-prj-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  expectExcludes: true
+- description: user:user-e,namespace:none,query:projectsornamespaces!=test-prj-1,test-prj-2
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces!=test-prj-1,test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+  expectExcludes: true
+- description: user:user-e,namespace:none,query:projectsornamespaces!=test-prj-1,test-ns-6,test-ns-8
+  user: user-e
+  namespace: ''
+  query: projectsornamespaces!=test-prj-1,test-ns-6,test-ns-8
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  expectExcludes: true
+- description: user:user-e,namespace:test-ns-6,query:projectsornamespaces=test-prj-2
+  user: user-e
+  namespace: test-ns-6
+  query: projectsornamespaces=test-prj-2
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+- description: user:user-e,namespace:test-ns-6,query:projectsornamespaces=test-prj-1
+  user: user-e
+  namespace: test-ns-6
+  query: projectsornamespaces=test-prj-1
+  expect: []
+- description: user:user-e,namespace:test-ns-1,query:projectsornamespaces=test-ns-1,test-ns-2,test-prj-2,test-ns-7
+  user: user-e
+  namespace: test-ns-1
+  query: projectsornamespaces=test-ns-1,test-ns-2,test-prj-2,test-ns-7
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-e,namespace:test-ns-1,query:projectsornamespaces!=test-prj-1
+  user: user-e
+  namespace: test-ns-1
+  query: projectsornamespaces!=test-prj-1
+  expect: []
+- description: user:user-e,namespace:test-ns-1,query:projectsornamespaces!=test-prj-1,test-prj-2
+  user: user-e
+  namespace: test-ns-1
+  query: projectsornamespaces!=test-prj-1,test-prj-2
+  expect: []
+- description: user:user-e,namespace:test-ns-1,query:projectsornamespaces!=test-prj-1,test-ns-2,test-ns-8
+  user: user-e
+  namespace: test-ns-1
+  query: projectsornamespaces!=test-prj-1,test-ns-2,test-ns-8
+  expect: []
