@@ -161,12 +161,11 @@ func (i *IntegrationSuite) TestProxyStore() {
 	err = wsConn.WriteJSON(watchMessage)
 	i.Require().NoError(err)
 
-	// Channel to signal when watch is closed via resource.stop message
-	watchClosed := make(chan struct{})
 	// Channel to signal when we receive a resource.create notification
 	createReceived := make(chan struct{})
+	// Channel to signal when we receive resource.stop message for oranges
+	resourceStopReceived := make(chan struct{})
 	go func() {
-		defer close(watchClosed)
 		for {
 			_, message, err := wsConn.ReadMessage()
 			if err != nil {
@@ -191,7 +190,12 @@ func (i *IntegrationSuite) TestProxyStore() {
 				// Watch received resource.stop message indicating CRD schema change
 				// Note: The WebSocket connection itself remains open, but Steve sends this
 				// message to signal that the watch needs to be re-established
-				return
+				select {
+				case <-resourceStopReceived:
+					// Already closed
+				default:
+					close(resourceStopReceived)
+				}
 			}
 		}
 	}()
@@ -227,13 +231,13 @@ func (i *IntegrationSuite) TestProxyStore() {
 		return i.doApply(ctx, obj, gvr)
 	})
 
-	// Wait for the watch to be closed (with timeout)
+	// Wait for the resource.stop message after CRD modification
 	select {
-	case <-watchClosed:
-		// Watch was properly closed
+	case <-resourceStopReceived:
+		// Received resource.stop message as expected
 	case <-time.After(10 * time.Second):
 		watchCancel() // Cancel to clean up the watch goroutine
-		i.Require().Fail("expected watch to be closed after CRD modification")
+		i.Require().Fail("expected to receive resource.stop message after CRD modification")
 	}
 
 	// Close the previous WebSocket connection
