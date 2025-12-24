@@ -240,9 +240,6 @@ func (i *IntegrationSuite) TestProxyStore() {
 		i.Require().Fail("expected to receive resource.stop message after CRD modification")
 	}
 
-	// Close the previous WebSocket connection
-	wsConn.Close()
-
 	// Wait for schema to be updated with new columns
 	i.Require().EventuallyWithT(func(c *assert.CollectT) {
 		i.discoveryMapper.Reset()
@@ -261,7 +258,67 @@ func (i *IntegrationSuite) TestProxyStore() {
 		require.NoError(c, err)
 	}, 15*time.Second, 500*time.Millisecond)
 
-	// Verify that a new watch can be started after the schema reset
+	// Test case 1: Re-establish watch on the existing WebSocket connection
+	// Send a new watch message on the same connection (without revision to watch from current state)
+	reWatchMessage := watchRequest{
+		ResourceType: "fruits.cattle.io.oranges",
+	}
+	err = wsConn.WriteJSON(reWatchMessage)
+	i.Require().NoError(err)
+
+	// Verify we can receive messages on the re-established watch
+	// Create another orange to confirm the watch is working
+	testOrange2 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "fruits.cattle.io/v1",
+			"kind":       "Orange",
+			"metadata": map[string]interface{}{
+				"name": "test-orange-2",
+			},
+			"foo": "bar2",
+		},
+	}
+	_, err = i.client.Resource(orangeGVR).Create(ctx, testOrange2, metav1.CreateOptions{})
+	i.Require().NoError(err)
+	defer func() {
+		_ = i.client.Resource(orangeGVR).Delete(ctx, "test-orange-2", metav1.DeleteOptions{})
+	}()
+
+	// Wait for the create notification to confirm the re-established watch is working
+	createReceived2 := make(chan struct{})
+	go func() {
+		for {
+			_, message, err := wsConn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var event watchEvent
+			if err := json.Unmarshal(message, &event); err != nil {
+				continue
+			}
+			if event.Name == "resource.create" && event.ResourceType == "fruits.cattle.io.oranges" {
+				select {
+				case <-createReceived2:
+					// Already closed
+				default:
+					close(createReceived2)
+				}
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-createReceived2:
+		// Watch is confirmed working after re-establishment on same connection
+	case <-time.After(10 * time.Second):
+		i.Require().Fail("expected to receive resource.create notification after re-establishing watch on existing connection")
+	}
+
+	// Close the WebSocket connection
+	wsConn.Close()
+
+	// Test case 2: Verify that a new watch can be started with a new connection
 	newWatchCtx, newWatchCancel := context.WithCancel(ctx)
 	defer newWatchCancel()
 
