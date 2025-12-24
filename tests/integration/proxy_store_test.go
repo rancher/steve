@@ -46,6 +46,37 @@ spec:
     storage: true
 `
 
+const orangeCRDManifestWithColumn = `
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: oranges.fruits.cattle.io
+spec:
+  scope: Cluster
+  group: fruits.cattle.io
+  names:
+    kind: Orange
+    listKind: OrangeList
+    plural: oranges
+    singular: orange
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          bar:
+            type: string
+          foo:
+            type: string
+    served: true
+    storage: true
+    additionalPrinterColumns:
+    - name: Foo
+      type: string
+      jsonPath: .foo
+`
+
 // TestProxyStore tests that when a CRD's schema changes, existing watch connections
 // are properly closed and new watches can be established.
 func (i *IntegrationSuite) TestProxyStore() {
@@ -83,12 +114,6 @@ func (i *IntegrationSuite) TestProxyStore() {
 		Group:    "fruits.cattle.io",
 		Version:  "v1",
 		Resource: "oranges",
-	}
-
-	crdGVR := schema.GroupVersionResource{
-		Group:    "apiextensions.k8s.io",
-		Version:  "v1",
-		Resource: "customresourcedefinitions",
 	}
 
 	// Create the Orange CRD dynamically using YAML string
@@ -163,7 +188,9 @@ func (i *IntegrationSuite) TestProxyStore() {
 				}
 			}
 			if event.Name == "resource.stop" && event.ResourceType == "fruits.cattle.io.oranges" {
-				// Watch was closed by the server
+				// Watch received resource.stop message indicating CRD schema change
+				// Note: The WebSocket connection itself remains open, but Steve sends this
+				// message to signal that the watch needs to be re-established
 				return
 			}
 		}
@@ -195,54 +222,10 @@ func (i *IntegrationSuite) TestProxyStore() {
 		i.Require().Fail("expected to receive resource.create notification for test-orange")
 	}
 
-	// Patch the CRD to add an additional printer column using Apply with Force
-	patchedCRD := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "apiextensions.k8s.io/v1",
-			"kind":       "CustomResourceDefinition",
-			"metadata": map[string]interface{}{
-				"name": "oranges.fruits.cattle.io",
-			},
-			"spec": map[string]interface{}{
-				"group": "fruits.cattle.io",
-				"scope": "Cluster",
-				"names": map[string]interface{}{
-					"kind":     "Orange",
-					"listKind": "OrangeList",
-					"plural":   "oranges",
-					"singular": "orange",
-				},
-				"versions": []interface{}{
-					map[string]interface{}{
-						"name": "v1",
-						"schema": map[string]interface{}{
-							"openAPIV3Schema": map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"bar": map[string]interface{}{"type": "string"},
-									"foo": map[string]interface{}{"type": "string"},
-								},
-							},
-						},
-						"served":  true,
-						"storage": true,
-						"additionalPrinterColumns": []interface{}{
-							map[string]interface{}{
-								"name":     "Foo",
-								"type":     "string",
-								"jsonPath": ".foo",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	_, err = i.client.Resource(crdGVR).Apply(ctx, "oranges.fruits.cattle.io", patchedCRD, metav1.ApplyOptions{
-		FieldManager: "integration-tests",
-		Force:        true,
+	// Patch the CRD to add an additional printer column using YAML manifest
+	i.doManifestString(ctx, orangeCRDManifestWithColumn, func(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error {
+		return i.doApply(ctx, obj, gvr)
 	})
-	i.Require().NoError(err)
 
 	// Wait for the watch to be closed (with timeout)
 	select {
