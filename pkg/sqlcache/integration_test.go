@@ -559,7 +559,7 @@ func waitForProjectsDisplayName(ctx context.Context, proxyStore *sqlproxy.Store,
 			Request: req,
 		}
 		partitions := []partition.Partition{defaultPartition}
-		list, total, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		list, total, _, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
 		if err != nil || total == 0 {
 			// note that we don't return the error since that would stop the polling
 			return false, nil
@@ -608,7 +608,7 @@ func waitForTransferredFields(ctx context.Context, proxyStore *sqlproxy.Store, s
 			Request: req,
 		}
 		partitions := []partition.Partition{defaultPartition}
-		_, total, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		_, total, _, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
 		return err == nil && total == expectedNum, err
 	})
 }
@@ -1144,7 +1144,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 		{"saotome", "portuguese"},
 	}
 	for _, info := range mcioProjectInfo {
-		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], "", info[1], nil)
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], "*NOT USED*", info[1], nil)
 		requireT.NoError(err)
 	}
 
