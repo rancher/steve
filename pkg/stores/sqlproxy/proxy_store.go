@@ -93,10 +93,10 @@ var (
 		gvkKey("", "v1", "ReplicationController"): {
 			{"spec", "template", "spec", "containers", "image"}},
 		gvkKey("", "v1", "Secret"): {
+			{"_type"},
 			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
 			{"spec", "clusterName"},
 			{"spec", "displayName"},
-			{"_type"},
 		},
 		gvkKey("", "v1", "Service"): {
 			{"spec", "clusterIP"},

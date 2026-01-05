@@ -208,7 +208,7 @@ func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thi
 	return err
 }
 
-func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string, secretType string) error {
 	obj := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -218,6 +218,7 @@ func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTe
 				testLabel: thisTestLabel,
 			},
 		},
+		Type: v1.SecretType(secretType),
 	}
 	_, err := i.clientset.CoreV1().Secrets(defaultTestNamespace).Create(ctx, obj, metav1.CreateOptions{})
 	return err
@@ -1217,11 +1218,11 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 
 	err = ctrl.Start(ctx)
 	requireT.NoError(err)
-	secretInfo := [][2]string{
-		{"morocco", "rabat"},
-		{"eritrea", "asmara"},
-		{"kenya", "nairobi"},
-		{"benin", "portonovo"},
+	secretInfo := [][3]string{
+		{"morocco", "rabat", "france"},
+		{"eritrea", "asmara", "italy"},
+		{"kenya", "nairobi", "england"},
+		{"benin", "portonovo", "france"},
 	}
 	projectInfo := [][3]string{
 		{"rabat", "arabic", "casablanca"},
@@ -1230,7 +1231,7 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 		{"portonovo", "french", "cotonou"},
 	}
 	for _, info := range secretInfo {
-		err = i.createSecret(ctx, info[0], labelTest, info[1])
+		err = i.createSecret(ctx, info[0], labelTest, info[1], info[2])
 		requireT.NoError(err)
 	}
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
@@ -1294,6 +1295,16 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 			},
 		},
 		{
+			name:  "sorts by type (colonizer)",
+			query: "sort=_type,metadata.name",
+			wantNames: []string{
+				"kenya",   // england
+				"benin",   // france
+				"morocco", // france
+				"eritrea", // italy
+			},
+		},
+		{
 			name:  "filter on spec.clusterName (language)",
 			query: "filter=spec.clusterName~en",
 			wantNames: []string{
@@ -1307,6 +1318,14 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 			wantNames: []string{
 				"kenya",   // mombasa
 				"morocco", // casablanca
+			},
+		},
+		{
+			name:  "filter on type (colonizer)",
+			query: "filter=_type=france&sort=metadata.name",
+			wantNames: []string{
+				"benin",   // france
+				"morocco", // france
 			},
 		},
 	}
