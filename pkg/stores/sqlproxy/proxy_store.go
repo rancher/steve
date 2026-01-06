@@ -285,10 +285,18 @@ var (
 	// We might need to pull in the `memoryRaw` fields as well
 	// Remember to index these fields in the database.
 	provisionedClusterDependencies = func() []sqltypes.ExternalDependency {
-		fields := []string{"status.allocatable.cpu", "status.allocatable.cpuRaw",
-			"status.allocatable.memory", "status.allocatable.memoryRaw", "status.allocatable.pods",
-			"status.requested.cpu", "status.requested.cpuRaw",
-			"status.requested.memory", "status.requested.memoryRaw", "status.requested.pods"}
+		fields := []string{
+			"status.allocatable.cpu",
+			"status.allocatable.cpuRaw",
+			"status.allocatable.memory",
+			"status.allocatable.memoryRaw",
+			"status.allocatable.pods",
+			"status.requested.cpu",
+			"status.requested.cpuRaw",
+			"status.requested.memory",
+			"status.requested.memoryRaw",
+			"status.requested.pods",
+		}
 		x := make([]sqltypes.ExternalDependency, len(fields))
 		for i, field := range fields {
 			x[i] = sqltypes.ExternalDependency{

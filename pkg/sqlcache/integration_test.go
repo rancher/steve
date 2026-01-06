@@ -830,7 +830,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 		{"luanda", "14250m", "2610Ki", 11},
 		{"gaborone", "98m", "12Mi", 14},
 		{"gitega", "325m", "4Mi", 8},
-		{"bamako", "700m", "1200Ki", 20},
+		{"bamako", "7", "1200Ki", 20},
 	}
 	for _, info := range mcioInfo {
 		err = createMCIO(ctx, mcioClient, mcioGVR, info.city, labelTest, info.cpu, info.memory, info.pods)
@@ -890,7 +890,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			wantNames: []string{
 				"botswana", // 98m
 				"burundi",  // 325m
-				"mali",     // 700m
+				"mali",     // 7
 				"rwanda",   // 7000m
 				"angola",   // 14250m
 			},
@@ -923,8 +923,8 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			wantNames: []string{
 				"angola",   // 14250m
 				"burundi",  // 325m
+				"mali",     // 7
 				"rwanda",   // 7000m
-				"mali",     // 700m
 				"botswana", // 98m
 			},
 		},
@@ -943,14 +943,14 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			name:  "filter on original cpu",
 			query: "filter=status.allocatable.cpu=7000m",
 			wantNames: []string{
-				"rwanda",
+				"rwanda", // 7000m
 			},
 		},
 		{
 			name:  "filter on processed cpu",
 			query: "filter=status.allocatable.cpuRaw=14.25",
 			wantNames: []string{
-				"angola",
+				"angola", // 14250m
 			},
 		},
 		{
