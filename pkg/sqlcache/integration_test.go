@@ -826,54 +826,72 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			},
 		},
 		{
-			name:      "sorts by cpu",
-			query:     "sort=status.allocatable.cpuRaw,metadata.name", //TODO: Reinstate raw
-			wantNames: []string{"botswana", "burundi", "mali", "rwanda", "angola"},
-		},
-		{
-			name:      "sorts by memory",
-			query:     "sort=status.allocatable.memoryRaw,metadata.name",
-			wantNames: []string{"rwanda", "mali", "angola", "burundi", "botswana"},
-		},
-		{
-			name:      "sorts by pods",
-			query:     "sort=status.allocatable.pods,metadata.name",
-			wantNames: []string{"burundi", "angola", "botswana", "rwanda", "mali"},
-		},
-		{
-			name:  "misguided sort by raw cpu",
-			query: "sort=status.allocatable.cpu,metadata.name",
+			name:  "sorts by cpu",
+			query: "sort=status.allocatable.cpuRaw,metadata.name",
 			wantNames: []string{
-				"angola",
-				"burundi",
-				"rwanda",
-				"mali",
-				"botswana",
+				"botswana", // 98m
+				"burundi",  // 325m
+				"mali",     // 700m
+				"rwanda",   // 7000m
+				"angola",   // 14250m
 			},
 		},
 		{
-			name:  "misguided sort by raw memory",
+			name:  "sorts by memory",
+			query: "sort=status.allocatable.memoryRaw,metadata.name",
+			wantNames: []string{
+				"rwanda",   // 900Ki
+				"mali",     // 1200Ki
+				"angola",   // 2610Ki
+				"burundi",  // 4Mi
+				"botswana", // 12Mi
+			},
+		},
+		{
+			name:  "sorts by pods",
+			query: "sort=status.allocatable.pods,metadata.name",
+			wantNames: []string{
+				"burundi",  // 8
+				"angola",   // 11
+				"botswana", // 14
+				"rwanda",   // 17
+				"mali",     // 20
+			},
+		},
+		{
+			name:  "misguided (alphabetical) sort by raw cpu",
+			query: "sort=status.allocatable.cpu,metadata.name",
+			wantNames: []string{
+				"angola",   // 14250m
+				"burundi",  // 325m
+				"rwanda",   // 7000m
+				"mali",     // 700m
+				"botswana", // 98m
+			},
+		},
+		{
+			name:  "misguided (alphabetical) sort by raw memory",
 			query: "sort=status.allocatable.memory,metadata.name",
 			wantNames: []string{
-				"mali",
-				"botswana",
-				"angola",
-				"burundi",
-				"rwanda",
+				"mali",     // 1200Ki
+				"botswana", // 12Mi
+				"angola",   // 2610Ki
+				"burundi",  // 4Mi
+				"rwanda",   // 900Ki
 			},
 		},
 		{
 			name:  "filter on original cpu",
 			query: "filter=status.allocatable.cpu=7000m",
 			wantNames: []string{
-				"rwanda",
+				"rwanda", // 7000m
 			},
 		},
 		{
 			name:  "filter on processed cpu",
 			query: "filter=status.allocatable.cpuRaw=14.25",
 			wantNames: []string{
-				"angola",
+				"angola", // 14250m
 			},
 		},
 		{
