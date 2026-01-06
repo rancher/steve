@@ -757,7 +757,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	requireT.NoError(err)
 	mcioGitegaCpu2Mem4Pod1, err := createMCIO(ctx, mcioClient, mcioGVR, "gitega", "325m", "4Mi", 8)
 	requireT.NoError(err)
-	mcioBamakoCpu3Mem2Pod5, err := createMCIO(ctx, mcioClient, mcioGVR, "bamako", "700m", "1200Ki", 20)
+	mcioBamakoCpu3Mem2Pod5, err := createMCIO(ctx, mcioClient, mcioGVR, "bamako", "7", "1200Ki", 20)
 	requireT.NoError(err)
 
 	pcioRwandaKigali, err := createPCIO(ctx, pcioClient, pcioGVR, "rwanda", "kigali")
@@ -831,7 +831,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			wantNames: []string{
 				"botswana", // 98m
 				"burundi",  // 325m
-				"mali",     // 700m
+				"mali",     // 7
 				"rwanda",   // 7000m
 				"angola",   // 14250m
 			},
@@ -864,8 +864,8 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			wantNames: []string{
 				"angola",   // 14250m
 				"burundi",  // 325m
+				"mali",     // 7
 				"rwanda",   // 7000m
-				"mali",     // 700m
 				"botswana", // 98m
 			},
 		},
