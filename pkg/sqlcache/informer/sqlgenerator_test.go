@@ -3065,6 +3065,37 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		},
 		expectedJoinTable: map[string]int{"knot": 1},
 	})
+	// filter=metadata.labels.knot!=granny&pagesize=8
+	tests = append(tests, testCase{
+		description: "TestConstructSummaryTestFilters: pagesize requires sorting: filter=metadata.labels.knot=granny&pagesize=8",
+		listOptions: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					[]sqltypes.Filter{
+						{
+							Field:   []string{"metadata", "labels", "knot"},
+							Op:      sqltypes.Eq,
+							Matches: []string{"granny"},
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{PageSize: 8},
+		},
+		partitions: []partition.Partition{{All: true}},
+		ns:         "",
+		expectedFilters: &filterComponentsT{
+			joinParts:       standardJoinParts,
+			whereClauses:    []string{"lt1.label = ? AND lt1.value = ?"},
+			orderByClauses:  []string{`f1."metadata.name" ASC`},
+			params:          []any{"knot", "granny"},
+			limitClause:     "\n  LIMIT 8",
+			limitParam:      8,
+			isEmpty:         false,
+			queryUsesLabels: true,
+		},
+		expectedJoinTable: map[string]int{"knot": 1},
+	})
 	t.Parallel()
 	dbName := "something"
 	mainFieldPrefix := "f1"

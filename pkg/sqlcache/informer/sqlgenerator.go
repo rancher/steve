@@ -80,8 +80,8 @@ func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.
 	joinTableIndexByLabelName := make(map[string]int)
 	const mainObjectPrefix = "o"
 	const mainFieldPrefix = "f1"
-	const includeSort = false
 	const isSummaryFilter = true
+	includeSort := lo.SummaryFieldList != nil
 	filterComponents, err := l.compileQuery(lo, partitions, namespace, dbName, mainFieldPrefix, joinTableIndexByLabelName, includeSort, isSummaryFilter)
 	if err != nil {
 		return nil, err
@@ -231,6 +231,10 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 		whereClauses: make([]string, 0),
 		params:       make([]any, 0),
 		isEmpty:      true,
+	}
+	if !includeSort && lo.Pagination.PageSize > 0 {
+		// If we want a slice of the data we need to sort it so we group on the correct slice
+		includeSort = true
 	}
 	if includeSort {
 		unboundSortLabels = getUnboundSortLabels(lo)
@@ -409,7 +413,7 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 					}
 					filterComponents.orderByClauses = append(filterComponents.orderByClauses, clause)
 				} else {
-					fieldEntry, err := l.getValidFieldEntry("f", fields)
+					fieldEntry, err := l.getValidFieldEntry(mainFieldPrefix, fields)
 					if err != nil {
 						return nil, err
 					}
@@ -498,6 +502,9 @@ func (l *ListOptionIndexer) constructComplexSummaryQueryForField(fieldParts []st
 		withParts = append(withParts, fmt.Sprintf("\tWHERE %s\n", filterComponents.whereClauses[0]))
 	default:
 		withParts = append(withParts, fmt.Sprintf("\tWHERE (%s)\n", strings.Join(filterComponents.whereClauses, ")\n\t\tAND (")))
+	}
+	if len(filterComponents.orderByClauses) > 0 {
+		withParts = append(withParts, "\t"+"ORDER BY "+strings.Join(filterComponents.orderByClauses, ", ")+"\n")
 	}
 	if filterComponents.limitClause != "" {
 		withParts = append(withParts, "\t"+filterComponents.limitClause+"\n")
@@ -1122,13 +1129,17 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 
 func (f filterComponentsT) copy() filterComponentsT {
 	return filterComponentsT{
-		withParts:    append([]withPart{}, f.withParts...),
-		joinParts:    append([]joinPart{}, f.joinParts...),
-		whereClauses: append([]string{}, f.whereClauses...),
-		limitClause:  f.limitClause,
-		offsetClause: f.offsetClause,
-		params:       append([]any{}, f.params...),
-		isEmpty:      f.isEmpty,
+		withParts:       append([]withPart{}, f.withParts...),
+		joinParts:       append([]joinPart{}, f.joinParts...),
+		whereClauses:    append([]string{}, f.whereClauses...),
+		orderByClauses:  append([]string{}, f.orderByClauses...),
+		limitClause:     f.limitClause,
+		limitParam:      f.limitParam,
+		offsetClause:    f.offsetClause,
+		offsetParam:     f.offsetParam,
+		params:          append([]any{}, f.params...),
+		queryUsesLabels: f.queryUsesLabels,
+		isEmpty:         f.isEmpty,
 	}
 }
 
