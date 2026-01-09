@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -516,27 +515,6 @@ func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
 
 func gvkKey(group, version, kind string) string {
 	return group + "_" + version + "_" + kind
-}
-
-func tableColsToCommonCols(tableDefs []table.Column) []common.ColumnDefinition {
-	colDefs := make([]common.ColumnDefinition, len(tableDefs))
-	for i, td := range tableDefs {
-		// This isn't used right now, but it is used in the PR that tries to identify
-		// numeric fields, so leave it here.
-		// Although the `table.Column` and `metav1.TableColumnDefinition` types
-		// are structurally the same, Go doesn't allow a quick way to cast one to the other.
-		tcd := metav1.TableColumnDefinition{
-			Name:        td.Name,
-			Type:        td.Type,
-			Format:      td.Format,
-			Description: td.Description,
-		}
-		colDefs[i] = common.ColumnDefinition{
-			TableColumnDefinition: tcd,
-			Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
-		}
-	}
-	return colDefs
 }
 
 // getFieldAndColInfo converts object field names from types.APISchema's format into steve's
