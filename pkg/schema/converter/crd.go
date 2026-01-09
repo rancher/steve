@@ -1,6 +1,8 @@
 package converter
 
 import (
+	"fmt"
+
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
 	apiextv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/apiextensions.k8s.io/v1"
@@ -8,6 +10,7 @@ import (
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/jsonpath"
 )
 
 var (
@@ -68,6 +71,29 @@ func forVersion(group, kind string, version v1.CustomResourceDefinitionVersion, 
 			schemas.SetHasObservedGeneration(schema.Schema, true)
 		}
 	}
+
+	cols := map[string]*jsonpath.JSONPath{}
+	namePath := jsonpath.New("Name")
+	namePath.AllowMissingKeys(true)
+	if err := namePath.Parse("{.metadata.name}"); err == nil {
+		cols["Name"] = namePath
+	}
+
+	for _, col := range version.AdditionalPrinterColumns {
+		path := jsonpath.New(col.Name)
+		path.AllowMissingKeys(true)
+		if err := path.Parse(fmt.Sprintf("{%s}", col.JSONPath)); err == nil {
+			cols[col.Name] = path
+		}
+	}
+	if len(version.AdditionalPrinterColumns) == 0 {
+		agePath := jsonpath.New("Age")
+		agePath.AllowMissingKeys(true)
+		if err := agePath.Parse("{.metadata.creationTimestamp}"); err == nil {
+			cols["Age"] = agePath
+		}
+	}
+	attributes.SetCRDJSONPathParsers(schema, cols)
 }
 
 func hasObservedGeneration(schema *v1.JSONSchemaProps) bool {

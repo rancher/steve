@@ -14,11 +14,16 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/jsonpath"
 )
 
 func TestTransformChain(t *testing.T) {
 	now = func() time.Time { return time.Date(1992, 9, 2, 0, 0, 0, 0, time.UTC) }
 	noColumns := []rescommon.ColumnDefinition{}
+	jp := jsonpath.New("Age")
+	jp.AllowMissingKeys(true)
+	jp.Parse("{.metadata.creationTimestamp}")
+
 	tests := []struct {
 		name             string
 		input            any
@@ -26,6 +31,7 @@ func TestTransformChain(t *testing.T) {
 		hasRelationships []summarycache.Relationship
 		columns          []rescommon.ColumnDefinition
 		isCRD            bool
+		jsonPaths        map[string]*jsonpath.JSONPath
 		wantOutput       any
 		wantError        bool
 	}{
@@ -157,6 +163,75 @@ func TestTransformChain(t *testing.T) {
 						},
 						"fields": []interface{}{
 							fmt.Sprintf("%d", now().Add(-24*time.Hour).UnixMilli()),
+						},
+					},
+					"id":  "test-ns/testobj",
+					"_id": "old-id",
+				},
+			},
+		},
+		{
+			name: "CRD with jsonPath - should use jsonPath value instead of metadata.fields",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "testobj",
+						Namespace: "test-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "test.cattle.io/v1",
+						Kind:       "TestResource",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "success",
+					Transitioning: false,
+					Error:         false,
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "test.cattle.io/v1",
+					"kind":       "TestResource",
+					"metadata": map[string]interface{}{
+						"name":              "testobj",
+						"namespace":         "test-ns",
+						"creationTimestamp": "2023-01-01T00:00:00Z", // valid RFC3339
+						"fields":            []interface{}{"99d"},   // stale value
+					},
+					"id": "old-id",
+				},
+			},
+			isCRD: true,
+			columns: []rescommon.ColumnDefinition{
+				{
+					Field: "metadata.fields[0]",
+					TableColumnDefinition: v1.TableColumnDefinition{
+						Name: "Age",
+						Type: "date",
+					},
+				},
+			},
+			jsonPaths: map[string]*jsonpath.JSONPath{
+				"Age": jp,
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "test.cattle.io/v1",
+					"kind":       "TestResource",
+					"metadata": map[string]interface{}{
+						"name":              "testobj",
+						"namespace":         "test-ns",
+						"creationTimestamp": "2023-01-01T00:00:00Z",
+						"relationships":     []any(nil),
+						"state": map[string]interface{}{
+							"name":          "success",
+							"error":         false,
+							"transitioning": false,
+							"message":       "",
+						},
+						"fields": []interface{}{
+							"2023-01-01T00:00:00Z", // Should be preserved as is
 						},
 					},
 					"id":  "test-ns/testobj",
@@ -562,7 +637,7 @@ func TestTransformChain(t *testing.T) {
 			if test.name == "a non-ready cluster" {
 				fmt.Printf("Stop here")
 			}
-			output, err := tb.GetTransformFunc(gvk, test.columns, test.isCRD)(test.input)
+			output, err := tb.GetTransformFunc(gvk, test.columns, test.isCRD, test.jsonPaths)(test.input)
 			require.Equal(t, test.wantOutput, output)
 			if test.wantError {
 				require.Error(t, err)
