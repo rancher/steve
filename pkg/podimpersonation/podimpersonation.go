@@ -586,16 +586,23 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 				SubPath:   "config",
 			}
 
+			securityContext := &v1.SecurityContext{
+				ReadOnlyRootFilesystem: &f,
+			}
+			if container.SecurityContext != nil {
+				securityContext = container.SecurityContext
+
+				//We must override ReadOnlyRootFilesystem value to false for same reason as above.
+				securityContext.ReadOnlyRootFilesystem = &f
+			}
+
 			pod.Spec.InitContainers = append(pod.Spec.InitContainers, v1.Container{
 				Name:            "init-kubeconfig-volume",
 				Image:           image,
 				Command:         []string{"sh", "-c", fmt.Sprintf("cp %s %s && chown %d %s/config", cfgVMount.MountPath, vmount.MountPath, shellUser, vmount.MountPath)},
 				ImagePullPolicy: v1.PullIfNotPresent,
-				SecurityContext: &v1.SecurityContext{
-					RunAsUser:  &zero,
-					RunAsGroup: &zero,
-				},
-				VolumeMounts: []v1.VolumeMount{cfgVMount, vmount},
+				SecurityContext: securityContext,
+				VolumeMounts:    []v1.VolumeMount{cfgVMount, vmount},
 			},
 			)
 
@@ -620,8 +627,6 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 		},
 		Command: []string{"sh", "-c", "kubectl proxy --disable-filter || true"},
 		SecurityContext: &v1.SecurityContext{
-			RunAsUser:              &zero,
-			RunAsGroup:             &zero,
 			ReadOnlyRootFilesystem: &t,
 		},
 		VolumeMounts: []v1.VolumeMount{
