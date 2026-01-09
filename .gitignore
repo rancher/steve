@@ -1,7 +1,8 @@
 .DS_Store
 
-/.dapper
 /.cache
+/.dapper
+/.idea
 /certs
 /bin
 /dist
