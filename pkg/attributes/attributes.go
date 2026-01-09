@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/jsonpath"
 )
 
 func Namespaced(s *types.APISchema) bool {
@@ -197,4 +198,21 @@ func SetPreferredGroup(s *types.APISchema, ver string) {
 		s.Attributes = map[string]interface{}{}
 	}
 	s.Attributes["preferredGroup"] = ver
+}
+
+func SetCRDJSONPathParsers(s *types.APISchema, columns map[string]*jsonpath.JSONPath) {
+	if s.Attributes == nil {
+		s.Attributes = map[string]interface{}{}
+	}
+	s.Attributes["crdJSONPathParsers"] = columns
+}
+
+func CRDJSONPathParsers(s *types.APISchema) map[string]*jsonpath.JSONPath {
+	if s.Attributes == nil {
+		return nil
+	}
+	if cols, ok := s.Attributes["crdJSONPathParsers"].(map[string]*jsonpath.JSONPath); ok {
+		return cols
+	}
+	return nil
 }

@@ -3,7 +3,9 @@
 package virtual
 
 import (
+	"bytes"
 	"fmt"
+	"reflect"
 	"slices"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/jsonpath"
 )
 
 var now = time.Now
@@ -35,7 +38,7 @@ func NewTransformBuilder(cache common.SummaryCache) *TransformBuilder {
 }
 
 // GetTransformFunc returns the func to transform a raw object into a fixed object, if needed
-func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool) cache.TransformFunc {
+func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
 	if gvk.Kind == "Event" && gvk.Group == "" && gvk.Version == "v1" {
 		converters = append(converters, events.TransformEventObject)
@@ -63,6 +66,27 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 				value, cast := curValue[index].(string)
 				if !cast {
 					return obj, fmt.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", index, curValue[index])
+				}
+
+				if jp, ok := jsonPaths[col.Name]; ok && isCRD {
+					results, err := jp.FindResults(obj.Object)
+					if err == nil && len(results) > 0 && len(results[0]) > 0 {
+						v := results[0][0].Interface()
+						if v != nil {
+							buf := &bytes.Buffer{}
+							if err := jp.PrintResults(buf, []reflect.Value{reflect.ValueOf(v)}); err == nil {
+								value = buf.String()
+							}
+						}
+					}
+
+					if _, err := time.Parse(time.RFC3339, value); err == nil {
+						curValue[index] = value
+						if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
+							return obj, err
+						}
+						return obj, nil
+					}
 				}
 
 				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)

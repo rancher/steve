@@ -273,6 +273,11 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 					return
 				}
 
+				if _, err := time.Parse(time.RFC3339, timeValue); err == nil {
+					// it's already a timestamp, so we don't need to do anything
+					return
+				}
+
 				dur, ok := isDuration(timeValue)
 				if !ok {
 					millis, err := strconv.ParseInt(timeValue, 10, 64)
