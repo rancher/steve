@@ -185,3 +185,183 @@ func TestTransformCommonObjects(t *testing.T) {
 		})
 	}
 }
+
+// Pods have special needs for the summary object, best to do them in one function.
+func TestTransformCommonObjectsForPods(t *testing.T) {
+	tests := []struct {
+		name             string
+		input            any
+		hasSummary       *summary.SummarizedObject
+		hasRelationships []summarycache.Relationship
+		wantOutput       any
+		wantError        bool
+	}{
+		{
+			name: "summary: fix successful pods",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "successful-pod",
+						Namespace: "successful-pod-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "/v1",
+						Kind:       "Pod",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "completed",
+					Transitioning: false,
+					Error:         false,
+					Message:       []string{"resource 1 rolled out", "resource 2 rolled out"},
+				},
+			},
+			hasRelationships: []summarycache.Relationship{
+				{
+					ToID:        "1345",
+					ToType:      "SomeType",
+					ToNamespace: "some-ns",
+					FromID:      "78901",
+					FromType:    "TestResource",
+					Rel:         "uses",
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Kind",
+					"metadata": map[string]interface{}{
+						"name":      "successful-pod",
+						"namespace": "successful-pod-ns",
+					},
+					"id": "old-id",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Kind",
+					"metadata": map[string]interface{}{
+						"name":      "successful-pod",
+						"namespace": "successful-pod-ns",
+						"state": map[string]interface{}{
+							"name":          "succeeded",
+							"error":         false,
+							"transitioning": false,
+							"message":       "resource 1 rolled out:resource 2 rolled out",
+						},
+						"relationships": []any{
+							map[string]any{
+								"toId":        "1345",
+								"toType":      "SomeType",
+								"toNamespace": "some-ns",
+								"fromId":      "78901",
+								"fromType":    "TestResource",
+								"rel":         "uses",
+							},
+						},
+					},
+					"id":  "successful-pod-ns/successful-pod",
+					"_id": "old-id",
+				},
+			},
+		},
+		{
+			name: "summary: fix unavailable pods",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "failure01",
+						Namespace: "lemon-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "/v1",
+						Kind:       "Pod",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "unavailable",
+					Transitioning: false,
+					Error:         false,
+					Message:       []string{"looks like a bad pod spec"},
+				},
+			},
+			hasRelationships: []summarycache.Relationship{
+				{
+					ToID:        "1346",
+					ToType:      "SomeType",
+					ToNamespace: "some-ns",
+					FromID:      "78901",
+					FromType:    "TestResource",
+					Rel:         "uses",
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Kind",
+					"metadata": map[string]interface{}{
+						"name":      "failure01",
+						"namespace": "lemon-ns",
+					},
+					"id": "old-id",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Kind",
+					"metadata": map[string]interface{}{
+						"name":      "failure01",
+						"namespace": "lemon-ns",
+						"state": map[string]interface{}{
+							"name":          "crashLoopBackOff",
+							"error":         false,
+							"transitioning": false,
+							"message":       "looks like a bad pod spec",
+						},
+						"relationships": []any{
+							map[string]any{
+								"toId":        "1346",
+								"toType":      "SomeType",
+								"toNamespace": "some-ns",
+								"fromId":      "78901",
+								"fromType":    "TestResource",
+								"rel":         "uses",
+							},
+						},
+					},
+					"id":  "lemon-ns/failure01",
+					"_id": "old-id",
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fakeCache := common.FakeSummaryCache{
+				SummarizedObject: test.hasSummary,
+				Relationships:    test.hasRelationships,
+			}
+			df := common.DefaultFields{
+				Cache: &fakeCache,
+			}
+			raw, isSignal, err := common.GetUnstructured(test.input)
+			if err != nil {
+				require.True(t, test.wantError)
+				return
+			}
+			if isSignal {
+				require.Equal(t, test.input, test.wantOutput)
+				return
+			}
+			output, err := df.TransformCommonForPods(raw)
+			if test.wantError {
+				require.Error(t, err)
+			} else {
+				require.Equal(t, test.wantOutput, output)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
