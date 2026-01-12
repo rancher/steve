@@ -200,7 +200,7 @@ func SetPreferredGroup(s *types.APISchema, ver string) {
 	s.Attributes["preferredGroup"] = ver
 }
 
-func SetCRDJSONPathParsers(s *types.APISchema, columns map[string]*jsonpath.JSONPath) {
+func SetCRDJSONPathParsers(s *types.APISchema, columns map[string]string) {
 	if s.Attributes == nil {
 		s.Attributes = map[string]interface{}{}
 	}
@@ -211,8 +211,19 @@ func CRDJSONPathParsers(s *types.APISchema) map[string]*jsonpath.JSONPath {
 	if s.Attributes == nil {
 		return nil
 	}
-	if cols, ok := s.Attributes["crdJSONPathParsers"].(map[string]*jsonpath.JSONPath); ok {
-		return cols
+	cols, ok := s.Attributes["crdJSONPathParsers"].(map[string]string)
+	if !ok {
+		return nil
 	}
-	return nil
+
+	result := map[string]*jsonpath.JSONPath{}
+	for name, parserStr := range cols {
+		path := jsonpath.New(name)
+		path.AllowMissingKeys(true)
+		if err := path.Parse(parserStr); err == nil {
+			result[name] = path
+		}
+	}
+
+	return result
 }

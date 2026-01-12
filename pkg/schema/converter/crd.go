@@ -10,7 +10,6 @@ import (
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/util/jsonpath"
 )
 
 var (
@@ -72,26 +71,14 @@ func forVersion(group, kind string, version v1.CustomResourceDefinitionVersion, 
 		}
 	}
 
-	cols := map[string]*jsonpath.JSONPath{}
-	namePath := jsonpath.New("Name")
-	namePath.AllowMissingKeys(true)
-	if err := namePath.Parse("{.metadata.name}"); err == nil {
-		cols["Name"] = namePath
-	}
+	cols := map[string]string{}
+	cols["Name"] = "{.metadata.name}"
 
 	for _, col := range version.AdditionalPrinterColumns {
-		path := jsonpath.New(col.Name)
-		path.AllowMissingKeys(true)
-		if err := path.Parse(fmt.Sprintf("{%s}", col.JSONPath)); err == nil {
-			cols[col.Name] = path
-		}
+		cols[col.Name] = fmt.Sprintf("{%s}", col.JSONPath)
 	}
 	if len(version.AdditionalPrinterColumns) == 0 {
-		agePath := jsonpath.New("Age")
-		agePath.AllowMissingKeys(true)
-		if err := agePath.Parse("{.metadata.creationTimestamp}"); err == nil {
-			cols["Age"] = agePath
-		}
+		cols["Age"] = "{.metadata.creationTimestamp}"
 	}
 	attributes.SetCRDJSONPathParsers(schema, cols)
 }
