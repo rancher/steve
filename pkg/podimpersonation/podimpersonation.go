@@ -622,7 +622,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 		Env: []v1.EnvVar{
 			{
 				Name:  "KUBECONFIG",
-				Value: "/home/shell/.kube/config",
+				Value: userKubeConfigPath("shell"), // TODO: maybe we need a way to configure user?
 			},
 		},
 		Command: []string{"sh", "-c", "kubectl proxy --disable-filter || true"},
@@ -633,7 +633,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 			{
 				Name:      "admin-kubeconfig",
 				ReadOnly:  true,
-				MountPath: "/home/shell/.kube/config",
+				MountPath: userKubeConfigPath("shell"), // TODO: maybe we need a way to configure user?
 				SubPath:   "config",
 			},
 			{
@@ -704,4 +704,12 @@ func (s *PodImpersonation) createConfigMaps(ctx context.Context, user user.Info,
 	}
 
 	return nil
+}
+
+func userKubeConfigPath(user string) string {
+	if user == "root" {
+		return "/root/.kube/config"
+	}
+
+	return "/home/" + user + "/.kube/config"
 }
