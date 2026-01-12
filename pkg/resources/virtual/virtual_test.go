@@ -8,6 +8,7 @@ import (
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/rancher/steve/pkg/resources/virtual/dates"
 	"github.com/rancher/steve/pkg/summarycache"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,12 @@ import (
 )
 
 func TestTransformChain(t *testing.T) {
-	now = func() time.Time { return time.Date(1992, 9, 2, 0, 0, 0, 0, time.UTC) }
+	// Mock time in dates package
+	mockTime := func() time.Time { return time.Date(1992, 9, 2, 0, 0, 0, 0, time.UTC) }
+	dates.Now = mockTime
+	// Also keep local now mocked if it was used anywhere else (though it seems unused now in virtual.go)
+	now = mockTime
+
 	noColumns := []rescommon.ColumnDefinition{}
 	jp := jsonpath.New("Age")
 	jp.AllowMissingKeys(true)
@@ -162,7 +168,7 @@ func TestTransformChain(t *testing.T) {
 							"message":       "",
 						},
 						"fields": []interface{}{
-							fmt.Sprintf("%d", now().Add(-24*time.Hour).UnixMilli()),
+							fmt.Sprintf("%d", dates.Now().Add(-24*time.Hour).UnixMilli()),
 						},
 					},
 					"id":  "test-ns/testobj",
@@ -293,7 +299,7 @@ func TestTransformChain(t *testing.T) {
 							"message":       "",
 						},
 						"fields": []interface{}{
-							fmt.Sprintf("%d", now().Add(-24*time.Hour).UnixMilli()),
+							fmt.Sprintf("%d", dates.Now().Add(-24*time.Hour).UnixMilli()),
 						},
 					},
 					"id":  "test-ns/testobj",

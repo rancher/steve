@@ -3,15 +3,13 @@
 package virtual
 
 import (
-	"bytes"
 	"fmt"
-	"reflect"
-	"slices"
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual/clusters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
+	"github.com/rancher/steve/pkg/resources/virtual/dates"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
 
 	"github.com/sirupsen/logrus"
@@ -47,63 +45,13 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	}
 
 	// Detecting if we need to convert date fields
-	for _, col := range columns {
-		gvkDateFields, gvkFound := rescommon.DateFieldsByGVK[gvk]
-		hasCRDDate := isCRD && col.Type == "date"
-		hasBuiltInDate := gvkFound && slices.Contains(gvkDateFields, col.Name)
-		if hasCRDDate || hasBuiltInDate {
-			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
-				index := rescommon.GetIndexValueFromString(col.Field)
-				if index == -1 {
-					return obj, fmt.Errorf("field index not found at column.Field struct variable: %s", col.Field)
-				}
-
-				curValue, got, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
-				if err != nil || !got || curValue[index] == nil {
-					return obj, err
-				}
-
-				value, cast := curValue[index].(string)
-				if !cast {
-					return obj, fmt.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", index, curValue[index])
-				}
-
-				if jp, ok := jsonPaths[col.Name]; ok && isCRD {
-					results, err := jp.FindResults(obj.Object)
-					if err == nil && len(results) > 0 && len(results[0]) > 0 {
-						v := results[0][0].Interface()
-						if v != nil {
-							buf := &bytes.Buffer{}
-							if err := jp.PrintResults(buf, []reflect.Value{reflect.ValueOf(v)}); err == nil {
-								value = buf.String()
-							}
-						}
-					}
-
-					if _, err := time.Parse(time.RFC3339, value); err == nil {
-						curValue[index] = value
-						if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
-							return obj, err
-						}
-						return obj, nil
-					}
-				}
-
-				duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
-				if err != nil {
-					logrus.Errorf("parse timestamp %s, failed with error: %s", value, err)
-					return obj, nil
-				}
-
-				curValue[index] = fmt.Sprintf("%d", now().Add(-duration).UnixMilli())
-				if err := unstructured.SetNestedSlice(obj.Object, curValue, "metadata", "fields"); err != nil {
-					return obj, err
-				}
-
-				return obj, nil
-			})
-		}
+	dateConverter := &dates.Converter{
+		GVK:       gvk,
+		Columns:   columns,
+		IsCRD:     isCRD,
+		JSONPaths: jsonPaths,
 	}
+	converters = append(converters, dateConverter.Transform)
 
 	converters = append(converters, t.defaultFields.TransformCommon)
 
