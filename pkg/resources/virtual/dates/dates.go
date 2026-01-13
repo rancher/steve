@@ -47,13 +47,10 @@ func (d *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 		return obj, err
 	}
 
-	gvkDateFields, gvkFound := rescommon.DateFieldsByGVK[d.GVK]
 	updated := false
 
 	for _, col := range d.Columns {
-		hasCRDDate := d.IsCRD && col.Type == "date"
-		hasBuiltInDate := gvkFound && slices.Contains(gvkDateFields, col.Name)
-		if !hasCRDDate && !hasBuiltInDate {
+		if !d.isDateColumn(col) {
 			continue
 		}
 
@@ -108,6 +105,15 @@ func (d *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 	}
 
 	return obj, nil
+}
+
+func (d *Converter) isDateColumn(col rescommon.ColumnDefinition) bool {
+	// Check for CRD date columns
+	if d.IsCRD && col.Type == "date" {
+		return true
+	}
+	// Check for built-in resource date columns
+	return slices.Contains(rescommon.DateFieldsByGVK[d.GVK], col.Name)
 }
 
 func getValueFromJSONPath(obj map[string]any, jp *jsonpath.JSONPath) (string, bool) {
