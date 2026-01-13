@@ -64,8 +64,8 @@ func (d *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 			continue
 		}
 
-		value, cast := fields[index].(string)
-		if !cast {
+		value, ok := fields[index].(string)
+		if !ok {
 			logrus.Errorf("could not cast metadata.fields[%d] to string, original value: <%v>", index, fields[index])
 			continue
 		}
