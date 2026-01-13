@@ -7,6 +7,7 @@ import (
 	openapiv2 "github.com/google/gnostic-models/openapiv2"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/resources/apigroups"
+	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	wranglerSchema "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
@@ -166,9 +167,13 @@ func TestToSchemas(t *testing.T) {
 							"resource":   "testResources",
 							"verbs":      []string{"get"},
 							"namespaced": true,
-							"crdColumns": map[string]string{
-								"Name":       ".metadata.name",
-								"TestColumn": "TestPath",
+							"columns": []table.Column{
+								{
+									Name:   "TestColumn",
+									Field:  "TestPath",
+									Type:   "TestType",
+									Format: "TestFormat",
+								},
 							},
 						},
 						Description: "Test Resource for unit tests",

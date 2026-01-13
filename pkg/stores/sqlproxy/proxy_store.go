@@ -53,7 +53,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/jsonpath"
 )
 
 const (
@@ -381,7 +380,7 @@ type RelationshipNotifier interface {
 }
 
 type TransformBuilder interface {
-	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc
+	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool) cache.TransformFunc
 }
 
 type Store struct {
@@ -484,7 +483,7 @@ func (s *Store) initializeNamespaceCache() error {
 	fields = append(fields, getFieldForGVK(gvk)...)
 
 	// get the type-specific transform func
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema), attributes.CRDJSONPathParsers(&nsSchema))
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema))
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
@@ -1122,7 +1121,7 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
 	fields = append(fields, getFieldForGVK(gvk)...)
 
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
 	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))

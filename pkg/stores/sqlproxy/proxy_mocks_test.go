@@ -26,7 +26,6 @@ import (
 	kubernetes "k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	cache "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/jsonpath"
 )
 
 // MockCache is a mock of Cache interface.
@@ -410,15 +409,15 @@ func (m *MockTransformBuilder) EXPECT() *MockTransformBuilderMockRecorder {
 }
 
 // GetTransformFunc mocks base method.
-func (m *MockTransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
+func (m *MockTransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool) cache.TransformFunc {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransformFunc", gvk, colDefs, isCRD, jsonPaths)
+	ret := m.ctrl.Call(m, "GetTransformFunc", gvk, colDefs, isCRD)
 	ret0, _ := ret[0].(cache.TransformFunc)
 	return ret0
 }
 
 // GetTransformFunc indicates an expected call of GetTransformFunc.
-func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(gvk, colDefs, isCRD, jsonPaths any) *gomock.Call {
+func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(gvk, colDefs, isCRD any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), gvk, colDefs, isCRD, jsonPaths)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), gvk, colDefs, isCRD)
 }
