@@ -1,11 +1,12 @@
 package podimpersonation
 
 import (
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
-	"time"
 )
 
 func TestAugmentPod(t *testing.T) {
@@ -56,6 +57,189 @@ func TestAugmentPod(t *testing.T) {
 				assert.Len(t, pod.Spec.InitContainers, len(p.Spec.InitContainers), "expected no init container to be created")
 			}
 			assert.Equal(t, pod.Spec.Containers[len(pod.Spec.Containers)-1].Name, "proxy", "expected the container proxy to be created")
+		})
+	}
+}
+
+func TestAugmentPodNonRoot(t *testing.T) {
+	runAsUser := int64(1000)
+	fsGroup := int64(1000)
+	runAsNonRoot := true
+
+	testCases := []struct {
+		name             string
+		securityContext  *v1.PodSecurityContext
+		podOptions       *PodOptions
+		expectRootInit   bool
+		expectRootProxy  bool
+		expectChownCmd   bool
+		expectUsername   string
+		expectKubeconfig string
+	}{
+		{
+			name: "Non-root pod with FSGroup should not force root",
+			securityContext: &v1.PodSecurityContext{
+				RunAsNonRoot: &runAsNonRoot,
+				RunAsUser:    &runAsUser,
+				FSGroup:      &fsGroup,
+			},
+			podOptions:       &PodOptions{},
+			expectRootInit:   false,
+			expectRootProxy:  false,
+			expectChownCmd:   false,
+			expectUsername:   "shell",
+			expectKubeconfig: "/home/shell/.kube/config",
+		},
+		{
+			name: "Non-root pod without FSGroup should not use chown",
+			securityContext: &v1.PodSecurityContext{
+				RunAsNonRoot: &runAsNonRoot,
+				RunAsUser:    &runAsUser,
+			},
+			podOptions:       &PodOptions{},
+			expectRootInit:   false,
+			expectRootProxy:  false,
+			expectChownCmd:   false,
+			expectUsername:   "shell",
+			expectKubeconfig: "/home/shell/.kube/config",
+		},
+		{
+			name: "Non-root pod with custom username",
+			securityContext: &v1.PodSecurityContext{
+				RunAsNonRoot: &runAsNonRoot,
+				RunAsUser:    &runAsUser,
+				FSGroup:      &fsGroup,
+			},
+			podOptions: &PodOptions{
+				Username: "kuberlr",
+			},
+			expectRootInit:   false,
+			expectRootProxy:  false,
+			expectChownCmd:   false,
+			expectUsername:   "kuberlr",
+			expectKubeconfig: "/home/kuberlr/.kube/config",
+		},
+		{
+			name:             "Root pod (nil SecurityContext) should force root",
+			securityContext:  nil,
+			podOptions:       &PodOptions{},
+			expectRootInit:   true,
+			expectRootProxy:  true,
+			expectChownCmd:   true,
+			expectUsername:   "root",
+			expectKubeconfig: "/root/.kube/config",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := []v1.EnvVar{{Name: "KUBECONFIG", Value: ".kube/config"}}
+			p := &v1.Pod{
+				Spec: v1.PodSpec{
+					Volumes: []v1.Volume{{
+						Name: "volume1",
+						VolumeSource: v1.VolumeSource{
+							ConfigMap: &v1.ConfigMapVolumeSource{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "cfgMap",
+								},
+							},
+						},
+					}},
+					Containers: []v1.Container{
+						{
+							Name:  "shell",
+							Image: "rancher/shell:v0.1.22",
+							Env:   env,
+						},
+					},
+					SecurityContext: tc.securityContext,
+				},
+			}
+
+			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
+			pod := impersonator.augmentPod(p, nil, &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "s"}}, tc.podOptions)
+
+			// Check init container exists
+			assert.GreaterOrEqual(t, len(pod.Spec.InitContainers), 1, "expected one init container")
+			var initContainer v1.Container
+			for _, c := range pod.Spec.InitContainers {
+				if c.Name == "init-kubeconfig-volume" {
+					initContainer = c
+					break
+				}
+			}
+			assert.NotNil(t, initContainer, "expected init container")
+
+			// Check init container SecurityContext
+			if tc.expectRootInit {
+				assert.NotNil(t, initContainer.SecurityContext, "expected init container SecurityContext to be set")
+				assert.NotNil(t, initContainer.SecurityContext.RunAsUser, "expected init container RunAsUser to be set")
+				assert.Equal(t, int64(0), *initContainer.SecurityContext.RunAsUser, "expected init container to run as root")
+			} else {
+				// Non-root should have nil SecurityContext (inherit from pod)
+				assert.Nil(t, initContainer.SecurityContext, "expected init container SecurityContext to be nil (inherit from pod)")
+			}
+
+			// Check init container command
+			if tc.expectChownCmd {
+				assert.Contains(t, initContainer.Command[2], "chown", "expected init command to include chown")
+			} else {
+				assert.NotContains(t, initContainer.Command[2], "chown", "expected init command to not include chown")
+			}
+
+			// Check proxy container
+			proxyContainer := pod.Spec.Containers[len(pod.Spec.Containers)-1]
+			assert.Equal(t, "proxy", proxyContainer.Name, "expected proxy container")
+
+			// Check proxy SecurityContext
+			if tc.expectRootProxy {
+				assert.NotNil(t, proxyContainer.SecurityContext.RunAsUser, "expected proxy RunAsUser to be set")
+				assert.Equal(t, int64(0), *proxyContainer.SecurityContext.RunAsUser, "expected proxy to run as root")
+			} else {
+				// Non-root should not have RunAsUser set (inherit from pod)
+				assert.Nil(t, proxyContainer.SecurityContext.RunAsUser, "expected proxy RunAsUser to be nil (inherit from pod)")
+			}
+
+			// Check kubeconfig path
+			assert.Equal(t, tc.expectKubeconfig, proxyContainer.Env[0].Value, "expected correct KUBECONFIG path")
+			assert.Equal(t, tc.expectKubeconfig, proxyContainer.VolumeMounts[0].MountPath, "expected correct volume mount path")
+		})
+	}
+}
+
+func TestUserKubeConfigPath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		username string
+		expected string
+	}{
+		{
+			name:     "Root user",
+			username: "root",
+			expected: "/root/.kube/config",
+		},
+		{
+			name:     "Empty username defaults to root",
+			username: "",
+			expected: "/root/.kube/config",
+		},
+		{
+			name:     "Shell user",
+			username: "shell",
+			expected: "/home/shell/.kube/config",
+		},
+		{
+			name:     "Custom username",
+			username: "kuberlr",
+			expected: "/home/kuberlr/.kube/config",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := userKubeConfigPath(tc.username)
+			assert.Equal(t, tc.expected, result, "expected correct kubeconfig path")
 		})
 	}
 }
