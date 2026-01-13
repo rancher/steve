@@ -271,23 +271,23 @@ func TestAugmentPodUserId(t *testing.T) {
 		expectChownCmd bool
 	}{
 		{
-			name:           "Default UserId should be 1000",
+			name:           "Default UserID should be 1000",
 			podOptions:     &PodOptions{},
 			expectUserId:   1000,
 			expectChownCmd: true,
 		},
 		{
-			name: "Custom UserId should be used",
+			name: "Custom UserID should be used",
 			podOptions: &PodOptions{
-				UserId: &customUserId,
+				UserID: &customUserId,
 			},
 			expectUserId:   2000,
 			expectChownCmd: true,
 		},
 		{
-			name: "Nil UserId should default to 1000",
+			name: "Nil UserID should default to 1000",
 			podOptions: &PodOptions{
-				UserId: nil,
+				UserID: nil,
 			},
 			expectUserId:   1000,
 			expectChownCmd: true,
