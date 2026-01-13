@@ -26,7 +26,7 @@ import (
 	kubernetes "k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	cache "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/jsonpath"
+	jsonpath "k8s.io/client-go/util/jsonpath"
 )
 
 // MockCache is a mock of Cache interface.
