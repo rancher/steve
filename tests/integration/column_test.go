@@ -55,9 +55,8 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 
 	type ColumnTestConfig struct {
 		Tests []struct {
-			SchemaID string  `yaml:"schemaID"`
-			Query    string  `yaml:"query"`
-			Expected [][]any `yaml:"expected"`
+			SchemaID string     `yaml:"schemaID"`
+			Expected [][]string `yaml:"expected"`
 		} `json:"tests"`
 	}
 	var columnTestConfig ColumnTestConfig
@@ -83,9 +82,6 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 	for _, test := range columnTestConfig.Tests {
 		i.Run(test.SchemaID, func() {
 			url := fmt.Sprintf("%s/v1/%s", baseURL, test.SchemaID)
-			if test.Query != "" {
-				url = fmt.Sprintf("%s?%s", url, test.Query)
-			}
 			fmt.Println(url)
 			resp, err := http.Get(url)
 			i.Require().NoError(err)
@@ -96,7 +92,7 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 			type Response struct {
 				Data []struct {
 					Metadata struct {
-						Fields []any `json:"fields"`
+						Fields []string `json:"fields"`
 					} `json:"metadata"`
 				} `json:"data"`
 			}
@@ -106,7 +102,7 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 
 			i.Require().Len(parsed.Data, len(test.Expected))
 
-			var table [][]any
+			var table [][]string
 			for _, row := range parsed.Data {
 				table = append(table, row.Metadata.Fields)
 			}
@@ -115,17 +111,9 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 				i.Require().Len(table[row], len(test.Expected[row]))
 				for fieldIndex := range test.Expected[row] {
 					field := test.Expected[row][fieldIndex]
-					switch field {
-					case "$duration":
-						_, err := rescommon.ParseHumanReadableDuration(fmt.Sprintf("%v", table[row][fieldIndex]))
-						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
-						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
-					case "$timestamp":
-						_, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", table[row][fieldIndex]))
-						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
-						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
-					case "$skip":
-						// Sometimes you just don't care what the value is
+					if field == "$timestamp" {
+						_, err := rescommon.ParseTimestampOrHumanReadableDuration(table[row][fieldIndex])
+						i.Require().NoError(err, "expected timestamp (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
 						test.Expected[row][fieldIndex] = table[row][fieldIndex]
 					}
 				}
