@@ -22,9 +22,8 @@ var Now = time.Now
 //  1. CRD Date Columns:
 //     For CRDs, columns defined with type `date` are expected by the UI to contain a timestamp, not a duration. We
 //     use the associated JSONPath to extract the raw value from the object. This ensures we
-//     pass the correct timestamp format to the UI, as the default `metadata.fields` might contain
-//     a transformed or truncated value. We do it in the transformer so that we can correctly sort / filter
-//     in the SQLite database.
+//     pass the correct timestamp format to the UI. We do it in the transformer so that we can
+//     correctly sort / filter in the SQLite database.
 //
 //  2. Built-in Date Columns
 //     Kubernetes often returns time fields (like "Age") as human-readable durations (e.g., "6h4m").
@@ -124,4 +123,3 @@ func getValueFromJSONPath(obj map[string]any, jp *jsonpath.JSONPath) (string, bo
 	}
 	return "", false
 }
-
