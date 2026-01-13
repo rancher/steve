@@ -38,7 +38,8 @@ func TestAugmentPod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPod(tc.envVars)
 			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
-			pod := impersonator.augmentPod(p, nil, &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "s"}}, tc.imageOverride)
+			podOpts := &PodOptions{ImageOverride: tc.imageOverride}
+			pod := impersonator.augmentPod(p, nil, &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "s"}}, podOpts)
 
 			assert.Len(t, pod.Spec.Volumes, len(p.Spec.Volumes)+4, "expected four new volumes")
 			if len(tc.envVars) != 0 {
