@@ -123,6 +123,8 @@ type PodOptions struct {
 	SecretsToCreate    []*v1.Secret
 	Wait               bool
 	ImageOverride      string
+	Username           string // Username for kubeconfig paths (e.g. "shell", "kuberlr"). Defaults to "shell" for non-root, "root" for root
+	UserId             *int64 // UserId for chown operations on kubeconfig files. Defaults to 1000 if not specified
 }
 
 // CreatePod will create a pod with a service account that impersonates as user. Corresponding
@@ -361,7 +363,7 @@ func (s *PodImpersonation) createPod(ctx context.Context, user user.Info, role *
 			}
 		}
 	}
-	pod = s.augmentPod(pod, sa, tokenSecret, podOptions.ImageOverride)
+	pod = s.augmentPod(pod, sa, tokenSecret, podOptions)
 
 	if err := s.createConfigMaps(ctx, user, role, pod, podOptions, client); err != nil {
 		return nil, err
@@ -510,17 +512,51 @@ func (s *PodImpersonation) adminKubeConfig(user user.Info, role *rbacv1.ClusterR
 	}, nil
 }
 
-func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret *v1.Secret, imageOverride string) *v1.Pod {
+func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret *v1.Secret, podOptions *PodOptions) *v1.Pod {
 	var (
 		zero      = int64(0)
 		t         = true
 		f         = false
 		m         = int32(0o644)
 		m2        = int32(0o600)
-		shellUser = 1000
+		shellUser = int64(1000)
 	)
 
 	pod = pod.DeepCopy()
+
+	// Detect if this is a non-root pod
+	isNonRoot := false
+	hasFSGroup := false
+
+	if pod.Spec.SecurityContext != nil {
+		psc := pod.Spec.SecurityContext
+		if psc.RunAsNonRoot != nil && *psc.RunAsNonRoot {
+			isNonRoot = true
+		}
+		if psc.FSGroup != nil {
+			hasFSGroup = true
+		}
+	}
+
+	// Determine image to use
+	image := ""
+	if podOptions != nil && podOptions.ImageOverride != "" {
+		image = podOptions.ImageOverride
+	}
+	if image == "" {
+		image = s.imageName()
+	}
+
+	// Determine username for kubeconfig paths
+	username := "root"
+	if isNonRoot {
+		username = "shell" // default for non-root
+	}
+	if podOptions != nil && podOptions.Username != "" {
+		username = podOptions.Username // user override
+	}
+
+	kubeconfigPath := userKubeConfigPath(username)
 
 	pod.Spec.ServiceAccountName = ""
 	pod.Spec.AutomountServiceAccountToken = &f
@@ -562,11 +598,6 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 			},
 		})
 
-	image := imageOverride
-	if image == "" {
-		image = s.imageName()
-	}
-
 	for i, container := range pod.Spec.Containers {
 		for _, envvar := range container.Env {
 			if envvar.Name != "KUBECONFIG" {
@@ -586,16 +617,36 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 				SubPath:   "config",
 			}
 
+			// Build init container SecurityContext based on pod settings
+			var initSecurityContext *v1.SecurityContext
+			if !isNonRoot {
+				// Legacy mode: force root for chown
+				initSecurityContext = &v1.SecurityContext{
+					RunAsUser:  &zero,
+					RunAsGroup: &zero,
+				}
+			}
+			// else: inherit from pod SecurityContext (nil = inherit)
+
+			// Build init command based on whether we need chown
+			initCmd := fmt.Sprintf("cp %s %s", cfgVMount.MountPath, vmount.MountPath+"/config")
+			userId := shellUser
+			if podOptions != nil && podOptions.UserId != nil {
+				userId = *podOptions.UserId
+			}
+			if !hasFSGroup && !isNonRoot {
+				// Only chown if we don't have fsGroup AND we're running as root
+				initCmd = fmt.Sprintf("cp %s %s && chown %d %s/config",
+					cfgVMount.MountPath, vmount.MountPath, userId, vmount.MountPath)
+			}
+
 			pod.Spec.InitContainers = append(pod.Spec.InitContainers, v1.Container{
 				Name:            "init-kubeconfig-volume",
 				Image:           image,
-				Command:         []string{"sh", "-c", fmt.Sprintf("cp %s %s && chown %d %s/config", cfgVMount.MountPath, vmount.MountPath, shellUser, vmount.MountPath)},
+				Command:         []string{"sh", "-c", initCmd},
 				ImagePullPolicy: v1.PullIfNotPresent,
-				SecurityContext: &v1.SecurityContext{
-					RunAsUser:  &zero,
-					RunAsGroup: &zero,
-				},
-				VolumeMounts: []v1.VolumeMount{cfgVMount, vmount},
+				SecurityContext: initSecurityContext,
+				VolumeMounts:    []v1.VolumeMount{cfgVMount, vmount},
 			},
 			)
 
@@ -608,6 +659,22 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 		}
 	}
 
+	// Build proxy container SecurityContext
+	var proxySecurityContext *v1.SecurityContext
+	if isNonRoot {
+		// Non-root mode: inherit from pod, but still enforce ReadOnlyRootFilesystem
+		proxySecurityContext = &v1.SecurityContext{
+			ReadOnlyRootFilesystem: &t,
+		}
+	} else {
+		// Legacy mode: force root
+		proxySecurityContext = &v1.SecurityContext{
+			RunAsUser:              &zero,
+			RunAsGroup:             &zero,
+			ReadOnlyRootFilesystem: &t,
+		}
+	}
+
 	pod.Spec.Containers = append(pod.Spec.Containers, v1.Container{
 		Name:            "proxy",
 		Image:           image,
@@ -615,20 +682,16 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 		Env: []v1.EnvVar{
 			{
 				Name:  "KUBECONFIG",
-				Value: "/root/.kube/config",
+				Value: kubeconfigPath,
 			},
 		},
-		Command: []string{"sh", "-c", "kubectl proxy --disable-filter || true"},
-		SecurityContext: &v1.SecurityContext{
-			RunAsUser:              &zero,
-			RunAsGroup:             &zero,
-			ReadOnlyRootFilesystem: &t,
-		},
+		Command:         []string{"sh", "-c", "kubectl proxy --disable-filter || true"},
+		SecurityContext: proxySecurityContext,
 		VolumeMounts: []v1.VolumeMount{
 			{
 				Name:      "admin-kubeconfig",
 				ReadOnly:  true,
-				MountPath: "/root/.kube/config",
+				MountPath: kubeconfigPath,
 				SubPath:   "config",
 			},
 			{
@@ -640,6 +703,13 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 	})
 
 	return pod
+}
+
+func userKubeConfigPath(username string) string {
+	if username == "" || username == "root" {
+		return "/root/.kube/config"
+	}
+	return "/home/" + username + "/.kube/config"
 }
 
 func (s *PodImpersonation) createSecrets(ctx context.Context, role *rbacv1.ClusterRole, pod *v1.Pod, podOptions *PodOptions, client kubernetes.Interface) error {
