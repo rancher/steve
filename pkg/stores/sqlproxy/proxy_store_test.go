@@ -360,9 +360,9 @@ func TestListByPartitions(t *testing.T) {
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
-			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
-			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), nil, "", nil)
+			list, total, summary, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
@@ -526,9 +526,9 @@ func TestListByPartitions(t *testing.T) {
 				false).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
 
-			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
-			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), nil, "", nil)
+			list, total, summary, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
@@ -601,7 +601,7 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
-			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
 				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
 				gomock.Any(),
@@ -701,10 +701,10 @@ func TestListByPartitions(t *testing.T) {
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
-			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(nil, 0, nil, "", fmt.Errorf("error"))
+			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
-			_, _, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -827,7 +827,7 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 				attributes.Namespaced(theSchema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
-			tb.EXPECT().GetTransformFunc(attributes.GVK(theSchema), gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			tb.EXPECT().GetTransformFunc(attributes.GVK(theSchema), gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
 			listToReturn := &unstructured.UnstructuredList{
 				Items: make([]unstructured.Unstructured, 0, 0),
@@ -947,7 +947,7 @@ func TestReset(t *testing.T) {
 				false,
 				true).Return(nsc, nil)
 			cf.EXPECT().DoneWithCache(nsc)
-			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset(gvk)
 			assert.Nil(t, err)
 			assert.Equal(t, nsc, s.namespaceCache)
@@ -1102,7 +1102,7 @@ func TestReset(t *testing.T) {
 				gomock.Any(),
 				false,
 				true).Return(nil, fmt.Errorf("error"))
-			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			err := s.Reset(gvk)
 			assert.NotNil(t, err)
 		},
