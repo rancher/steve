@@ -809,9 +809,9 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryUsesLabels := hasLabelFilter(lo.Filters) || len(lo.ProjectsOrNamespaces.Filters) > 0
 	joinTableIndexByLabelName := make(map[string]int)
 
-	l.latestRVLock.RLock()
+	l.lock.RLock()
 	latestRV := l.latestRV
-	l.latestRVLock.RUnlock()
+	l.lock.RUnlock()
 
 	if len(lo.Revision) > 0 {
 		currentRevision, err := strconv.ParseInt(latestRV, 10, 64)
