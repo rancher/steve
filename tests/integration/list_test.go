@@ -40,7 +40,8 @@ type ListTestConfig struct {
 		Expect         []map[string]string `yaml:"expect"`
 		ExpectExcludes bool                `yaml:"expectExcludes"`
 		ExpectContains bool                `yaml:"expectContains"`
-		SQLOnly        bool                `yaml:"sqlOnly"` // Skip in non-SQL mode
+		SQLOnly        bool                `yaml:"sqlOnly"`    // Skip in non-SQL mode
+		NonSQLOnly     bool                `yaml:"nonSQLOnly"` // Skip in SQL mode
 	} `yaml:"tests"`
 }
 
@@ -128,11 +129,7 @@ func (i *IntegrationSuite) runListTest(sqlCache bool) {
 		name := filepath.Base(match)
 		name = strings.TrimSuffix(name, ".test.yaml")
 
-		// SQL mode: skip pagination tests (they use limit/continue which is non-SQL only)
-		// Non-SQL mode: run ALL tests including pagination
-		if sqlCache && name == "pagination" {
-			continue
-		}
+		config := i.readListTestConfig(match)
 
 		i.Run(name, func() {
 			// Apply scenario-specific manifests if they exist
@@ -142,12 +139,12 @@ func (i *IntegrationSuite) runListTest(sqlCache bool) {
 				defer i.doManifestReversed(ctx, scenarioManifestsFile, i.doDelete)
 			}
 
-			i.testListScenario(ctx, match, baseURL, sqlCache, csvWriter)
+			i.testListScenario(ctx, config, baseURL, sqlCache, csvWriter)
 		})
 	}
 }
 
-func (i *IntegrationSuite) testListScenario(ctx context.Context, testFile string, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
+func (i *IntegrationSuite) readListTestConfig(testFile string) ListTestConfig {
 	file, err := os.Open(testFile)
 	i.Require().NoError(err)
 	defer file.Close()
@@ -155,7 +152,10 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, testFile string
 	var config ListTestConfig
 	err = yaml.NewDecoder(file).Decode(&config)
 	i.Require().NoError(err)
+	return config
+}
 
+func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTestConfig, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
 	// Track continue token and revision across tests in this scenario
 	var lastContinueToken string
 	var lastRevision string
@@ -163,6 +163,10 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, testFile string
 	for _, test := range config.Tests {
 		// Skip SQL-only tests when running in non-SQL mode
 		if !sqlCache && test.SQLOnly {
+			continue
+		}
+		// Skip non-SQL-only tests when running in SQL mode
+		if sqlCache && test.NonSQLOnly {
 			continue
 		}
 
