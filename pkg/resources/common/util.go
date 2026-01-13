@@ -1,14 +1,11 @@
 package common
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
-	"github.com/rancher/steve/pkg/schema/table"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GetIndexValueFromString looks for values between [ ].
@@ -38,32 +35,7 @@ func GetColumnDefinitions(schema *types.APISchema) []ColumnDefinition {
 	}
 	colDefs, ok := columns.([]ColumnDefinition)
 	if !ok {
-		tableDefs, ok := columns.([]table.Column)
-		if !ok {
-			return nil
-		}
-		colDefs = TableColsToCommonCols(tableDefs)
-	}
-	return colDefs
-}
-
-func TableColsToCommonCols(tableDefs []table.Column) []ColumnDefinition {
-	colDefs := make([]ColumnDefinition, len(tableDefs))
-	for i, td := range tableDefs {
-		// This isn't used right now, but it is used in the PR that tries to identify
-		// numeric fields, so leave it here.
-		// Although the `table.Column` and `metav1.TableColumnDefinition` types
-		// are structurally the same, Go doesn't allow a quick way to cast one to the other.
-		tcd := metav1.TableColumnDefinition{
-			Name:        td.Name,
-			Type:        td.Type,
-			Format:      td.Format,
-			Description: td.Description,
-		}
-		colDefs[i] = ColumnDefinition{
-			TableColumnDefinition: tcd,
-			Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
-		}
+		return nil
 	}
 	return colDefs
 }
