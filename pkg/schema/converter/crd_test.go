@@ -167,9 +167,9 @@ func TestAddCustomResources(t *testing.T) {
 						ID: "testgroup.v1.testresource",
 						Attributes: map[string]interface{}{
 							"crd": true,
-							"crdColumns": map[string]string{
-								"Name":       ".metadata.name",
-								"TestColumn": "TestPath",
+							"crdJSONPathParsers": map[string]string{
+								"Name":       "{.metadata.name}",
+								"TestColumn": "{TestPath}",
 							},
 						},
 						Description: "Test Resource for unit tests",

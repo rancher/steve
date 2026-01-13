@@ -166,9 +166,9 @@ func TestToSchemas(t *testing.T) {
 							"resource":   "testResources",
 							"verbs":      []string{"get"},
 							"namespaced": true,
-							"crdColumns": map[string]string{
-								"Name":       ".metadata.name",
-								"TestColumn": "TestPath",
+							"crdJSONPathParsers": map[string]string{
+								"Name":       "{.metadata.name}",
+								"TestColumn": "{TestPath}",
 							},
 						},
 						Description: "Test Resource for unit tests",
