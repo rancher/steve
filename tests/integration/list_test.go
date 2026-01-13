@@ -90,16 +90,16 @@ func (i *IntegrationSuite) runListTest(sqlCache bool) {
 
 	baseURL := httpServer.URL
 
-	// Apply secrets manifests
-	manifestsFile := filepath.Join(testdataListDir, "list.manifests.yaml")
+	// Apply common manifests (shared across all scenarios)
+	commonManifestsFile := filepath.Join(testdataListDir, "common.manifests.yaml")
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
-	i.doManifest(ctx, manifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
+	i.doManifest(ctx, commonManifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
 		gvrs[gvr] = struct{}{}
 		return i.doApply(ctx, obj, gvr)
 	})
 	// Only cleanup in non-SQL mode (runs second, after SQL mode)
 	if !sqlCache {
-		defer i.doManifestReversed(ctx, manifestsFile, i.doDelete)
+		defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
 	}
 
 	for gvr := range gvrs {
@@ -135,6 +135,13 @@ func (i *IntegrationSuite) runListTest(sqlCache bool) {
 		}
 
 		i.Run(name, func() {
+			// Apply scenario-specific manifests if they exist
+			scenarioManifestsFile := filepath.Join(testdataListDir, name+".manifests.yaml")
+			if _, err := os.Stat(scenarioManifestsFile); err == nil {
+				i.doManifest(ctx, scenarioManifestsFile, i.doApply)
+				defer i.doManifestReversed(ctx, scenarioManifestsFile, i.doDelete)
+			}
+
 			i.testListScenario(ctx, match, baseURL, sqlCache, csvWriter)
 		})
 	}
