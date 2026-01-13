@@ -124,6 +124,7 @@ type PodOptions struct {
 	Wait               bool
 	ImageOverride      string
 	Username           string // Username for kubeconfig paths (e.g. "shell", "kuberlr"). Defaults to "shell" for non-root, "root" for root
+	UserId             *int64 // UserId for chown operations on kubeconfig files. Defaults to 1000 if not specified
 }
 
 // CreatePod will create a pod with a service account that impersonates as user. Corresponding
@@ -518,7 +519,7 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 		f         = false
 		m         = int32(0o644)
 		m2        = int32(0o600)
-		shellUser = 1000
+		shellUser = int64(1000)
 	)
 
 	pod = pod.DeepCopy()
@@ -629,10 +630,14 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 
 			// Build init command based on whether we need chown
 			initCmd := fmt.Sprintf("cp %s %s", cfgVMount.MountPath, vmount.MountPath+"/config")
+			userId := shellUser
+			if podOptions != nil && podOptions.UserId != nil {
+				userId = *podOptions.UserId
+			}
 			if !hasFSGroup && !isNonRoot {
 				// Only chown if we don't have fsGroup AND we're running as root
 				initCmd = fmt.Sprintf("cp %s %s && chown %d %s/config",
-					cfgVMount.MountPath, vmount.MountPath, shellUser, vmount.MountPath)
+					cfgVMount.MountPath, vmount.MountPath, userId, vmount.MountPath)
 			}
 
 			pod.Spec.InitContainers = append(pod.Spec.InitContainers, v1.Container{

@@ -1,6 +1,7 @@
 package podimpersonation
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -62,9 +63,12 @@ func TestAugmentPod(t *testing.T) {
 }
 
 func TestAugmentPodNonRoot(t *testing.T) {
-	runAsUser := int64(1000)
-	fsGroup := int64(1000)
-	runAsNonRoot := true
+	var (
+		fBool     = false
+		tBool     = true
+		runAsUser = int64(1000)
+		fsGroup   = int64(1000)
+	)
 
 	testCases := []struct {
 		name             string
@@ -79,7 +83,7 @@ func TestAugmentPodNonRoot(t *testing.T) {
 		{
 			name: "Non-root pod with FSGroup should not force root",
 			securityContext: &v1.PodSecurityContext{
-				RunAsNonRoot: &runAsNonRoot,
+				RunAsNonRoot: &tBool,
 				RunAsUser:    &runAsUser,
 				FSGroup:      &fsGroup,
 			},
@@ -93,7 +97,7 @@ func TestAugmentPodNonRoot(t *testing.T) {
 		{
 			name: "Non-root pod without FSGroup should not use chown",
 			securityContext: &v1.PodSecurityContext{
-				RunAsNonRoot: &runAsNonRoot,
+				RunAsNonRoot: &tBool,
 				RunAsUser:    &runAsUser,
 			},
 			podOptions:       &PodOptions{},
@@ -106,7 +110,7 @@ func TestAugmentPodNonRoot(t *testing.T) {
 		{
 			name: "Non-root pod with custom username",
 			securityContext: &v1.PodSecurityContext{
-				RunAsNonRoot: &runAsNonRoot,
+				RunAsNonRoot: &tBool,
 				RunAsUser:    &runAsUser,
 				FSGroup:      &fsGroup,
 			},
@@ -126,6 +130,19 @@ func TestAugmentPodNonRoot(t *testing.T) {
 			expectRootInit:   true,
 			expectRootProxy:  true,
 			expectChownCmd:   true,
+			expectUsername:   "root",
+			expectKubeconfig: "/root/.kube/config",
+		},
+		{
+			name: "Root pod with FSGroup should not use chown",
+			securityContext: &v1.PodSecurityContext{
+				RunAsNonRoot: &fBool, // or omit to default to false
+				FSGroup:      &fsGroup,
+			},
+			podOptions:       &PodOptions{},
+			expectRootInit:   true,
+			expectRootProxy:  true,
+			expectChownCmd:   false, // FSGroup handles permissions
 			expectUsername:   "root",
 			expectKubeconfig: "/root/.kube/config",
 		},
@@ -240,6 +257,90 @@ func TestUserKubeConfigPath(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := userKubeConfigPath(tc.username)
 			assert.Equal(t, tc.expected, result, "expected correct kubeconfig path")
+		})
+	}
+}
+
+func TestAugmentPodUserId(t *testing.T) {
+	customUserId := int64(2000)
+
+	testCases := []struct {
+		name           string
+		podOptions     *PodOptions
+		expectUserId   int64
+		expectChownCmd bool
+	}{
+		{
+			name:           "Default UserId should be 1000",
+			podOptions:     &PodOptions{},
+			expectUserId:   1000,
+			expectChownCmd: true,
+		},
+		{
+			name: "Custom UserId should be used",
+			podOptions: &PodOptions{
+				UserId: &customUserId,
+			},
+			expectUserId:   2000,
+			expectChownCmd: true,
+		},
+		{
+			name: "Nil UserId should default to 1000",
+			podOptions: &PodOptions{
+				UserId: nil,
+			},
+			expectUserId:   1000,
+			expectChownCmd: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := []v1.EnvVar{{Name: "KUBECONFIG", Value: ".kube/config"}}
+			p := &v1.Pod{
+				Spec: v1.PodSpec{
+					Volumes: []v1.Volume{{
+						Name: "volume1",
+						VolumeSource: v1.VolumeSource{
+							ConfigMap: &v1.ConfigMapVolumeSource{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "cfgMap",
+								},
+							},
+						},
+					}},
+					Containers: []v1.Container{
+						{
+							Name:  "shell",
+							Image: "rancher/shell:v0.1.22",
+							Env:   env,
+						},
+					},
+					SecurityContext: nil, // Root pod to trigger chown
+				},
+			}
+
+			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
+			pod := impersonator.augmentPod(p, nil, &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "s"}}, tc.podOptions)
+
+			// Find init container
+			assert.GreaterOrEqual(t, len(pod.Spec.InitContainers), 1, "expected at least one init container")
+			var initContainer v1.Container
+			for _, c := range pod.Spec.InitContainers {
+				if c.Name == "init-kubeconfig-volume" {
+					initContainer = c
+					break
+				}
+			}
+			assert.NotEmpty(t, initContainer.Name, "expected to find init-kubeconfig-volume container")
+
+			// Check init container command
+			if tc.expectChownCmd {
+				assert.Contains(t, initContainer.Command[2], "chown", "expected init command to include chown")
+				// Verify the specific userId is in the chown command
+				assert.Contains(t, initContainer.Command[2], fmt.Sprintf("chown %d", tc.expectUserId),
+					"expected chown command to use userId %d", tc.expectUserId)
+			}
 		})
 	}
 }
