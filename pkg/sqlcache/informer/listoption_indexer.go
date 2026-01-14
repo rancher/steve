@@ -151,6 +151,11 @@ type ListOptionIndexerOptions struct {
 	//
 	// For example, .metadata.resourceVersion should be specified as []string{"metadata", "resourceVersion"}
 	Fields [][]string
+	// Used for specifying types of non-TEXT database fields.
+	// The key is a fully-qualified field name, like 'metadata.fields[1]'.
+	// The value is a type name, most likely "INT" but could be "REAL". The default type is "TEXT",
+	// and we don't (currently) use NULL or BLOB types.
+	TypeGuidance map[string]string
 	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
 	// namespaced
 	IsNamespaced bool
@@ -205,14 +210,19 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropFields)
 	columnDefs := make([]string, len(indexedFields))
 	for index, field := range indexedFields {
-		column := fmt.Sprintf(`"%s" TEXT`, field)
+		typeName := "TEXT"
+		newTypeName, ok := opts.TypeGuidance[field]
+		if ok {
+			typeName = newTypeName
+		}
+		column := fmt.Sprintf(`"%s" %s`, field, typeName)
 		columnDefs[index] = column
 	}
 
 	dbName := db.Sanitize(i.GetName())
-	columns := make([]string, len(indexedFields))
-	qmarks := make([]string, len(indexedFields))
-	setStatements := make([]string, len(indexedFields))
+	columns := make([]string, 0, len(indexedFields))
+	qmarks := make([]string, 0, len(indexedFields))
+	setStatements := make([]string, 0, len(indexedFields))
 
 	err = l.WithTransaction(ctx, true, func(tx transaction.Client) error {
 		dropEventsQuery := fmt.Sprintf(dropEventsFmt, dbName)
@@ -239,7 +249,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return &db.QueryError{QueryString: createFieldsTableQuery, Err: err}
 		}
 
-		for index, field := range indexedFields {
+		for _, field := range indexedFields {
 			// create index for field
 			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
 			_, err = tx.Exec(createFieldsIndexQuery)
@@ -249,14 +259,14 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 			// format field into column for prepared statement
 			column := fmt.Sprintf(`"%s"`, field)
-			columns[index] = column
+			columns = append(columns, column)
 
 			// add placeholder for column's value in prepared statement
-			qmarks[index] = "?"
+			qmarks = append(qmarks, "?")
 
 			// add formatted set statement for prepared statement
 			setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
-			setStatements[index] = setStatement
+			setStatements = append(setStatements, setStatement)
 		}
 
 		dropLabelsQuery := fmt.Sprintf(dropLabelsStmtFmt, dbName)

@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -17,8 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"errors"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/transaction"
 	"github.com/sirupsen/logrus"
@@ -477,43 +476,41 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 	if err != nil {
 		return dbPath, err
 	}
-	sqlite.RegisterDeterministicScalarFunction(
-		"extractBarredValue",
-		2,
-		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
-			var arg1 string
-			var arg2 int
-			switch argTyped := args[0].(type) {
-			case string:
-				arg1 = argTyped
-			case []byte:
-				arg1 = string(argTyped)
-			default:
-				return nil, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
-			}
-			var err error
-			switch argTyped := args[1].(type) {
-			case int:
-				arg2 = argTyped
-			case string:
-				arg2, err = strconv.Atoi(argTyped)
-			case []byte:
-				arg2, err = strconv.Atoi(string(argTyped))
-			default:
-				return nil, fmt.Errorf("unsupported type for arg2: expected an int, got: %T", args[0])
-			}
-			if err != nil {
-				return nil, fmt.Errorf("problem with arg2: %w", err)
-			}
-			parts := strings.Split(arg1, "|")
-			if arg2 >= len(parts) || arg2 < 0 {
-				return "", nil
-			}
-			return parts[arg2], nil
-		},
-	)
+	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
 	c.conn = sqlDB
 	return dbPath, nil
+}
+
+func extractBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 string
+	var arg2 int
+	switch argTyped := args[0].(type) {
+	case string:
+		arg1 = argTyped
+	case []byte:
+		arg1 = string(argTyped)
+	default:
+		return nil, fmt.Errorf("unsupported type for arg1: expected a string, got :%T", args[0])
+	}
+	var err error
+	switch argTyped := args[1].(type) {
+	case int:
+		arg2 = argTyped
+	case string:
+		arg2, err = strconv.Atoi(argTyped)
+	case []byte:
+		arg2, err = strconv.Atoi(string(argTyped))
+	default:
+		return nil, fmt.Errorf("unsupported type for arg2: expected an int, got: %T", args[0])
+	}
+	if err != nil {
+		return nil, fmt.Errorf("problem with arg2: %w", err)
+	}
+	parts := strings.Split(arg1, "|")
+	if arg2 >= len(parts) || arg2 < 0 {
+		return "", nil
+	}
+	return parts[arg2], nil
 }
 
 // This acts like "touch" for both existing files and non-existing files.
