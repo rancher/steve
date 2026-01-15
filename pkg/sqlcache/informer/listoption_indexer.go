@@ -173,14 +173,21 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	var indexedFields []string
+	knownFields := sets.New[string]()
+	add := func(f string) {
+		if !knownFields.Has(f) {
+			knownFields.Insert(f)
+			indexedFields = append(indexedFields, f)
+		}
+	}
 	for _, f := range defaultIndexedFields {
-		indexedFields = append(indexedFields, f)
+		add(f)
 	}
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, defaultIndexNamespaced)
+		add(defaultIndexNamespaced)
 	}
 	for _, f := range opts.Fields {
-		indexedFields = append(indexedFields, toColumnName(f))
+		add(toColumnName(f))
 	}
 
 	l := &ListOptionIndexer{
