@@ -886,9 +886,6 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		if errors.Is(err, informer.ErrInvalidColumn) {
 			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
 		}
-		if errors.Is(err, informer.ErrUnknownRevision) {
-			return nil, 0, "", apierror.NewAPIError(validation.ErrorCode{Code: err.Error(), Status: http.StatusBadRequest}, err.Error())
-		}
 		return nil, 0, "", fmt.Errorf("listbyoptions %v: %w", gvk, err)
 	}
 

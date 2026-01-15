@@ -369,9 +369,6 @@ If both `pagesize` and `limit` are set, the smallest is taken.
 If both `page` and `continue` are set, the result is the `page`-th page
 after the last result specified by `continue`.
 
-**If SQLCache is enabled and `revision` is passed:**
-`revision` sets a minimum numerical value for resourceVersion in a LIST request. If the server's cached resourceVersion for that GVK is older than the revision provided, an "unknown revision" error is returned. 
-
 **In both cases**,
 the total number of pages and individual items are included in the list
 response as `pages` and `count` respectively.
