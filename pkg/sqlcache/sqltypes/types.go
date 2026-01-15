@@ -31,7 +31,6 @@ type ListOptions struct {
 	ProjectsOrNamespaces OrFilter
 	SortList             SortList
 	Pagination           Pagination
-	Revision             string
 }
 
 // Filter represents a field to filter by.
