@@ -26,6 +26,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	// needed for drivers
 	_ "modernc.org/sqlite"
@@ -39,6 +40,8 @@ const (
 	InformerObjectCacheDBPath     = InformerObjectCacheDBPathRoot + ".db"
 
 	informerObjectCachePerms fs.FileMode = 0o600
+
+	maxBeginTXAttemptsOnBusyErrors = 3
 
 	debugQueryLogPathEnvVar           = "CATTLE_DEBUG_QUERY_LOG"
 	debugQueryIncludeParamsPathEnvVar = "CATTLE_DEBUG_QUERY_INCLUDE_PARAMS"
@@ -81,38 +84,68 @@ func (c *client) WithTransaction(ctx context.Context, forWriting bool, f WithTra
 func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error {
 	c.connLock.RLock()
 	// note: this assumes _txlock=immediate in the connection string, see NewConnection
-	tx, err := c.conn.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly: !forWriting,
-	})
+	tx, err := c.beginTX(ctx, forWriting)
 	c.connLock.RUnlock()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 
-	if err = f(NewTxClient(tx, WithQueryLogger(c.queryLogger))); err != nil {
+	if err := f(NewTxClient(tx, WithQueryLogger(c.queryLogger))); err != nil {
 		rerr := c.rollback(ctx, tx)
 		return errors.Join(err, rerr)
 	}
 
-	err = c.commit(ctx, tx)
-	if err != nil {
-		// When the context.Context given to BeginTx is canceled, then the
-		// Tx is rolled back already, so rolling back again could have failed.
-		return err
-	}
-	return nil
+	return c.commit(ctx, tx)
 }
 
-func (c *client) commit(ctx context.Context, tx *sql.Tx) error {
+// beginTX handles automatic retries for writing transactions for specific error codes.
+// Rationale: in WAL mode, BEGIN IMMEDIATE requires 2 steps: create a read transaction and promote it, which can fail if another thread wrote to the database in the meantime.
+// See https://github.com/rancher/rancher/issues/52872 for more details
+func (c *client) beginTX(ctx context.Context, forWriting bool) (Tx, error) {
+	if !forWriting {
+		return c.conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	}
+
+	var attempts int
+	for {
+		attempts++
+		tx, err := c.conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: false})
+		if err == nil {
+			return tx, nil
+		} else if attempts == maxBeginTXAttemptsOnBusyErrors || !isRetriableSQLiteError(err) {
+			return nil, err
+		}
+	}
+}
+
+func isRetriableSQLiteError(err error) bool {
+	var serr *sqlite.Error
+	if !errors.As(err, &serr) {
+		return false
+	}
+
+	switch serr.Code() {
+	case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_BUSY_SNAPSHOT:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *client) commit(ctx context.Context, tx Tx) error {
 	err := tx.Commit()
+	// When the context.Context given to BeginTx is canceled, then the
+	// Tx is rolled back automatically, so rolling back again could have failed.
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
 		return fmt.Errorf("commit failed due to canceled context")
 	}
 	return err
 }
 
-func (c *client) rollback(ctx context.Context, tx *sql.Tx) error {
+func (c *client) rollback(ctx context.Context, tx Tx) error {
 	err := tx.Rollback()
+	// When the context.Context given to BeginTx is canceled, then the
+	// Tx is rolled back automatically, so rolling back again could have failed.
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() == context.Canceled {
 		return fmt.Errorf("rollback failed due to canceled context")
 	}
@@ -135,10 +168,18 @@ type client struct {
 
 // Connection represents a connection pool.
 type Connection interface {
-	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Prepare(query string) (*sql.Stmt, error)
 	Close() error
+}
+
+type connection struct {
+	*sql.DB
+}
+
+func (c *connection) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
+	return c.DB.BeginTx(ctx, opts)
 }
 
 // QueryError encapsulates an error while executing a query
@@ -505,7 +546,7 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
 	sqlite.RegisterDeterministicScalarFunction("inet_aton", 1, inetAtoN)
 	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
-	c.conn = sqlDB
+	c.conn = &connection{sqlDB}
 	return dbPath, nil
 }
 
