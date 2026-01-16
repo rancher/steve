@@ -46,15 +46,28 @@ type ListTestConfig struct {
 }
 
 func (i *IntegrationSuite) TestList() {
-	i.runListTest(true)  // SQL mode
-}
-
-func (i *IntegrationSuite) TestListNonSQL() {
-	i.runListTest(false) // Non-SQL mode
-}
-
-func (i *IntegrationSuite) runListTest(sqlCache bool) {
 	ctx := i.T().Context()
+	
+	// Apply common manifests once for both test modes
+	commonManifestsFile := filepath.Join(testdataListDir, "common.manifests.yaml")
+	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
+	i.doManifest(ctx, commonManifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
+		gvrs[gvr] = struct{}{}
+		return i.doApply(ctx, obj, gvr)
+	})
+	// Cleanup common manifests after all tests complete
+	defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
+	
+	// Run SQL mode first, then non-SQL mode sequentially
+	i.Run("SQL", func() {
+		i.runListTest(ctx, true, gvrs)
+	})
+	i.Run("NonSQL", func() {
+		i.runListTest(ctx, false, gvrs)
+	})
+}
+
+func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 
 	// Custom authenticator: use impersonation if header present, otherwise admin
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
@@ -91,18 +104,7 @@ func (i *IntegrationSuite) runListTest(sqlCache bool) {
 
 	baseURL := httpServer.URL
 
-	// Apply common manifests (shared across all scenarios)
-	commonManifestsFile := filepath.Join(testdataListDir, "common.manifests.yaml")
-	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
-	i.doManifest(ctx, commonManifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
-		gvrs[gvr] = struct{}{}
-		return i.doApply(ctx, obj, gvr)
-	})
-	// Only cleanup in non-SQL mode (runs second, after SQL mode)
-	if !sqlCache {
-		defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
-	}
-
+	// Wait for schemas to be ready (gvrs already applied in TestList)
 	for gvr := range gvrs {
 		i.waitForSchema(baseURL, gvr)
 	}
