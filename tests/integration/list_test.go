@@ -40,8 +40,7 @@ type ListTestConfig struct {
 		Expect         []map[string]string `yaml:"expect"`
 		ExpectExcludes bool                `yaml:"expectExcludes"`
 		ExpectContains bool                `yaml:"expectContains"`
-		SQLOnly        bool                `yaml:"sqlOnly"`    // Skip in non-SQL mode
-		NonSQLOnly     bool                `yaml:"nonSQLOnly"` // Skip in SQL mode
+		RunOn          string              `yaml:"runOn"` // Restrict test execution: "sql" (SQL cache only), "nonsql" (non-SQL cache only), or "" (run on both)
 	} `yaml:"tests"`
 }
 
@@ -163,12 +162,12 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTest
 	var lastRevision string
 
 	for _, test := range config.Tests {
-		// Skip SQL-only tests when running in non-SQL mode
-		if !sqlCache && test.SQLOnly {
-			continue
+		// Skip tests restricted to specific cache modes
+		currentMode := "sql"
+		if !sqlCache {
+			currentMode = "nonsql"
 		}
-		// Skip non-SQL-only tests when running in SQL mode
-		if sqlCache && test.NonSQLOnly {
+		if test.RunOn != "" && test.RunOn != currentMode {
 			continue
 		}
 
@@ -182,9 +181,6 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTest
 			if strings.Contains(query, "nondeterministicint") {
 				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
 			}
-
-			// Convert project names to project IDs for projectsornamespaces parameter
-			query = convertProjectsOrNamespaces(query)
 
 			// Convert labelSelector/fieldSelector to filter format for SQL mode
 			if sqlCache {
@@ -296,13 +292,6 @@ func convertQueryForSQLCache(query string) string {
 	if changed {
 		return strings.Join(parts, "&")
 	}
-	return query
-}
-
-// convertProjectsOrNamespaces - no conversion needed since we use test-prj-X directly
-// This mirrors the logic in steve_api_test.go#L2732-L2751
-func convertProjectsOrNamespaces(query string) string {
-	// No conversion needed - test-prj-X is used directly as the label value
 	return query
 }
 

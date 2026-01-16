@@ -4,7 +4,7 @@ tests:
   user: user-a
   namespace: ''
   query: limit=8
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test1
     namespace: test-ns-1
@@ -26,7 +26,7 @@ tests:
   user: user-a
   namespace: ''
   query: limit=8&continue=nondeterministictoken
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test4
     namespace: test-ns-2
@@ -48,7 +48,7 @@ tests:
   user: user-a
   namespace: test-ns-1
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test1
     namespace: test-ns-1
@@ -60,7 +60,7 @@ tests:
   user: user-a
   namespace: test-ns-1
   query: limit=3&continue=nondeterministictoken
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test4
     namespace: test-ns-1
@@ -70,7 +70,7 @@ tests:
   user: user-a
   namespace: ''
   query: filter=metadata.labels.test-label-gte=3&sort=-metadata.name&pagesize=6&limit=20
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test5
   - name: test5
@@ -82,7 +82,7 @@ tests:
   user: user-a
   namespace: ''
   query: filter=metadata.labels.test-label-gte=3&sort=-metadata.name&pagesize=6&page=2&revision=nondeterministicint&limit=20
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test4
   - name: test4
@@ -94,7 +94,7 @@ tests:
   user: user-a
   namespace: ''
   query: filter=metadata.labels.test-label-gte=3&sort=-metadata.name&pagesize=6&page=1&limit=20&continue=nondeterministictoken
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test5
     namespace: test-ns-5
@@ -106,7 +106,7 @@ tests:
   user: user-b
   namespace: ''
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test1
     namespace: test-ns-1
@@ -118,7 +118,7 @@ tests:
   user: user-b
   namespace: ''
   query: limit=3&continue=nondeterministictoken
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test4
     namespace: test-ns-1
@@ -128,7 +128,7 @@ tests:
   user: user-b
   namespace: test-ns-1
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test1
     namespace: test-ns-1
@@ -140,7 +140,7 @@ tests:
   user: user-b
   namespace: test-ns-1
   query: limit=3&continue=nondeterministictoken
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test4
     namespace: test-ns-1
@@ -150,13 +150,13 @@ tests:
   user: user-b
   namespace: test-ns-5
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect: []
 - description: user:user-c,namespace:none,query:limit=3
   user: user-c
   namespace: ''
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test1
     namespace: test-ns-1
@@ -168,7 +168,7 @@ tests:
   user: user-c
   namespace: ''
   query: limit=3&continue=nondeterministictoken
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test2
     namespace: test-ns-2
@@ -180,7 +180,7 @@ tests:
   user: user-c
   namespace: test-ns-1
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect:
   - name: test1
     namespace: test-ns-1
@@ -190,5 +190,5 @@ tests:
   user: user-c
   namespace: test-ns-5
   query: limit=3
-  nonSQLOnly: true
+  runOn: nonsql
   expect: []
