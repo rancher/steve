@@ -1,0 +1,498 @@
+schemaID: secret
+tests:
+- description: user:user-a,namespace:none,query:labelSelector=test-label=2
+  user: user-a
+  namespace: ''
+  query: labelSelector=test-label=2
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-5
+- description: user:user-a,namespace:test-ns-2,query:labelSelector=test-label=2
+  user: user-a
+  namespace: test-ns-2
+  query: labelSelector=test-label=2
+  expect:
+  - name: test2
+    namespace: test-ns-2
+- description: user:user-a,namespace:none,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-a
+  namespace: ''
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-a,namespace:none,query:fieldSelector=metadata.name=test1
+  user: user-a
+  namespace: ''
+  query: fieldSelector=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+- description: user:user-a,namespace:test-ns-1,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-a
+  namespace: test-ns-1
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-a,namespace:test-ns-2,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-a
+  namespace: test-ns-2
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect: []
+- description: user:user-a,namespace:test-ns-1,query:fieldSelector=metadata.name=test1
+  user: user-a
+  namespace: test-ns-1
+  query: fieldSelector=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-a,namespace:none,query:filter=metadata.name=test1
+  user: user-a
+  namespace: ''
+  query: filter=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+- description: user:user-a,namespace:none,query:filter=metadata.name=test6
+  user: user-a
+  namespace: ''
+  query: filter=metadata.name=test6
+  expect: []
+- description: user:user-a,namespace:test-ns-1,query:filter=metadata.name=test1
+  user: user-a
+  namespace: test-ns-1
+  query: filter=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-a,namespace:none,query:filter=metadata.name=test1,metadata.namespace=test-ns-1
+  user: user-a
+  namespace: ''
+  query: filter=metadata.name=test1,metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+- description: user:user-a,namespace:none,query:filter=metadata.labels.test-label-gte=3,metadata.labels.test-label=2&filter=metadata.namespace=test-ns-1
+  user: user-a
+  namespace: ''
+  query: filter=metadata.labels.test-label-gte=3,metadata.labels.test-label=2&filter=metadata.namespace=test-ns-1
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-a,namespace:none,query:filter=metadata.name!=test1
+  user: user-a
+  namespace: ''
+  query: filter=metadata.name!=test1
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+- description: user:user-a,namespace:test-ns-2,query:filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=spuds
+  user: user-a
+  namespace: test-ns-2
+  query: filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=spuds
+  runOn: sql
+  expect:
+  - name: test4
+    namespace: test-ns-2
+- description: user:user-a,namespace:test-ns-2,query:filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=potatoes
+  user: user-a
+  namespace: test-ns-2
+  query: filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=potatoes
+  runOn: sql
+  expect: []
+- description: user:user-b,namespace:none,query:labelSelector=test-label=2
+  user: user-b
+  namespace: ''
+  query: labelSelector=test-label=2
+  expect:
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:labelSelector=test-label=2
+  user: user-b
+  namespace: test-ns-1
+  query: labelSelector=test-label=2
+  expect:
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-2,query:labelSelector=test-label=2
+  user: user-b
+  namespace: test-ns-2
+  query: labelSelector=test-label=2
+  expect: []
+- description: user:user-b,namespace:none,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-b
+  namespace: ''
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:none,query:fieldSelector=metadata.namespace=test-ns-2
+  user: user-b
+  namespace: ''
+  query: fieldSelector=metadata.namespace=test-ns-2
+  expect: []
+- description: user:user-b,namespace:none,query:fieldSelector=metadata.name=test1
+  user: user-b
+  namespace: ''
+  query: fieldSelector=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-b
+  namespace: test-ns-1
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-2,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-b
+  namespace: test-ns-2
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect: []
+- description: user:user-b,namespace:test-ns-1,query:fieldSelector=metadata.namespace=test-ns-2
+  user: user-b
+  namespace: test-ns-1
+  query: fieldSelector=metadata.namespace=test-ns-2
+  expect: []
+- description: user:user-b,namespace:test-ns-1,query:fieldSelector=metadata.name=test1
+  user: user-b
+  namespace: test-ns-1
+  query: fieldSelector=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-2,query:fieldSelector=metadata.name=test1
+  user: user-b
+  namespace: test-ns-2
+  query: fieldSelector=metadata.name=test1
+  expect: []
+- description: user:user-b,namespace:none,query:filter=metadata.name=test1
+  user: user-b
+  namespace: ''
+  query: filter=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:filter=metadata.name=test1
+  user: user-b
+  namespace: test-ns-1
+  query: filter=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:filter=metadata.name=test6
+  user: user-b
+  namespace: test-ns-1
+  query: filter=metadata.name=test6
+  expect: []
+- description: user:user-b,namespace:none,query:filter=metadata.name=test1,metadata.namespace=test-ns-1
+  user: user-b
+  namespace: ''
+  query: filter=metadata.name=test1,metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:none,query:filter=metadata.labels.test-label-gte=3,metadata.labels.test-label=2&filter=metadata.namespace=test-ns-1
+  user: user-b
+  namespace: ''
+  query: filter=metadata.labels.test-label-gte=3,metadata.labels.test-label=2&filter=metadata.namespace=test-ns-1
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:none,query:filter=metadata.name!=test1
+  user: user-b
+  namespace: ''
+  query: filter=metadata.name!=test1
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-c,namespace:none,query:labelSelector=test-label=2
+  user: user-c
+  namespace: ''
+  query: labelSelector=test-label=2
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-3
+- description: user:user-c,namespace:test-ns-1,query:labelSelector=test-label=2
+  user: user-c
+  namespace: test-ns-1
+  query: labelSelector=test-label=2
+  expect:
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-c,namespace:test-ns-5,query:labelSelector=test-label=2
+  user: user-c
+  namespace: test-ns-5
+  query: labelSelector=test-label=2
+  expect: []
+- description: user:user-c,namespace:none,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-c
+  namespace: ''
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-c,namespace:none,query:fieldSelector=metadata.namespace=test-ns-2
+  user: user-c
+  namespace: ''
+  query: fieldSelector=metadata.namespace=test-ns-2
+  expect:
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+- description: user:user-c,namespace:none,query:fieldSelector=metadata.namespace=test-ns-5
+  user: user-c
+  namespace: ''
+  query: fieldSelector=metadata.namespace=test-ns-5
+  expect: []
+- description: user:user-c,namespace:none,query:fieldSelector=metadata.name=test1
+  user: user-c
+  namespace: ''
+  query: fieldSelector=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+- description: user:user-c,namespace:none,query:fieldSelector=metadata.name=test5
+  user: user-c
+  namespace: ''
+  query: fieldSelector=metadata.name=test5
+  expect: []
+- description: user:user-c,namespace:test-ns-1,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-c
+  namespace: test-ns-1
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-c,namespace:test-ns-2,query:fieldSelector=metadata.namespace=test-ns-1
+  user: user-c
+  namespace: test-ns-2
+  query: fieldSelector=metadata.namespace=test-ns-1
+  expect: []
+- description: user:user-c,namespace:test-ns-1,query:fieldSelector=metadata.namespace=test-ns-2
+  user: user-c
+  namespace: test-ns-1
+  query: fieldSelector=metadata.namespace=test-ns-2
+  expect: []
+- description: user:user-c,namespace:test-ns-1,query:fieldSelector=metadata.name=test1
+  user: user-c
+  namespace: test-ns-1
+  query: fieldSelector=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-c,namespace:test-ns-5,query:fieldSelector=metadata.name=test1
+  user: user-c
+  namespace: test-ns-5
+  query: fieldSelector=metadata.name=test1
+  expect: []
+- description: user:user-c,namespace:test-ns-1,query:fieldSelector=metadata.name=test5
+  user: user-c
+  namespace: test-ns-1
+  query: fieldSelector=metadata.name=test5
+  expect: []
+- description: user:user-c,namespace:none,query:filter=metadata.name=test1
+  user: user-c
+  namespace: ''
+  query: filter=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+- description: user:user-c,namespace:test-ns-1,query:filter=metadata.name=test1
+  user: user-c
+  namespace: test-ns-1
+  query: filter=metadata.name=test1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+- description: user:user-c,namespace:test-ns-1,query:filter=metadata.name=test3
+  user: user-c
+  namespace: test-ns-1
+  query: filter=metadata.name=test3
+  expect: []
+- description: user:user-c,namespace:none,query:filter=metadata.name=test1,metadata.namespace=test-ns-1
+  user: user-c
+  namespace: ''
+  query: filter=metadata.name=test1,metadata.namespace=test-ns-1
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+- description: user:user-c,namespace:test-ns-1,query:filter=metadata.name!=test1
+  user: user-c
+  namespace: ''
+  query: filter=metadata.name!=test1
+  expect:
+  - name: test2
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-3
+- description: user:user-c,namespace:none,query:filter=metadata.labels.test-label-gte=3,metadata.labels.test-label=2&filter=metadata.namespace=test-ns-1
+  user: user-c
+  namespace: ''
+  query: filter=metadata.labels.test-label-gte=3,metadata.labels.test-label=2&filter=metadata.namespace=test-ns-1
+  expect:
+  - name: test2
+    namespace: test-ns-1
