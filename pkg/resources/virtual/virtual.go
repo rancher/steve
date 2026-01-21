@@ -46,23 +46,21 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		converters = append(converters, clusters.TransformManagedCluster)
 	}
 
-	// Register multi-value converter with field configurations
-	multiValueConverter := &multivalue.Converter{
-		Columns: columns,
-		Fields: []multivalue.FieldConfig{
-			{
-				GVK: schema.GroupVersionKind{
-					Group:   "",
-					Version: "v1",
-					Kind:    "Pod",
+	// Register multi-value converter for Pods only
+	if gvk.Kind == "Pod" && gvk.Group == "" && gvk.Version == "v1" {
+		multiValueConverter := &multivalue.Converter{
+			Columns: columns,
+			Fields: []multivalue.FieldConfig{
+				{
+					GVK:        gvk,
+					ColumnName: "Restarts",
+					ParseFunc:  parsers.ParseRestarts,
 				},
-				ColumnName: "Restarts",
-				ParseFunc:  parsers.ParseRestarts,
+				// Future: Add more multi-value field configs here
 			},
-			// Future: Add more multi-value field configs here
-		},
+		}
+		converters = append(converters, multiValueConverter.Transform)
 	}
-	converters = append(converters, multiValueConverter.Transform)
 
 	// Detecting if we need to convert date fields
 	dateConverter := &dates.Converter{
