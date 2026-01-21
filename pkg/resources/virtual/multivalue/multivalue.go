@@ -1,6 +1,8 @@
 package multivalue
 
 import (
+	"encoding/json"
+
 	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -62,7 +64,15 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 			continue
 		}
 
-		fields[index] = arrayValue
+		// Marshal to JSON string for SQL storage
+		jsonBytes, err := json.Marshal(arrayValue)
+		if err != nil {
+			logrus.Debugf("failed to marshal %s value: %v", fieldConfig.ColumnName, err)
+			continue
+		}
+
+		// Store as string - it will be treated as JSONB by SQL layer
+		fields[index] = string(jsonBytes)
 		updated = true
 	}
 

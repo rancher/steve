@@ -36,8 +36,9 @@ func (i *IntegrationSuite) TestPodRestarts() {
 	// Cleanup manifests after all tests complete
 	defer i.doManifestReversed(ctx, manifestsFile, i.doDelete)
 
-	// Wait for pods to be ready
-	time.Sleep(10 * time.Second)
+	// Wait for pods to stabilize - some pods need time to go through restart cycles
+	i.T().Log("Waiting for pods to stabilize (6 seconds)...")
+	time.Sleep(6 * time.Second)
 
 	// Run SQL mode only - these tests are specifically for SQL cache with JSONB support
 	i.runPodRestartsTest(ctx, true, gvrs)
@@ -78,7 +79,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 
 	// Wait for cache to be populated
 	if sqlCache {
-		time.Sleep(10 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	// Load and run test scenarios
