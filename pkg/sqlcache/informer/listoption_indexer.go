@@ -66,7 +66,6 @@ var (
 		"metadata.namespace",
 		"metadata.name",
 		"id",
-		"metadata.state.name",
 	)
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
