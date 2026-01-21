@@ -921,6 +921,9 @@ var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
 		"metadata.fields[1]": "INT", // name: Data
 	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}: {
+		"metadata.fields[3]": "JSONB", // name: Restarts
+	},
 }
 
 func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
