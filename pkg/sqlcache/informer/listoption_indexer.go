@@ -60,7 +60,6 @@ var (
 		"metadata.namespace",
 		"metadata.name",
 		"id",
-		"metadata.state.name",
 	)
 
 	ErrTooOld = errors.New("resourceversion too old")
