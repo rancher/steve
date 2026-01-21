@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,7 +199,45 @@ func (i *IntegrationSuite) doManifestWithHeader(ctx context.Context, manifestFil
 	i.Require().NoError(err)
 	defer file.Close()
 
-	dec := yaml.NewDecoder(file)
+	i.doManifestReaderWithHeader(ctx, file, headerFn, doFn)
+}
+
+func (i *IntegrationSuite) doManifestString(ctx context.Context, manifestYAML string, doFn DoFunc) {
+	noHeader := func(_ context.Context, _ map[string]any) error {
+		return nil
+	}
+	i.doManifestStringWithHeader(ctx, manifestYAML, noHeader, doFn)
+}
+
+func (i *IntegrationSuite) doManifestStringReversed(ctx context.Context, manifestYAML string, doFn DoFunc) {
+	noHeader := func(_ context.Context, _ map[string]any) error {
+		return nil
+	}
+	i.doManifestStringWithHeaderReversed(ctx, manifestYAML, noHeader, doFn)
+}
+
+func (i *IntegrationSuite) doManifestStringWithHeaderReversed(ctx context.Context, manifestYAML string, headerFn HeaderFunc, doFn DoFunc) {
+	var fns []func()
+	acc := func(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error {
+		fns = append(fns, func() {
+			doFn(ctx, obj, gvr)
+		})
+		return nil
+	}
+	i.doManifestStringWithHeader(ctx, manifestYAML, headerFn, acc)
+	for i := range len(fns) {
+		index := len(fns) - i - 1
+		fns[index]()
+	}
+}
+
+func (i *IntegrationSuite) doManifestStringWithHeader(ctx context.Context, manifestYAML string, headerFn HeaderFunc, doFn DoFunc) {
+	reader := strings.NewReader(manifestYAML)
+	i.doManifestReaderWithHeader(ctx, reader, headerFn, doFn)
+}
+
+func (i *IntegrationSuite) doManifestReaderWithHeader(ctx context.Context, reader io.Reader, headerFn HeaderFunc, doFn DoFunc) {
+	dec := yaml.NewDecoder(reader)
 	for {
 		obj := &unstructured.Unstructured{Object: map[string]any{}}
 		err := dec.Decode(obj.Object)
@@ -247,6 +286,7 @@ func (i *IntegrationSuite) waitForSchema(baseURL string, gvr schema.GroupVersion
 
 func (i *IntegrationSuite) maybeStopAndDebug(baseURL string) {
 	if os.Getenv("INTEGRATION_TEST_DEBUG") == "true" {
+		wsURL := strings.Replace(baseURL, "http://", "ws://", 1) + "/v1/subscribe"
 		fmt.Printf(`###########################
 #
 # Integration tests stopped as requested
@@ -254,11 +294,12 @@ func (i *IntegrationSuite) maybeStopAndDebug(baseURL string) {
 # You can now access the Kubernetes cluster and steve
 #
 # Kubernetes: KUBECONFIG=%s
-# Steve URL: %s
+# Steve URL: %s/v1
+# Steve WebSocket URL: %s
 # SQL cache database: %s
 #
 ###########################
-`, i.kubeconfigFile, baseURL, i.sqliteDatabaseFile)
+`, i.kubeconfigFile, baseURL, wsURL, i.sqliteDatabaseFile)
 		<-i.T().Context().Done()
 		i.Require().FailNow("Troubleshooting done, exiting")
 	}
