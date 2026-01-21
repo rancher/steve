@@ -32,10 +32,10 @@ require (
 	github.com/rancher/apiserver v0.8.1
 	github.com/rancher/dynamiclistener v0.7.2-rc.3
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
-	github.com/rancher/lasso v0.2.5-rc.1
+	github.com/rancher/lasso v0.2.5
 	github.com/rancher/norman v0.8.0
 	github.com/rancher/remotedialer v0.6.0-rc.1
-	github.com/rancher/wrangler/v3 v3.3.0-rc.2
+	github.com/rancher/wrangler/v3 v3.3.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	github.com/tinylib/msgp v1.6.3
