@@ -10,35 +10,36 @@ import (
 
 func TestParseRestarts(t *testing.T) {
 	// Mock Now for deterministic tests
+	fixedNow := time.Unix(1737462000, 0) // 2026-01-21 13:00:00 UTC
 	Now = func() time.Time {
-		return time.Unix(1737462000, 0)
+		return fixedNow
 	}
 	defer func() { Now = time.Now }()
 
 	tests := []struct {
-		name      string
-		input     string
-		wantCount int
-		wantTime  bool
-		wantErr   bool
+		name          string
+		input         string
+		wantCount     int
+		wantTimestamp *int64 // nil means no timestamp expected
+		wantErr       bool
 	}{
 		{
-			name:      "no restarts",
-			input:     "0",
-			wantCount: 0,
-			wantTime:  false,
+			name:          "no restarts",
+			input:         "0",
+			wantCount:     0,
+			wantTimestamp: nil,
 		},
 		{
-			name:      "single restart with time",
-			input:     "1 (3h37m ago)",
-			wantCount: 1,
-			wantTime:  true,
+			name:          "single restart with time (3h37m ago)",
+			input:         "1 (3h37m ago)",
+			wantCount:     1,
+			wantTimestamp: int64Ptr(fixedNow.Add(-3*time.Hour - 37*time.Minute).UnixMilli()),
 		},
 		{
-			name:      "multiple restarts with time",
-			input:     "4 (3h38m ago)",
-			wantCount: 4,
-			wantTime:  true,
+			name:          "multiple restarts with time (3h38m ago)",
+			input:         "4 (3h38m ago)",
+			wantCount:     4,
+			wantTimestamp: int64Ptr(fixedNow.Add(-3*time.Hour - 38*time.Minute).UnixMilli()),
 		},
 		{
 			name:    "invalid format",
@@ -65,11 +66,20 @@ func TestParseRestarts(t *testing.T) {
 			assert.Equal(t, int64(tt.wantCount), count)
 
 			// Check timestamp
-			if tt.wantTime {
-				assert.NotNil(t, result[1])
+			if tt.wantTimestamp != nil {
+				require.NotNil(t, result[1])
+				timestamp, ok := result[1].(int64)
+				require.True(t, ok)
+				assert.Equal(t, *tt.wantTimestamp, timestamp)
 			} else {
 				assert.Nil(t, result[1])
 			}
 		})
 	}
 }
+
+// Helper function to get pointer to int64
+func int64Ptr(v int64) *int64 {
+	return &v
+}
+
