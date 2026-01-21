@@ -69,6 +69,7 @@ var (
 	namespacesDbName        = "_v1_Namespace"
 	projectIDFieldLabel     = "field.cattle.io/projectId"
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
+	fieldPathPattern        = regexp.MustCompile(`^(.+\[\d+\])(\[(\d+)\])$`)
 
 	ErrInvalidColumn   = errors.New("supplied column is invalid")
 	ErrUnknownRevision = errors.New("unknown revision")
@@ -1089,16 +1090,16 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 
 func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
 	columnName := toColumnName(fields)
-	
+
 	// Check for JSON array access pattern like "metadata.fields[4][0]"
 	baseField, jsonIndex, hasJSON := parseFieldPath(columnName)
-	
+
 	// Validate the base field (without the JSON sub-index)
 	fieldToValidate := columnName
 	if hasJSON {
 		fieldToValidate = baseField
 	}
-	
+
 	err := l.validateColumn(fieldToValidate)
 	if err == nil {
 		if hasJSON {
@@ -1450,8 +1451,7 @@ func toColumnName(s []string) string {
 // e.g., "metadata.fields[4][0]" -> ("metadata.fields[4]", "0", true)
 func parseFieldPath(field string) (baseField string, jsonIndex string, hasJSONAccess bool) {
 	// Check for pattern like "metadata.fields[4][0]"
-	re := regexp.MustCompile(`^(.+\[\d+\])(\[(\d+)\])$`)
-	matches := re.FindStringSubmatch(field)
+	matches := fieldPathPattern.FindStringSubmatch(field)
 	if matches != nil {
 		return matches[1], matches[3], true
 	}

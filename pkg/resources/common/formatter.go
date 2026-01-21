@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/resources/common/formatters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/sirupsen/logrus"
 
@@ -181,6 +181,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 
 			if options.InSQLMode {
 				isCRD := attributes.IsCRD(resource.Schema)
+				convertMetadataMultiValueFields(request, gvk, unstr)
 				convertMetadataTimestampFields(request, gvk, unstr, isCRD)
 			}
 		}
@@ -238,6 +239,48 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 	}
 }
 
+// convertMetadataMultiValueFields converts multi-value JSON arrays back to display strings
+func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured) {
+	if request.Schema == nil {
+		return
+	}
+
+	cols := GetColumnDefinitions(request.Schema)
+	for _, col := range cols {
+		index := GetIndexValueFromString(col.Field)
+		if index == -1 {
+			continue
+		}
+
+		curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+		if err != nil || !got {
+			continue
+		}
+
+		if index >= len(curValue) {
+			continue
+		}
+
+		// Check if this is a multi-value field stored as JSON array
+		jsonArray, ok := curValue[index].([]interface{})
+		if !ok || len(jsonArray) < 2 {
+			continue
+		}
+
+		// Handle restarts field
+		if col.Name == "Restarts" && gvk.Kind == "Pod" && gvk.Group == "" {
+			curValue[index] = formatters.FormatRestarts(jsonArray)
+
+			// Update the slice
+			if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+				logrus.Errorf("failed to set multi-value display value: %s", err.Error())
+			}
+		}
+
+		// Future: Add other multi-value field formatters here
+	}
+}
+
 // convertMetadataTimestampFields updates metadata timestamp fields to ensure they remain fresh and human-readable when sent back
 // to the client. Internally, fields are stored as Unix timestamps; on each request, we calculate the elapsed time since
 // those timestamps by subtracting them from time.Now(), then format the resulting duration into a human-friendly string.
@@ -258,36 +301,6 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 
 			if index >= len(curValue) {
 				continue
-			}
-
-			// Check if this is a multi-value field stored as JSON array
-			if jsonArray, ok := curValue[index].([]interface{}); ok && len(jsonArray) >= 2 {
-				// Handle restarts: [4, 1737462000000] -> "4 (3h38m ago)"
-				if col.Name == "Restarts" && gvk.Kind == "Pod" && gvk.Group == "" {
-					count := jsonArray[0]
-
-					// Recalculate fresh "ago" time from timestamp
-					if len(jsonArray) > 1 && jsonArray[1] != nil {
-						if timestamp, ok := jsonArray[1].(float64); ok {
-							// Calculate current duration since restart
-							dur := time.Since(time.UnixMilli(int64(timestamp)))
-							humanDur := duration.HumanDuration(dur)
-							// Format with FRESH "ago" time
-							curValue[index] = fmt.Sprintf("%v (%s ago)", count, humanDur)
-						} else {
-							curValue[index] = fmt.Sprintf("%v", count)
-						}
-					} else {
-						// No timestamp, just show count
-						curValue[index] = fmt.Sprintf("%v", count)
-					}
-
-					// Update the slice
-					if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
-						logrus.Errorf("failed to set restarts display value: %s", err.Error())
-					}
-					continue
-				}
 			}
 
 			gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
