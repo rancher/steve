@@ -1089,8 +1089,22 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 
 func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
 	columnName := toColumnName(fields)
-	err := l.validateColumn(columnName)
+	
+	// Check for JSON array access pattern like "metadata.fields[4][0]"
+	baseField, jsonIndex, hasJSON := parseFieldPath(columnName)
+	
+	// Validate the base field (without the JSON sub-index)
+	fieldToValidate := columnName
+	if hasJSON {
+		fieldToValidate = baseField
+	}
+	
+	err := l.validateColumn(fieldToValidate)
 	if err == nil {
+		if hasJSON {
+			// Use json_extract for JSON array sub-element access
+			return fmt.Sprintf(`json_extract(%s."%s", '$[%s]')`, prefix, baseField, jsonIndex), nil
+		}
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
 	}
 	if len(fields) <= 2 {
@@ -1430,4 +1444,16 @@ func smartJoin(s []string) string {
 // toColumnName returns the column name corresponding to a field expressed as string slice
 func toColumnName(s []string) string {
 	return db.Sanitize(smartJoin(s))
+}
+
+// parseFieldPath extracts base field and JSON array index if present
+// e.g., "metadata.fields[4][0]" -> ("metadata.fields[4]", "0", true)
+func parseFieldPath(field string) (baseField string, jsonIndex string, hasJSONAccess bool) {
+	// Check for pattern like "metadata.fields[4][0]"
+	re := regexp.MustCompile(`^(.+\[\d+\])(\[(\d+)\])$`)
+	matches := re.FindStringSubmatch(field)
+	if matches != nil {
+		return matches[1], matches[3], true
+	}
+	return field, "", false
 }

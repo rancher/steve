@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -245,25 +246,57 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 	if request.Schema != nil {
 		cols := GetColumnDefinitions(request.Schema)
 		for _, col := range cols {
+			index := GetIndexValueFromString(col.Field)
+			if index == -1 {
+				continue
+			}
+
+			curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+			if err != nil || !got {
+				continue
+			}
+
+			if index >= len(curValue) {
+				continue
+			}
+
+			// Check if this is a multi-value field stored as JSON array
+			if jsonArray, ok := curValue[index].([]interface{}); ok && len(jsonArray) >= 2 {
+				// Handle restarts: [4, 1737462000000] -> "4 (3h38m ago)"
+				if col.Name == "Restarts" && gvk.Kind == "Pod" && gvk.Group == "" {
+					count := jsonArray[0]
+
+					// Recalculate fresh "ago" time from timestamp
+					if len(jsonArray) > 1 && jsonArray[1] != nil {
+						if timestamp, ok := jsonArray[1].(float64); ok {
+							// Calculate current duration since restart
+							dur := time.Since(time.UnixMilli(int64(timestamp)))
+							humanDur := duration.HumanDuration(dur)
+							// Format with FRESH "ago" time
+							curValue[index] = fmt.Sprintf("%v (%s ago)", count, humanDur)
+						} else {
+							curValue[index] = fmt.Sprintf("%v", count)
+						}
+					} else {
+						// No timestamp, just show count
+						curValue[index] = fmt.Sprintf("%v", count)
+					}
+
+					// Update the slice
+					if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+						logrus.Errorf("failed to set restarts display value: %s", err.Error())
+					}
+					continue
+				}
+			}
+
 			gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
 
 			hasCRDDateField := isCRD && col.Type == "date"
 			hasGVKDateFieldMapping := gvkFound && slices.Contains(gvkDateFields, col.Name)
 			if hasCRDDateField || hasGVKDateFieldMapping {
-				index := GetIndexValueFromString(col.Field)
 				if index == -1 {
 					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)
-					return
-				}
-
-				curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
-				if err != nil {
-					logrus.Warnf("failed to get metadata.fields slice from unstr.Object: %s", err.Error())
-					return
-				}
-
-				if !got {
-					logrus.Warnf("couldn't find metadata.fields at unstr.Object")
 					return
 				}
 
