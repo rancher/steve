@@ -1,0 +1,23 @@
+schemaID: pod
+tests:
+# Test sorting by restart count (sub-element [0])
+- namespace: test-restarts
+  query: sort=metadata.fields[3][0]
+  expectContains: true
+  expect:
+  - name: stable-pod
+
+# Test filtering by restart count = 0
+- namespace: test-restarts
+  query: filter=metadata.fields[3][0]=0
+  expectContains: true
+  expect:
+  - name: stable-pod
+
+# Test sorting by restart time (sub-element [1])
+- namespace: test-restarts
+  query: sort=metadata.fields[3][1]
+  expectContains: true
+  expect:
+  - name: stable-pod
+

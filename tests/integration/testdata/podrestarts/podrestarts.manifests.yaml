@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-restarts
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stable-pod
+  namespace: test-restarts
+spec:
+  containers:
+  - name: nginx
+    image: nginx:stable-alpine
+  restartPolicy: Always
