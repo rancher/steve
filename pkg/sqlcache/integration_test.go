@@ -548,6 +548,71 @@ func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, sch
 	})
 }
 
+// Do not call this if there are no projects -- the function will run until it times out.
+func waitForProjectsDisplayName(ctx context.Context, proxyStore *sqlproxy.Store, schema *types.APISchema) error {
+	return wait.PollUntilContextCancel(ctx, time.Second*10, true, func(ctx context.Context) (done bool, err error) {
+		req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+		if err != nil {
+			return false, err
+		}
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		partitions := []partition.Partition{defaultPartition}
+		list, total, _, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		if err != nil || total == 0 {
+			// note that we don't return the error since that would stop the polling
+			return false, nil
+		}
+		// Moving on, if there are errors return them
+		for _, item := range list.Items {
+			displayName, ok, err := unstructured.NestedFieldNoCopy(item.Object, "spec", "displayName")
+			if !ok || displayName == "" || err != nil {
+				if err == nil && ok {
+					fmt.Printf("No displayName yet for mcio.project %q\n", item.GetName())
+				}
+				return false, err
+			}
+			clusterName, ok, err := unstructured.NestedFieldNoCopy(item.Object, "spec", "clusterName")
+			if !ok || clusterName == "" || err != nil {
+				if err == nil {
+					fmt.Printf("No clusterName yet for mcio.project %q\n", item.GetName())
+				}
+				return false, err
+			}
+		}
+		return true, nil
+	})
+}
+
+func waitForTransferredFields(ctx context.Context, proxyStore *sqlproxy.Store, schema *types.APISchema, labelTest string, expectedNum int, transferredFields ...string) error {
+	if expectedNum == 0 {
+		return nil
+	}
+	return wait.PollUntilContextCancel(ctx, time.Second*10, true, func(ctx context.Context) (done bool, err error) {
+		q := "?filter="
+		nextFilter := ""
+		if labelTest != "" {
+			q = fmt.Sprintf("?%s=%s", testFilter, labelTest)
+			nextFilter = "&"
+		}
+		for _, s := range transferredFields {
+			q += fmt.Sprintf(`%s%s!=""`, nextFilter, s)
+			nextFilter = "&"
+		}
+		req, err := http.NewRequest("GET", "http://localhost:8080"+q, nil)
+		if err != nil {
+			return false, err
+		}
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		partitions := []partition.Partition{defaultPartition}
+		_, total, _, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		return err == nil && total == expectedNum, err
+	})
+}
+
 type ResetFunc func(k8sschema.GroupVersionKind) error
 
 func (f ResetFunc) Reset(gvk k8sschema.GroupVersionKind) error {
@@ -1079,7 +1144,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 		{"saotome", "portuguese"},
 	}
 	for _, info := range mcioProjectInfo {
-		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], "", info[1], nil)
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], "*NOT USED*", info[1], nil)
 		requireT.NoError(err)
 	}
 
@@ -1138,6 +1203,8 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioProjectInfo))
 	requireT.NoError(err)
 	err = waitForObjectsBySchema(ctx, proxyStore, nsSchema, labelTest, len(namespaceInfo))
+	requireT.NoError(err)
+	err = waitForProjectsDisplayName(ctx, proxyStore, mcioSchema)
 	requireT.NoError(err)
 
 	partitions := []partition.Partition{defaultPartition}
@@ -1219,12 +1286,14 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 	err = ctrl.Start(ctx)
 	requireT.NoError(err)
 	secretInfo := [][3]string{
+		// metadata.name, metadata.projects[management.cattle.io/project-scoped-secret]
 		{"morocco", "rabat", "france"},
 		{"eritrea", "asmara", "italy"},
 		{"kenya", "nairobi", "england"},
 		{"benin", "portonovo", "france"},
 	}
 	projectInfo := [][3]string{
+		// metadata.name, spec.clusterName, spec.displayName
 		{"rabat", "arabic", "casablanca"},
 		{"asmara", "tigrinya", "keren"},
 		{"nairobi", "english", "mombasa"},
@@ -1331,8 +1400,24 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 	}
 
 	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(projectInfo))
+	if err != nil {
+		fmt.Printf("Error in secret/project tests: waitFor mico projects failed: %s\n", err)
+	}
 	requireT.NoError(err)
 	err = waitForObjectsBySchema(ctx, proxyStore, secretSchema, labelTest, len(secretInfo))
+	if err != nil {
+		fmt.Printf("Error in secret/project tests: waitFor secrets failed: %s\n", err)
+	}
+	requireT.NoError(err)
+	err = waitForProjectsDisplayName(ctx, proxyStore, mcioSchema)
+	if err != nil {
+		fmt.Printf("Error in secret/project tests: waitFor ProjectsDisplayName failed: %s\n", err)
+	}
+	requireT.NoError(err)
+	err = waitForTransferredFields(ctx, proxyStore, secretSchema, labelTest, len(secretInfo), "spec.clusterName", "spec.displayName")
+	if err != nil {
+		fmt.Printf("Error in secret/project tests: waitFor secrets transferred-fields failed: %s\n", err)
+	}
 	requireT.NoError(err)
 
 	partitions := []partition.Partition{defaultPartition}
@@ -1345,17 +1430,19 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 			apiOp := &types.APIRequest{
 				Request: req,
 			}
+			requireT.EventuallyWithT(func(c *assert.CollectT) {
 
-			got, total, _, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
-			if err != nil {
-				i.Assert().NoError(err)
-				return
-			}
-			i.Assert().Equal(len(test.wantNames), total)
-			i.Assert().Equal("", continueToken)
-			i.Assert().Len(got.Items, len(test.wantNames))
-			gotNames := stringsFromULIst(got)
-			i.Assert().Equal(test.wantNames, gotNames)
+				got, total, _, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
+				if err != nil {
+					require.NoError(c, err)
+					return
+				}
+				require.Equal(c, len(test.wantNames), total)
+				require.Equal(c, "", continueToken)
+				require.Equal(c, len(got.Items), len(test.wantNames))
+				gotNames := stringsFromULIst(got)
+				require.Equal(c, test.wantNames, gotNames)
+			}, 15*time.Second, 500*time.Millisecond)
 		})
 	}
 }
