@@ -29,6 +29,7 @@ type ListOptionIndexer struct {
 
 	namespaced    bool
 	indexedFields []string
+	typeGuidance  map[string]string
 
 	// lock protects both latestRV and watchers
 	lock     sync.RWMutex
@@ -170,6 +171,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		Indexer:       i,
 		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
+		typeGuidance:  opts.TypeGuidance,
 		watchers:      make(map[*watchKey]*watcher),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)

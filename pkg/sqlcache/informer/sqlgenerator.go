@@ -1106,6 +1106,13 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 			// Use json_extract for JSON array sub-element access
 			return fmt.Sprintf(`json_extract(%s."%s", '$[%s]')`, prefix, baseField, jsonIndex), nil
 		}
+
+		// Check if this field is JSONB type and should default to [0]
+		if l.typeGuidance != nil && l.typeGuidance[columnName] == "JSONB" {
+			// Default to first element [0] for JSONB arrays when no sub-index specified
+			return fmt.Sprintf(`json_extract(%s."%s", '$[0]')`, prefix, columnName), nil
+		}
+
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
 	}
 	if len(fields) <= 2 {
