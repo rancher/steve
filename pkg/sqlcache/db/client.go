@@ -18,6 +18,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -544,6 +545,7 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 		return dbPath, err
 	}
 	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
+	sqlite.RegisterDeterministicScalarFunction("hasBarredValue", 2, hasBarredValue)
 	sqlite.RegisterDeterministicScalarFunction("inet_aton", 1, inetAtoN)
 	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
 	c.conn = &connection{sqlDB}
@@ -573,13 +575,42 @@ func extractBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (drive
 		return nil, fmt.Errorf("unsupported type for arg2: expected an int, got: %T", args[0])
 	}
 	if err != nil {
-		return nil, fmt.Errorf("problem with arg2: %w", err)
+		return nil, fmt.Errorf("extractBarredValue: problem with arg2: %w", err)
 	}
 	parts := strings.Split(arg1, "|")
 	if arg2 >= len(parts) || arg2 < 0 {
 		return "", nil
 	}
 	return parts[arg2], nil
+}
+
+func hasBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 string
+	var arg2 string
+	switch argTyped := args[0].(type) {
+	case string:
+		arg1 = argTyped
+	case []byte:
+		arg1 = string(argTyped)
+	default:
+		return nil, fmt.Errorf("hasBarredValue: unsupported type for arg1: expected a string, got :%T", args[0])
+	}
+	var err error
+	switch argTyped := args[1].(type) {
+	case int:
+		arg2 = fmt.Sprintf("%d", argTyped)
+	case string:
+		arg2 = argTyped
+	case []byte:
+		arg2 = string(argTyped)
+	default:
+		return nil, fmt.Errorf("hasBarredValue: unsupported type for arg2: expected a string, got: %T", args[0])
+	}
+	if err != nil {
+		return nil, fmt.Errorf("problem with arg2: %w", err)
+	}
+	parts := strings.Split(arg1, "|")
+	return slices.Contains(parts, arg2), nil
 }
 
 func inetAtoN(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
