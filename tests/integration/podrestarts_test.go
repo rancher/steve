@@ -19,9 +19,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
-var (
-	testdataPodRestartsDir = filepath.Join("testdata", "podrestarts")
-)
+var testdataPodRestartsDir = filepath.Join("testdata", "podrestarts")
 
 func (i *IntegrationSuite) TestPodRestarts() {
 	ctx := i.T().Context()
@@ -97,8 +95,8 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 			err = yaml.Unmarshal(data, &config)
 			i.Require().NoError(err)
 
-			for idx, test := range config.Tests {
-				i.Run(fmt.Sprintf("#%02d", idx), func() {
+			for _, test := range config.Tests {
+				i.Run(fmt.Sprintf("%s", test.Description), func() {
 					url := buildURLRaw(steveServer.URL, config.SchemaID, test.Namespace, test.Query)
 					i.T().Logf("Testing: %s", url)
 

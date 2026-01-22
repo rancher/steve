@@ -1,82 +1,79 @@
 schemaID: pod
 tests:
-# Test 1: Sort by restart count ascending (sub-element [0])
-- namespace: test-restarts
-  query: sort=metadata.fields[3][0]
-  expectContains: true
-  expect:
-  - name: stable-pod
-  - name: another-stable-pod
+  - description: sort-by-restart-count-ascending-using-explicit-sub-index-0
+    namespace: test-restarts
+    query: sort=metadata.fields[3][0]
+    expect:
+      - name: stable-pod
+      - name: another-stable-pod
 
-# Test 2: Sort by restart count descending
-- namespace: test-restarts
-  query: sort=-metadata.fields[3][0]
-  expectContains: true
-  expect:
-  - name: multiple-restart-pod
-  - name: moderate-restart-pod
+  - description: sort-by-restart-count-descending-using-explicit-sub-index-0
+    namespace: test-restarts
+    query: sort=-metadata.fields[3][0]
+    expectContains: true
+    expect:
+      - name: multiple-restart-pod
+      - name: moderate-restart-pod
 
-# Test 3: Sort by whole field (no sub-index) - should default to [0]
-- namespace: test-restarts
-  query: sort=metadata.fields[3]
-  expectContains: true
-  expect:
-  - name: stable-pod
-  - name: another-stable-pod
+  - description: sort-by-restart-field-without-sub-index-defaults-to-count-ascending
+    namespace: test-restarts
+    query: sort=metadata.fields[3]
+    expectContains: true
+    expect:
+      - name: stable-pod
+      - name: another-stable-pod
 
-# Test 4: Sort by whole field descending - should default to [0]
-- namespace: test-restarts
-  query: sort=-metadata.fields[3]
-  expectContains: true
-  expect:
-  - name: multiple-restart-pod
-  - name: moderate-restart-pod
+  - description: sort-by-restart-field-without-sub-index-defaults-to-count-descending
+    namespace: test-restarts
+    query: sort=-metadata.fields[3]
+    expectContains: true
+    expect:
+      - name: multiple-restart-pod
+      - name: moderate-restart-pod
 
-# Test 5: Filter pods with zero restarts
-- namespace: test-restarts
-  query: filter=metadata.fields[3][0]=0
-  expectContains: true
-  expect:
-  - name: stable-pod
-  - name: another-stable-pod
+  - description: filter-pods-with-zero-restarts-using-explicit-sub-index
+    namespace: test-restarts
+    query: filter=metadata.fields[3][0]=0
+    expectContains: true
+    expect:
+      - name: stable-pod
+      - name: another-stable-pod
 
-# Test 6: Filter pods with restarts (using name to identify specific pods)
-- namespace: test-restarts
-  query: filter=metadata.name=single-restart-pod
-  expectContains: true
-  expect:
-  - name: single-restart-pod
+  - description: filter-specific-pod-by-name
+    namespace: test-restarts
+    query: filter=metadata.name=single-restart-pod
+    expectContains: true
+    expect:
+      - name: single-restart-pod
 
-# Test 7: Sort by restart time descending (most recent first) - sub-element [1]
-- namespace: test-restarts
-  query: sort=-metadata.fields[3][1]
-  expectContains: true
-  expect:
-  - name: multiple-restart-pod
+  - description: sort-by-restart-timestamp-descending-most-recent-first-sub-index-1
+    namespace: test-restarts
+    query: sort=-metadata.fields[3][1]
+    expectContains: true
+    expect:
+      - name: multiple-restart-pod
 
-# Test 8: Sort by restart time ascending (oldest first)
-- namespace: test-restarts
-  query: sort=metadata.fields[3][1]
-  expectContains: true
-  expect:
-  - name: single-restart-pod
+  - description: sort-by-restart-timestamp-ascending-oldest-first-sub-index-1
+    namespace: test-restarts
+    query: sort=metadata.fields[3][1]
+    expectContains: true
+    expect:
+      - name: single-restart-pod
 
-# Test 9: Verify all pods in namespace are queryable (no query)
-- namespace: test-restarts
-  query: ""
-  expectContains: true
-  expect:
-  - name: stable-pod
-  - name: another-stable-pod
-  - name: single-restart-pod
-  - name: moderate-restart-pod
-  - name: multiple-restart-pod
+  - description: list-all-pods-in-namespace-without-filters-or-sorting
+    namespace: test-restarts
+    query: ""
+    expectContains: true
+    expect:
+      - name: stable-pod
+      - name: another-stable-pod
+      - name: single-restart-pod
+      - name: moderate-restart-pod
+      - name: multiple-restart-pod
 
-# Test 10: Combined filter and sort - filter specific pod and sort
-- namespace: test-restarts
-  query: filter=metadata.name=multiple-restart-pod&sort=metadata.fields[3][0]
-  expectContains: true
-  expect:
-  - name: multiple-restart-pod
-
-
+  - description: combined-filter-by-name-and-sort-by-restart-count
+    namespace: test-restarts
+    query: filter=metadata.name=multiple-restart-pod&sort=metadata.fields[3][0]
+    expectContains: true
+    expect:
+      - name: multiple-restart-pod
