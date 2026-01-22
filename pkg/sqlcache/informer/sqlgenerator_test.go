@@ -2541,6 +2541,144 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 	}
 }
 
+func TestConstructQueryWithContainsOp(t *testing.T) {
+	type testCase struct {
+		description           string
+		listOptions           sqltypes.ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithContainsOp: handles CONTAIN statements on indexed arrays",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle01"},
+						Field:   []string{"metadata", "fields"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (hasBarredValue(f."metadata.fields", ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"needle01"},
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithContainsOp: handles CONTAIN statements on single strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"needle02"},
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    (hasBarredValue(f."metadata.queryField1", ?)) AND
+    (FALSE)
+  ORDER BY f."metadata.name" ASC`,
+		expectedStmtArgs: []any{"needle02"},
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithContainsOp: error CONTAIN statements on too many target strings",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"too", "many", "targets"},
+						Field:   []string{"metadata", "queryField1"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 3 were specified",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithContainsOp: error CONTAIN statements on unrecognized field",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Matches: []string{"this"},
+						Field:   []string{"bills", "farm"},
+						Op:      sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		ns:          "",
+		expectedErr: "column is invalid [bills.farm]: supplied column is invalid",
+	})
+	tests = append(tests, testCase{
+		description: "TestConstructQueryWithContainsOp: error CONTAIN statements on no target string",
+		listOptions: sqltypes.ListOptions{Filters: []sqltypes.OrFilter{
+			{
+				[]sqltypes.Filter{
+					{
+						Field: []string{"metadata", "queryField1"},
+						Op:    sqltypes.Contains,
+					},
+				},
+			},
+		},
+		},
+		//partitions: []partition.Partition{},
+		ns:          "",
+		expectedErr: "array checking works on exactly one field, 0 were specified",
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields"},
+			}
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+			if test.expectedErr != "" {
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
 func TestConstructSummaryQueryForField(t *testing.T) {
 	type testCase struct {
 		description      string
