@@ -29,6 +29,7 @@ type Operator string
 const (
 	DoesNotExist     Operator = "!"
 	Equals           Operator = "="
+	Contains         Operator = "contains"
 	DoubleEquals     Operator = "=="
 	PartialEquals    Operator = "~"
 	In               Operator = "in"
