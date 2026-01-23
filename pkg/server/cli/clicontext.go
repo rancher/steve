@@ -11,7 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/ui"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/ratelimit"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 )
 
 type Config struct {
