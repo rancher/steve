@@ -804,3 +804,90 @@ spec:
       name: santana
     - image: "band/shakira:v2.13.2"
       name: shakira
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: bandpractice
+  name: piano
+spec:
+  containers:
+    - image: "band/fleetwoodmac:v0.14"
+      name: fleetwoodmac
+    - image: "band/santana:v7.1.2"
+      name: santana
+    - image: "band/shakira:v2.13"
+      name: shakira
+
+#---
+#apiVersion: v1
+#kind: Node
+#metadata:
+#  name: fender
+##spec:
+##  taints:
+##    - key: "node-role.kubernetes.io/etcd"
+##      value: desire
+##      # effect: NoSchedule
+##    - key: "band/frampton"
+##      value: alive
+##      # effect: PreferNoSchedule
+##    - key: "band/wings"
+##      value: sound
+##      # effect: NoExecute
+#status:
+#  addresses:
+#    - address: "192.168.5.15"
+#      type: "InternalIP"
+#    - address: "192.168.64.2"
+#      type: "ExternalIP"
+#    - address: "lima-rancher-desktop"
+#      type: "Hostname"
+#
+#---
+#apiVersion: v1
+#kind: Node
+#metadata:
+#  name: gibson
+##spec:
+##  taints:
+##    - key: "node-role.kubernetes.io/control-plane"
+##      value: desire
+##      # effect: NoSchedule
+##    - key: "band/frampton"
+##      value: alive
+##      # effect: PreferNoSchedule
+##    - key: "band/stevie"
+##      value: life
+##      # effect: NoExecute
+#status:
+#  addresses:
+#    - address: "192.168.5.15"
+#      type: InternalIP
+#    - address: "192.168.64.3"
+#      type: ExternalIP2
+#    - address: lima-rancher-desktop
+#      type: Home
+#
+#---
+#apiVersion: v1
+#kind: Node
+#metadata:
+#  name: harmony
+##spec:
+##  taints:
+##    - key: "band/dylan"
+##      value: desire
+##      # effect: NoSchedule
+##    - key: "band/frampton"
+##      value: alive
+##      # effect: PreferNoSchedule
+#status:
+#  addresses:
+#    - address: "192.168.5.15"
+#      type: InternalIP3
+#    - address: "192.168.64.3"
+#      type: ExternalIP3
+#    - address: lima-rancher-desktop
+#      type: Home
+#
