@@ -804,3 +804,17 @@ spec:
       name: santana
     - image: "band/shakira:v2.13.2"
       name: shakira
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: bandpractice
+  name: piano
+spec:
+  containers:
+    - image: "band/fleetwoodmac:v0.14"
+      name: fleetwoodmac
+    - image: "band/santana:v7.1.2"
+      name: santana
+    - image: "band/shakira:v2.13"
+      name: shakira

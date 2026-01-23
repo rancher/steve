@@ -30,6 +30,20 @@ tests:
         namespace: bandpractice
       - name: guitar
         namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/santana:v7.1.2"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/santana:v7.1.2"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: piano
+        namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: piano
+        namespace: bandpractice
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/phish:v4.0.1"
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/phish:v4.0.1"
