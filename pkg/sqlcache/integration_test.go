@@ -1632,9 +1632,6 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 	for _, test := range tests {
 		test := test
 		i.Run(test.name, func() {
-			if test.name == "mountain sizes, non-hitch knot label, has a g" {
-				fmt.Println("stop here")
-			}
 			q := getFilteredQuery(test.query, labelTest)
 			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
 			requireT.NoError(err)
