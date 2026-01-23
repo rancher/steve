@@ -1165,6 +1165,52 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 	}
 }
 
+func (i *IntegrationSuite) TestNodeFiltering() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		return ccache.OnSchemas(schemas)
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+
+	var nodeSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		nodeSchema = sf.Schema("node")
+		require.NotNil(c, nodeSchema)
+	}, 15*time.Second, 50*time.Millisecond)
+
+	req, err := http.NewRequest("GET", "http://localhost:8080", nil)
+	requireT.NoError(err)
+	apiOp := &types.APIRequest{
+		Request: req,
+	}
+	partitions := []partition.Partition{defaultPartition}
+	got, total, _, _, err := proxyStore.ListByPartitions(apiOp, nodeSchema, partitions)
+	requireT.NoError(err)
+	if total == 0 {
+		i.Require().NotEqual(0, total)
+	}
+	fmt.Printf("QQQ: nodes; %v\n", got)
+
+	// Assume there's no waiting for the nodes
+
+}
+
 func (i *IntegrationSuite) TestSecretProjectDependencies() {
 	ctx, cancel := context.WithCancel(i.T().Context())
 	defer cancel()
