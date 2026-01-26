@@ -53,7 +53,12 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	}
 	converters = append(converters, dateConverter.Transform)
 
-	converters = append(converters, t.defaultFields.TransformCommon)
+	if gvk.Kind == "Pod" && gvk.Group == "" && gvk.Version == "v1" {
+		// Pods need special-case handling for summaries
+		converters = append(converters, t.defaultFields.TransformCommonForPods)
+	} else {
+		converters = append(converters, t.defaultFields.TransformCommon)
+	}
 
 	return func(raw interface{}) (interface{}, error) {
 		obj, isSignal, err := common.GetUnstructured(raw)

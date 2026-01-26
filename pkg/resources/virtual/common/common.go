@@ -33,12 +33,52 @@ func (d *DefaultFields) TransformCommon(obj *unstructured.Unstructured) (*unstru
 	return obj, nil
 }
 
+func (d *DefaultFields) TransformCommonForPods(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	obj = addIDField(obj)
+	obj, err := addSummaryFieldsForPods(obj, d.Cache)
+	if err != nil {
+		return obj, fmt.Errorf("unable to add summary fields: %w", err)
+	}
+	return obj, nil
+}
+
 // addSummaryFields adds the virtual fields for object state.
 func addSummaryFields(raw *unstructured.Unstructured, cache SummaryCache) (*unstructured.Unstructured, error) {
 	s, relationships := cache.SummaryAndRelationship(raw)
+	stateName := ""
+	if s != nil {
+		stateName = s.State
+	}
+	return finishAddingSummaryFields(raw, s, stateName, relationships)
+}
+
+var podStateNameMapping = map[string]string{
+	"completed":   "succeeded",
+	"unavailable": "crashLoopBackOff",
+}
+
+func addSummaryFieldsForPods(raw *unstructured.Unstructured, cache SummaryCache) (*unstructured.Unstructured, error) {
+	s, relationships := cache.SummaryAndRelationship(raw)
+	adjustedStateName := ""
+	if s != nil {
+		state := s.State
+		newState, ok := podStateNameMapping[state]
+		if ok {
+			adjustedStateName = newState
+		} else {
+			adjustedStateName = state
+		}
+	}
+	return finishAddingSummaryFields(raw, s, adjustedStateName, relationships)
+}
+
+func finishAddingSummaryFields(raw *unstructured.Unstructured,
+	s *wranglerSummary.SummarizedObject,
+	finalStateName string,
+	relationships []summarycache.Relationship) (*unstructured.Unstructured, error) {
 	if s != nil {
 		data.PutValue(raw.Object, map[string]interface{}{
-			"name":          s.State,
+			"name":          finalStateName,
 			"error":         s.Error,
 			"transitioning": s.Transitioning,
 			"message":       strings.Join(s.Message, ":"),
