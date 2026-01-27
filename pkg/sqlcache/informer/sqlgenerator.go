@@ -7,7 +7,6 @@ import (
 	"maps"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type filterComponentsT struct {
@@ -351,40 +351,41 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	}
 
 	// WHERE clauses (from partitions and their corresponding parameters)
-	partitionClauses := []string{}
+	var partitionClauses []string
+	filterInNamespaces := sets.New[string]()
 	for _, thisPartition := range partitions {
 		if thisPartition.Passthrough {
 			// nothing to do, no extra filtering to apply by definition
-		} else {
-			singlePartitionClauses := []string{}
+			partitionClauses = nil
+			break
+		}
 
-			// filter by namespace
-			if thisPartition.Namespace != "" && thisPartition.Namespace != "*" {
-				singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`%s."metadata.namespace" = ?`, mainFieldPrefix))
-				filterComponents.params = append(filterComponents.params, thisPartition.Namespace)
-			}
-
-			// optionally filter by names
-			if !thisPartition.All {
-				names := thisPartition.Names
-
-				if len(names) == 0 {
-					// degenerate case, there will be no results
-					singlePartitionClauses = append(singlePartitionClauses, "FALSE")
-				} else {
-					singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`%s."metadata.name" IN (?%s)`, mainFieldPrefix, strings.Repeat(", ?", len(thisPartition.Names)-1)))
-					// sort for reproducibility
-					sortedNames := thisPartition.Names.UnsortedList()
-					sort.Strings(sortedNames)
-					for _, name := range sortedNames {
-						filterComponents.params = append(filterComponents.params, name)
-					}
+		filterByNamespace := thisPartition.Namespace != "" && thisPartition.Namespace != "*"
+		filterByNames := !thisPartition.All
+		switch {
+		case filterByNamespace && filterByNames:
+			partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.namespace" = ? AND`)
+			filterComponents.params = append(filterComponents.params, thisPartition.Namespace)
+			fallthrough
+		case filterByNames:
+			names := thisPartition.Names
+			if len(names) == 0 {
+				// degenerate case, there will be no results
+				partitionClauses = append(partitionClauses, "FALSE")
+			} else {
+				partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(names)-1)+" )")
+				for _, name := range sets.List(names) { // result is sorted, for reproducibility
+					filterComponents.params = append(filterComponents.params, name)
 				}
 			}
-
-			if len(singlePartitionClauses) > 0 {
-				partitionClauses = append(partitionClauses, strings.Join(singlePartitionClauses, " AND "))
-			}
+		case filterByNamespace:
+			filterInNamespaces.Insert(thisPartition.Namespace)
+		}
+	}
+	if len(filterInNamespaces) > 0 {
+		partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(filterInNamespaces)-1)+" )")
+		for _, ns := range sets.List(filterInNamespaces) { // already sorted
+			filterComponents.params = append(filterComponents.params, ns)
 		}
 	}
 	if len(partitions) == 0 {
