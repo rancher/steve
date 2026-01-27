@@ -352,6 +352,7 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 
 	// WHERE clauses (from partitions and their corresponding parameters)
 	var partitionClauses []string
+	var partitionClausesParams []any
 	filterInNamespaces := sets.New[string]()
 	for _, thisPartition := range partitions {
 		if thisPartition.Passthrough {
@@ -365,7 +366,7 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 		switch {
 		case filterByNamespace && filterByNames:
 			partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.namespace" = ? AND`)
-			filterComponents.params = append(filterComponents.params, thisPartition.Namespace)
+			partitionClausesParams = append(partitionClausesParams, thisPartition.Namespace)
 			fallthrough
 		case filterByNames:
 			names := thisPartition.Names
@@ -375,7 +376,7 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 			} else {
 				partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(names)-1)+" )")
 				for _, name := range sets.List(names) { // result is sorted, for reproducibility
-					filterComponents.params = append(filterComponents.params, name)
+					partitionClausesParams = append(partitionClausesParams, name)
 				}
 			}
 		case filterByNamespace:
@@ -385,7 +386,7 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	if len(filterInNamespaces) > 0 {
 		partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(filterInNamespaces)-1)+" )")
 		for _, ns := range sets.List(filterInNamespaces) { // already sorted
-			filterComponents.params = append(filterComponents.params, ns)
+			partitionClausesParams = append(partitionClausesParams, ns)
 		}
 	}
 	if len(partitions) == 0 {
@@ -395,10 +396,12 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	}
 	if len(partitionClauses) == 1 {
 		filterComponents.whereClauses = append(filterComponents.whereClauses, partitionClauses[0])
+		filterComponents.params = append(filterComponents.params, partitionClausesParams...)
 		filterComponents.isEmpty = false
 	}
 	if len(partitionClauses) > 1 {
 		filterComponents.whereClauses = append(filterComponents.whereClauses, "(\n      ("+strings.Join(partitionClauses, ") OR\n      (")+")\n)")
+		filterComponents.params = append(filterComponents.params, partitionClausesParams...)
 		filterComponents.isEmpty = false
 	}
 
