@@ -368,27 +368,32 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 			// Omit not matching partitions, since there is a higher-level clause already
 			continue
 		}
-
 		filterByNames := !thisPartition.All
-		switch {
-		case filterByNamespace && filterByNames:
-			partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.namespace" = ? AND`)
+
+		var conditions []string
+		if filterByNamespace {
+			if !filterByNames {
+				// Aggregate namespaces filter in a single clause
+				filterInNamespaces.Insert(thisPartition.Namespace)
+				continue
+			}
+
+			conditions = append(conditions, mainFieldPrefix+`."metadata.namespace" = ?`)
 			partitionClausesParams = append(partitionClausesParams, thisPartition.Namespace)
-			fallthrough
-		case filterByNames:
+		}
+		if filterByNames {
 			names := thisPartition.Names
 			if len(names) == 0 {
 				// degenerate case, there will be no results
-				partitionClauses = append(partitionClauses, "FALSE")
+				conditions = append(conditions, "FALSE")
 			} else {
-				partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(names)-1)+" )")
+				conditions = append(conditions, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(names)-1)+" )")
 				for _, name := range sets.List(names) { // result is sorted, for reproducibility
 					partitionClausesParams = append(partitionClausesParams, name)
 				}
 			}
-		case filterByNamespace:
-			filterInNamespaces.Insert(thisPartition.Namespace)
 		}
+		partitionClauses = append(partitionClauses, strings.Join(conditions, " AND "))
 	}
 	if len(filterInNamespaces) > 0 {
 		partitionClauses = append(partitionClauses, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(filterInNamespaces)-1)+" )")
