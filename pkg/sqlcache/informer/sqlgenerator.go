@@ -344,7 +344,9 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	}
 
 	// WHERE clauses (from namespace)
+	var singleNamespace bool
 	if namespace != "" && namespace != "*" {
+		singleNamespace = true
 		filterComponents.whereClauses = append(filterComponents.whereClauses, fmt.Sprintf(`%s."metadata.namespace" = ?`, mainFieldPrefix))
 		filterComponents.params = append(filterComponents.params, namespace)
 		filterComponents.isEmpty = false
@@ -362,6 +364,11 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 		}
 
 		filterByNamespace := thisPartition.Namespace != "" && thisPartition.Namespace != "*"
+		if singleNamespace && filterByNamespace && thisPartition.Namespace != namespace {
+			// Omit not matching partitions, since there is a higher-level clause already
+			continue
+		}
+
 		filterByNames := !thisPartition.All
 		switch {
 		case filterByNamespace && filterByNames:
