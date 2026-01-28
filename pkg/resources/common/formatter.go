@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -180,6 +181,7 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 
 			if options.InSQLMode {
 				isCRD := attributes.IsCRD(resource.Schema)
+				convertMetadataMultiValueFields(request, gvk, unstr)
 				convertMetadataTimestampFields(request, gvk, unstr, isCRD)
 			}
 		}
@@ -233,6 +235,71 @@ func excludeFields(request *types.APIRequest, unstr *unstructured.Unstructured) 
 		for _, f := range fields {
 			fieldParts := strings.Split(f, ".")
 			data.RemoveValue(unstr.Object, fieldParts...)
+		}
+	}
+}
+
+// convertMetadataMultiValueFields converts multi-value bar-separated fields back to display format
+// Currently handles Pod restart fields: "count|timestamp_ms" → "count (Xm ago)"
+func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured) {
+	if request.Schema == nil {
+		return
+	}
+
+	// Only process Pods for now
+	if gvk.Kind != "Pod" || gvk.Group != "" {
+		return
+	}
+
+	cols := GetColumnDefinitions(request.Schema)
+	for _, col := range cols {
+		// Only handle Restarts field
+		if col.Name != "Restarts" {
+			continue
+		}
+
+		index := GetIndexValueFromString(col.Field)
+		if index == -1 {
+			continue
+		}
+
+		curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+		if err != nil || !got || index >= len(curValue) {
+			continue
+		}
+
+		strValue, ok := curValue[index].(string)
+		if !ok {
+			continue
+		}
+
+		// Parse "count|timestamp_ms"
+		parts := strings.Split(strValue, "|")
+		if len(parts) != 2 {
+			continue // Not in bar format, skip
+		}
+
+		count := parts[0]
+		timestampMs, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			logrus.Warnf("invalid timestamp in restart field: %s", parts[1])
+			continue
+		}
+
+		// Recalculate fresh "ago" time
+		timestamp := time.Unix(0, timestampMs*int64(time.Millisecond))
+		dur := time.Since(timestamp)
+		humanDuration := duration.HumanDuration(dur)
+
+		// Format back to original Kubernetes format
+		if count == "0" || timestampMs == 0 {
+			curValue[index] = count
+		} else {
+			curValue[index] = fmt.Sprintf("%s (%s ago)", count, humanDuration)
+		}
+
+		if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+			logrus.Errorf("failed to set restart field: %s", err.Error())
 		}
 	}
 }
