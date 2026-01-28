@@ -54,6 +54,7 @@ func (i *IntegrationSuite) SetupSuite() {
 	pathOptions := clientcmd.NewDefaultPathOptions()
 	clientCmdConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(pathOptions.LoadingRules, &clientcmd.ConfigOverrides{})
 	restCfg, err := clientCmdConfig.ClientConfig()
+	i.Require().NoError(err, "ensure you have a Kubernetes cluster available")
 	// disable client-side rate limit for our tests
 	restCfg.QPS = -1
 	i.Require().Nil(restCfg.RateLimiter)
@@ -64,7 +65,6 @@ func (i *IntegrationSuite) SetupSuite() {
 	}
 	i.kubeconfigFile = kubeconfigFile
 
-	i.Require().NoError(err, "ensure you have a Kubernetes cluster available")
 	i.restCfg = restCfg
 
 	i.client, err = dynamic.NewForConfig(i.restCfg)
