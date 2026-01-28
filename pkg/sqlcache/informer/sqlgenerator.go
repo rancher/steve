@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"io"
 	"maps"
 	"regexp"
 	"slices"
@@ -417,14 +419,29 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	return &filterComponents, nil
 }
 
+func namesSignatures(names []string) uint64 {
+	h := fnv.New64a()
+	for _, name := range names {
+		io.WriteString(h, name)
+		io.WriteString(h, "\x00") // Null separator
+	}
+	return h.Sum64()
+}
+
 func generatePartitionClauses(namespaceFilter string, partitions []partition.Partition, mainFieldPrefix string) (clauses []string, params []any) {
 	if len(partitions) == 0 {
 		// degenerate case, there will be no results
 		return []string{"FALSE"}, nil
 	}
 
+	// Map of Signature -> List of Namespaces belonging to this group
+	groups := make(map[uint64]struct {
+		names         []string
+		namespaces    []string
+		allNamespaces bool
+	})
+
 	singleNamespace := namespaceFilter != "" && namespaceFilter != "*"
-	filterInNamespaces := sets.New[string]()
 	for _, thisPartition := range partitions {
 		filterByNamespace := thisPartition.Namespace != "" && thisPartition.Namespace != "*"
 		filterByNames := !thisPartition.All
@@ -441,47 +458,68 @@ func generatePartitionClauses(namespaceFilter string, partitions []partition.Par
 			continue
 		}
 
-		if filterByNamespace && !filterByNames {
-			// Aggregate namespaces filter in a single clause
-			filterInNamespaces.Insert(thisPartition.Namespace)
-			continue
-		}
-
-		var conditions []string
-		// Add Namespace Clause (only if not covered by the global filter)
-		if filterByNamespace && !singleNamespace {
-			conditions = append(conditions, mainFieldPrefix+`."metadata.namespace" = ?`)
-			params = append(params, thisPartition.Namespace)
-		}
+		var sig uint64 // 0 is a valid signature, representing "All: true"
+		var names []string
 		if filterByNames {
-			names := thisPartition.Names
+			// Case B: Restricted Access
+			names = sets.List(thisPartition.Names)
 			if len(names) == 0 {
-				// degenerate case, there will be no results
-				conditions = append(conditions, "FALSE")
-			} else {
-				conditions = append(conditions, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(names)-1)+" )")
-				for _, name := range sets.List(names) { // result is sorted, for reproducibility
-					params = append(params, name)
-				}
+				continue // Degenerate case (FALSE)
+			}
+			sig = namesSignatures(names)
+			if sig == 0 { // Safety: In the astronomically unlikely event we hash to 0, bump it so it doesn't grant Full access
+				sig = 1
 			}
 		}
-		if len(conditions) > 0 {
-			clauses = append(clauses, strings.Join(conditions, " AND "))
-		}
-	}
 
-	if len(clauses) == 0 && len(filterInNamespaces) == 0 {
+		group, ok := groups[sig]
+		if !ok {
+			group.names = names
+		}
+		if !filterByNamespace {
+			group.allNamespaces = true
+			group.namespaces = nil
+		}
+		if !group.allNamespaces {
+			group.namespaces = append(group.namespaces, thisPartition.Namespace)
+		}
+		groups[sig] = group
+
+	}
+	if len(groups) == 0 {
 		// Partitions didn't grant access to any resource
 		return []string{"FALSE"}, nil
 	}
 
-	if n := filterInNamespaces.Len(); n == 1 && filterInNamespaces.Has(namespaceFilter) {
-		// special case, only access to the namespace in the filter, which already has its own clause
-		// this avoids a redundant "namespace = ? AND namespace in (?)" query
-	} else if n > 0 {
-		clauses = append(clauses, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", n-1)+" )")
-		for _, ns := range sets.List(filterInNamespaces) { // already sorted
-			params = append(params, ns)
+	if g, ok := groups[0]; ok && (singleNamespace || g.allNamespaces) {
+		// special case for the group with no name restrictions:
+		// 1. If single namespace, the namespace condition would be redundant
+		// 2. All resources in all namespaces means everything, so the `WHERE` will be omitted
+		return nil, nil
+	}
+
+	for _, sig := range slices.Sorted(maps.Keys(groups)) {
+		group := groups[sig]
+		slices.Sort(group.namespaces)
+		var conditions []string
+		switch {
+		case sig == 0:
+			clauses = append(clauses, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(group.namespaces)-1)+" )")
+			for _, ns := range group.namespaces {
+				params = append(params, ns)
+			}
+		case !singleNamespace && !group.allNamespaces:
+			conditions = append(conditions, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(group.namespaces)-1)+" )")
+			for _, ns := range group.namespaces {
+				params = append(params, ns)
+			}
+			fallthrough
+		default:
+			conditions = append(conditions, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(group.names)-1)+" )")
+			for _, name := range group.names {
+				params = append(params, name)
+			}
+			clauses = append(clauses, strings.Join(conditions, " AND "))
 		}
 	}
 
