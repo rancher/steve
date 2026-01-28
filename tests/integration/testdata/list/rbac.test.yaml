@@ -1,0 +1,457 @@
+schemaID: secret
+tests:
+- description: user:user-a,namespace:none,query:none
+  user: user-a
+  namespace: ''
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+- description: user:user-a,namespace:test-ns-1,query:none
+  user: user-a
+  namespace: test-ns-1
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-a,namespace:test-ns-5,query:none
+  user: user-a
+  namespace: test-ns-5
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+- description: user:user-a,namespace:none,query:pagesize=8
+  user: user-a
+  namespace: ''
+  query: pagesize=8
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+- description: user:user-a,namespace:none,query:pagesize=8&page=2&revision=
+  user: user-a
+  namespace: ''
+  query: pagesize=8&page=2&revision=
+  expect:
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+- description: user:user-a,namespace:test-ns-1,query:pagesize=3
+  user: user-a
+  namespace: test-ns-1
+  query: pagesize=3
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+- description: user:user-a,namespace:test-ns-1,query:pagesize=3&page=2&revision=
+  user: user-a
+  namespace: test-ns-1
+  query: pagesize=3&page=2&revision=
+  expect:
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:none,query:none
+  user: user-b
+  namespace: ''
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:none
+  user: user-b
+  namespace: test-ns-1
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-5,query:none
+  user: user-b
+  namespace: test-ns-5
+  query: ''
+  expect: []
+- description: user:user-b,namespace:none,query:pagesize=3
+  user: user-b
+  namespace: ''
+  query: pagesize=3
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+- description: user:user-b,namespace:none,query:pagesize=3&page=2&revision=
+  user: user-b
+  namespace: ''
+  query: pagesize=3&page=2&revision=
+  expect:
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:pagesize=3
+  user: user-b
+  namespace: test-ns-1
+  query: pagesize=3
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-1,query:pagesize=3&page=2&revision=
+  user: user-b
+  namespace: test-ns-1
+  query: pagesize=3&page=2&revision=
+  expect:
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+- description: user:user-b,namespace:test-ns-5,query:pagesize=3
+  user: user-b
+  namespace: test-ns-5
+  query: pagesize=3
+  expect: []
+- description: user:user-c,namespace:none,query:none
+  user: user-c
+  namespace: ''
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+- description: user:user-c,namespace:test-ns-1,query:none
+  user: user-c
+  namespace: test-ns-1
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-c,namespace:test-ns-5,query:none
+  user: user-c
+  namespace: test-ns-5
+  query: ''
+  expect: []
+- description: user:user-c,namespace:none,query:pagesize=3
+  user: user-c
+  namespace: ''
+  query: pagesize=3
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+- description: user:user-c,namespace:none,query:pagesize=3&page=2&revision=
+  user: user-c
+  namespace: ''
+  query: pagesize=3&page=2&revision=
+  expect:
+  - name: test2
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+- description: user:user-c,namespace:test-ns-1,query:pagesize=3
+  user: user-c
+  namespace: test-ns-1
+  query: pagesize=3
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+- description: user:user-c,namespace:test-ns-5,query:pagesize=3
+  user: user-c
+  namespace: test-ns-5
+  query: pagesize=3
+  expect: []
+- description: user:user-d,namespace:none,query:none
+  user: user-d
+  namespace: ''
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+- description: user:user-d,namespace:test-ns-6,query:none
+  user: user-d
+  namespace: test-ns-6
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+- description: user:user-e,namespace:none,query:none
+  user: user-e
+  namespace: ''
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-1
+  - name: test2
+    namespace: test-ns-1
+  - name: test3
+    namespace: test-ns-1
+  - name: test4
+    namespace: test-ns-1
+  - name: test5
+    namespace: test-ns-1
+  - name: test1
+    namespace: test-ns-2
+  - name: test2
+    namespace: test-ns-2
+  - name: test3
+    namespace: test-ns-2
+  - name: test4
+    namespace: test-ns-2
+  - name: test5
+    namespace: test-ns-2
+  - name: test1
+    namespace: test-ns-3
+  - name: test2
+    namespace: test-ns-3
+  - name: test3
+    namespace: test-ns-3
+  - name: test4
+    namespace: test-ns-3
+  - name: test5
+    namespace: test-ns-3
+  - name: test1
+    namespace: test-ns-4
+  - name: test2
+    namespace: test-ns-4
+  - name: test3
+    namespace: test-ns-4
+  - name: test4
+    namespace: test-ns-4
+  - name: test5
+    namespace: test-ns-4
+  - name: test1
+    namespace: test-ns-5
+  - name: test2
+    namespace: test-ns-5
+  - name: test3
+    namespace: test-ns-5
+  - name: test4
+    namespace: test-ns-5
+  - name: test5
+    namespace: test-ns-5
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6
+  - name: test1
+    namespace: test-ns-7
+  - name: test2
+    namespace: test-ns-7
+  - name: test1
+    namespace: test-ns-8
+  - name: test2
+    namespace: test-ns-8
+  - name: test1
+    namespace: test-ns-9
+  - name: test2
+    namespace: test-ns-9
+  expectContains: true
+- description: user:user-e,namespace:test-ns-6,query:none
+  user: user-e
+  namespace: test-ns-6
+  query: ''
+  expect:
+  - name: test1
+    namespace: test-ns-6
+  - name: test2
+    namespace: test-ns-6

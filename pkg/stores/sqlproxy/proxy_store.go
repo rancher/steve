@@ -53,6 +53,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/jsonpath"
 )
 
 const (
@@ -93,6 +94,7 @@ var (
 		gvkKey("", "v1", "ReplicationController"): {
 			{"spec", "template", "spec", "containers", "image"}},
 		gvkKey("", "v1", "Secret"): {
+			{"_type"},
 			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
 			{"spec", "clusterName"},
 			{"spec", "displayName"},
@@ -284,10 +286,18 @@ var (
 	// We might need to pull in the `memoryRaw` fields as well
 	// Remember to index these fields in the database.
 	provisionedClusterDependencies = func() []sqltypes.ExternalDependency {
-		fields := []string{"status.allocatable.cpu", "status.allocatable.cpuRaw",
-			"status.allocatable.memory", "status.allocatable.memoryRaw", "status.allocatable.pods",
-			"status.requested.cpu", "status.requested.cpuRaw",
-			"status.requested.memory", "status.requested.memoryRaw", "status.requested.pods"}
+		fields := []string{
+			"status.allocatable.cpu",
+			"status.allocatable.cpuRaw",
+			"status.allocatable.memory",
+			"status.allocatable.memoryRaw",
+			"status.allocatable.pods",
+			"status.requested.cpu",
+			"status.requested.cpuRaw",
+			"status.requested.memory",
+			"status.requested.memoryRaw",
+			"status.requested.pods",
+		}
 		x := make([]sqltypes.ExternalDependency, len(fields))
 		for i, field := range fields {
 			x[i] = sqltypes.ExternalDependency{
@@ -347,9 +357,10 @@ type Cache interface {
 	// Specifically:
 	//   - an unstructured list of resources belonging to any of the specified partitions
 	//   - the total number of resources (returned list might be a subset depending on pagination options in lo)
+	//   - a summary object, containing the possible values for each field specified in a summary= subquery
 	//   - a continue token, if there are more pages after the returned one
 	//   - an error instead of all of the above if anything went wrong
-	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error)
+	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error)
 }
 
 // WarningBuffer holds warnings that may be returned from the kubernetes api
@@ -370,7 +381,7 @@ type RelationshipNotifier interface {
 }
 
 type TransformBuilder interface {
-	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool) cache.TransformFunc
+	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc
 }
 
 type Store struct {
@@ -473,7 +484,7 @@ func (s *Store) initializeNamespaceCache() error {
 	fields = append(fields, getFieldForGVK(gvk)...)
 
 	// get the type-specific transform func
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema))
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema), attributes.CRDJSONPathParsers(&nsSchema))
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
@@ -945,33 +956,35 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 // ListByPartitions returns:
 //   - an unstructured list of resources belonging to any of the specified partitions
 //   - the total number of resources (returned list might be a subset depending on pagination options in apiOp)
+//   - a summary object, containing the possible values for each field specified in a summary= subquery
 //   - a continue token, if there are more pages after the returned one
 //   - an error instead of all of the above if anything went wrong
-func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (*unstructured.UnstructuredList, int, string, error) {
+func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISchema, partitions []partition.Partition) (list *unstructured.UnstructuredList, total int, summary *types.APISummary, continueToken string, err error) {
 	ctx, cancel := context.WithCancel(apiOp.Context())
 	defer cancel()
 
 	inf, doneFn, err := s.cacheForWithDeps(ctx, apiOp, apiSchema)
 	if err != nil {
-		return nil, 0, "", err
+		return
 	}
 	defer doneFn()
 
 	gvk := attributes.GVK(apiSchema)
-	opts, err := listprocessor.ParseQuery(apiOp, gvk.Kind)
+	var opts sqltypes.ListOptions
+	opts, err = listprocessor.ParseQuery(apiOp, gvk.Kind)
 	if err != nil {
 		var apiError *apierror.APIError
 		if errors.As(err, &apiError) {
 			if apiError.Code.Status == http.StatusNoContent {
-				list := &unstructured.UnstructuredList{}
+				list = &unstructured.UnstructuredList{}
 				resourceVersion := inf.ByOptionsLister.GetLatestResourceVersion()
 				if len(resourceVersion) > 0 {
 					list.SetResourceVersion(resourceVersion[0])
 				}
-				return list, 0, "", nil
+				return
 			}
 		}
-		return nil, 0, "", err
+		return
 	}
 
 	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
@@ -983,7 +996,8 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		}, "", "") {
 			user, ok := request.UserFrom(apiOp.Request.Context())
 			if !ok {
-				return nil, 0, "", apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
+				err = apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
+				return
 			}
 			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
 				Filters: []sqltypes.Filter{
@@ -997,18 +1011,18 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		}
 	}
 
-	list, total, continueToken, err := inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
+	list, total, summary, continueToken, err = inf.ListByOptions(apiOp.Context(), &opts, partitions, apiOp.Namespace)
 	if err != nil {
 		if errors.Is(err, informer.ErrInvalidColumn) {
-			return nil, 0, "", apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+			err = apierror.NewAPIError(validation.InvalidBodyContent, err.Error())
+		} else if errors.Is(err, informer.ErrUnknownRevision) {
+			err = apierror.NewAPIError(validation.ErrorCode{Code: err.Error(), Status: http.StatusBadRequest}, err.Error())
+		} else {
+			err = fmt.Errorf("listbyoptions %v: %w", gvk, err)
 		}
-		if errors.Is(err, informer.ErrUnknownRevision) {
-			return nil, 0, "", apierror.NewAPIError(validation.ErrorCode{Code: err.Error(), Status: http.StatusBadRequest}, err.Error())
-		}
-		return nil, 0, "", fmt.Errorf("listbyoptions %v: %w", gvk, err)
 	}
 
-	return list, total, continueToken, nil
+	return
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
@@ -1108,7 +1122,7 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
 	fields = append(fields, getFieldForGVK(gvk)...)
 
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema))
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
 	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))

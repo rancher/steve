@@ -30,6 +30,7 @@ type ListOptions struct {
 	Filters              []OrFilter
 	ProjectsOrNamespaces OrFilter
 	SortList             SortList
+	SummaryFieldList     SummaryFieldList
 	Pagination           Pagination
 	Revision             string
 }
@@ -67,6 +68,8 @@ type Sort struct {
 type SortList struct {
 	SortDirectives []Sort
 }
+
+type SummaryFieldList [][]string
 
 // Pagination represents how to return paginated results.
 type Pagination struct {

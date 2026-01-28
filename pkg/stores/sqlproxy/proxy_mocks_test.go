@@ -26,6 +26,7 @@ import (
 	kubernetes "k8s.io/client-go/kubernetes"
 	rest "k8s.io/client-go/rest"
 	cache "k8s.io/client-go/tools/cache"
+	jsonpath "k8s.io/client-go/util/jsonpath"
 )
 
 // MockCache is a mock of Cache interface.
@@ -53,14 +54,15 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // ListByOptions mocks base method.
-func (m *MockCache) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, string, error) {
+func (m *MockCache) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListByOptions", ctx, lo, partitions, namespace)
 	ret0, _ := ret[0].(*unstructured.UnstructuredList)
 	ret1, _ := ret[1].(int)
-	ret2, _ := ret[2].(string)
-	ret3, _ := ret[3].(error)
-	return ret0, ret1, ret2, ret3
+	ret2, _ := ret[2].(*types.APISummary)
+	ret3, _ := ret[3].(string)
+	ret4, _ := ret[4].(error)
+	return ret0, ret1, ret2, ret3, ret4
 }
 
 // ListByOptions indicates an expected call of ListByOptions.
@@ -408,15 +410,15 @@ func (m *MockTransformBuilder) EXPECT() *MockTransformBuilderMockRecorder {
 }
 
 // GetTransformFunc mocks base method.
-func (m *MockTransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool) cache.TransformFunc {
+func (m *MockTransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransformFunc", gvk, colDefs, isCRD)
+	ret := m.ctrl.Call(m, "GetTransformFunc", gvk, colDefs, isCRD, jsonPaths)
 	ret0, _ := ret[0].(cache.TransformFunc)
 	return ret0
 }
 
 // GetTransformFunc indicates an expected call of GetTransformFunc.
-func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(gvk, colDefs, isCRD any) *gomock.Call {
+func (mr *MockTransformBuilderMockRecorder) GetTransformFunc(gvk, colDefs, isCRD, jsonPaths any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), gvk, colDefs, isCRD)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransformFunc", reflect.TypeOf((*MockTransformBuilder)(nil).GetTransformFunc), gvk, colDefs, isCRD, jsonPaths)
 }

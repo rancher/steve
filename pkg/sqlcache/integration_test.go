@@ -51,7 +51,8 @@ import (
 
 const defaultTestNamespace = "sql-test"
 const testLabel = "capitals.cattle.io/test"
-const testFilter = "filter=metadata.labels[" + testLabel + "]"
+const mdTestLabel = "metadata.labels[" + testLabel + "]"
+const testFilter = "filter=" + mdTestLabel
 
 var defaultPartition = partition.Partition{
 	All: true,
@@ -60,7 +61,7 @@ var defaultPartition = partition.Partition{
 // Always use a filter-test instead of a namespace test because some of the resources we care about
 // in this test don't have namespaces, but all resources have labels.
 func getFilteredQuery(query string, labelTest string) string {
-	if strings.Contains(query, testFilter) {
+	if strings.Contains(query, mdTestLabel+"=") {
 		return query
 	}
 	continuationToken := "&"
@@ -139,7 +140,15 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	return err
 }
 
-func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName, displayName string) error {
+func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, thisTestLabel, name, clusterName, displayName string, otherLabels map[string]string) error {
+	labels := map[string]interface{}{
+		testLabel: thisTestLabel,
+	}
+	if otherLabels != nil {
+		for k, v := range otherLabels {
+			labels[k] = v
+		}
+	}
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": gvr.Group + "/" + gvr.Version,
@@ -147,9 +156,7 @@ func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gv
 			"metadata": map[string]interface{}{
 				"name":      name,
 				"namespace": defaultTestNamespace,
-				"labels": map[string]interface{}{
-					testLabel: thisTestLabel,
-				},
+				"labels":    labels,
 			},
 			"spec": map[string]interface{}{
 				"clusterName": clusterName,
@@ -201,7 +208,7 @@ func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thi
 	return err
 }
 
-func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string, secretType string) error {
 	obj := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -211,6 +218,7 @@ func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTe
 				testLabel: thisTestLabel,
 			},
 		},
+		Type: v1.SecretType(secretType),
 	}
 	_, err := i.clientset.CoreV1().Secrets(defaultTestNamespace).Create(ctx, obj, metav1.CreateOptions{})
 	return err
@@ -443,7 +451,7 @@ func (i *IntegrationSuite) TestSQLCacheFilters() {
 			partitions := []partition.Partition{defaultPartition}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 			defer cancel()
-			cfgMaps, total, continueToken, err := cache.ListByOptions(ctx, &options, partitions, defaultTestNamespace)
+			cfgMaps, total, _, continueToken, err := cache.ListByOptions(ctx, &options, partitions, defaultTestNamespace)
 			i.Require().NoError(err)
 			// since there's no additional pages, the continue token should be empty
 			i.Require().Equal("", continueToken)
@@ -498,7 +506,7 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 		partitions := []partition.Partition{defaultPartition}
 		cacheCtx, cacheCancel := context.WithTimeout(ctx, time.Second*5)
 		defer cacheCancel()
-		currentResources, total, _, err := cache.ListByOptions(cacheCtx, &options, partitions, namespace)
+		currentResources, total, _, _, err := cache.ListByOptions(cacheCtx, &options, partitions, namespace)
 		if err != nil {
 			// note that we don't return the error since that would stop the polling
 			return false, nil
@@ -531,7 +539,7 @@ func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, sch
 			Request: req,
 		}
 		partitions := []partition.Partition{defaultPartition}
-		_, total, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		_, total, _, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
 		if err != nil {
 			// note that we don't return the error since that would stop the polling
 			return false, nil
@@ -822,7 +830,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 		{"luanda", "14250m", "2610Ki", 11},
 		{"gaborone", "98m", "12Mi", 14},
 		{"gitega", "325m", "4Mi", 8},
-		{"bamako", "700m", "1200Ki", 20},
+		{"bamako", "7", "1200Ki", 20},
 	}
 	for _, info := range mcioInfo {
 		err = createMCIO(ctx, mcioClient, mcioGVR, info.city, labelTest, info.cpu, info.memory, info.pods)
@@ -882,7 +890,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			wantNames: []string{
 				"botswana", // 98m
 				"burundi",  // 325m
-				"mali",     // 700m
+				"mali",     // 7
 				"rwanda",   // 7000m
 				"angola",   // 14250m
 			},
@@ -915,8 +923,8 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			wantNames: []string{
 				"angola",   // 14250m
 				"burundi",  // 325m
+				"mali",     // 7
 				"rwanda",   // 7000m
-				"mali",     // 700m
 				"botswana", // 98m
 			},
 		},
@@ -935,14 +943,14 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 			name:  "filter on original cpu",
 			query: "filter=status.allocatable.cpu=7000m",
 			wantNames: []string{
-				"rwanda",
+				"rwanda", // 7000m
 			},
 		},
 		{
 			name:  "filter on processed cpu",
 			query: "filter=status.allocatable.cpuRaw=14.25",
 			wantNames: []string{
-				"angola",
+				"angola", // 14250m
 			},
 		},
 		{
@@ -983,7 +991,7 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 				Request: req,
 			}
 
-			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, pcioSchema, partitions)
+			got, total, _, continueToken, err := proxyStore.ListByPartitions(apiOp, pcioSchema, partitions)
 			if err != nil {
 				i.Assert().NoError(err)
 				return
@@ -1071,7 +1079,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 		{"saotome", "portuguese"},
 	}
 	for _, info := range mcioProjectInfo {
-		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[0], info[1])
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], "", info[1], nil)
 		requireT.NoError(err)
 	}
 
@@ -1143,7 +1151,7 @@ func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
 				Request: req,
 			}
 
-			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
+			got, total, _, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
 			if err != nil {
 				i.Assert().NoError(err)
 				return
@@ -1210,11 +1218,11 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 
 	err = ctrl.Start(ctx)
 	requireT.NoError(err)
-	secretInfo := [][2]string{
-		{"morocco", "rabat"},
-		{"eritrea", "asmara"},
-		{"kenya", "nairobi"},
-		{"benin", "portonovo"},
+	secretInfo := [][3]string{
+		{"morocco", "rabat", "france"},
+		{"eritrea", "asmara", "italy"},
+		{"kenya", "nairobi", "england"},
+		{"benin", "portonovo", "france"},
 	}
 	projectInfo := [][3]string{
 		{"rabat", "arabic", "casablanca"},
@@ -1223,14 +1231,14 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 		{"portonovo", "french", "cotonou"},
 	}
 	for _, info := range secretInfo {
-		err = i.createSecret(ctx, info[0], labelTest, info[1])
+		err = i.createSecret(ctx, info[0], labelTest, info[1], info[2])
 		requireT.NoError(err)
 	}
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
 	requireT.NoError(err)
 	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
 	for _, info := range projectInfo {
-		err = createMCIOProject(ctx, mcioClient, mcioGVR, info[0], labelTest, info[1], info[2])
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], info[1], info[2], nil)
 		requireT.NoError(err)
 	}
 
@@ -1287,6 +1295,16 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 			},
 		},
 		{
+			name:  "sorts by type (colonizer)",
+			query: "sort=_type,metadata.name",
+			wantNames: []string{
+				"kenya",   // england
+				"benin",   // france
+				"morocco", // france
+				"eritrea", // italy
+			},
+		},
+		{
 			name:  "filter on spec.clusterName (language)",
 			query: "filter=spec.clusterName~en",
 			wantNames: []string{
@@ -1300,6 +1318,14 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 			wantNames: []string{
 				"kenya",   // mombasa
 				"morocco", // casablanca
+			},
+		},
+		{
+			name:  "filter on type (colonizer)",
+			query: "filter=_type=france&sort=metadata.name",
+			wantNames: []string{
+				"benin",   // france
+				"morocco", // france
 			},
 		},
 	}
@@ -1320,7 +1346,7 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 				Request: req,
 			}
 
-			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
+			got, total, _, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
 			if err != nil {
 				i.Assert().NoError(err)
 				return
@@ -1330,6 +1356,298 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 			i.Assert().Len(got.Items, len(test.wantNames))
 			gotNames := stringsFromULIst(got)
 			i.Assert().Equal(test.wantNames, gotNames)
+		})
+	}
+}
+
+type summaryBlockT struct {
+	Property string         `json:"property"`
+	Counts   map[string]int `json:"counts"`
+}
+
+func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+	labelTest := "SummaryFieldsOnMCIOProjects"
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	// This time use the format
+	// projectName   clusterName   displayName
+	// country       mountainName   high|low|meh
+	type projectInfo struct {
+		countryMountainRating [3]string
+		labels                map[string]string
+	}
+	mcioProjectInfo := []projectInfo{
+		{countryMountainRating: [3]string{"italy", "blanc", "high"},
+			labels: map[string]string{"knot": "bowline",
+				"apple": "envy", "dinner": "burritos"},
+		},
+		{countryMountainRating: [3]string{"armenia", "aragats", "high"},
+			labels: map[string]string{"knot": "hitch",
+				"apple": "ambrosia", "dinner": "tacos"},
+		},
+		{countryMountainRating: [3]string{"spain", "teide", "high"},
+			labels: map[string]string{"knot": "bowline", "dinner": "tacos"},
+		},
+		{countryMountainRating: [3]string{"austria", "grossglockner", "high"},
+			labels: map[string]string{"apple": "nicola", "dinner": "burritos"},
+		},
+		{countryMountainRating: [3]string{"slovakia", "gerlachovsky", "meh"},
+			labels: map[string]string{"knot": "hitch"},
+		},
+		{countryMountainRating: [3]string{"netherlands", "vaalserberg", "low"},
+			labels: map[string]string{"knot": "granny", "apple": "nicola", "dinner": "tacos"},
+		},
+		{countryMountainRating: [3]string{"latvia", "gaizinkalns", "low"},
+			labels: map[string]string{"knot": "bowline", "apple": "ambrosia", "dinner": "tortas"},
+		},
+		{countryMountainRating: [3]string{"norway", "galdhopiggen", "meh"},
+			labels: map[string]string{"knot": "hitch", "apple": "ambrosia", "dinner": "tacos"},
+		},
+		{countryMountainRating: [3]string{"sweden", "kebnekaise", "low"},
+			labels: map[string]string{"knot": "bowline", "apple": "salish", "dinner": "tortas"},
+		},
+		{countryMountainRating: [3]string{"finland", "halti", "low"},
+			labels: map[string]string{"knot": "bowline", "apple": "salish", "dinner": "burritos"},
+		},
+		{countryMountainRating: [3]string{"denmark", "mollehoj", "low"},
+			labels: map[string]string{"knot": "bowline", "apple": "grapple", "dinner": "tacos"},
+		},
+	}
+	for _, item := range mcioProjectInfo {
+		info := item.countryMountainRating
+		labels := item.labels
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], info[1], info[2], labels)
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioProjectInfo))
+	requireT.NoError(err)
+
+	tests := []struct {
+		name        string
+		query       string
+		wantSummary types.APISummary
+	}{
+		{
+			name:  "mountain sizes, no tests",
+			query: "summary=spec.displayName",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "spec.displayName",
+						Counts: map[string]int{
+							"high": 4,
+							"meh":  2,
+							"low":  5,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "mountain sizes, mountainName contains a 'g'",
+			query: "summary=spec.displayName&filter=spec.clusterName~g",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "spec.displayName",
+						Counts: map[string]int{
+							"high": 2,
+							"meh":  2,
+							"low":  2,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "mountain sizes, bowline label",
+			query: "summary=spec.displayName&filter=metadata.labels.knot=bowline",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "spec.displayName",
+						Counts: map[string]int{
+							"high": 2,
+							"low":  4,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "mountain sizes, hitch knot label, has a g",
+			query: "summary=spec.displayName&filter=metadata.labels.knot=hitch&filter=spec.clusterName~g",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "spec.displayName",
+						Counts: map[string]int{
+							"high": 1,
+							"meh":  2,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "mountain sizes, non-hitch knot label, has a g",
+			query: "summary=spec.displayName&filter=metadata.labels.knot!=hitch&filter=spec.clusterName~g",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "spec.displayName",
+						Counts: map[string]int{
+							"high": 1,
+							"low":  2,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "knot label only",
+			query: "summary=metadata.labels.knot",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "metadata.labels.knot",
+						Counts: map[string]int{
+							"hitch":   3,
+							"bowline": 6,
+							"granny":  1,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "apple label only",
+			query: "summary=metadata.labels.apple",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "metadata.labels.apple",
+						Counts: map[string]int{
+							"envy":     1,
+							"ambrosia": 3,
+							"nicola":   2,
+							"salish":   2,
+							"grapple":  1,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "multiple summary fields: knots, apple, mountain sizes; reg & label neg & pos filters",
+			query: "summary=metadata.labels.knot,spec.displayName,metadata.labels.apple&filter=spec.clusterName~g&filter=metadata.labels.knot!=granny&filter=metadata.labels.dinner~ta",
+			wantSummary: types.APISummary{
+				SummaryItems: []types.SummaryEntry{
+					types.SummaryEntry{
+						Property: "metadata.labels.apple",
+						Counts: map[string]int{
+							"ambrosia": 3,
+						},
+					},
+					types.SummaryEntry{
+						Property: "metadata.labels.knot",
+						Counts: map[string]int{
+							"hitch":   2,
+							"bowline": 1,
+						},
+					},
+					types.SummaryEntry{
+						Property: "spec.displayName",
+						Counts: map[string]int{
+							"high": 1,
+							"meh":  1,
+							"low":  1,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	partitions := []partition.Partition{defaultPartition}
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+			requireT.NoError(err)
+			apiOp := &types.APIRequest{
+				Request: req,
+			}
+
+			list, total, summary, continueToken, err := proxyStore.ListByPartitions(apiOp, mcioSchema, partitions)
+			if err != nil {
+				i.Assert().NoError(err)
+				return
+			}
+			gotNames := stringsFromULIst(list)
+			fmt.Printf("Got %d items, names: %s\n", total, gotNames)
+			i.Assert().Equal("", continueToken)
+			i.Assert().Equal(&test.wantSummary, summary)
 		})
 	}
 }
