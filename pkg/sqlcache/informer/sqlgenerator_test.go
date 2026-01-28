@@ -4208,11 +4208,11 @@ func TestGeneratePartitionClauses(t *testing.T) {
 			wantParams:  nil,
 		},
 		{
-			name: "Passthrough returns TRUE",
+			name: "Passthrough returns nil (no clauses needed)",
 			partitions: []partition.Partition{
 				{Passthrough: true},
 			},
-			wantClauses: []string{"TRUE"},
+			wantClauses: nil,
 			wantParams:  nil,
 		},
 		{
@@ -4221,7 +4221,7 @@ func TestGeneratePartitionClauses(t *testing.T) {
 				{Namespace: "restricted", All: false},
 				{Passthrough: true},
 			},
-			wantClauses: []string{"TRUE"},
+			wantClauses: nil,
 			wantParams:  nil,
 		},
 

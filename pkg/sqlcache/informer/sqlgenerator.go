@@ -426,13 +426,15 @@ func generatePartitionClauses(namespaceFilter string, partitions []partition.Par
 	singleNamespace := namespaceFilter != "" && namespaceFilter != "*"
 	filterInNamespaces := sets.New[string]()
 	for _, thisPartition := range partitions {
-		if thisPartition.Passthrough {
-			// nothing to do, no extra filtering to apply by definition
-			return []string{"TRUE"}, nil
-		}
-
 		filterByNamespace := thisPartition.Namespace != "" && thisPartition.Namespace != "*"
 		filterByNames := !thisPartition.All
+
+		// Passthrough provides access to everything
+		// Same for non-namespaced partitions with All=true
+		if thisPartition.Passthrough || (!filterByNamespace && !filterByNames) {
+			// nothing to do, no extra filtering to apply by definition
+			return nil, nil
+		}
 
 		if singleNamespace && filterByNamespace && thisPartition.Namespace != namespaceFilter {
 			// Omit not matching partitions, since there is a higher-level clause already
