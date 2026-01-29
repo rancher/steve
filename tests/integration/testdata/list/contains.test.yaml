@@ -1,0 +1,52 @@
+schemaID: pod
+tests:
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14.2"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14.2"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: drums
+        namespace: bandpractice
+      - name: guitar
+        namespace: bandpractice
+      # This block is only here if you want to make a test fail -- uncomment the next two lines
+      #- name: flute
+      #  namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/shakira:v2.13.2"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/shakira:v2.13.2"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: bass
+        namespace: bandpractice
+      - name: drums
+        namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/santana:v7.1"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/santana:v7.1"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: bass
+        namespace: bandpractice
+      - name: guitar
+        namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/santana:v7.1.2"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/santana:v7.1.2"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: piano
+        namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14"&sort=metadata.name
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14"&sort=metadata.name
+    runOn: sql
+    expect:
+      - name: piano
+        namespace: bandpractice
+  - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/phish:v4.0.1"
+    namespace: bandpractice
+    query: filter=spec.containers.image+CONTAINS+"band/phish:v4.0.1"
+    runOn: sql
+    expect: []
+
