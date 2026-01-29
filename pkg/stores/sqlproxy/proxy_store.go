@@ -109,6 +109,8 @@ var (
 		},
 		gvkKey("apps", "v1", "Deployment"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			{"metadata", "podRestarts"},
+			{"metadata", "podStateName"},
 			{"spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("apps", "v1", "ReplicaSet"): {
@@ -159,13 +161,14 @@ var (
 			{"status", "allocatable", "memory"},
 			{"status", "allocatable", "memoryRaw"},
 			{"status", "allocatable", "pods"},
+			{"status", "connected"},
+			{"status", "provider"},
 			{"status", "requested", "cpu"},
 			{"status", "requested", "cpuRaw"},
 			{"status", "requested", "memory"},
 			{"status", "requested", "memoryRaw"},
 			{"status", "requested", "pods"},
-			{"status", "connected"},
-			{"status", "provider"},
+			{"status", "version", "gitVersion"},
 		},
 		gvkKey("management.cattle.io", "v3", "ClusterRoleTemplateBinding"): {
 			{"clusterName"},
@@ -199,6 +202,7 @@ var (
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
 			{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"},
+			{"spec", "kubernetesVersion"},
 			{"status", "allocatable", "cpu"},
 			{"status", "allocatable", "cpuRaw"},
 			{"status", "allocatable", "memory"},
@@ -211,6 +215,7 @@ var (
 			{"status", "requested", "memory"},
 			{"status", "requested", "memoryRaw"},
 			{"status", "requested", "pods"},
+			{"status", "version", "gitVersion"},
 		},
 		gvkKey("rke.cattle.io", "v1", "ETCDSnapshot"): {
 			{"snapshotFile", "createdAt"},
@@ -297,6 +302,10 @@ var (
 			"status.requested.memory",
 			"status.requested.memoryRaw",
 			"status.requested.pods",
+			// and include a few other misc. fields:
+			"metadata.state.name",
+			"status.provider",
+			"status.version.gitVersion",
 		}
 		x := make([]sqltypes.ExternalDependency, len(fields))
 		for i, field := range fields {
