@@ -1,7 +1,6 @@
 package multivalue
 
 import (
-	"encoding/json"
 	"testing"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
@@ -77,21 +76,16 @@ func TestConverter_Transform(t *testing.T) {
 			require.True(t, found)
 			require.Len(t, fields, 5)
 
-			// Check that field[3] is now a JSON string
-			jsonStr, ok := fields[3].(string)
-			require.True(t, ok, "field should be JSON string")
-
-			// Unmarshal and check the array
-			var restartField []interface{}
-			err = json.Unmarshal([]byte(jsonStr), &restartField)
-			require.NoError(t, err)
+			// Check that field[3] is now an array (COMPOSITE_INT fields are stored as arrays)
+			restartField, ok := fields[3].([]interface{})
+			require.True(t, ok, "field should be array")
 			require.Len(t, restartField, 2)
 
-			// Check count (first element) - JSON unmarshals numbers as float64
+			// Check count (first element)
 			expectedCount := tt.expectedField.([]interface{})[0].(int64)
-			actualCount, ok := restartField[0].(float64)
+			actualCount, ok := restartField[0].(int64)
 			require.True(t, ok)
-			assert.Equal(t, float64(expectedCount), actualCount)
+			assert.Equal(t, expectedCount, actualCount)
 		})
 	}
 }
