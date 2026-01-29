@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"io"
 	"maps"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -815,53 +816,15 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	}
 
 	// WHERE clauses (from partitions and their corresponding parameters)
-	partitionClauses := []string{}
-	for _, thisPartition := range partitions {
-		if thisPartition.Passthrough {
-			// nothing to do, no extra filtering to apply by definition
+	partitionClauses, partitionClausesParams := generatePartitionClauses(namespace, partitions, "f")
+	if n := len(partitionClauses); n > 0 {
+		if n == 1 {
+			whereClauses = append(whereClauses, partitionClauses[0])
 		} else {
-			singlePartitionClauses := []string{}
-
-			// filter by namespace
-			if thisPartition.Namespace != "" && thisPartition.Namespace != "*" {
-				singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`f."metadata.namespace" = ?`))
-				params = append(params, thisPartition.Namespace)
-			}
-
-			// optionally filter by names
-			if !thisPartition.All {
-				names := thisPartition.Names
-
-				if len(names) == 0 {
-					// degenerate case, there will be no results
-					singlePartitionClauses = append(singlePartitionClauses, "FALSE")
-				} else {
-					singlePartitionClauses = append(singlePartitionClauses, fmt.Sprintf(`f."metadata.name" IN (?%s)`, strings.Repeat(", ?", len(thisPartition.Names)-1)))
-					// sort for reproducibility
-					sortedNames := thisPartition.Names.UnsortedList()
-					sort.Strings(sortedNames)
-					for _, name := range sortedNames {
-						params = append(params, name)
-					}
-				}
-			}
-
-			if len(singlePartitionClauses) > 0 {
-				partitionClauses = append(partitionClauses, strings.Join(singlePartitionClauses, " AND "))
-			}
+			whereClauses = append(whereClauses, "(\n      ("+strings.Join(partitionClauses, ") OR\n      (")+")\n)")
 		}
+		params = append(params, partitionClausesParams...)
 	}
-	if len(partitions) == 0 {
-		// degenerate case, there will be no results
-		whereClauses = append(whereClauses, "FALSE")
-	}
-	if len(partitionClauses) == 1 {
-		whereClauses = append(whereClauses, partitionClauses[0])
-	}
-	if len(partitionClauses) > 1 {
-		whereClauses = append(whereClauses, "(\n      ("+strings.Join(partitionClauses, ") OR\n      (")+")\n)")
-	}
-
 	if len(whereClauses) > 0 {
 		query += "\n  WHERE\n    "
 		for index, clause := range whereClauses {
@@ -950,6 +913,113 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryInfo.params = params
 
 	return queryInfo, nil
+}
+
+func namesSignatures(names []string) uint64 {
+	h := fnv.New64a()
+	for _, name := range names {
+		io.WriteString(h, name)
+		io.WriteString(h, "\x00") // Null separator
+	}
+	return h.Sum64()
+}
+
+func generatePartitionClauses(namespaceFilter string, partitions []partition.Partition, mainFieldPrefix string) (clauses []string, params []any) {
+	if len(partitions) == 0 {
+		// degenerate case, there will be no results
+		return []string{"FALSE"}, nil
+	}
+
+	// Map of Signature -> List of Namespaces belonging to this group
+	groups := make(map[uint64]struct {
+		names         []string
+		namespaces    []string
+		allNamespaces bool
+	})
+
+	singleNamespace := namespaceFilter != "" && namespaceFilter != "*"
+	for _, thisPartition := range partitions {
+		filterByNamespace := thisPartition.Namespace != "" && thisPartition.Namespace != "*"
+		filterByNames := !thisPartition.All
+
+		// Passthrough provides access to everything
+		// Same for non-namespaced partitions with All=true
+		if thisPartition.Passthrough || (!filterByNamespace && !filterByNames) {
+			// nothing to do, no extra filtering to apply by definition
+			return nil, nil
+		}
+
+		if singleNamespace && filterByNamespace && thisPartition.Namespace != namespaceFilter {
+			// Omit not matching partitions, since there is a higher-level clause already
+			continue
+		}
+
+		var sig uint64 // 0 is a valid signature, representing "All: true"
+		var names []string
+		if filterByNames {
+			// Case B: Restricted Access
+			names = sets.List(thisPartition.Names)
+			if len(names) == 0 {
+				continue // Degenerate case (FALSE)
+			}
+			sig = namesSignatures(names)
+			if sig == 0 { // Safety: In the astronomically unlikely event we hash to 0, bump it so it doesn't grant Full access
+				sig = 1
+			}
+		}
+
+		group, ok := groups[sig]
+		if !ok {
+			group.names = names
+		}
+		if !filterByNamespace {
+			group.allNamespaces = true
+			group.namespaces = nil
+		}
+		if !group.allNamespaces {
+			group.namespaces = append(group.namespaces, thisPartition.Namespace)
+		}
+		groups[sig] = group
+
+	}
+	if len(groups) == 0 {
+		// Partitions didn't grant access to any resource
+		return []string{"FALSE"}, nil
+	}
+
+	if g, ok := groups[0]; ok && (singleNamespace || g.allNamespaces) {
+		// special case for the group with no name restrictions:
+		// 1. If single namespace, the namespace condition would be redundant
+		// 2. All resources in all namespaces means everything, so the `WHERE` will be omitted
+		return nil, nil
+	}
+
+	for _, sig := range slices.Sorted(maps.Keys(groups)) {
+		group := groups[sig]
+		slices.Sort(group.namespaces)
+		var conditions []string
+		switch {
+		case sig == 0:
+			clauses = append(clauses, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(group.namespaces)-1)+" )")
+			for _, ns := range group.namespaces {
+				params = append(params, ns)
+			}
+		case !singleNamespace && !group.allNamespaces:
+			conditions = append(conditions, mainFieldPrefix+`."metadata.namespace" IN ( ?`+strings.Repeat(", ?", len(group.namespaces)-1)+" )")
+			for _, ns := range group.namespaces {
+				params = append(params, ns)
+			}
+			fallthrough
+		default:
+			conditions = append(conditions, mainFieldPrefix+`."metadata.name" IN ( ?`+strings.Repeat(", ?", len(group.names)-1)+" )")
+			for _, name := range group.names {
+				params = append(params, name)
+			}
+			clauses = append(clauses, strings.Join(conditions, " AND "))
+		}
+	}
+
+	return clauses, params
 }
 
 func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryInfo) (result *unstructured.UnstructuredList, total int, token string, err error) {
