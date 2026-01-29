@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/accesscontrol/fake"
+	testapisv1 "github.com/rancher/steve/pkg/ext/testapis/v1"
 	wrbacv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +39,7 @@ import (
 )
 
 type authzTestStore struct {
-	*testStore[*TestType, *TestTypeList]
+	*testStore[*testapisv1.TestType, *testapisv1.TestTypeList]
 	authorizer authorizer.Authorizer
 }
 
@@ -75,18 +76,18 @@ func (t *authzTestStore) List(ctx context.Context, _ *metainternalversion.ListOp
 	return &testTypeListFixture, nil
 }
 
-func (t *authzTestStore) get(_ context.Context, name string, _ *metav1.GetOptions) (*TestType, error) {
+func (t *authzTestStore) get(_ context.Context, name string, _ *metav1.GetOptions) (*testapisv1.TestType, error) {
 	if name == "not-found" {
 		return nil, apierrors.NewNotFound(t.gvr.GroupResource(), name)
 	}
 	return &testTypeFixture, nil
 }
 
-func (t *authzTestStore) create(_ context.Context, _ *TestType, _ *metav1.CreateOptions) (*TestType, error) {
+func (t *authzTestStore) create(_ context.Context, _ *testapisv1.TestType, _ *metav1.CreateOptions) (*testapisv1.TestType, error) {
 	return &testTypeFixture, nil
 }
 
-func (t *authzTestStore) update(_ context.Context, _ *TestType, _ *metav1.UpdateOptions) (*TestType, error) {
+func (t *authzTestStore) update(_ context.Context, _ *testapisv1.TestType, _ *metav1.UpdateOptions) (*testapisv1.TestType, error) {
 	return &testTypeFixture, nil
 }
 
@@ -99,9 +100,9 @@ func (t *authzTestStore) Create(ctx context.Context, obj runtime.Object, createV
 		}
 	}
 
-	objT, ok := obj.(*TestType)
+	objT, ok := obj.(*testapisv1.TestType)
 	if !ok {
-		var zeroT *TestType
+		var zeroT *testapisv1.TestType
 		return nil, convertError(fmt.Errorf("expected %T but got %T", zeroT, obj))
 	}
 
@@ -273,7 +274,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			},
 			createRequest: func() *http.Request {
 				var buf bytes.Buffer
-				json.NewEncoder(&buf).Encode(&TestType{
+				json.NewEncoder(&buf).Encode(&testapisv1.TestType{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "TestType",
 						APIVersion: testTypeGV.String(),
@@ -333,7 +334,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			},
 			createRequest: func() *http.Request {
 				var buf bytes.Buffer
-				json.NewEncoder(&buf).Encode(&TestType{
+				json.NewEncoder(&buf).Encode(&testapisv1.TestType{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "TestType",
 						APIVersion: testTypeGV.String(),
@@ -353,7 +354,7 @@ func (s *ExtensionAPIServerSuite) TestAuthorization() {
 			},
 			createRequest: func() *http.Request {
 				var buf bytes.Buffer
-				json.NewEncoder(&buf).Encode(&TestType{
+				json.NewEncoder(&buf).Encode(&testapisv1.TestType{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "TestType",
 						APIVersion: testTypeGV.String(),

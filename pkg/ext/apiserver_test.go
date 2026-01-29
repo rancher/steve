@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	testapisv1 "github.com/rancher/steve/pkg/ext/testapis/v1"
+	openapigen "github.com/rancher/steve/pkg/generated/openapi"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,7 +55,7 @@ func TestStore(t *testing.T) {
 	require.NoError(t, err)
 
 	store := newDefaultTestStore()
-	store.items = make(map[string]*TestType)
+	store.items = make(map[string]*testapisv1.TestType)
 
 	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
@@ -74,10 +76,10 @@ func TestStore(t *testing.T) {
 	}
 
 	updatedObjList := testTypeListFixture.DeepCopy()
-	updatedObjList.Items = []TestType{*updatedObj}
+	updatedObjList.Items = []testapisv1.TestType{*updatedObj}
 
 	emptyList := testTypeListFixture.DeepCopy()
-	emptyList.Items = []TestType{}
+	emptyList.Items = []testapisv1.TestType{}
 
 	createRequest := func(method string, path string, obj any) *http.Request {
 		var body io.Reader
@@ -104,49 +106,49 @@ func TestStore(t *testing.T) {
 		{
 			name:               "get empty list",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
-			newType:            &TestTypeList{},
+			newType:            &testapisv1.TestTypeList{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       emptyList,
 		},
 		{
 			name:               "create testtype",
 			request:            createRequest(http.MethodPost, "/apis/ext.cattle.io/v1/testtypes", testTypeFixture.DeepCopy()),
-			newType:            &TestType{},
+			newType:            &testapisv1.TestType{},
 			expectedStatusCode: http.StatusCreated,
 			expectedBody:       &testTypeFixture,
 		},
 		{
 			name:               "get non-empty list",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
-			newType:            &TestTypeList{},
+			newType:            &testapisv1.TestTypeList{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       &testTypeListFixture,
 		},
 		{
 			name:               "get specific object",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
-			newType:            &TestType{},
+			newType:            &testapisv1.TestType{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       &testTypeFixture,
 		},
 		{
 			name:               "update",
 			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", updatedObj.DeepCopy()),
-			newType:            &TestType{},
+			newType:            &testapisv1.TestType{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       updatedObj,
 		},
 		{
 			name:               "get updated",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
-			newType:            &TestTypeList{},
+			newType:            &testapisv1.TestTypeList{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       updatedObjList,
 		},
 		{
 			name:               "delete",
 			request:            createRequest(http.MethodDelete, "/apis/ext.cattle.io/v1/testtypes/foo", nil),
-			newType:            &TestType{},
+			newType:            &testapisv1.TestType{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       updatedObj,
 		},
@@ -163,13 +165,13 @@ func TestStore(t *testing.T) {
 		{
 			name:               "get empty list again",
 			request:            createRequest(http.MethodGet, "/apis/ext.cattle.io/v1/testtypes", nil),
-			newType:            &TestTypeList{},
+			newType:            &testapisv1.TestTypeList{},
 			expectedStatusCode: http.StatusOK,
 			expectedBody:       emptyList,
 		},
 		{
 			name:               "create via update",
-			newType:            &TestType{},
+			newType:            &testapisv1.TestType{},
 			request:            createRequest(http.MethodPut, "/apis/ext.cattle.io/v1/testtypes/foo", testTypeFixture.DeepCopy()),
 			expectedStatusCode: http.StatusCreated,
 			expectedBody:       &testTypeFixture,
@@ -210,7 +212,7 @@ func TestStore(t *testing.T) {
 		raw, err := json.Marshal(event.Object)
 		require.NoError(t, err)
 
-		obj := &TestType{}
+		obj := &testapisv1.TestType{}
 		err = json.Unmarshal(raw, obj)
 		require.NoError(t, err)
 
@@ -230,7 +232,7 @@ type partialStorage struct {
 
 // New implements [regrest.Storage]
 func (t *partialStorage) New() runtime.Object {
-	obj := &TestType{}
+	obj := &testapisv1.TestType{}
 	obj.GetObjectKind().SetGroupVersionKind(t.gvk)
 	return obj
 }
@@ -285,9 +287,9 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 		Group:   "ext.cattle.io",
 		Version: "v4",
 	}
-	scheme.AddKnownTypes(differentVersion, &TestType{}, &TestTypeList{})
-	scheme.AddKnownTypes(differentGroupVersion, &TestType{}, &TestTypeList{})
-	scheme.AddKnownTypes(partialGroupVersion, &TestType{}, &TestTypeList{})
+	scheme.AddKnownTypes(differentVersion, &testapisv1.TestType{}, &testapisv1.TestTypeList{})
+	scheme.AddKnownTypes(differentGroupVersion, &testapisv1.TestType{}, &testapisv1.TestTypeList{})
+	scheme.AddKnownTypes(partialGroupVersion, &testapisv1.TestType{}, &testapisv1.TestTypeList{})
 	metav1.AddToGroupVersion(scheme, differentVersion)
 	metav1.AddToGroupVersion(scheme, differentGroupVersion)
 	metav1.AddToGroupVersion(scheme, partialGroupVersion)
@@ -301,10 +303,10 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 		opts.Authorizer = authorizer.AuthorizerFunc(authzAllowAll)
 		opts.Authenticator = authenticator.RequestFunc(authAsAdmin)
 	}, func(s *ExtensionAPIServer) error {
-		err = s.Install("testtypeothers", testTypeGV.WithKind("TestTypeOther"), &testStore[*TestTypeOther, *TestTypeOtherList]{
+		err = s.Install("testtypeothers", testTypeGV.WithKind("TestTypeOther"), &testStore[*testapisv1.TestTypeOther, *testapisv1.TestTypeOtherList]{
 			singular: "testtypeother",
-			objT:     &TestTypeOther{},
-			objListT: &TestTypeOtherList{},
+			objT:     &testapisv1.TestTypeOther{},
+			objListT: &testapisv1.TestTypeOtherList{},
 			gvk:      testTypeGV.WithKind("TestTypeOther"),
 			gvr:      schema.GroupVersionResource{Group: testTypeGV.Group, Version: testTypeGV.Version, Resource: "testtypeothers"},
 		})
@@ -312,10 +314,10 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			return err
 		}
 
-		err = s.Install(testTypeResource, differentVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
+		err = s.Install(testTypeResource, differentVersion.WithKind("TestType"), &testStore[*testapisv1.TestType, *testapisv1.TestTypeList]{
 			singular: "testtype",
-			objT:     &TestType{},
-			objListT: &TestTypeList{},
+			objT:     &testapisv1.TestType{},
+			objListT: &testapisv1.TestTypeList{},
 			gvk:      differentVersion.WithKind("TestType"),
 			gvr:      schema.GroupVersionResource{Group: differentVersion.Group, Version: differentVersion.Version, Resource: testTypeResource},
 		})
@@ -323,10 +325,10 @@ func TestDiscoveryAndOpenAPI(t *testing.T) {
 			return err
 		}
 
-		err = s.Install(testTypeResource, differentGroupVersion.WithKind("TestType"), &testStore[*TestType, *TestTypeList]{
+		err = s.Install(testTypeResource, differentGroupVersion.WithKind("TestType"), &testStore[*testapisv1.TestType, *testapisv1.TestTypeList]{
 			singular: "testtype",
-			objT:     &TestType{},
-			objListT: &TestTypeList{},
+			objT:     &testapisv1.TestType{},
+			objListT: &testapisv1.TestTypeList{},
 			gvk:      differentGroupVersion.WithKind("TestType"),
 			gvr:      schema.GroupVersionResource{Group: differentGroupVersion.Group, Version: differentVersion.Version, Resource: testTypeResource},
 		})
@@ -650,7 +652,7 @@ func TestNoStore(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := ExtensionAPIServerOptions{
-		GetOpenAPIDefinitions: getOpenAPIDefinitions,
+		GetOpenAPIDefinitions: openapigen.GetOpenAPIDefinitions,
 		Listener:              ln,
 		Authorizer:            authorizer.AuthorizerFunc(authzAllowAll),
 		Authenticator:         authenticator.RequestFunc(authAsAdmin),
@@ -697,7 +699,7 @@ func setupExtensionAPIServerNoStore(
 	codecs := serializer.NewCodecFactory(scheme)
 
 	opts := ExtensionAPIServerOptions{
-		GetOpenAPIDefinitions: getOpenAPIDefinitions,
+		GetOpenAPIDefinitions: openapigen.GetOpenAPIDefinitions,
 		OpenAPIDefinitionNameReplacements: map[string]string{
 			"com.github.rancher.steve.pkg.ext": "io.cattle.ext.v1",
 		},
@@ -783,11 +785,11 @@ func createRecordingWatcher(scheme *runtime.Scheme, gvr schema.GroupVersionResou
 
 // This store tests the printed columns functionality
 type customColumnsStore struct {
-	*testStore[*TestType, *TestTypeList]
+	*testStore[*testapisv1.TestType, *testapisv1.TestTypeList]
 
 	lock      sync.Mutex
 	columns   []metav1.TableColumnDefinition
-	convertFn func(obj *TestType) []string
+	convertFn func(obj *testapisv1.TestType) []string
 }
 
 func (s *customColumnsStore) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
@@ -796,7 +798,7 @@ func (s *customColumnsStore) ConvertToTable(ctx context.Context, object runtime.
 	return ConvertToTable(ctx, object, tableOptions, s.testStore.gvr.GroupResource(), s.columns, s.convertFn)
 }
 
-func (s *customColumnsStore) Set(columns []metav1.TableColumnDefinition, convertFn func(obj *TestType) []string) {
+func (s *customColumnsStore) Set(columns []metav1.TableColumnDefinition, convertFn func(obj *testapisv1.TestType) []string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.columns = columns
@@ -855,7 +857,7 @@ func TestCustomColumns(t *testing.T) {
 			Type: "number",
 		},
 	}
-	convertFn := func(obj *TestType) []string {
+	convertFn := func(obj *testapisv1.TestType) []string {
 		return []string{
 			"the name is " + obj.GetName(),
 			"the foo value",
@@ -867,7 +869,7 @@ func TestCustomColumns(t *testing.T) {
 		name               string
 		requests           []*http.Request
 		columns            []metav1.TableColumnDefinition
-		convertFn          func(obj *TestType) []string
+		convertFn          func(obj *testapisv1.TestType) []string
 		expectedStatusCode int
 		expectedBody       any
 	}{
@@ -1010,7 +1012,7 @@ func TestStoreEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	store := newDefaultTestStore()
-	store.items = make(map[string]*TestType)
+	store.items = make(map[string]*testapisv1.TestType)
 
 	extensionAPIServer, err := setupExtensionAPIServer(t, scheme, store, func(opts *ExtensionAPIServerOptions) {
 		opts.Listener = ln
