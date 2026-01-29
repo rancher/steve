@@ -11,95 +11,35 @@ metadata:
   namespace: test-restarts
 spec:
   containers:
-  - name: nginx
-    image: nginx:stable-alpine
+  - name: busybox
+    image: rancher/mirrored-library-busybox:1.36.1
+    command: ["sleep", "infinity"]
   restartPolicy: Always
 ---
-# Pod that will restart once
+# Pod that will restart - exits once then stays running
+# Uses an emptyDir volume to persist state across restarts
 apiVersion: v1
 kind: Pod
 metadata:
-  name: single-restart-pod
+  name: restarting-pod
   namespace: test-restarts
 spec:
+  volumes:
+  - name: state
+    emptyDir: {}
   containers:
   - name: busybox
-    image: busybox:latest
+    image: rancher/mirrored-library-busybox:1.36.1
+    volumeMounts:
+    - name: state
+      mountPath: /state
     command: ["/bin/sh", "-c"]
     args:
       - |
-        if [ ! -f /tmp/restarted ]; then
-          touch /tmp/restarted
+        if [ ! -f /state/restarted ]; then
+          touch /state/restarted
           exit 1
         fi
-        sleep infinity
-  restartPolicy: Always
----
-# Pod that will restart multiple times
-apiVersion: v1
-kind: Pod
-metadata:
-  name: multiple-restart-pod
-  namespace: test-restarts
-spec:
-  containers:
-  - name: busybox
-    image: busybox:latest
-    command: ["/bin/sh", "-c"]
-    args:
-      - |
-        COUNT_FILE=/tmp/restart_count
-        if [ ! -f $COUNT_FILE ]; then
-          echo "0" > $COUNT_FILE
-        fi
-        COUNT=$(cat $COUNT_FILE)
-        COUNT=$((COUNT + 1))
-        echo $COUNT > $COUNT_FILE
-        if [ $COUNT -lt 3 ]; then
-          echo "Restart attempt $COUNT, exiting..."
-          exit 1
-        fi
-        echo "Restart attempt $COUNT, now stable"
-        sleep infinity
-  restartPolicy: Always
----
-# Another stable pod for comparison
-apiVersion: v1
-kind: Pod
-metadata:
-  name: another-stable-pod
-  namespace: test-restarts
-spec:
-  containers:
-  - name: nginx
-    image: nginx:stable-alpine
-  restartPolicy: Always
----
-# Pod with moderate restarts
-apiVersion: v1
-kind: Pod
-metadata:
-  name: moderate-restart-pod
-  namespace: test-restarts
-spec:
-  containers:
-  - name: busybox
-    image: busybox:latest
-    command: ["/bin/sh", "-c"]
-    args:
-      - |
-        COUNT_FILE=/tmp/restart_count
-        if [ ! -f $COUNT_FILE ]; then
-          echo "0" > $COUNT_FILE
-        fi
-        COUNT=$(cat $COUNT_FILE)
-        COUNT=$((COUNT + 1))
-        echo $COUNT > $COUNT_FILE
-        if [ $COUNT -lt 2 ]; then
-          echo "Restart attempt $COUNT, exiting..."
-          exit 1
-        fi
-        echo "Restart attempt $COUNT, now stable"
         sleep infinity
   restartPolicy: Always
 

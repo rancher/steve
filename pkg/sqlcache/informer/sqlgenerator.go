@@ -826,6 +826,16 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 	if err != nil {
 		return "", nil, err
 	}
+
+	// Check if this is a COMPOSITE_INT field - need to cast parameter to integer for proper comparison
+	columnName := toColumnName(filter.Field)
+	baseField, _, hasJSON := parseFieldPath(columnName)
+	fieldToCheck := columnName
+	if hasJSON {
+		fieldToCheck = baseField
+	}
+	isCompositeInt := l.typeGuidance != nil && l.typeGuidance[fieldToCheck] == "COMPOSITE_INT"
+
 	switch filter.Op {
 	case sqltypes.Eq:
 		if filter.Partial {
@@ -835,7 +845,14 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			opString = "="
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		param := formatMatchTarget(filter)
+		if isCompositeInt && !filter.Partial {
+			// For COMPOSITE_INT, convert string parameter to integer
+			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
+				return clause, []any{intVal}, nil
+			}
+		}
+		return clause, []any{param}, nil
 	case sqltypes.NotEq:
 		if filter.Partial {
 			opString = "NOT LIKE"
@@ -844,7 +861,14 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			opString = "!="
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		param := formatMatchTarget(filter)
+		if isCompositeInt && !filter.Partial {
+			// For COMPOSITE_INT, convert string parameter to integer
+			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
+				return clause, []any{intVal}, nil
+			}
+		}
+		return clause, []any{param}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:
 		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
@@ -1102,15 +1126,27 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 
 	err := l.validateColumn(fieldToValidate)
 	if err == nil {
+		// Check if this field is COMPOSITE_INT type
+		if l.typeGuidance != nil && l.typeGuidance[fieldToValidate] == "COMPOSITE_INT" {
+			if hasJSON {
+				// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
+				return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, jsonIndex), nil
+			}
+			// Default to first element when no sub-index specified
+			return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
+		}
+
 		if hasJSON {
-			// Use json_extract for JSON array sub-element access
-			return fmt.Sprintf(`json_extract(%s."%s", '$[%s]')`, prefix, baseField, jsonIndex), nil
+			// Use COALESCE to handle NULL values (treat as 0) and CAST for proper integer comparison
+			// This ensures NULL sorts as 0 instead of last
+			return fmt.Sprintf(`COALESCE(CAST(json_extract(%s."%s", '$[%s]') AS INTEGER), 0)`, prefix, baseField, jsonIndex), nil
 		}
 
 		// Check if this field is JSONB type and should default to [0]
 		if l.typeGuidance != nil && l.typeGuidance[columnName] == "JSONB" {
 			// Default to first element [0] for JSONB arrays when no sub-index specified
-			return fmt.Sprintf(`json_extract(%s."%s", '$[0]')`, prefix, columnName), nil
+			// Use COALESCE to treat NULL as 0
+			return fmt.Sprintf(`COALESCE(CAST(json_extract(%s."%s", '$[0]') AS INTEGER), 0)`, prefix, columnName), nil
 		}
 
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
@@ -1263,7 +1299,9 @@ func getField(a any, field string) (any, error) {
 				if key >= len(t) {
 					return nil, fmt.Errorf("[listoption indexer] given index is too large for slice of len %d", len(t))
 				}
-				obj = fmt.Sprintf("%v", t[key])
+				// Preserve the type of array elements instead of stringifying
+				// This is important for COMPOSITE_INT fields that need the slice
+				obj = t[key]
 			} else if i == len(subFields)-1 {
 				// If the last layer is an array, return array.map(a => a[subfield])
 				result := make([]string, len(t))

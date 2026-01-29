@@ -2,7 +2,9 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,11 +36,11 @@ func (i *IntegrationSuite) TestPodRestarts() {
 	// Cleanup manifests after all tests complete
 	defer i.doManifestReversed(ctx, manifestsFile, i.doDelete)
 
-	// Wait for pods to stabilize - some pods need time to go through restart cycles
-	i.T().Log("Waiting for pods to stabilize (6 seconds)...")
-	time.Sleep(6 * time.Second)
+	// Wait for pods to stabilize - restarting-pod needs time to restart once
+	i.T().Log("Waiting for pods to stabilize (8 seconds)...")
+	time.Sleep(8 * time.Second)
 
-	// Run SQL mode only - these tests are specifically for SQL cache with JSONB support
+	// Run SQL mode only - these tests are specifically for SQL cache with COMPOSITE_INT support
 	i.runPodRestartsTest(ctx, true, gvrs)
 }
 
@@ -111,8 +113,60 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 					i.Require().NoError(err)
 					defer resp.Body.Close()
 
-					// Just check that the request succeeds (status 200)
+					// Check that the request succeeds (status 200)
 					i.Assert().Equal(http.StatusOK, resp.StatusCode, "request should succeed")
+
+					// Read and parse response body
+					body, err := io.ReadAll(resp.Body)
+					i.Require().NoError(err)
+
+					var result map[string]interface{}
+					err = json.Unmarshal(body, &result)
+					i.Require().NoError(err)
+
+					// Get the data array
+					data, ok := result["data"].([]interface{})
+					i.Require().True(ok, "response should have data array")
+
+					// Extract pod names from response
+					var actualNames []string
+					for _, item := range data {
+						pod, ok := item.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						metadata, ok := pod["metadata"].(map[string]interface{})
+						if !ok {
+							continue
+						}
+						name, ok := metadata["name"].(string)
+						if ok {
+							actualNames = append(actualNames, name)
+						}
+					}
+
+					// Verify expected pods
+					if test.ExpectContains {
+						// Check that all expected pods are present
+						expectedNames := make([]string, 0, len(test.Expect))
+						for _, expected := range test.Expect {
+							expectedNames = append(expectedNames, expected["name"])
+						}
+						
+						// Verify each expected pod is in the actual results
+						for _, expectedName := range expectedNames {
+							i.Assert().Contains(actualNames, expectedName, "expected pod %q to be in response", expectedName)
+						}
+					} else {
+						// Check exact match (order matters) - build comparable lists
+						expectedNames := make([]string, 0, len(test.Expect))
+						for _, expected := range test.Expect {
+							expectedNames = append(expectedNames, expected["name"])
+						}
+						
+						// Use assert.Equal to get nice diff output
+						i.Assert().Equal(expectedNames, actualNames, "pod list order mismatch")
+					}
 				})
 			}
 		})

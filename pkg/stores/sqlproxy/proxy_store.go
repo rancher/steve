@@ -922,7 +922,7 @@ var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 		"metadata.fields[1]": "INT", // name: Data
 	},
 	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}: {
-		"metadata.fields[3]": "JSONB", // name: Restarts
+		"metadata.fields[3]": "COMPOSITE_INT", // name: Restarts - splits into _0 (count) and _1 (timestamp)
 	},
 }
 

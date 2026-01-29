@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -186,15 +187,21 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropEvents)
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
-	columnDefs := make([]string, len(indexedFields))
-	for index, field := range indexedFields {
+	columnDefs := make([]string, 0, len(indexedFields)*2)
+	for _, field := range indexedFields {
 		typeName := "TEXT"
 		newTypeName, ok := opts.TypeGuidance[field]
 		if ok {
 			typeName = newTypeName
 		}
-		column := fmt.Sprintf(`"%s" %s`, field, typeName)
-		columnDefs[index] = column
+		if typeName == "COMPOSITE_INT" {
+			// For COMPOSITE_INT, create two separate integer columns
+			columnDefs = append(columnDefs, fmt.Sprintf(`"%s_0" INTEGER`, field))
+			columnDefs = append(columnDefs, fmt.Sprintf(`"%s_1" INTEGER`, field))
+		} else {
+			column := fmt.Sprintf(`"%s" %s`, field, typeName)
+			columnDefs = append(columnDefs, column)
+		}
 	}
 
 	dbName := db.Sanitize(i.GetName())
@@ -230,45 +237,44 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 				typeName = newTypeName
 			}
 
-			// create index for field
-			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
-			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
-				return err
-			}
+			if typeName == "COMPOSITE_INT" {
+				// For COMPOSITE_INT, create indexes for both split columns
+				for _, suffix := range []string{"_0", "_1"} {
+					col := field + suffix
+					createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, col, dbName, col)
+					if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
+						return err
+					}
+				}
 
-			// Create JSON indexes for JSONB columns
-			if typeName == "JSONB" {
-				// Index for first element (e.g., restart count)
-				jsonIndexQuery0 := fmt.Sprintf(
-					`CREATE INDEX "%s_%s_0_index" ON "%s_fields"(json_extract("%s", '$[0]'))`,
-					dbName, field, dbName, field,
-				)
-				if _, err := tx.Exec(jsonIndexQuery0); err != nil {
+				// Add both columns to the prepared statement
+				columns = append(columns, fmt.Sprintf(`"%s_0"`, field), fmt.Sprintf(`"%s_1"`, field))
+				qmarks = append(qmarks, "?", "?")
+				if !immutableFields.Has(field) {
+					setStatements = append(setStatements,
+						fmt.Sprintf(`"%s_0" = excluded."%s_0"`, field, field),
+						fmt.Sprintf(`"%s_1" = excluded."%s_1"`, field, field))
+				}
+			} else {
+				// create index for field
+				createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
+				if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
 					return err
 				}
 
-				// Index for second element (e.g., timestamp)
-				jsonIndexQuery1 := fmt.Sprintf(
-					`CREATE INDEX "%s_%s_1_index" ON "%s_fields"(json_extract("%s", '$[1]'))`,
-					dbName, field, dbName, field,
-				)
-				if _, err := tx.Exec(jsonIndexQuery1); err != nil {
-					return err
+				// format field into column for prepared statement
+				column := fmt.Sprintf(`"%s"`, field)
+				columns = append(columns, column)
+
+				// add placeholder for column's value in prepared statement
+				qmarks = append(qmarks, "?")
+
+				// add formatted set statement for prepared statement
+				// optimization: avoid SET for fields which cannot change
+				if !immutableFields.Has(field) {
+					setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
+					setStatements = append(setStatements, setStatement)
 				}
-			}
-
-			// format field into column for prepared statement
-			column := fmt.Sprintf(`"%s"`, field)
-			columns = append(columns, column)
-
-			// add placeholder for column's value in prepared statement
-			qmarks = append(qmarks, "?")
-
-			// add formatted set statement for prepared statement
-			// optimization: avoid SET for fields which cannot change
-			if !immutableFields.Has(field) {
-				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
-				setStatements = append(setStatements, setStatement)
 			}
 		}
 
@@ -636,6 +642,38 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 			logrus.Errorf("cannot index object of type [%s] with key [%s] for indexer [%s]: %v", l.GetType().String(), key, l.GetName(), err)
 			return err
 		}
+
+		// Check if this is a COMPOSITE_INT field
+		if l.typeGuidance != nil && l.typeGuidance[field] == "COMPOSITE_INT" {
+			// For COMPOSITE_INT, split the array into two separate columns
+			// The value might be a []interface{} or a JSON-encoded string like "[0,null]"
+			switch typedValue := value.(type) {
+			case []interface{}:
+				if len(typedValue) >= 2 {
+					args = append(args, toInt64(typedValue[0]), toInt64(typedValue[1]))
+				} else if len(typedValue) == 1 {
+					args = append(args, toInt64(typedValue[0]), int64(0))
+				} else {
+					args = append(args, int64(0), int64(0))
+				}
+			case string:
+				// Parse JSON-encoded string like "[0,null]" or "[1,1737462000000]"
+				var arr []interface{}
+				if err := json.Unmarshal([]byte(typedValue), &arr); err == nil && len(arr) >= 2 {
+					args = append(args, toInt64(arr[0]), toInt64(arr[1]))
+				} else if err == nil && len(arr) == 1 {
+					args = append(args, toInt64(arr[0]), int64(0))
+				} else {
+					args = append(args, int64(0), int64(0))
+				}
+			case nil:
+				args = append(args, int64(0), int64(0))
+			default:
+				args = append(args, int64(0), int64(0))
+			}
+			continue
+		}
+
 		switch typedValue := value.(type) {
 		case nil:
 			args = append(args, "")
@@ -658,6 +696,23 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 
 	_, err := tx.Stmt(l.addFieldsStmt).Exec(args...)
 	return err
+}
+
+// toInt64 converts a value to int64, returning 0 if conversion fails
+func toInt64(v interface{}) int64 {
+	switch val := v.(type) {
+	case int:
+		return int64(val)
+	case int64:
+		return val
+	case float64:
+		return int64(val)
+	case string:
+		if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return i
+		}
+	}
+	return 0
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK
