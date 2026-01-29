@@ -78,8 +78,11 @@ var (
 			{"spec", "displayName"},
 		},
 		gvkKey("", "v1", "Node"): {
+			{"spec", "taints", "key"},
+			{"status", "addresses", "type"},
 			{"status", "nodeInfo", "kubeletVersion"},
-			{"status", "nodeInfo", "operatingSystem"}},
+			{"status", "nodeInfo", "operatingSystem"},
+		},
 		gvkKey("", "v1", "PersistentVolume"): {
 			{"status", "reason"},
 			{"spec", "persistentVolumeReclaimPolicy"},
