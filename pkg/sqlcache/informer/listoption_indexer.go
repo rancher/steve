@@ -2,7 +2,6 @@ package informer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -231,13 +230,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		}
 
 		for _, field := range indexedFields {
-			typeName := "TEXT"
-			newTypeName, ok := opts.TypeGuidance[field]
-			if ok {
-				typeName = newTypeName
-			}
-
-			if typeName == "COMPOSITE_INT" {
+			if opts.TypeGuidance[field] == "COMPOSITE_INT" {
 				// For COMPOSITE_INT, create indexes for both split columns
 				for _, suffix := range []string{"_0", "_1"} {
 					col := field + suffix
@@ -656,16 +649,6 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 				} else {
 					args = append(args, int64(0), int64(0))
 				}
-			case string:
-				// Parse JSON-encoded string like "[0,null]" or "[1,1737462000000]"
-				var arr []interface{}
-				if err := json.Unmarshal([]byte(typedValue), &arr); err == nil && len(arr) >= 2 {
-					args = append(args, toInt64(arr[0]), toInt64(arr[1]))
-				} else if err == nil && len(arr) == 1 {
-					args = append(args, toInt64(arr[0]), int64(0))
-				} else {
-					args = append(args, int64(0), int64(0))
-				}
 			case nil:
 				args = append(args, int64(0), int64(0))
 			default:
@@ -677,13 +660,6 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 		switch typedValue := value.(type) {
 		case nil:
 			args = append(args, "")
-		case []interface{}:
-			// Store JSON arrays as-is for JSONB columns
-			jsonBytes, err := json.Marshal(typedValue)
-			if err != nil {
-				return fmt.Errorf("failed to marshal array field %v: %v", field, err)
-			}
-			args = append(args, string(jsonBytes))
 		case int, bool, string, int64, float64:
 			args = append(args, fmt.Sprint(typedValue))
 		case []string:

@@ -829,9 +829,9 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 
 	// Check if this is a COMPOSITE_INT field - need to cast parameter to integer for proper comparison
 	columnName := toColumnName(filter.Field)
-	baseField, _, hasJSON := parseFieldPath(columnName)
+	baseField, _, hasSubIndex := parseFieldPath(columnName)
 	fieldToCheck := columnName
-	if hasJSON {
+	if hasSubIndex {
 		fieldToCheck = baseField
 	}
 	isCompositeInt := l.typeGuidance != nil && l.typeGuidance[fieldToCheck] == "COMPOSITE_INT"
@@ -1115,12 +1115,12 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
 	columnName := toColumnName(fields)
 
-	// Check for JSON array access pattern like "metadata.fields[4][0]"
-	baseField, jsonIndex, hasJSON := parseFieldPath(columnName)
+	// Check for array sub-index pattern like "metadata.fields[3][0]"
+	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
 
-	// Validate the base field (without the JSON sub-index)
+	// Validate the base field (without the sub-index)
 	fieldToValidate := columnName
-	if hasJSON {
+	if hasSubIndex {
 		fieldToValidate = baseField
 	}
 
@@ -1128,25 +1128,12 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 	if err == nil {
 		// Check if this field is COMPOSITE_INT type
 		if l.typeGuidance != nil && l.typeGuidance[fieldToValidate] == "COMPOSITE_INT" {
-			if hasJSON {
+			if hasSubIndex {
 				// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
-				return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, jsonIndex), nil
+				return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, subIndex), nil
 			}
 			// Default to first element when no sub-index specified
 			return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
-		}
-
-		if hasJSON {
-			// Use COALESCE to handle NULL values (treat as 0) and CAST for proper integer comparison
-			// This ensures NULL sorts as 0 instead of last
-			return fmt.Sprintf(`COALESCE(CAST(json_extract(%s."%s", '$[%s]') AS INTEGER), 0)`, prefix, baseField, jsonIndex), nil
-		}
-
-		// Check if this field is JSONB type and should default to [0]
-		if l.typeGuidance != nil && l.typeGuidance[columnName] == "JSONB" {
-			// Default to first element [0] for JSONB arrays when no sub-index specified
-			// Use COALESCE to treat NULL as 0
-			return fmt.Sprintf(`COALESCE(CAST(json_extract(%s."%s", '$[0]') AS INTEGER), 0)`, prefix, columnName), nil
 		}
 
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
@@ -1492,10 +1479,10 @@ func toColumnName(s []string) string {
 	return db.Sanitize(smartJoin(s))
 }
 
-// parseFieldPath extracts base field and JSON array index if present
-// e.g., "metadata.fields[4][0]" -> ("metadata.fields[4]", "0", true)
-func parseFieldPath(field string) (baseField string, jsonIndex string, hasJSONAccess bool) {
-	// Check for pattern like "metadata.fields[4][0]"
+// parseFieldPath extracts base field and sub-index if present
+// e.g., "metadata.fields[3][0]" -> ("metadata.fields[3]", "0", true)
+func parseFieldPath(field string) (baseField string, subIndex string, hasSubIndex bool) {
+	// Check for pattern like "metadata.fields[3][0]"
 	matches := fieldPathPattern.FindStringSubmatch(field)
 	if matches != nil {
 		return matches[1], matches[3], true

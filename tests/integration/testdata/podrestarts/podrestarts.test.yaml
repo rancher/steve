@@ -33,10 +33,25 @@ tests:
     expect:
       - name: restarting-pod
 
+  - description: sort-by-restart-timestamp-ascending-stable-first
+    namespace: test-restarts
+    query: sort=metadata.fields[3][1]
+    expect:
+      - name: stable-pod
+      - name: restarting-pod
+
+  - description: sort-by-restart-timestamp-descending-restarting-first
+    namespace: test-restarts
+    query: sort=-metadata.fields[3][1]
+    expect:
+      - name: restarting-pod
+      - name: stable-pod
+
   - description: list-all-pods-in-namespace
     namespace: test-restarts
     query: ""
     expect:
       - name: restarting-pod
       - name: stable-pod
+
 

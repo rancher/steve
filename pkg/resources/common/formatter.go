@@ -1,7 +1,6 @@
 package common
 
 import (
-	"encoding/json"
 	"net/http"
 	"slices"
 	"strconv"
@@ -262,24 +261,15 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 			continue
 		}
 
-		// Check if this is a multi-value field stored as JSON string or array
-		var jsonArray []interface{}
-		
-		// Try as array first (in-memory before SQL storage)
-		if arr, ok := curValue[index].([]interface{}); ok && len(arr) >= 2 {
-			jsonArray = arr
-		} else if jsonStr, ok := curValue[index].(string); ok {
-			// Parse JSON string (from SQL storage)
-			if err := json.Unmarshal([]byte(jsonStr), &jsonArray); err != nil || len(jsonArray) < 2 {
-				continue
-			}
-		} else {
+		// Check if this is a multi-value field stored as array
+		arr, ok := curValue[index].([]interface{})
+		if !ok || len(arr) < 2 {
 			continue
 		}
 
 		// Handle restarts field
 		if col.Name == "Restarts" && gvk.Kind == "Pod" && gvk.Group == "" {
-			curValue[index] = formatters.FormatRestarts(jsonArray)
+			curValue[index] = formatters.FormatRestarts(arr)
 
 			// Update the slice
 			if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
