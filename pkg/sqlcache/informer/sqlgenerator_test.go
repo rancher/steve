@@ -4190,6 +4190,181 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 	}
 }
 
+func TestGeneratePartitionClauses(t *testing.T) {
+	const prefix = "g" // different from the default
+
+	tests := []struct {
+		name            string
+		namespaceFilter string // ?namespace=X query param
+		partitions      []partition.Partition
+		wantClauses     []string
+		wantParams      []any
+	}{
+		// Degenerate Cases
+		{
+			name:        "Empty partitions returns FALSE",
+			partitions:  []partition.Partition{},
+			wantClauses: []string{"FALSE"},
+			wantParams:  nil,
+		},
+		{
+			name: "Passthrough returns nil (no clauses needed)",
+			partitions: []partition.Partition{
+				{Passthrough: true},
+			},
+			wantClauses: nil,
+			wantParams:  nil,
+		},
+		{
+			name: "Passthrough overrides other restrictions",
+			partitions: []partition.Partition{
+				{Namespace: "restricted", All: false},
+				{Passthrough: true},
+			},
+			wantClauses: nil,
+			wantParams:  nil,
+		},
+
+		// Namespace Aggregation
+		{
+			name: "Multiple Namespaces with All=true aggregated to IN clause",
+			partitions: []partition.Partition{
+				{Namespace: "ns3", All: true},
+				{Namespace: "ns1", All: true},
+				{Namespace: "ns2", All: true},
+			},
+			wantClauses: []string{`g."metadata.namespace" IN ( ?, ?, ? )`},
+			wantParams:  []any{"ns1", "ns2", "ns3"},
+		},
+
+		// Mixed Specific and Aggregated
+		{
+			name: "Mixed: Specific Name restriction AND Aggregated Namespaces",
+			partitions: []partition.Partition{
+				{Namespace: "ns1", All: true},
+				{Namespace: "ns2", Names: sets.New("pod-a", "pod-b")},
+				{Namespace: "ns3", All: true},
+			},
+			// specific partitions first, then appends aggregated at the end
+			wantClauses: []string{
+				`g."metadata.namespace" IN ( ?, ? )`,
+				`g."metadata.namespace" IN ( ? ) AND g."metadata.name" IN ( ?, ? )`,
+			},
+			wantParams: []any{"ns1", "ns3", "ns2", "pod-a", "pod-b"},
+		},
+
+		// Input Filtering (User requests specific namespace)
+		{
+			name:            "User requests specific NS, Partition matches (Restricted names)",
+			namespaceFilter: "ns1",
+			partitions: []partition.Partition{
+				{Namespace: "ns1", All: false, Names: sets.New("pod-a")},
+				{Namespace: "ns2", All: true},
+			},
+			wantClauses: []string{`g."metadata.name" IN ( ? )`},
+			wantParams:  []any{"pod-a"},
+		},
+		{
+			name:            "User requests specific NS, No partition matches",
+			namespaceFilter: "ns-secret",
+			partitions: []partition.Partition{
+				{Namespace: "ns1", All: true},
+			},
+			// No intersection between filter and partitions
+			wantClauses: []string{"FALSE"},
+			wantParams:  nil,
+		},
+		{
+			name:            "User requests specific NS, Partition matches",
+			namespaceFilter: "ns1",
+			partitions: []partition.Partition{
+				{Namespace: "ns1", All: true},
+				{Namespace: "ns2", All: true},
+			},
+			// Special case: namespace filter for namespace with All=true, should omit further clauses and rely on the filter clause
+			wantClauses: nil,
+			wantParams:  nil,
+		},
+
+		// Cluster Scoped (Namespace is empty string)
+		{
+			name: "Cluster Scoped Partition (Specific Names)",
+			partitions: []partition.Partition{
+				{Namespace: "", All: false, Names: sets.New("node-1")},
+			},
+			// Should not contain namespace clause
+			wantClauses: []string{`g."metadata.name" IN ( ? )`},
+			wantParams:  []any{"node-1"},
+		},
+
+		// Clauses grouped by distinct name sets
+		{
+			name: "Grouping: Identical name lists grouped across namespaces",
+			partitions: []partition.Partition{
+				{Namespace: "ns1", Names: sets.New("app-a", "app-b")},
+				{Namespace: "ns2", Names: sets.New("app-b", "app-a")}, // Order shouldn't matter
+				{Namespace: "ns3", Names: sets.New("app-a", "app-b")},
+			},
+			wantClauses: []string{`g."metadata.namespace" IN ( ?, ?, ? ) AND g."metadata.name" IN ( ?, ? )`},
+			wantParams:  []any{"ns1", "ns2", "ns3", "app-a", "app-b"},
+		},
+		{
+			name: "Cluster Scope: Restricted names applied globally",
+			partitions: []partition.Partition{
+				// This partition applies to ALL namespaces ("")
+				{Namespace: "", All: false, Names: sets.New("global-app")},
+				// This partition is redundant (subset of global), should be absorbed by the first one
+				{Namespace: "ns1", All: false, Names: sets.New("global-app")},
+			},
+			wantClauses: []string{`g."metadata.name" IN ( ? )`},
+			wantParams:  []any{"global-app"},
+		},
+		{
+			name:            "Mixed: Same namespace, different restrictions (Full + Restricted)",
+			namespaceFilter: "ns1",
+			partitions: []partition.Partition{
+				// subset of the second partition, will be omitted
+				{Namespace: "ns1", All: false, Names: sets.New("x")},
+				// this produces the same as the namespaceFilter, so will be omitted as well
+				{Namespace: "ns1", All: true},
+			},
+			wantClauses: nil,
+			wantParams:  nil,
+		},
+		{
+			name: "Complex: Grouping + Unique + Full Access",
+			partitions: []partition.Partition{
+				{Namespace: "ns1", All: true},
+				{Namespace: "ns2", Names: sets.New("a")},
+				{Namespace: "ns3", Names: sets.New("a")},
+				{Namespace: "ns4", Names: sets.New("b")},
+			},
+			wantClauses: []string{
+				// Sig 0 (Full Access for ns1)
+				`g."metadata.namespace" IN ( ? )`,
+				// Sig Hash(a) (Grouped ns2, ns3)
+				`g."metadata.namespace" IN ( ?, ? ) AND g."metadata.name" IN ( ? )`,
+				// Sig Hash(b) (ns4)
+				`g."metadata.namespace" IN ( ? ) AND g."metadata.name" IN ( ? )`,
+			},
+			// Note: The order of clauses depends on the hash value of "a" vs "b".
+			// We might need to check if the test output order flips depending on the hash.
+			// However, inside the test, slices.Sorted(maps.Keys) makes it deterministic.
+			// Assuming Hash("a") < Hash("b") for this expected order:
+			wantParams: []any{"ns1", "ns2", "ns3", "a", "ns4", "b"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotClauses, gotParams := generatePartitionClauses(tt.namespaceFilter, tt.partitions, prefix)
+
+			assert.Equal(t, tt.wantClauses, gotClauses, "Clauses mismatch")
+			assert.Equal(t, tt.wantParams, gotParams, "Params mismatch")
+		})
+	}
+}
+
 func verifyListIsSorted(b *testing.B, list *unstructured.UnstructuredList, size int) {
 	for i := range size - 1 {
 		curr := list.Items[i]
