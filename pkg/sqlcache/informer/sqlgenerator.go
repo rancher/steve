@@ -71,6 +71,7 @@ var (
 	namespacesDbName        = "_v1_Namespace"
 	projectIDFieldLabel     = "field.cattle.io/projectId"
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
+	fieldPathPattern        = regexp.MustCompile(`^(.+\[\d+\])(\[(\d+)\])$`)
 
 	ErrInvalidColumn   = errors.New("supplied column is invalid")
 	ErrUnknownRevision = errors.New("unknown revision")
@@ -895,6 +896,16 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 	if err != nil {
 		return "", nil, err
 	}
+
+	// Check if this is a COMPOSITE_INT field - need to cast parameter to integer for proper comparison
+	columnName := toColumnName(filter.Field)
+	baseField, _, hasSubIndex := parseFieldPath(columnName)
+	fieldToCheck := columnName
+	if hasSubIndex {
+		fieldToCheck = baseField
+	}
+	isCompositeInt := l.typeGuidance != nil && l.typeGuidance[fieldToCheck] == "COMPOSITE_INT"
+
 	switch filter.Op {
 	case sqltypes.Eq:
 		if filter.Partial {
@@ -904,7 +915,14 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			opString = "="
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		param := formatMatchTarget(filter)
+		if isCompositeInt && !filter.Partial {
+			// For COMPOSITE_INT, convert string parameter to integer
+			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
+				return clause, []any{intVal}, nil
+			}
+		}
+		return clause, []any{param}, nil
 	case sqltypes.NotEq:
 		if filter.Partial {
 			opString = "NOT LIKE"
@@ -913,7 +931,14 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			opString = "!="
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		param := formatMatchTarget(filter)
+		if isCompositeInt && !filter.Partial {
+			// For COMPOSITE_INT, convert string parameter to integer
+			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
+				return clause, []any{intVal}, nil
+			}
+		}
+		return clause, []any{param}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:
 		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
@@ -1159,8 +1184,28 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 
 func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
 	columnName := toColumnName(fields)
-	err := l.validateColumn(columnName)
+
+	// Check for array sub-index pattern like "metadata.fields[3][0]"
+	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
+
+	// Validate the base field (without the sub-index)
+	fieldToValidate := columnName
+	if hasSubIndex {
+		fieldToValidate = baseField
+	}
+
+	err := l.validateColumn(fieldToValidate)
 	if err == nil {
+		// Check if this field is COMPOSITE_INT type
+		if l.typeGuidance != nil && l.typeGuidance[fieldToValidate] == "COMPOSITE_INT" {
+			if hasSubIndex {
+				// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
+				return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, subIndex), nil
+			}
+			// Default to first element when no sub-index specified
+			return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
+		}
+
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
 	}
 	if len(fields) <= 2 {
@@ -1311,7 +1356,9 @@ func getField(a any, field string) (any, error) {
 				if key >= len(t) {
 					return nil, fmt.Errorf("[listoption indexer] given index is too large for slice of len %d", len(t))
 				}
-				obj = fmt.Sprintf("%v", t[key])
+				// Preserve the type of array elements instead of stringifying
+				// This is important for COMPOSITE_INT fields that need the slice
+				obj = t[key]
 			} else if i == len(subFields)-1 {
 				// If the last layer is an array, return array.map(a => a[subfield])
 				result := make([]string, len(t))
@@ -1500,4 +1547,15 @@ func smartJoin(s []string) string {
 // toColumnName returns the column name corresponding to a field expressed as string slice
 func toColumnName(s []string) string {
 	return db.Sanitize(smartJoin(s))
+}
+
+// parseFieldPath extracts base field and sub-index if present
+// e.g., "metadata.fields[3][0]" -> ("metadata.fields[3]", "0", true)
+func parseFieldPath(field string) (baseField string, subIndex string, hasSubIndex bool) {
+	// Check for pattern like "metadata.fields[3][0]"
+	matches := fieldPathPattern.FindStringSubmatch(field)
+	if matches != nil {
+		return matches[1], matches[3], true
+	}
+	return field, "", false
 }

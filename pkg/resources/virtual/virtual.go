@@ -11,6 +11,8 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/dates"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+	"github.com/rancher/steve/pkg/resources/virtual/multivalue"
+	"github.com/rancher/steve/pkg/resources/virtual/multivalue/parsers"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -42,6 +44,22 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		converters = append(converters, events.TransformEventObject)
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
+	}
+
+	// Register multi-value converter for Pods only
+	if gvk.Kind == "Pod" && gvk.Group == "" && gvk.Version == "v1" {
+		multiValueConverter := &multivalue.Converter{
+			Columns: columns,
+			Fields: []multivalue.FieldConfig{
+				{
+					GVK:        gvk,
+					ColumnName: "Restarts",
+					ParseFunc:  parsers.ParseRestarts,
+				},
+				// Future: Add more multi-value field configs here
+			},
+		}
+		converters = append(converters, multiValueConverter.Transform)
 	}
 
 	// Detecting if we need to convert date fields

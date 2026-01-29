@@ -1,0 +1,57 @@
+schemaID: pod
+tests:
+  - description: sort-by-restart-count-ascending-stable-first
+    namespace: test-restarts
+    query: sort=metadata.fields[3][0]
+    expect:
+      - name: stable-pod
+      - name: restarting-pod
+
+  - description: sort-by-restart-count-descending-restarting-first
+    namespace: test-restarts
+    query: sort=-metadata.fields[3][0]
+    expect:
+      - name: restarting-pod
+      - name: stable-pod
+
+  - description: sort-by-restart-field-without-sub-index-defaults-to-count-ascending
+    namespace: test-restarts
+    query: sort=metadata.fields[3]
+    expect:
+      - name: stable-pod
+      - name: restarting-pod
+
+  - description: filter-pods-with-zero-restarts
+    namespace: test-restarts
+    query: filter=metadata.fields[3][0]=0
+    expect:
+      - name: stable-pod
+
+  - description: filter-pods-with-restarts-greater-than-zero
+    namespace: test-restarts
+    query: filter=metadata.fields[3][0]>0
+    expect:
+      - name: restarting-pod
+
+  - description: sort-by-restart-timestamp-ascending-stable-first
+    namespace: test-restarts
+    query: sort=metadata.fields[3][1]
+    expect:
+      - name: stable-pod
+      - name: restarting-pod
+
+  - description: sort-by-restart-timestamp-descending-restarting-first
+    namespace: test-restarts
+    query: sort=-metadata.fields[3][1]
+    expect:
+      - name: restarting-pod
+      - name: stable-pod
+
+  - description: list-all-pods-in-namespace
+    namespace: test-restarts
+    query: ""
+    expect:
+      - name: restarting-pod
+      - name: stable-pod
+
+
