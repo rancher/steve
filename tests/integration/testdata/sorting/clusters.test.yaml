@@ -14,3 +14,18 @@ tests:
   - default/burundi # gitega
   - default/rwanda # kigali
   - default/angola # luanda
+- query: sort=status.version.gitVersion,metadata.name
+  expected:
+  - default/burundi # 1.34+rke3
+  - default/angola # 1.35+rke2
+  - default/botswana # 1.35+rke2
+  - default/rwanda # 1.37+k3s1
+  - default/mali #  1.37+k3s2
+- query: sort=status.provider,metadata.name
+  expected:
+  - default/mali # accountant
+  - default/burundi # nurse
+  - default/angola # physician
+  - default/rwanda # physician
+  - default/botswana # therapist
+# We can't test metadata.state.name, as it's an artificial field, not in the CRDs

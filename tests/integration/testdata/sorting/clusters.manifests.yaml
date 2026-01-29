@@ -10,6 +10,9 @@ status:
   conditions:
   - type: Ready
     status: "True"
+  provider: physician
+  version:
+    gitVersion: "1.37+k3s1"
 ---
 apiVersion: provisioning.cattle.io/v1
 kind: Cluster
@@ -32,6 +35,9 @@ status:
   conditions:
   - type: Ready
     status: "True"
+  provider: physician
+  version:
+    gitVersion: "1.35+rke2"
 ---
 apiVersion: provisioning.cattle.io/v1
 kind: Cluster
@@ -54,6 +60,9 @@ status:
   conditions:
   - type: Ready
     status: "True"
+  provider: therapist
+  version:
+    gitVersion: "1.35+rke2"
 ---
 apiVersion: provisioning.cattle.io/v1
 kind: Cluster
@@ -76,6 +85,9 @@ status:
   conditions:
   - type: Ready
     status: "True"
+  provider: nurse
+  version:
+    gitVersion: "1.34+rke3"
 ---
 apiVersion: provisioning.cattle.io/v1
 kind: Cluster
@@ -98,6 +110,9 @@ status:
   conditions:
   - type: Ready
     status: "True"
+  provider: accountant
+  version:
+    gitVersion: "1.37+k3s2"
 ---
 apiVersion: provisioning.cattle.io/v1
 kind: Cluster
