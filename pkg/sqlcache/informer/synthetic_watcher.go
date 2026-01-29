@@ -83,7 +83,7 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 						rw.resultChan <- w
 					} else {
 						delete(previousState, key)
-						if oldItem.version != newObject.version {
+						if isUpdatedObject(oldItem, newObject) {
 							w, err := createWatchEvent(watch.Modified, oldItem.unstructuredObject)
 							if err != nil {
 								logrus.Errorf("can't convert unstructured obj into runtime: %s", err)
@@ -116,6 +116,12 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 
 func createWatchEvent(event watch.EventType, u *unstructured.Unstructured) (watch.Event, error) {
 	return watch.Event{Type: event, Object: u}, nil
+}
+
+// isUpdatedObject compares two objectHolder instances to determine if the underlying object has changed. It checks the resource version, and for NodeMetrics, it also checks the timestamp field
+func isUpdatedObject(oldItem, newItem objectHolder) bool {
+	return oldItem.version != newItem.version ||
+		(newItem.unstructuredObject.Object["kind"] == "NodeMetrics" && newItem.unstructuredObject.Object["timestamp"] != oldItem.unstructuredObject.Object["timestamp"])
 }
 
 // ResultChan implements [k8s.io/apimachinery/pkg/watch].Interface.
