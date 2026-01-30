@@ -587,7 +587,7 @@ func (i *IntegrationSuite) TestProxyStore() {
 	cacheFactory, err := factory.NewCacheFactoryWithContext(ctx, factory.CacheFactoryOptions{})
 	requireT.NoError(err)
 
-	proxyStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, cacheFactory, true)
+	proxyStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, cacheFactory, true)
 	requireT.NoError(err)
 	requireT.NotNil(proxyStore)
 
@@ -1721,6 +1721,6 @@ func (i *IntegrationSuite) setupTest(ctx context.Context) (cols *common.DynamicC
 		return
 	}
 
-	proxyStore, err = sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, cacheFactory, true)
+	proxyStore, err = sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, cacheFactory, true)
 	return
 }
