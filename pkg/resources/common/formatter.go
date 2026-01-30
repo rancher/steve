@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/norman/types/convert"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
@@ -164,8 +165,19 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			// with the sql cache, these were already added by the indexer. However, the sql cache
 			// is only used for lists, so we need to re-add here for get/watch
 			s, rel := summarycache.SummaryAndRelationship(unstr)
+			stateName := s.State
+			if gvk.Group == "" && gvk.Version == "v1" && gvk.Kind == "Pod" {
+				res, found, err := unstructured.NestedFieldNoCopy(unstr.Object, "metadata", "fields")
+				if found && err == nil {
+					rawFields := res.([]interface{})
+					if len(rawFields) > 2 {
+						stateName = convert.LowerTitle(rawFields[2].(string))
+					}
+				}
+			}
+
 			data.PutValue(unstr.Object, map[string]interface{}{
-				"name":          s.State,
+				"name":          stateName,
 				"error":         s.Error,
 				"transitioning": s.Transitioning,
 				"message":       strings.Join(s.Message, ":"),

@@ -625,6 +625,66 @@ func TestTransformChain(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "pods get their metadata.state.name from metadata.fields[2]",
+			hasSummary: &summary.SummarizedObject{
+				PartialObjectMetadata: v1.PartialObjectMetadata{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "testobj",
+						Namespace: "test-ns",
+					},
+					TypeMeta: v1.TypeMeta{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+					},
+				},
+				Summary: summary.Summary{
+					State:         "dolphin",
+					Transitioning: false,
+					Error:         false,
+				},
+			},
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Pod",
+					"metadata": map[string]interface{}{
+						"name":      "testobj",
+						"namespace": "test-ns",
+						"fields":    []interface{}{"1", "2", "Porpoise", "3", "4"},
+					},
+					"id": "old-id",
+				},
+			},
+			columns: []rescommon.ColumnDefinition{
+				{
+					TableColumnDefinition: v1.TableColumnDefinition{
+						Name: "Age",
+					},
+					Field: "metadata.fields[0]",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "/v1",
+					"kind":       "Pod",
+					"metadata": map[string]interface{}{
+						"name":          "testobj",
+						"namespace":     "test-ns",
+						"relationships": []any(nil),
+						"state": map[string]interface{}{
+							"name":          "porpoise",
+							"error":         false,
+							"transitioning": false,
+							"message":       "",
+						},
+						"fields": []interface{}{"1", "2", "Porpoise", "3", "4"},
+					},
+					"id":  "test-ns/testobj",
+					"_id": "old-id",
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
