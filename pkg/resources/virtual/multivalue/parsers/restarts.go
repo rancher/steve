@@ -7,6 +7,7 @@ import (
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
+	"github.com/sirupsen/logrus"
 )
 
 // Now is mockable for testing
@@ -28,7 +29,9 @@ func ParseRestarts(value string) ([]interface{}, error) {
 	if matches[2] != "" {
 		// Parse duration like "3h38m"
 		dur, err := rescommon.ParseHumanReadableDuration(matches[2])
-		if err == nil {
+		if err != nil {
+			logrus.Errorf("failed to parse restart duration %q: %v", matches[2], err)
+		} else {
 			timestamp = Now().Add(-dur).UnixMilli()
 		}
 	}

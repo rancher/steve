@@ -267,8 +267,8 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 			continue
 		}
 
-		// Handle restarts field
-		if col.Name == "Restarts" && gvk.Kind == "Pod" && gvk.Group == "" {
+		// v1/Pod - Handle restarts field
+		if col.Name == "Restarts" && MatchesGVK(gvk, PodGVK) {
 			curValue[index] = formatters.FormatRestarts(arr)
 
 			// Update the slice

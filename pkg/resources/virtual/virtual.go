@@ -40,14 +40,16 @@ func NewTransformBuilder(cache common.SummaryCache) *TransformBuilder {
 // GetTransformFunc returns the func to transform a raw object into a fixed object, if needed
 func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
-	if gvk.Kind == "Event" && gvk.Group == "" && gvk.Version == "v1" {
+
+	// v1/Event
+	if rescommon.MatchesGVK(gvk, rescommon.EventGVK) {
 		converters = append(converters, events.TransformEventObject)
-	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
+	} else if rescommon.MatchesGVK(gvk, rescommon.MgmtClusterGVK) { // management.cattle.io/v3/Cluster
 		converters = append(converters, clusters.TransformManagedCluster)
 	}
 
-	// Register multi-value converter for Pods only
-	if gvk.Kind == "Pod" && gvk.Group == "" && gvk.Version == "v1" {
+	// v1/Pod - Register multi-value converter
+	if rescommon.MatchesGVK(gvk, rescommon.PodGVK) {
 		multiValueConverter := &multivalue.Converter{
 			Columns: columns,
 			Fields: []multivalue.FieldConfig{

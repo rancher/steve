@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // GetIndexValueFromString looks for values between [ ].
@@ -38,4 +39,17 @@ func GetColumnDefinitions(schema *types.APISchema) []ColumnDefinition {
 		return nil
 	}
 	return colDefs
+}
+
+// Common GroupVersionKind definitions used throughout the codebase
+var (
+	PodGVK                 = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+	EventGVK               = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Event"}
+	MgmtClusterGVK         = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}
+	ProvisioningClusterGVK = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
+)
+
+// MatchesGVK checks if two GroupVersionKinds match
+func MatchesGVK(a, b schema.GroupVersionKind) bool {
+	return a.Group == b.Group && a.Version == b.Version && a.Kind == b.Kind
 }

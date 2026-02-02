@@ -35,7 +35,7 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 
 	// Process each registered field config
 	for _, fieldConfig := range c.Fields {
-		if !matchesGVK(objGVK, fieldConfig.GVK) {
+		if !rescommon.MatchesGVK(objGVK, fieldConfig.GVK) {
 			continue
 		}
 
@@ -74,13 +74,6 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 	}
 
 	return obj, nil
-}
-
-// matchesGVK checks if the object's GVK matches the field config's GVK
-func matchesGVK(objGVK, configGVK schema.GroupVersionKind) bool {
-	return objGVK.Group == configGVK.Group &&
-		objGVK.Version == configGVK.Version &&
-		objGVK.Kind == configGVK.Kind
 }
 
 // findColumnIndex finds the index of a column by name
