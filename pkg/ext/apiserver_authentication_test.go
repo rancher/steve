@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	testapisv1 "github.com/rancher/steve/pkg/ext/testapis/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +31,7 @@ var _ rest.Storage = (*authnTestStore)(nil)
 var _ rest.Lister = (*authnTestStore)(nil)
 
 type authnTestStore struct {
-	*testStore[*TestType, *TestTypeList]
+	*testStore[*testapisv1.TestType, *testapisv1.TestTypeList]
 	userCh chan user.Info
 }
 

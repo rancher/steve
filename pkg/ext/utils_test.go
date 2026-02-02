@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	testapisv1 "github.com/rancher/steve/pkg/ext/testapis/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -105,12 +106,12 @@ func TestCreateOrUpdate(t *testing.T) {
 			FieldValidation: metav1.FieldValidationStrict,
 		}
 
-		getFn := func(ctx context.Context, name string, opts *metav1.GetOptions) (*TestType, error) {
+		getFn := func(ctx context.Context, name string, opts *metav1.GetOptions) (*testapisv1.TestType, error) {
 			return nil, apierrors.NewNotFound(testTypeGVR.GroupResource(), name)
 		}
 
 		var createFnCalled bool
-		createFn := func(ctx context.Context, obj *TestType, opts *metav1.CreateOptions) (*TestType, error) {
+		createFn := func(ctx context.Context, obj *testapisv1.TestType, opts *metav1.CreateOptions) (*testapisv1.TestType, error) {
 			createFnCalled = true
 
 			require.NotNil(t, opts)
@@ -122,13 +123,13 @@ func TestCreateOrUpdate(t *testing.T) {
 		}
 
 		var updateFnCalled bool
-		updateFn := func(ctx context.Context, obj *TestType, opts *metav1.UpdateOptions) (*TestType, error) {
+		updateFn := func(ctx context.Context, obj *testapisv1.TestType, opts *metav1.UpdateOptions) (*testapisv1.TestType, error) {
 			updateFnCalled = true
 			return obj.DeepCopy(), nil
 		}
 
 		objInfo := &fakeUpdatedObjectInfo{
-			obj: &TestType{
+			obj: &testapisv1.TestType{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
