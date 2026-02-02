@@ -7,13 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var podStateNameMapping = map[string]string{
-	"completed":   "succeeded",
-	"unavailable": "crashLoopBackOff",
-	"Completed":   "Succeeded",
-	"Unavailable": "CrashLoopBackOff",
-}
-
 // TransformPodObject does the following:
 // 1. Ensure metadata.state.name is capitalized (and it should exist)
 // 2. if metadata.fields[2] exists, set it to lowercase(metadata.state.name) -- might not exist
