@@ -163,8 +163,8 @@ github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae7577
 github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379/go.mod h1:IfqyXrTiCAg8rTJodbGApTiORgujJnBH+QyHHJlFSII=
 github.com/rancher/lasso v0.2.6 h1:/QNO491vWlTNYgwOOopRlILcTv+pI/wBHYdPFD2Pk5E=
 github.com/rancher/lasso v0.2.6/go.mod h1:L3ol8PdO21KoMhNa3RWjpR3ZBnE70JCAod1nJuOvT1E=
-github.com/rancher/norman v0.8.0 h1://ZSe+B53cMgPNAbR7QBhzvIfWBxR4KaPWTKqG+g+O4=
-github.com/rancher/norman v0.8.0/go.mod h1:vZ5qL+eKodJ7zOMQYdl6jwMrSFrqTKpA+KYSFEKew2M=
+github.com/rancher/norman v0.8.1 h1:114Rdt3xsWTUdqaxlIR2F6PJT0ls01vF0Rfglustgow=
+github.com/rancher/norman v0.8.1/go.mod h1:vZ5qL+eKodJ7zOMQYdl6jwMrSFrqTKpA+KYSFEKew2M=
 github.com/rancher/remotedialer v0.6.0-rc.1 h1:HMwcJjjT4irqM+d++jPcpjoNfhPCaxoHIyPzdpghZhE=
 github.com/rancher/remotedialer v0.6.0-rc.1/go.mod h1:CW6Q8F8IESN05/yl48OSwhVi54nDwVQQriV16zAiGkg=
 github.com/rancher/wrangler/v3 v3.3.2-rc.1 h1:L7UbofKTHBUq+yR0KtoTeaw9N+HX4fyyo9yrMXwyEJM=
