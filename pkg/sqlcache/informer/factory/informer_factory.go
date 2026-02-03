@@ -260,6 +260,7 @@ func (f *CacheFactory) waitForCacheReady(ctx context.Context, gvk schema.GroupVe
 	// We don't want to get stuck in WaitForCachesSync if the request from
 	// the client has been canceled.
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		select {
 		case <-ctx.Done():
