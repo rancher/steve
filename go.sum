@@ -155,8 +155,8 @@ github.com/prometheus/common v0.66.1 h1:h5E0h5/Y8niHc5DlaLlWLArTQI7tMrsfQjHV+d9Z
 github.com/prometheus/common v0.66.1/go.mod h1:gcaUsgf3KfRSwHY4dIMXLPV0K/Wg1oZ8+SbZk/HH/dA=
 github.com/prometheus/procfs v0.16.1 h1:hZ15bTNuirocR6u0JZ6BAHHmwS1p8B4P6MRqxtzMyRg=
 github.com/prometheus/procfs v0.16.1/go.mod h1:teAbpZRB1iIAJYREa1LsoWUXykVXA1KlTmWl8x/U+Is=
-github.com/rancher/apiserver v0.8.1 h1:ALiXiB+I+wahq9HWTbmoDOvKtp3pNByFKudoAsKEeTs=
-github.com/rancher/apiserver v0.8.1/go.mod h1:Wb+Z8ktNyIuqt9hw30geFBQFJQucWTqgu6trxxMtcyM=
+github.com/rancher/apiserver v0.8.2 h1:/FqPBLvBQlhXJV+KAXvMyNEhKiFaQM1fxaQop4IBhYU=
+github.com/rancher/apiserver v0.8.2/go.mod h1:69Xm9g57l2VpZlM865iclRICHMi/qyz/aZl7gGsRyCQ=
 github.com/rancher/dynamiclistener v0.7.2-rc.3 h1:geymeVB2kxxT6cGWl6p4emjW6HxLq/O1vkBLpSJHung=
 github.com/rancher/dynamiclistener v0.7.2-rc.3/go.mod h1:maKY4eN3hrEm9hi65ltyGIpCk/H5uTezEvLmqOXHN4U=
 github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379 h1:/DKzOm5Du2jPLE5rXPGhsb0XeT68kWEIRi6jnzMeyGk=
