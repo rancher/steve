@@ -164,18 +164,22 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 	}
 	f.informersMutex.Unlock()
 
-	gi.mutex.RLock()
-	if gi.informer == nil {
-		// Initialize informer needs to acquire a write lock, so we need to release it temporarily
-		gi.mutex.RUnlock()
-
-		defer logCacheInitializationDuration(gvk)()
-		if err := f.initializeInformer(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable); err != nil {
-			log.Errorf("CacheFor failed to initialize informer for %v: %v", gvk, err)
-			return nil, fmt.Errorf("setting up informer for %v: %w", gvk, err)
+	for {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
-
-		gi.mutex.RLock()
+		if initialized, err := f.ensureInformerInitialized(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable); err != nil {
+			return nil, err
+		} else if gi.informer == nil {
+			// Special case for race condition: if Stop() is called while or immediately after this informer was initialized
+			// Since we had to downgrade from Lock to RLock (two steps), gi.informer could have been reset in between.
+			gi.mutex.RUnlock()
+			continue
+		} else if initialized {
+			// Only log from the goroutine that initialized the informer
+			defer logCacheInitializationDuration(gvk)()
+		}
+		break
 	}
 	defer gi.mutex.RUnlock()
 
@@ -189,10 +193,39 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 	return gvkCache, nil
 }
 
-func (f *CacheFactory) initializeInformer(gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) error {
-	gi.mutex.Lock()
-	defer gi.mutex.Unlock()
+// ensureInformerInitialized handles the informer initialization, if needed, in which case, it returns true
+// On success with gi.mutex.RLock() held
+func (f *CacheFactory) ensureInformerInitialized(gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (bool, error) {
+	// Fast path: read-lock and informer already initialized
+	gi.mutex.RLock()
+	if gi.informer != nil {
+		return false, nil
+	}
+	gi.mutex.RUnlock()
 
+	// Slow path: write lock and proceed to initialization.
+	// But first, check if already initialized while waiting for write lock.
+	gi.mutex.Lock()
+	if gi.informer != nil {
+		// Downgrade to RLock
+		gi.mutex.Unlock()
+		gi.mutex.RLock()
+		return false, nil
+	}
+
+	if err := f.initializeInformerLocked(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable); err != nil {
+		gi.mutex.Unlock()
+		// Error logging is already handled in initializeInformerLocked or caller can handle it
+		return false, err
+	}
+
+	// Downgrade to RLock
+	gi.mutex.Unlock()
+	gi.mutex.RLock()
+	return true, nil
+}
+
+func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) error {
 	_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
 	shouldEncrypt := f.encryptAll || encryptResourceAlways
 	// In non-test code this invokes pkg/sqlcache/informer/informer.go: NewInformer()
