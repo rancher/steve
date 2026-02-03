@@ -30,7 +30,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rancher/apiserver v0.8.1
-	github.com/rancher/dynamiclistener v0.7.2-rc.3
+	github.com/rancher/dynamiclistener v0.7.3
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
 	github.com/rancher/lasso v0.2.6
 	github.com/rancher/norman v0.8.0
