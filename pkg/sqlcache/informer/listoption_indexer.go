@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/resources/virtual/multivalue/composite"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -146,6 +146,12 @@ type ListOptionIndexerOptions struct {
 	GCInterval time.Duration
 	// GCKeepCount is how many events to keep in _events table when gc runs
 	GCKeepCount int
+}
+
+// isCompositeField checks if a field uses composite storage (split into multiple columns).
+// Composite fields are stored as multiple values in separate database columns.
+func (l *ListOptionIndexer) isCompositeField(field string) bool {
+	return l.typeGuidance != nil && l.typeGuidance[field] == "COMPOSITE_INT"
 }
 
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
@@ -636,30 +642,27 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 			return err
 		}
 
-		// Check if this is a COMPOSITE_INT field
-		if l.typeGuidance != nil && l.typeGuidance[field] == "COMPOSITE_INT" {
-			// For COMPOSITE_INT, split the array into two separate columns
-			// The value might be a []interface{} or a JSON-encoded string like "[0,null]"
-			switch typedValue := value.(type) {
-			case []interface{}:
-				if len(typedValue) >= 2 {
-					args = append(args, toInt64(typedValue[0]), toInt64(typedValue[1]))
-				} else if len(typedValue) == 1 {
-					args = append(args, toInt64(typedValue[0]), int64(0))
-				} else {
-					args = append(args, int64(0), int64(0))
-				}
-			case nil:
-				args = append(args, int64(0), int64(0))
-			default:
-				args = append(args, int64(0), int64(0))
-			}
-			continue
-		}
-
 		switch typedValue := value.(type) {
 		case nil:
+			if l.isCompositeField(field) {
+				args = append(args, int64(0), int64(0))
+				continue
+			}
 			args = append(args, "")
+		case []interface{}:
+			// Check if this is a composite field (splits into multiple columns)
+			if l.isCompositeField(field) {
+				// Wrap in CompositeInt for type-safe extraction
+				ci := composite.CompositeInt{}.From(typedValue)
+				args = append(args, ci.Primary, ci.Secondary)
+				continue
+			}
+			// Regular array - join as pipe-separated string
+			strValues := make([]string, len(typedValue))
+			for i, v := range typedValue {
+				strValues[i] = fmt.Sprint(v)
+			}
+			args = append(args, strings.Join(strValues, "|"))
 		case int, bool, string, int64, float64:
 			args = append(args, fmt.Sprint(typedValue))
 		case []string:
@@ -672,23 +675,6 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 
 	_, err := tx.Stmt(l.addFieldsStmt).Exec(args...)
 	return err
-}
-
-// toInt64 converts a value to int64, returning 0 if conversion fails
-func toInt64(v interface{}) int64 {
-	switch val := v.(type) {
-	case int:
-		return int64(val)
-	case int64:
-		return val
-	case float64:
-		return int64(val)
-	case string:
-		if i, err := strconv.ParseInt(val, 10, 64); err == nil {
-			return i
-		}
-	}
-	return 0
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK

@@ -827,14 +827,18 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		return "", nil, err
 	}
 
-	// Check if this is a COMPOSITE_INT field - need to cast parameter to integer for proper comparison
+	// Check if this is a composite field - need to cast parameter to integer for proper comparison
+	//
+	// Note: We're checking fieldToCheck (without suffix) because that's what's in typeGuidance.
+	// The actual SQL column names will have _0 and _1 suffixes.
+	//
 	columnName := toColumnName(filter.Field)
 	baseField, _, hasSubIndex := parseFieldPath(columnName)
 	fieldToCheck := columnName
 	if hasSubIndex {
 		fieldToCheck = baseField
 	}
-	isCompositeInt := l.typeGuidance != nil && l.typeGuidance[fieldToCheck] == "COMPOSITE_INT"
+	isCompositeInt := l.isCompositeField(fieldToCheck)
 
 	switch filter.Op {
 	case sqltypes.Eq:
@@ -1126,8 +1130,8 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 
 	err := l.validateColumn(fieldToValidate)
 	if err == nil {
-		// Check if this field is COMPOSITE_INT type
-		if l.typeGuidance != nil && l.typeGuidance[fieldToValidate] == "COMPOSITE_INT" {
+		// Check if this field is a composite type
+		if l.isCompositeField(fieldToValidate) {
 			if hasSubIndex {
 				// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
 				return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, subIndex), nil

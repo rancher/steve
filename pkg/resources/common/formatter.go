@@ -269,6 +269,7 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 
 		// v1/Pod - Handle restarts field
 		if col.Name == "Restarts" && MatchesGVK(gvk, PodGVK) {
+			// Use formatters package which wraps CompositeInt for type-safe formatting
 			curValue[index] = formatters.FormatRestarts(arr)
 
 			// Update the slice
