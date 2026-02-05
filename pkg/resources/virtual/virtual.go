@@ -42,14 +42,14 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
 
 	// v1/Event
-	if rescommon.MatchesGVK(gvk, rescommon.EventGVK) {
+	if gvk == rescommon.EventGVK {
 		converters = append(converters, events.TransformEventObject)
-	} else if rescommon.MatchesGVK(gvk, rescommon.MgmtClusterGVK) { // management.cattle.io/v3/Cluster
+	} else if gvk == rescommon.MgmtClusterGVK { // management.cattle.io/v3/Cluster
 		converters = append(converters, clusters.TransformManagedCluster)
 	}
 
 	// v1/Pod - Register multi-value converter
-	if rescommon.MatchesGVK(gvk, rescommon.PodGVK) {
+	if gvk == rescommon.PodGVK {
 		multiValueConverter := &multivalue.Converter{
 			Columns: columns,
 			Fields: []multivalue.FieldConfig{

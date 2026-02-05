@@ -17,7 +17,15 @@ type CompositeInt struct {
 
 // From creates a CompositeInt from a slice of values.
 // This is the main constructor used by SQL layer and formatter.
-// Returns zero values if the input is invalid or empty.
+//
+// Expected input: [count, timestamp_ms] where:
+//   - count: restart count (int or float64)
+//   - timestamp_ms: Unix timestamp in milliseconds of last restart (int64, float64, or nil)
+//
+// Handles partial/malformed input gracefully:
+//   - Empty slice: returns {Primary: 0, Secondary: 0}
+//   - Single element [count]: returns {Primary: count, Secondary: 0}
+//   - nil values: treated as 0
 func (CompositeInt) From(values []interface{}) CompositeInt {
 	ci := CompositeInt{}
 	if len(values) >= 1 {
