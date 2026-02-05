@@ -4,7 +4,6 @@ import (
 	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // ParseFunc transforms a string value into a multi-value array
@@ -12,7 +11,6 @@ type ParseFunc func(string) ([]interface{}, error)
 
 // FieldConfig defines a multi-value field transformation
 type FieldConfig struct {
-	GVK        schema.GroupVersionKind
 	ColumnName string
 	ParseFunc  ParseFunc
 }
@@ -30,15 +28,10 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 		return obj, err
 	}
 
-	objGVK := obj.GroupVersionKind()
 	updated := false
 
 	// Process each registered field config
 	for _, fieldConfig := range c.Fields {
-		if !rescommon.MatchesGVK(objGVK, fieldConfig.GVK) {
-			continue
-		}
-
 		// Find the column index for this field
 		index := findColumnIndex(c.Columns, fieldConfig.ColumnName)
 		if index == -1 || index >= len(fields) {

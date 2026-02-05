@@ -54,11 +54,9 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 			Columns: columns,
 			Fields: []multivalue.FieldConfig{
 				{
-					GVK:        gvk,
 					ColumnName: "Restarts",
 					ParseFunc:  parsers.ParseRestarts,
 				},
-				// Future: Add more multi-value field configs here
 			},
 		}
 		converters = append(converters, multiValueConverter.Transform)

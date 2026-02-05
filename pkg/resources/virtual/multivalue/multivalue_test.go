@@ -9,16 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestConverter_Transform(t *testing.T) {
-	podGVK := schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "Pod",
-	}
-
 	columns := []rescommon.ColumnDefinition{
 		{TableColumnDefinition: metav1.TableColumnDefinition{Name: "Name"}, Field: "metadata.fields[0]"},
 		{TableColumnDefinition: metav1.TableColumnDefinition{Name: "Ready"}, Field: "metadata.fields[1]"},
@@ -31,7 +24,6 @@ func TestConverter_Transform(t *testing.T) {
 		Columns: columns,
 		Fields: []FieldConfig{
 			{
-				GVK:        podGVK,
 				ColumnName: "Restarts",
 				ParseFunc:  parsers.ParseRestarts,
 			},

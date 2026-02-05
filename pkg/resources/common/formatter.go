@@ -245,15 +245,16 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 		return
 	}
 
+	// Get fields once before looping over columns
+	curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+	if err != nil || !got {
+		return
+	}
+
 	cols := GetColumnDefinitions(request.Schema)
 	for _, col := range cols {
 		index := GetIndexValueFromString(col.Field)
 		if index == -1 {
-			continue
-		}
-
-		curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
-		if err != nil || !got {
 			continue
 		}
 

@@ -49,7 +49,8 @@ var (
 	ProvisioningClusterGVK = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
 )
 
-// MatchesGVK checks if two GroupVersionKinds match
+// MatchesGVK checks if two GroupVersionKinds match.
+// Note: This exists for readability at call sites - `MatchesGVK(gvk, PodGVK)` is clearer than `gvk == PodGVK`.
 func MatchesGVK(a, b schema.GroupVersionKind) bool {
-	return a.Group == b.Group && a.Version == b.Version && a.Kind == b.Kind
+	return a == b
 }
