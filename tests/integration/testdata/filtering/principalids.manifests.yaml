@@ -1,0 +1,22 @@
+apiVersion: management.cattle.io/v3
+kind: User
+metadata:
+  name: user-one
+principalIds:
+  - local://user-one-principal
+  - local://another-id-for-user1
+---
+apiVersion: management.cattle.io/v3
+kind: User
+metadata:
+  name: user-two
+principalIds:
+  - local://user-two-principal
+  - local://another-id-for-user2
+---
+apiVersion: management.cattle.io/v3
+kind: User
+metadata:
+  name: admin-user
+principalIds:
+  - local://admin-principal
