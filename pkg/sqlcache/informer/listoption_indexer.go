@@ -384,6 +384,12 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 			args = append(args, fmt.Sprint(typedValue))
 		case []string:
 			args = append(args, strings.Join(typedValue, "|"))
+		case []interface{}:
+			var s []string
+			for _, v := range typedValue {
+				s = append(s, fmt.Sprint(v))
+			}
+			args = append(args, strings.Join(s, "|"))
 		default:
 			err2 := fmt.Errorf("field %v has a non-supported type value: %v", field, value)
 			return err2

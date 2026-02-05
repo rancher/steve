@@ -192,6 +192,9 @@ var (
 		gvkKey("management.cattle.io", "v3", "RoleTemplate"): {
 			{"context"},
 		},
+		gvkKey("management.cattle.io", "v3", "User"): {
+			{"principalIds"},
+		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
 			{"spec", "rules", "host"},
 			{"spec", "ingressClassName"},
