@@ -146,7 +146,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
 		typeGuidance:  opts.TypeGuidance,
-		watchers:      make(map[*watchKey]*watcher),
 		eventLog:      ring.NewCircularBuffer[*event](maxEventHistory),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
