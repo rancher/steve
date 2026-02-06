@@ -94,8 +94,6 @@ func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opt
 		return nil, "", err
 	}
 
-	go listOptionIndexer.RunGC(ctx)
-
 	return listOptionIndexer, dbPath, nil
 }
 
@@ -142,9 +140,6 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
-		// create events table
-		txClient.EXPECT().Exec(fmt.Sprintf(dropEventsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		// create field table
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" INT`)).Return(nil, nil)
@@ -266,8 +261,6 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
-		txClient.EXPECT().Exec(fmt.Sprintf(dropEventsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, fmt.Errorf("error"))
@@ -316,8 +309,6 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
-		txClient.EXPECT().Exec(fmt.Sprintf(dropEventsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
@@ -371,8 +362,6 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
-		txClient.EXPECT().Exec(fmt.Sprintf(dropEventsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createEventsTableFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
@@ -991,170 +980,6 @@ func TestWatchResourceVersion(t *testing.T) {
 	}
 }
 
-func TestWatchGarbageCollection(t *testing.T) {
-	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
-	startWatcher := func(ctx context.Context, loi *ListOptionIndexer, rv string) (chan watch.Event, chan error) {
-		errCh := make(chan error, 1)
-		eventsCh := make(chan watch.Event, 100)
-		go func() {
-			watchErr := loi.Watch(ctx, WatchOptions{ResourceVersion: rv}, eventsCh)
-			errCh <- watchErr
-		}()
-		time.Sleep(100 * time.Millisecond)
-		return eventsCh, errCh
-	}
-
-	waitStopWatcher := func(errCh chan error) error {
-		select {
-		case <-time.After(time.Second * 5):
-			return fmt.Errorf("not finished in time")
-		case err := <-errCh:
-			return err
-		}
-	}
-
-	receiveEvents := func(eventsCh chan watch.Event) []watch.Event {
-		timer := time.NewTimer(time.Millisecond * 50)
-		var events []watch.Event
-		for {
-			select {
-			case <-timer.C:
-				return events
-			case ev := <-eventsCh:
-				events = append(events, ev)
-			}
-		}
-	}
-
-	foo := &unstructured.Unstructured{}
-	foo.SetGroupVersionKind(gvk)
-	foo.SetResourceVersion("100")
-	foo.SetName("foo")
-
-	fooUpdated := foo.DeepCopy()
-	fooUpdated.SetResourceVersion("120")
-
-	bar := &unstructured.Unstructured{}
-	bar.SetGroupVersionKind(gvk)
-	bar.SetResourceVersion("150")
-	bar.SetName("bar")
-
-	barDeleted := bar.DeepCopy()
-	barDeleted.SetResourceVersion("160")
-
-	barNew := bar.DeepCopy()
-	barNew.SetResourceVersion("170")
-
-	parentCtx := context.Background()
-
-	opts := ListOptionIndexerOptions{
-		GCInterval:  40 * time.Millisecond,
-		GCKeepCount: 2,
-	}
-	loi, dbPath, err := makeListOptionIndexer(parentCtx, gvk, opts, false, emptyNamespaceList)
-	defer cleanTempFiles(dbPath)
-	assert.NoError(t, err)
-
-	getRV := func(t *testing.T) string {
-		t.Helper()
-		list, _, _, _, err := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{}, []partition.Partition{{All: true}}, "")
-		assert.NoError(t, err)
-		return list.GetResourceVersion()
-	}
-
-	err = loi.Add(foo)
-	assert.NoError(t, err)
-	rv1 := getRV(t)
-
-	err = loi.Update(fooUpdated)
-	assert.NoError(t, err)
-	rv2 := getRV(t)
-
-	err = loi.Add(bar)
-	assert.NoError(t, err)
-	rv3 := getRV(t)
-
-	err = loi.Delete(barDeleted)
-	assert.NoError(t, err)
-	rv4 := getRV(t)
-
-	// Make sure GC runs
-	time.Sleep(2 * opts.GCInterval)
-
-	for _, rv := range []string{rv1, rv2} {
-		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
-		gotEvents := receiveEvents(watcherCh)
-		err = waitStopWatcher(errCh)
-		assert.Empty(t, gotEvents)
-		assert.ErrorIs(t, err, ErrTooOld)
-	}
-
-	tests := []struct {
-		rv             string
-		expectedEvents []watch.Event
-	}{
-		{
-			rv: rv3,
-			expectedEvents: []watch.Event{
-				{Type: watch.Deleted, Object: barDeleted},
-			},
-		},
-		{
-			rv:             rv4,
-			expectedEvents: nil,
-		},
-	}
-	for _, test := range tests {
-		ctx, cancel := context.WithCancel(parentCtx)
-		watcherCh, errCh := startWatcher(ctx, loi, test.rv)
-		gotEvents := receiveEvents(watcherCh)
-		cancel()
-		err = waitStopWatcher(errCh)
-		assert.Equal(t, test.expectedEvents, gotEvents)
-		assert.NoError(t, err)
-	}
-
-	err = loi.Add(barNew)
-	assert.NoError(t, err)
-	rv5 := getRV(t)
-
-	// Make sure GC runs
-	time.Sleep(2 * opts.GCInterval)
-
-	for _, rv := range []string{rv1, rv2, rv3} {
-		watcherCh, errCh := startWatcher(parentCtx, loi, rv)
-		gotEvents := receiveEvents(watcherCh)
-		err = waitStopWatcher(errCh)
-		assert.Empty(t, gotEvents)
-		assert.ErrorIs(t, err, ErrTooOld)
-	}
-
-	tests = []struct {
-		rv             string
-		expectedEvents []watch.Event
-	}{
-		{
-			rv: rv4,
-			expectedEvents: []watch.Event{
-				{Type: watch.Added, Object: barNew},
-			},
-		},
-		{
-			rv:             rv5,
-			expectedEvents: nil,
-		},
-	}
-	for _, test := range tests {
-		ctx, cancel := context.WithCancel(parentCtx)
-		watcherCh, errCh := startWatcher(ctx, loi, test.rv)
-		gotEvents := receiveEvents(watcherCh)
-		cancel()
-		err = waitStopWatcher(errCh)
-		assert.Equal(t, test.expectedEvents, gotEvents)
-		assert.NoError(t, err)
-	}
-}
-
 func TestNonNumberResourceVersion(t *testing.T) {
 	ctx := context.Background()
 	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
@@ -1277,65 +1102,4 @@ func TestWatchCancel(t *testing.T) {
 	}()
 	<-errCh
 	time.Sleep(1 * time.Second)
-}
-
-func Test_watcherWithBackfill(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-
-	eventsCh := make(chan int, 10)
-	w, doneCb, closeWatcher := watcherWithBackfill(ctx, eventsCh, 100)
-	defer closeWatcher()
-
-	eventsCh <- 1
-	eventsCh <- 2
-	w <- 5
-	eventsCh <- 3
-	w <- 6
-	eventsCh <- 4
-	doneCb()
-
-	time.Sleep(10 * time.Millisecond)
-	w <- 7
-	w <- 8
-
-	time.Sleep(10 * time.Millisecond)
-	cancel()
-
-	close(eventsCh)
-	res := make([]int, 0, len(eventsCh))
-	for n := range eventsCh {
-		res = append(res, n)
-	}
-
-	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7, 8}, res)
-}
-
-// This test aims to detect a very specific race condition, see https://github.com/rancher/steve/pull/879 for details
-func Test_watcherWithBackfillCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-
-	eventsCh := make(chan int)
-	w, doneCb, closeWatcher := watcherWithBackfill(ctx, eventsCh, 100)
-	defer closeWatcher()
-	doneCb()
-
-	select {
-	case w <- 1:
-		t.Fatal("expected blocking trying to write")
-	default:
-	}
-
-	doneWriting := make(chan struct{})
-	go func() {
-		w <- 1 // should be discarded
-		close(doneWriting)
-	}()
-	time.Sleep(100 * time.Millisecond)
-
-	cancel()
-	select {
-	case <-doneWriting:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("expected writing to not block when context is canceled")
-	}
 }

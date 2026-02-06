@@ -16,16 +16,24 @@ type TxClient interface {
 	Stmt(stmt Stmt) Stmt
 }
 
+// Tx represents the methods used from sql.Tx
+type Tx interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Stmt(stmt *sql.Stmt) *sql.Stmt
+	Commit() error
+	Rollback() error
+}
+
 // txClient is the main implementation of TxClient, delegates to sql.Tx
 // other implementations exist for testing purposes
 type txClient struct {
-	tx          *sql.Tx
+	tx          Tx
 	queryLogger logging.QueryLogger
 }
 
 type TxClientOption func(*txClient)
 
-func NewTxClient(tx *sql.Tx, opts ...TxClientOption) TxClient {
+func NewTxClient(tx Tx, opts ...TxClientOption) TxClient {
 	c := &txClient{tx: tx, queryLogger: &logging.NoopQueryLogger{}}
 	for _, opt := range opts {
 		opt(c)

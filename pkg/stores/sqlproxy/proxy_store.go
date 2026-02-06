@@ -24,7 +24,6 @@ import (
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/kv"
-	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/sirupsen/logrus"
@@ -225,26 +224,6 @@ var (
 		{`id`},
 		{`metadata`, `state`, `name`},
 	}
-	baseNSSchema = types.APISchema{
-		Schema: &schemas.Schema{
-			Attributes: map[string]interface{}{
-				"group":    "",
-				"version":  "v1",
-				"kind":     "Namespace",
-				"resource": "namespaces",
-			},
-		},
-	}
-	mgmtClusterSchema = types.APISchema{
-		Schema: &schemas.Schema{
-			Attributes: map[string]interface{}{
-				"group":    "management.cattle.io",
-				"version":  "v3",
-				"kind":     "Cluster",
-				"resource": "clusters",
-			},
-		},
-	}
 	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
 	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
@@ -352,6 +331,11 @@ type SchemaColumnSetter interface {
 	SetColumns(ctx context.Context, schema *types.APISchema) error
 }
 
+type SchemaCollection interface {
+	Schema(id string) *types.APISchema
+	ByGVK(gvk schema.GroupVersionKind) string
+}
+
 type Cache interface {
 	// ListByOptions returns objects according to the specified list options and partitions.
 	// Specifically:
@@ -394,6 +378,7 @@ type Store struct {
 	lock             sync.Mutex
 	columnSetter     SchemaColumnSetter
 	transformBuilder TransformBuilder
+	schemas          SchemaCollection
 
 	watchers *Watchers
 }
@@ -407,13 +392,14 @@ type CacheFactory interface {
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, factory CacheFactory, needToInitNamespaceCache bool) (*Store, error) {
+func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, schemas SchemaCollection, factory CacheFactory, needToInitNamespaceCache bool) (*Store, error) {
 	store := &Store{
 		ctx:              ctx,
 		clientGetter:     clientGetter,
 		notifier:         notifier,
 		columnSetter:     c,
 		transformBuilder: virtual.NewTransformBuilder(scache),
+		schemas:          schemas,
 		watchers:         newWatchers(),
 	}
 
@@ -465,26 +451,34 @@ func defaultInitializeCacheFactory() (CacheFactory, error) {
 // namespaces and projects.
 func (s *Store) initializeNamespaceCache() error {
 	buffer := WarningBuffer{}
-	nsSchema := baseNSSchema
+	var nsSchema *types.APISchema
+
+	if id := s.schemas.ByGVK(namespaceGVK); id != "" {
+		nsSchema = s.schemas.Schema(id)
+	}
+
+	if nsSchema == nil {
+		return fmt.Errorf("namespace schema not found")
+	}
 
 	// make sure any relevant columns are set to the ns schema
-	if err := s.columnSetter.SetColumns(s.ctx, &nsSchema); err != nil {
+	if err := s.columnSetter.SetColumns(s.ctx, nsSchema); err != nil {
 		return fmt.Errorf("failed to set columns for proxy stores namespace informer: %w", err)
 	}
 
 	// build table client
-	client, err := s.clientGetter.TableAdminClient(nil, &nsSchema, "", &buffer)
+	client, err := s.clientGetter.TableAdminClient(nil, nsSchema, "", &buffer)
 	if err != nil {
 		return err
 	}
 
-	gvk := attributes.GVK(&nsSchema)
-	fields, cols, typeGuidance := getFieldAndColInfo(&nsSchema, gvk)
+	gvk := attributes.GVK(nsSchema)
+	fields, cols, typeGuidance := getFieldAndColInfo(nsSchema, gvk)
 	// get any type-specific fields that steve is interested in
 	fields = append(fields, getFieldForGVK(gvk)...)
 
 	// get the type-specific transform func
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(&nsSchema), attributes.CRDJSONPathParsers(&nsSchema))
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(nsSchema), attributes.CRDJSONPathParsers(nsSchema))
 
 	// get the ns informer
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
@@ -1090,7 +1084,20 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 	// provisioning.cattle.io.clusters depends on information from management.cattle.io.clusters
 	// so we must initialize this one as well
 	if gvk == pcioClusterGvk {
-		mgmtClusterInf, err := s.cacheFor(ctx, nil, &mgmtClusterSchema)
+		var mgmtSchema *types.APISchema
+		if id := s.schemas.ByGVK(schema.GroupVersionKind{
+			Group:   "management.cattle.io",
+			Version: "v3",
+			Kind:    "Cluster",
+		}); id != "" {
+			mgmtSchema = s.schemas.Schema(id)
+		}
+
+		if mgmtSchema == nil {
+			return nil, nil, fmt.Errorf("management cluster schema not found")
+		}
+
+		mgmtClusterInf, err := s.cacheFor(ctx, nil, mgmtSchema)
 		if err != nil {
 			return nil, nil, err
 		}
