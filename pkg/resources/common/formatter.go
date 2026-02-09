@@ -245,12 +245,18 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 		return
 	}
 
-	// Get fields once before looping over columns
+	// Check if this GVK has any multi-value fields of interest before reading the slice
+	if gvk != PodGVK {
+		// Future: expand this check when adding other multi-value field formatters
+		return
+	}
+
 	curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
 	if err != nil || !got {
 		return
 	}
 
+	changedFields := false
 	cols := GetColumnDefinitions(request.Schema)
 	for _, col := range cols {
 		index := GetIndexValueFromString(col.Field)
@@ -272,14 +278,17 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 		if col.Name == "Restarts" && gvk == PodGVK {
 			// Use formatters package which wraps CompositeInt for type-safe formatting
 			curValue[index] = formatters.FormatRestarts(arr)
-
-			// Update the slice
-			if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
-				logrus.Errorf("failed to set multi-value display value: %s", err.Error())
-			}
+			changedFields = true
+			break // Only one Restarts field per schema
 		}
 
 		// Future: Add other multi-value field formatters here
+	}
+
+	if changedFields {
+		if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+			logrus.Errorf("failed to set multi-value display value: %s", err.Error())
+		}
 	}
 }
 
@@ -288,68 +297,75 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 // those timestamps by subtracting them from time.Now(), then format the resulting duration into a human-friendly string.
 // This prevents cached durations (e.g. “2d” - 2 days) from becoming stale over time.
 func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.GroupVersionKind, unstr *unstructured.Unstructured, isCRD bool) {
-	if request.Schema != nil {
-		cols := GetColumnDefinitions(request.Schema)
-		for _, col := range cols {
-			index := GetIndexValueFromString(col.Field)
-			if index == -1 {
+	if request.Schema == nil {
+		return
+	}
+
+	// Check if there are any date fields of interest before reading the slice
+	gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
+	if !isCRD && !gvkFound {
+		return
+	}
+
+	curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
+	if err != nil || !got {
+		return
+	}
+
+	changedFields := false
+	cols := GetColumnDefinitions(request.Schema)
+	for _, col := range cols {
+		index := GetIndexValueFromString(col.Field)
+		if index == -1 {
+			continue
+		}
+
+		if index >= len(curValue) {
+			continue
+		}
+
+		hasCRDDateField := isCRD && col.Type == "date"
+		hasGVKDateFieldMapping := gvkFound && slices.Contains(gvkDateFields, col.Name)
+		if !hasCRDDateField && !hasGVKDateFieldMapping {
+			continue
+		}
+
+		timeValue, ok := curValue[index].(string)
+		if !ok {
+			logrus.Warnf("time field isn't a string")
+			continue
+		}
+
+		if _, err := time.Parse(time.RFC3339, timeValue); err == nil {
+			// it's already a timestamp, so we don't need to do anything
+			continue
+		}
+
+		dur, ok := isDuration(timeValue)
+		if !ok {
+			millis, err := strconv.ParseInt(timeValue, 10, 64)
+			if err != nil {
+				logrus.Warnf("convert timestamp value: %s failed with error: %s", timeValue, err.Error())
 				continue
 			}
 
-			curValue, got, err := unstructured.NestedSlice(unstr.Object, "metadata", "fields")
-			if err != nil || !got {
-				continue
-			}
+			timestamp := time.Unix(0, millis*int64(time.Millisecond))
+			dur = time.Since(timestamp)
+		}
 
-			if index >= len(curValue) {
-				continue
-			}
+		humanDuration := duration.HumanDuration(dur)
+		if humanDuration == "<invalid>" {
+			logrus.Warnf("couldn't convert value %d into human duration for column %s", int64(dur), col.Name)
+			continue
+		}
 
-			gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
+		curValue[index] = humanDuration
+		changedFields = true
+	}
 
-			hasCRDDateField := isCRD && col.Type == "date"
-			hasGVKDateFieldMapping := gvkFound && slices.Contains(gvkDateFields, col.Name)
-			if hasCRDDateField || hasGVKDateFieldMapping {
-				if index == -1 {
-					logrus.Errorf("field index not found at column.Field struct variable: %s", col.Field)
-					return
-				}
-
-				timeValue, ok := curValue[index].(string)
-				if !ok {
-					logrus.Warnf("time field isn't a string")
-					return
-				}
-
-				if _, err := time.Parse(time.RFC3339, timeValue); err == nil {
-					// it's already a timestamp, so we don't need to do anything
-					return
-				}
-
-				dur, ok := isDuration(timeValue)
-				if !ok {
-					millis, err := strconv.ParseInt(timeValue, 10, 64)
-					if err != nil {
-						logrus.Warnf("convert timestamp value: %s failed with error: %s", timeValue, err.Error())
-						return
-					}
-
-					timestamp := time.Unix(0, millis*int64(time.Millisecond))
-					dur = time.Since(timestamp)
-				}
-
-				humanDuration := duration.HumanDuration(dur)
-				if humanDuration == "<invalid>" {
-					logrus.Warnf("couldn't convert value %d into human duration for column %s", int64(dur), col.Name)
-					return
-				}
-
-				curValue[index] = humanDuration
-				if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
-					logrus.Errorf("failed to set value back to metadata.fields slice: %s", err.Error())
-					return
-				}
-			}
+	if changedFields {
+		if err := unstructured.SetNestedSlice(unstr.Object, curValue, "metadata", "fields"); err != nil {
+			logrus.Errorf("failed to set value back to metadata.fields slice: %s", err.Error())
 		}
 	}
 }
