@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -68,6 +69,12 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "c-m-boris",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "boris",
@@ -156,6 +163,10 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "local",
@@ -240,6 +251,12 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "c-m-natasha",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "c-m-natasha",
@@ -317,6 +334,12 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "c-m-yodie",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "yodie",
@@ -393,6 +416,12 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "c-m-homer",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "homer",
@@ -469,6 +498,12 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "c-m-gortz",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "gortz",
@@ -545,6 +580,12 @@ func TestTransformManagedCluster(t *testing.T) {
 					"type": "management.cattle.io.cluster",
 					"metadata": map[string]interface{}{
 						"name": "c-m-homer",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
 					},
 					"spec": map[string]interface{}{
 						"displayName": "homer",
@@ -571,6 +612,599 @@ func TestTransformManagedCluster(t *testing.T) {
 							"memory": "cheese",
 							"pods":   "2",
 						},
+					},
+				},
+			},
+		},
+		{
+			name: "an MCI cluster with priority-1 provider and gitVersion",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"labels": map[string]interface{}{
+							"provider.cattle.io": "harvester",
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    true,
+						"rkeConfig":   "not used",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"version": map[string]any{
+							"gitVersion": "miro",
+						},
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "miro",
+							"k8sVersionPriority": int64(2),
+							"provider":           "harvester",
+							"providerPriority":   int64(2),
+						},
+						"labels": map[string]interface{}{
+							"provider.cattle.io": "harvester",
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    true,
+						"rkeConfig":   "not used",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": true,
+						"version": map[string]interface{}{
+							"gitVersion": "miro",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "an MCI cluster with priority-1 provider (harvester) and spec.*Config.k8sVersion",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"labels": map[string]interface{}{
+							"provider.cattle.io": "harvester",
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    true,
+						"gkeConfig": map[string]interface{}{
+							"kubernetesVersion": "gkeConfigVersionHasPriority",
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"version": map[string]interface{}{
+							"gitVersion": "statusVersionGitVersionHasPriority",
+						},
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "statusVersionGitVersionHasPriority",
+							"k8sVersionPriority": int64(2),
+							"provider":           "harvester",
+							"providerPriority":   int64(2),
+						},
+						"labels": map[string]interface{}{
+							"provider.cattle.io": "harvester",
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    true,
+						"gkeConfig": map[string]interface{}{
+							"kubernetesVersion": "gkeConfigVersionHasPriority",
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": true,
+						"version": map[string]interface{}{
+							"gitVersion": "statusVersionGitVersionHasPriority",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "an MCI cluster with priority-4 provider (not harvester) and no k8sVersion",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"labels": map[string]interface{}{
+							"provider.cattle.io": "k3s",
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+						"spork": map[string]interface{}{
+							// Not found because it isn't an Xconfig
+							"kubernetesVersion": "braques",
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"driver":   "k3s",
+						"provider": "k3s",
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
+						"labels": map[string]interface{}{
+							"provider.cattle.io": "k3s",
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+						"spork": map[string]interface{}{
+							"kubernetesVersion": "braques",
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": true,
+						"driver":    "k3s",
+						"provider":  "k3s",
+					},
+				},
+			},
+		},
+		{
+			name: "an MCI cluster with priority-4 provider - gkeConfig, and no k8sVersion",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+						"gkeConfig": map[string]interface{}{
+							"imported": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"driver":   "rke2",
+						"provider": "k3s",
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+						"gkeConfig": map[string]interface{}{
+							"imported": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": true,
+						"driver":    "rke2",
+						"provider":  "k3s",
+					},
+				},
+			},
+		},
+		{
+			name: "an MCI cluster with priority-4 provider - status.driver is null, and no k8sVersion",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"driver":   nil,
+						"provider": "k3s",
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": true,
+						"driver":    nil,
+						"provider":  "k3s",
+					},
+				},
+			},
+		},
+		{
+			name: "an MCI cluster with no provider - status.driver is null, and no k8sVersion",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"driver":   nil,
+						"provider": "k3s",
+					},
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"id":   2,
+					"type": "management.cattle.io.cluster",
+					"metadata": map[string]interface{}{
+						"name": "local",
+						"clusterFields": map[string]interface{}{
+							"k8sVersion":         "-",
+							"k8sVersionPriority": int64(2),
+							"provider":           "imported",
+							"providerPriority":   int64(3),
+						},
+					},
+					"spec": map[string]interface{}{
+						"displayName": "local",
+						"internal":    false,
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "BackingNamespaceCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "2025-01-10T22:41:37Z",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "DefaultProjectCreated",
+							},
+							map[string]interface{}{
+								"error":          false,
+								"lastUpdateTime": "",
+								"status":         "True",
+								"transitioning":  false,
+								"type":           "Ready",
+							},
+						},
+						"connected": true,
+						"driver":    nil,
+						"provider":  "k3s",
 					},
 				},
 			},

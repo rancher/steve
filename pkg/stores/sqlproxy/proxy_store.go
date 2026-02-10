@@ -152,6 +152,10 @@ var (
 		gvkKey("cluster.x-k8s.io", "v1beta1", "MachineDeployment"): {
 			{"spec", "clusterName"}},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
+			{"metadata", "clusterFields", "k8sVersion"},
+			{"metadata", "clusterFields", "k8sVersionPriority"},
+			{"metadata", "clusterFields", "provider"},
+			{"metadata", "clusterFields", "providerPriority"},
 			{"spec", "internal"},
 			{"spec", "displayName"},
 			{"status", "allocatable", "cpu"},
@@ -199,6 +203,10 @@ var (
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
 			{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"},
+			{"metadata", "clusterFields", "k8sVersion"},
+			{"metadata", "clusterFields", "k8sVersionPriority"},
+			{"metadata", "clusterFields", "provider"},
+			{"metadata", "clusterFields", "providerPriority"},
 			{"status", "allocatable", "cpu"},
 			{"status", "allocatable", "cpuRaw"},
 			{"status", "allocatable", "memory"},

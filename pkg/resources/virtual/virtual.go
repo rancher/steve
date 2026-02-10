@@ -42,6 +42,8 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		converters = append(converters, events.TransformEventObject)
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
+	} else if gvk.Kind == "Cluster" && gvk.Group == "provisioning.cattle.io" && gvk.Version == "v1`" {
+		converters = append(converters, clusters.TransformProvisionedCluster)
 	}
 
 	// Detecting if we need to convert date fields
