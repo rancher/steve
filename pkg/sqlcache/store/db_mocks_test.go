@@ -219,6 +219,21 @@ func (mr *MockClientMockRecorder) ReadObjects(rows, typ any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadObjects", reflect.TypeOf((*MockClient)(nil).ReadObjects), rows, typ)
 }
 
+// ReadNStrings mocks base method.
+func (m *MockClient) ReadNStrings(rows db.Rows, numColumns int) ([][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadNStrings", rows, numColumns)
+	ret0, _ := ret[0].([][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadNStrings indicates an expected call of ReadNStrings.
+func (mr *MockClientMockRecorder) ReadNStrings(rows, numColumns any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadNStrings", reflect.TypeOf((*MockClient)(nil).ReadNStrings), rows, numColumns)
+}
+
 // ReadStringIntString mocks base method.
 func (m *MockClient) ReadStringIntString(rows db.Rows) ([][]string, error) {
 	m.ctrl.T.Helper()

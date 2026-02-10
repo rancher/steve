@@ -55,6 +55,7 @@ type Client interface {
 	ReadObjects(rows Rows, typ reflect.Type) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStrings2(rows Rows) ([][]string, error)
+	ReadNStrings(rows Rows, numColumns int) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
 	ReadStringIntString(rows Rows) ([][]string, error)
 	Upsert(tx TxClient, stmt Stmt, key string, obj SerializedObject) error
@@ -366,6 +367,41 @@ func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
 		}
 
 		result = append(result, []string{val1, strconv.Itoa(val2), val3})
+	}
+	err := rows.Err()
+	if err != nil {
+		return nil, closeRowsOnError(rows, err)
+	}
+
+	err = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ReadNStrings scans the given rows into string-slices of the specified number of columns
+func (c *client) ReadNStrings(rows Rows, numColumns int) ([][]string, error) {
+	c.connLock.RLock()
+	defer c.connLock.RUnlock()
+
+	var result [][]string
+	for rows.Next() {
+		stringList := make([]string, numColumns)
+		stringPointers := make([]any, numColumns)
+		for i, s := range stringList {
+			stringPointers[i] = &s
+		}
+		err := rows.Scan(stringPointers...)
+		if err != nil {
+			return nil, closeRowsOnError(rows, err)
+		}
+		for i, sp := range stringPointers {
+			stringList[i] = *((sp).(*string))
+		}
+
+		result = append(result, stringList)
 	}
 	err := rows.Err()
 	if err != nil {

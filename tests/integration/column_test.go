@@ -48,6 +48,10 @@ func (i *IntegrationSuite) TestListColumns() {
 			i.testColumnsScenario(ctx, name, baseURL)
 		})
 	}
+	depPodName := "check deployments for associated pod info"
+	i.Run(depPodName, func() {
+		i.testDeploymentPodAssociations(ctx, depPodName, baseURL)
+	})
 }
 
 func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario string, baseURL string) {
@@ -135,6 +139,51 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 		})
 	}
 }
+
+func (i *IntegrationSuite) testDeploymentPodAssociations(ctx context.Context, scenario string, baseURL string) {
+	var gvr k8sschema.GroupVersionResource
+	gvr = k8sschema.GroupVersionResource{
+		Group: "apps",
+		Version: "v1",
+		Resource: "deployments",
+	}
+	thingy := fmt.Sprintf("%s.%s", gvr.Group, gvr.Resource)
+	i.waitForSchema(baseURL, gvr)
+	defer i.maybeStopAndDebug(baseURL)
+	url := fmt.Sprintf("%s/v1/%s", baseURL, thingy)
+	fmt.Println(url)
+	resp, err := http.Get(url)
+	i.Require().NoError(err)
+	defer resp.Body.Close()
+
+	i.Require().Equal(http.StatusOK, resp.StatusCode)
+
+	type Response struct {
+		Data []struct {
+			Metadata struct {
+				Namespace string `json:"namespace"`
+				Name string `json:"name"`
+				AssociatedData []any `json:"associatedData,omitempty"`
+			} `json:"metadata"`
+		} `json:"data"`
+	}
+	var parsed Response
+	err = json.NewDecoder(resp.Body).Decode(&parsed)
+	i.Require().NoError(err)
+
+	// Require at least one non-empty associations block
+
+	i.Require().GreaterOrEqualf(len(parsed.Data), 1, "no data")
+	numAssociations := 0
+	for _, row := range parsed.Data {
+		md := row.Metadata
+		if len(md.AssociatedData) > 0 {
+			numAssociations += 1
+		}
+	}
+	i.Require().GreaterOrEqualf(numAssociations, 1, "no deployment-pod associations found")
+}
+
 
 // Yeah.. Heh.. 🤷
 func mapToObj(theMap map[string]any, obj any) error {
