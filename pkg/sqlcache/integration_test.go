@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/schema/definitions"
 	"github.com/rancher/steve/pkg/server"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/schematracker"
@@ -491,7 +492,14 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 	}
 	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(defaultTestNamespace)
 	typeGuidance := map[string]string{}
-	cache, err := cacheFactory.CacheFor(context.Background(), fields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
+
+	// Convert [][]string to []informer.IndexedField
+	indexedFields := make([]informer.IndexedField, len(fields))
+	for i, f := range fields {
+		indexedFields[i] = &informer.JSONPathField{Path: f}
+	}
+
+	cache, err := cacheFactory.CacheFor(context.Background(), indexedFields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make cache: %w", err)
 	}

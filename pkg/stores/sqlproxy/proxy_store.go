@@ -17,8 +17,6 @@ import (
 	"github.com/rancher/apiserver/pkg/apierror"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/resources/virtual/multivalue/composite"
-	"github.com/rancher/steve/pkg/resources/virtual/multivalue/parsers"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -96,7 +94,7 @@ var (
 			&informer.ComputedField{
 				Names:         []string{"metadata.fields[3]_0", "metadata.fields[3]_1"},
 				Types:         []string{"INTEGER", "INTEGER"},
-				GetValuesFunc: extractPodRestarts,
+				GetValuesFunc: informer.ExtractPodRestarts,
 			},
 		},
 		gvkKey("", "v1", "ReplicationController"): {
@@ -930,40 +928,6 @@ var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
 		"metadata.fields[1]": "INT", // name: Data
 	},
-	// Pod restarts is now handled by ComputedField in TypeSpecificIndexedFields
-}
-
-// extractPodRestarts extracts restart count and timestamp from Pod metadata.fields[3]
-func extractPodRestarts(obj *unstructured.Unstructured) ([]any, error) {
-	value, found, err := unstructured.NestedFieldNoCopy(obj.Object, "metadata", "fields")
-	if err != nil || !found {
-		return []any{int64(0), int64(0)}, nil
-	}
-
-	fields, ok := value.([]interface{})
-	if !ok || len(fields) <= 3 {
-		return []any{int64(0), int64(0)}, nil
-	}
-
-	field3 := fields[3]
-
-	// If it's already a slice (from transform), use it
-	if arr, ok := field3.([]interface{}); ok {
-		ci := composite.CompositeInt{}.From(arr)
-		return []any{ci.Primary, ci.Secondary}, nil
-	}
-
-	// If it's a string (from raw K8s), parse it
-	if str, ok := field3.(string); ok {
-		arr, err := parsers.ParseRestarts(str)
-		if err != nil {
-			return []any{int64(0), int64(0)}, nil
-		}
-		ci := composite.CompositeInt{}.From(arr)
-		return []any{ci.Primary, ci.Secondary}, nil
-	}
-
-	return []any{int64(0), int64(0)}, nil
 }
 
 func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
