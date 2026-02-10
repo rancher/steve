@@ -26,6 +26,30 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+// toIndexedFields converts [][]string to []IndexedField for test convenience
+func toIndexedFieldsGen(fields [][]string) []IndexedField {
+	result := make([]IndexedField, len(fields))
+	for i, f := range fields {
+		result[i] = &JSONPathField{Path: f}
+	}
+	return result
+}
+
+// toIndexedFieldsFromColumnNames converts column names (like "metadata.name") to []IndexedField
+// The column names are used as-is since these tests are for constructQuery which uses column names directly
+func toIndexedFieldsFromColumnNames(colNames ...string) []IndexedField {
+	result := make([]IndexedField, len(colNames))
+	for i, name := range colNames {
+		// Create a ComputedField that returns this exact column name
+		result[i] = &ComputedField{
+			Names:         []string{name},
+			Types:         []string{"TEXT"},
+			GetValuesFunc: nil, // Not needed for query construction tests
+		}
+	}
+	return result
+}
+
 var standardJoinParts = []joinPart{
 	{
 		joinCommand:    "LEFT OUTER JOIN",
@@ -928,17 +952,17 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			fields := [][]string{
+			baseFields := [][]string{
 				{"metadata", "somefield"},
 				{"status", "someotherfield"},
 				{"status", "podIP"},
 				{"metadata", "unknown"},
 				{"metadata", "sortfield"},
 			}
-			fields = append(fields, test.extraIndexedFields...)
+			baseFields = append(baseFields, test.extraIndexedFields...)
 
 			opts := ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(baseFields),
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, namespaceList)
@@ -1328,7 +1352,7 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 			fields = append(fields, test.extraIndexedFields...)
 
 			opts := ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, namespaceList)
@@ -1459,7 +1483,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 		testCase{
 			description: "TestNewListOptionIndexerTypeGuidance() with type-guidance INT on non-ints sorts as string",
 			opts: ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 				TypeGuidance: map[string]string{
 					"metadata.someNumericValue": "INT",
@@ -1472,7 +1496,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	tests = append(tests,
 		testCase{description: "TestNewListOptionIndexerTypeGuidance() without type-guidance sorts as strings",
 			opts: ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 			},
 			sortFields:           []string{"metadata", "someNumericValue"},
@@ -1512,7 +1536,7 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	tests = append(tests,
 		testCase{description: "TestNewListOptionIndexerTypeGuidance() with type-guidance as int on a non-number sorts as string",
 			opts: ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 				TypeGuidance: map[string]string{
 					"metadata.favoriteFruit": "INT",
@@ -2525,7 +2549,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.name", "metadata.queryField1", "status.queryField2", "spec.containers.image", "status.podIP", "metadata.namespace"},
+				indexedFields: toIndexedFieldsFromColumnNames("metadata.name", "metadata.queryField1", "status.queryField2", "spec.containers.image", "status.podIP", "metadata.namespace"),
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != nil {
@@ -2830,7 +2854,7 @@ SELECT 'metadata.labels.pacific' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"},
+				indexedFields: toIndexedFieldsFromColumnNames("metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"),
 			}
 			fieldNum := test.fieldNum
 			if fieldNum == 0 {
@@ -3110,7 +3134,7 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"},
+				indexedFields: toIndexedFieldsFromColumnNames("metadata.name", "metadata.namespace", "metadata.queryField1", "metadata.state.name", "spec.containers.image"),
 			}
 			joinTableIndexByLabelName := make(map[string]int)
 			filterComponents, err := lii.compileQuery(&test.listOptions, test.partitions, test.ns, dbName, mainFieldPrefix, joinTableIndexByLabelName, includeSort, isSummaryFilter)
@@ -3595,7 +3619,7 @@ func TestSortPodsOnArrayAccess(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			opts := ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, podGVK, opts, false, namespaceList)
@@ -3803,7 +3827,7 @@ func TestUserDefinedExtractFunction(t *testing.T) {
 			fields = append(fields, test.extraIndexedFields...)
 
 			opts := ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
@@ -3922,7 +3946,7 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 			fields = append(fields, test.extraIndexedFields...)
 
 			opts := ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
@@ -4164,7 +4188,7 @@ func TestUserDefinedMemoryFunction(t *testing.T) {
 				test.partitions = []partition.Partition{{All: true}}
 			}
 			opts := ListOptionIndexerOptions{
-				Fields:       fields,
+				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)

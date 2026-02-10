@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/resources/virtual/multivalue/composite"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/informer/internal/ring"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -29,7 +28,7 @@ type ListOptionIndexer struct {
 	*Indexer
 
 	namespaced    bool
-	indexedFields []string
+	indexedFields []IndexedField
 	typeGuidance  map[string]string
 
 	// lock protects latestRV
@@ -94,11 +93,9 @@ type event struct {
 }
 
 type ListOptionIndexerOptions struct {
-	// Fields is a list of fields within the object that we want indexed for
-	// filtering & sorting. Each field is specified as a slice.
-	//
-	// For example, .metadata.resourceVersion should be specified as []string{"metadata", "resourceVersion"}
-	Fields [][]string
+	// Fields is a list of IndexedField instances for filtering & sorting.
+	// Each IndexedField specifies its column name(s), SQL type(s), and value extraction logic.
+	Fields []IndexedField
 	// Used for specifying types of non-TEXT database fields.
 	// The key is a fully-qualified field name, like 'metadata.fields[1]'.
 	// The value is a type name, most likely "INT" but could be "REAL". The default type is "TEXT",
@@ -111,12 +108,6 @@ type ListOptionIndexerOptions struct {
 	GCKeepCount int
 }
 
-// isCompositeField checks if a field uses composite storage (split into multiple columns).
-// Composite fields are stored as multiple values in separate database columns.
-func (l *ListOptionIndexer) isCompositeField(field string) bool {
-	return l.typeGuidance != nil && l.typeGuidance[field] == "COMPOSITE_INT"
-}
-
 // NewListOptionIndexer returns a SQLite-backed cache.Indexer of unstructured.Unstructured Kubernetes resources of a certain GVK
 // ListOptionIndexer is also able to satisfy ListOption queries on indexed (sub)fields.
 func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOptions) (*ListOptionIndexer, error) {
@@ -125,16 +116,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
-	var indexedFields []string
+	var indexedFields []IndexedField
+	// Add default fields
 	for _, f := range defaultIndexedFields {
-		indexedFields = append(indexedFields, f)
+		indexedFields = append(indexedFields, &JSONPathField{Path: strings.Split(f, ".")})
 	}
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, defaultIndexNamespaced)
+		indexedFields = append(indexedFields, &JSONPathField{Path: strings.Split(defaultIndexNamespaced, ".")})
 	}
-	for _, f := range opts.Fields {
-		indexedFields = append(indexedFields, toColumnName(f))
-	}
+	// Add provided fields (already IndexedField instances)
+	indexedFields = append(indexedFields, opts.Fields...)
 
 	maxEventHistory := opts.GCKeepCount
 	if maxEventHistory <= 0 {
@@ -162,25 +153,22 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropFields)
 	columnDefs := make([]string, 0, len(indexedFields)*2)
 	for _, field := range indexedFields {
-		typeName := "TEXT"
-		newTypeName, ok := opts.TypeGuidance[field]
-		if ok {
-			typeName = newTypeName
-		}
-		if typeName == "COMPOSITE_INT" {
-			// For COMPOSITE_INT, create two separate integer columns
-			columnDefs = append(columnDefs, fmt.Sprintf(`"%s_0" INTEGER`, field))
-			columnDefs = append(columnDefs, fmt.Sprintf(`"%s_1" INTEGER`, field))
-		} else {
-			column := fmt.Sprintf(`"%s" %s`, field, typeName)
-			columnDefs = append(columnDefs, column)
+		colNames := field.ColumnNames()
+		colTypes := field.ColumnTypes()
+		for i, colName := range colNames {
+			sqlType := colTypes[i]
+			// Allow type guidance to override if specified
+			if override, ok := opts.TypeGuidance[colName]; ok {
+				sqlType = override
+			}
+			columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, sqlType))
 		}
 	}
 
 	dbName := db.Sanitize(i.GetName())
-	columns := make([]string, 0, len(indexedFields))
-	qmarks := make([]string, 0, len(indexedFields))
-	setStatements := make([]string, 0, len(indexedFields))
+	columns := make([]string, 0, len(indexedFields)*2)
+	qmarks := make([]string, 0, len(indexedFields)*2)
+	setStatements := make([]string, 0, len(indexedFields)*2)
 
 	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		dropFieldsQuery := fmt.Sprintf(dropFieldsFmt, dbName)
@@ -194,33 +182,15 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		}
 
 		for _, field := range indexedFields {
-			if opts.TypeGuidance[field] == "COMPOSITE_INT" {
-				// For COMPOSITE_INT, create indexes for both split columns
-				for _, suffix := range []string{"_0", "_1"} {
-					col := field + suffix
-					createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, col, dbName, col)
-					if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
-						return err
-					}
-				}
-
-				// Add both columns to the prepared statement
-				columns = append(columns, fmt.Sprintf(`"%s_0"`, field), fmt.Sprintf(`"%s_1"`, field))
-				qmarks = append(qmarks, "?", "?")
-				if !immutableFields.Has(field) {
-					setStatements = append(setStatements,
-						fmt.Sprintf(`"%s_0" = excluded."%s_0"`, field, field),
-						fmt.Sprintf(`"%s_1" = excluded."%s_1"`, field, field))
-				}
-			} else {
+			for _, colName := range field.ColumnNames() {
 				// create index for field
-				createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
+				createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, colName, dbName, colName)
 				if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
 					return err
 				}
 
 				// format field into column for prepared statement
-				column := fmt.Sprintf(`"%s"`, field)
+				column := fmt.Sprintf(`"%s"`, colName)
 				columns = append(columns, column)
 
 				// add placeholder for column's value in prepared statement
@@ -228,8 +198,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 				// add formatted set statement for prepared statement
 				// optimization: avoid SET for fields which cannot change
-				if !immutableFields.Has(field) {
-					setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
+				if !immutableFields.Has(colName) {
+					setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, colName, colName)
 					setStatements = append(setStatements, setStatement)
 				}
 			}
@@ -405,47 +375,54 @@ func (l *ListOptionIndexer) closeEventLog(_ db.TxClient) error {
 
 // addIndexFields saves sortable/filterable fields into tables
 func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) error {
+	unstrObj, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("expected unstructured.Unstructured, got %T", obj)
+	}
+
 	args := []any{key}
+
 	for _, field := range l.indexedFields {
-		value, err := getField(obj, field)
+		values, err := field.GetValues(unstrObj)
 		if err != nil {
-			logrus.Errorf("cannot index object of type [%s] with key [%s] for indexer [%s]: %v", l.GetType().String(), key, l.GetName(), err)
-			return err
+			logrus.Errorf("cannot index field %v: %v", field.ColumnNames(), err)
+			// Use nil values on error
+			for range field.ColumnNames() {
+				args = append(args, normalizeValue(nil))
+			}
+			continue
 		}
 
-		switch typedValue := value.(type) {
-		case nil:
-			if l.isCompositeField(field) {
-				args = append(args, int64(0), int64(0))
-				continue
-			}
-			args = append(args, "")
-		case []interface{}:
-			// Check if this is a composite field (splits into multiple columns)
-			if l.isCompositeField(field) {
-				// Wrap in CompositeInt for type-safe extraction
-				ci := composite.CompositeInt{}.From(typedValue)
-				args = append(args, ci.Primary, ci.Secondary)
-				continue
-			}
-			// Regular array - join as pipe-separated string
-			strValues := make([]string, len(typedValue))
-			for i, v := range typedValue {
-				strValues[i] = fmt.Sprint(v)
-			}
-			args = append(args, strings.Join(strValues, "|"))
-		case int, bool, string, int64, float64:
-			args = append(args, fmt.Sprint(typedValue))
-		case []string:
-			args = append(args, strings.Join(typedValue, "|"))
-		default:
-			err2 := fmt.Errorf("field %v has a non-supported type value: %v", field, value)
-			return err2
+		// Append values in order (GetValues returns same order as ColumnNames)
+		for _, value := range values {
+			args = append(args, normalizeValue(value))
 		}
 	}
 
 	_, err := tx.Stmt(l.addFieldsStmt).Exec(args...)
 	return err
+}
+
+// normalizeValue converts a value to a SQL-compatible type
+func normalizeValue(value any) any {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case int, int64, float64, bool:
+		return v
+	case string:
+		return v
+	case []string:
+		return strings.Join(v, "|")
+	case []interface{}:
+		strValues := make([]string, len(v))
+		for i, item := range v {
+			strValues[i] = fmt.Sprint(item)
+		}
+		return strings.Join(strValues, "|")
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK

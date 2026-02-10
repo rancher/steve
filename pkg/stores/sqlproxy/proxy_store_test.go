@@ -105,7 +105,11 @@ func TestNewProxyStore(t *testing.T) {
 			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"spec", "displayName"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -237,7 +241,11 @@ func TestNewProxyStore(t *testing.T) {
 			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"spec", "displayName"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -337,7 +345,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = []informer.IndexedField{&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -349,7 +357,12 @@ func TestListByPartitions(t *testing.T) {
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"some", "field"}},
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -424,7 +437,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = []informer.IndexedField{&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -502,7 +515,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = []informer.IndexedField{&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}}
 
 			attributes.SetGVK(schema, gvk)
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
@@ -515,7 +528,12 @@ func TestListByPartitions(t *testing.T) {
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			// note also the watchable bool is expected to be false
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"some", "field"}},
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -591,7 +609,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = []informer.IndexedField{&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -604,7 +622,12 @@ func TestListByPartitions(t *testing.T) {
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"some", "field"}},
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -680,7 +703,7 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = []informer.IndexedField{&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -692,7 +715,12 @@ func TestListByPartitions(t *testing.T) {
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"some", "field"}},
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -818,7 +846,7 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			attributes.SetGVK(theSchema, gvk)
 			cg.EXPECT().TableAdminClient(apiOp, theSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {"id"}, {"metadata", "state", "name"}},
+				[]informer.IndexedField{&informer.JSONPathField{Path: []string{"some", "field"}}, &informer.JSONPathField{Path: []string{"id"}}, &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -886,7 +914,11 @@ func TestReset(t *testing.T) {
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"spec", "displayName"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
@@ -1042,7 +1074,11 @@ func TestReset(t *testing.T) {
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				[]informer.IndexedField{
+					&informer.JSONPathField{Path: []string{"id"}},
+					&informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+					&informer.JSONPathField{Path: []string{"spec", "displayName"}},
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),

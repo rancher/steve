@@ -897,18 +897,22 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		return "", nil, err
 	}
 
-	// Check if this is a composite field - need to cast parameter to integer for proper comparison
+	// Check if this is an INTEGER column - need to cast parameter to integer for proper comparison
 	//
-	// Note: We're checking fieldToCheck (without suffix) because that's what's in typeGuidance.
-	// The actual SQL column names will have _0 and _1 suffixes.
+	// Note: We determine this by checking the actual column type from the IndexedField.
 	//
 	columnName := toColumnName(filter.Field)
-	baseField, _, hasSubIndex := parseFieldPath(columnName)
-	fieldToCheck := columnName
+	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
+	// Determine the actual column name to check for INTEGER type
+	var actualColumnName string
 	if hasSubIndex {
-		fieldToCheck = baseField
+		actualColumnName = baseField + "_" + subIndex
+	} else if l.hasMultiColumnField(columnName) {
+		actualColumnName = columnName + "_0" // Default to _0 for multi-column fields
+	} else {
+		actualColumnName = columnName
 	}
-	isCompositeInt := l.isCompositeField(fieldToCheck)
+	isIntegerCol := l.isIntegerColumn(actualColumnName)
 
 	switch filter.Op {
 	case sqltypes.Eq:
@@ -920,8 +924,8 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
 		param := formatMatchTarget(filter)
-		if isCompositeInt && !filter.Partial {
-			// For COMPOSITE_INT, convert string parameter to integer
+		if isIntegerCol && !filter.Partial {
+			// For INTEGER columns, convert string parameter to integer
 			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
 				return clause, []any{intVal}, nil
 			}
@@ -936,8 +940,8 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
 		param := formatMatchTarget(filter)
-		if isCompositeInt && !filter.Partial {
-			// For COMPOSITE_INT, convert string parameter to integer
+		if isIntegerCol && !filter.Partial {
+			// For INTEGER columns, convert string parameter to integer
 			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
 				return clause, []any{intVal}, nil
 			}
@@ -1192,6 +1196,14 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 	// Check for array sub-index pattern like "metadata.fields[3][0]"
 	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
 
+	// If we have a sub-index (like metadata.fields[3][0]), first check for multi-column fields.
+	// Multi-column fields (like ComputedField with metadata.fields[3]_0, metadata.fields[3]_1)
+	// take priority over single-column base fields (like JSONPathField with metadata.fields[3]).
+	if hasSubIndex && l.hasMultiColumnField(baseField) {
+		// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
+		return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, subIndex), nil
+	}
+
 	// Validate the base field (without the sub-index)
 	fieldToValidate := columnName
 	if hasSubIndex {
@@ -1200,18 +1212,16 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 
 	err := l.validateColumn(fieldToValidate)
 	if err == nil {
-		// Check if this field is a composite type
-		if l.isCompositeField(fieldToValidate) {
-			if hasSubIndex {
-				// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
-				return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, subIndex), nil
-			}
-			// Default to first element when no sub-index specified
-			return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
-		}
-
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
 	}
+
+	// Check if this is a multi-column field without sub-index (like metadata.fields[3] with _0/_1 columns)
+	hasMultiCol := l.hasMultiColumnField(fieldToValidate)
+	if hasMultiCol {
+		// Default to first element when no sub-index specified
+		return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
+	}
+
 	if len(fields) <= 2 {
 		return "", err
 	}
@@ -1238,12 +1248,42 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 }
 
 func (l *ListOptionIndexer) validateColumn(column string) error {
-	for _, v := range l.indexedFields {
-		if v == column {
-			return nil
+	for _, field := range l.indexedFields {
+		for _, colName := range field.ColumnNames() {
+			if colName == column {
+				return nil
+			}
 		}
 	}
 	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
+}
+
+// hasMultiColumnField checks if a base field has multiple columns (like _0, _1 suffixes).
+// This is used to detect fields that need special handling for sub-indexing (e.g., metadata.fields[3][0]).
+func (l *ListOptionIndexer) hasMultiColumnField(baseField string) bool {
+	lookingFor := baseField + "_0"
+	for _, field := range l.indexedFields {
+		for _, colName := range field.ColumnNames() {
+			if colName == lookingFor {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isIntegerColumn checks if a column is stored as INTEGER type.
+func (l *ListOptionIndexer) isIntegerColumn(columnName string) bool {
+	for _, field := range l.indexedFields {
+		colNames := field.ColumnNames()
+		colTypes := field.ColumnTypes()
+		for i, colName := range colNames {
+			if colName == columnName && colTypes[i] == "INTEGER" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (f filterComponentsT) copy() filterComponentsT {

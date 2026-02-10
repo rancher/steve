@@ -15,6 +15,7 @@ import (
 
 	types "github.com/rancher/apiserver/pkg/types"
 	common "github.com/rancher/steve/pkg/resources/common"
+	informer "github.com/rancher/steve/pkg/sqlcache/informer"
 	factory "github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -269,7 +270,7 @@ func (m *MockCacheFactory) EXPECT() *MockCacheFactoryMockRecorder {
 }
 
 // CacheFor mocks base method.
-func (m *MockCacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced, watchable bool) (*factory.Cache, error) {
+func (m *MockCacheFactory) CacheFor(ctx context.Context, fields []informer.IndexedField, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced, watchable bool) (*factory.Cache, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CacheFor", ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable)
 	ret0, _ := ret[0].(*factory.Cache)
