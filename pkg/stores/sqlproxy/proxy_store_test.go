@@ -279,8 +279,7 @@ func TestListByPartitions(t *testing.T) {
 	}
 	var tests []testCase
 	tests = append(tests, testCase{
-		description: "client ListByPartitions() with no errors returned should return no errors. Should pass fields" +
-			" from schema.",
+		description: "client ListByPartitions() with no errors returned should return no errors. Should pass fields from schema.",
 		test: func(t *testing.T) {
 			cg := NewMockClientGetter(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
@@ -619,8 +618,7 @@ func TestListByPartitions(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields" +
-			" from schema.",
+		description: "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields from schema.",
 		test: func(t *testing.T) {
 			nsi := factory.Cache{
 				ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t)),
@@ -711,7 +709,186 @@ func TestListByPartitions(t *testing.T) {
 	})
 	t.Parallel()
 	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) { test.test(t) })
+		t.Run(test.description, func(t *testing.T) {
+			//if test.description == "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields from schema." {
+			//	fmt.Println("break here")
+			//}
+			test.test(t)
+		})
+	}
+}
+
+func TestAugmentRelationships(t *testing.T) {
+	type testCase struct {
+		description string
+		test        func(t *testing.T)
+	}
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "unrecognized GVKs aren't augmented",
+		test: func(t *testing.T) {
+			nsi := &factory.Cache{
+				ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t)),
+			}
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			s := &Store{
+				ctx:              context.Background(),
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			req := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+			}
+			schema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"columns": []common.ColumnDefinition{
+						{
+							Field: "some.field",
+						},
+					},
+					"verbs": []string{"list", "watch"},
+				}},
+			}
+			originalItems := []unstructured.Unstructured{
+				unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"kind": "apple",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			originalList := unstructured.UnstructuredList{
+				Items: originalItems,
+			}
+			augmentedList := unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(originalItems), len(originalItems)),
+			}
+			copy(augmentedList.Items, originalItems)
+			gvk := schema2.GroupVersionKind{
+				Group:   "some",
+				Version: "test",
+				Kind:    "gvk",
+			}
+
+			setupContext(req)
+			attributes.SetGVK(schema, gvk)
+			err := s.AugmentRelationships(req.Context(), gvk, &originalList, nil)
+			assert.Nil(t, err)
+			assert.Equal(t, augmentedList.Items, originalItems)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "Deployments get augmented.",
+		test: func(t *testing.T) {
+			nsi := &factory.Cache{
+				ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t)),
+			}
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			c := &factory.Cache{
+				ByOptionsLister: inf,
+			}
+			s := &Store{
+				ctx:              context.Background(),
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			podSchema := &types.APISchema{
+				Schema: &schemas.Schema{Attributes: map[string]interface{}{
+					"version":    "v1",
+					"kind":       "Pod",
+					"group":      "",
+					"namespaced": true,
+				}},
+			}
+			apiSchemas := &types.APISchemas{
+				Schemas: map[string]*types.APISchema{
+					"pod": podSchema,
+				},
+			}
+			apiOp := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+				Schemas: apiSchemas,
+			}
+			originalItems := []unstructured.Unstructured{
+				unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"kind": "Deployment",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			originalList := unstructured.UnstructuredList{
+				Items: originalItems,
+			}
+			augmentedList := unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(originalItems), len(originalItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "apps",
+				Version: "v1",
+				Kind:    "Deployment",
+			}
+			podGVK := schema2.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Pod",
+			}
+			ctx := context.Background()
+
+			copy(augmentedList.Items, originalItems)
+			cg.EXPECT().TableAdminClient(apiOp, podSchema, "", &WarningBuffer{}).Return(nil, nil)
+			cf.EXPECT().CacheFor(ctx,
+				[][]string{{"id"}, {"metadata", "state", "name"},
+					{"metadata", "state", "error"},
+					{"metadata", "state", "message"},
+					{"metadata", "state", "transitioning"},
+					{"spec", "containers", "image"}, {"spec", "nodeName"}, {"status", "podIP"}},
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(), // can't do (*tablelistconvert.Client)(nil),
+				attributes.GVK(podSchema),
+				gomock.Any(),
+				attributes.Namespaced(podSchema),
+				false).Return(c, nil)
+			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			cf.EXPECT().DoneWithCache(c)
+			bloi.EXPECT().AugmentList(ctx, &originalList).Return(nil)
+			err := s.AugmentRelationships(ctx, gvk, &originalList, apiOp)
+			assert.Nil(t, err)
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			test.test(t)
+		})
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -89,6 +90,10 @@ var (
 		gvkKey("", "v1", "PersistentVolumeClaim"): {
 			{"spec", "volumeName"}},
 		gvkKey("", "v1", "Pod"): {
+			// TODO: Move these to commonIndexFields if everyone needs them
+			{"metadata", "state", "error"},
+			{"metadata", "state", "message"},
+			{"metadata", "state", "transitioning"},
 			{"spec", "containers", "image"},
 			{"spec", "nodeName"},
 			{"status", "podIP"},
@@ -343,6 +348,10 @@ type SchemaCollection interface {
 }
 
 type Cache interface {
+	// AugmentList takes a list of resources, and for some of them,
+	// adds related data to each item in the list
+	AugmentList(ctx context.Context, list *unstructured.UnstructuredList)
+
 	// ListByOptions returns objects according to the specified list options and partitions.
 	// Specifically:
 	//   - an unstructured list of resources belonging to any of the specified partitions
@@ -1020,9 +1029,39 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		} else {
 			err = fmt.Errorf("listbyoptions %v: %w", gvk, err)
 		}
+	} else {
+		//t1 := time.Now()
+		err = s.AugmentRelationships(ctx, gvk, list, apiOp) //, apiOp, schema)
+		//t2 := time.Now()
+		//fmt.Printf("QQQ: AugmentRelationships took %v\n", t2.Sub(t1))
 	}
 
 	return
+}
+
+func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersionKind, list *unstructured.UnstructuredList, apiOp *types.APIRequest) error {
+	gvksToAugment := []schema.GroupVersionKind{
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"},
+		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"},
+	}
+	if slices.Contains(gvksToAugment, gvk) {
+		schemas1 := apiOp.Schemas
+		schemas2 := schemas1.Schemas
+
+		podSchema, ok := schemas2["pod"]
+		if !ok {
+			return fmt.Errorf("No pod schema found")
+		}
+		podClusterInf, doneCache, err := s.cacheForWithDeps(ctx, apiOp, podSchema)
+		if err != nil {
+			return err
+		}
+		defer doneCache()
+		return podClusterInf.AugmentList(ctx, list)
+	}
+	return nil
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions

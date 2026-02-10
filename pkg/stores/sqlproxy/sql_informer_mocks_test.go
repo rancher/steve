@@ -46,6 +46,20 @@ func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 	return m.recorder
 }
 
+// AugmentList mocks base method.
+func (m *MockByOptionsLister) AugmentList(ctx context.Context, list *unstructured.UnstructuredList) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AugmentList", ctx, list)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AugmentList indicates an expected call of AugmentList.
+func (mr *MockByOptionsListerMockRecorder) AugmentList(ctx, list any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockByOptionsLister)(nil).AugmentList), ctx, list)
+}
+
 // DropAll mocks base method.
 func (m *MockByOptionsLister) DropAll(arg0 context.Context) error {
 	m.ctrl.T.Helper()

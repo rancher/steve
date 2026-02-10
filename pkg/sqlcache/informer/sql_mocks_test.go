@@ -278,6 +278,21 @@ func (mr *MockStoreMockRecorder) ReadObjects(rows, typ any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadObjects", reflect.TypeOf((*MockStore)(nil).ReadObjects), rows, typ)
 }
 
+// ReadPodInfoStrings mocks base method.
+func (m *MockStore) ReadPodInfoStrings(rows db.Rows) ([][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadPodInfoStrings", rows)
+	ret0, _ := ret[0].([][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadPodInfoStrings indicates an expected call of ReadPodInfoStrings.
+func (mr *MockStoreMockRecorder) ReadPodInfoStrings(rows any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPodInfoStrings", reflect.TypeOf((*MockStore)(nil).ReadPodInfoStrings), rows)
+}
+
 // ReadStringIntString mocks base method.
 func (m *MockStore) ReadStringIntString(rows db.Rows) ([][]string, error) {
 	m.ctrl.T.Helper()

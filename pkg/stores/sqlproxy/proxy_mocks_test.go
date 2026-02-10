@@ -53,6 +53,18 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 	return m.recorder
 }
 
+// AugmentList mocks base method.
+func (m *MockCache) AugmentList(ctx context.Context, list *unstructured.UnstructuredList) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AugmentList", ctx, list)
+}
+
+// AugmentList indicates an expected call of AugmentList.
+func (mr *MockCacheMockRecorder) AugmentList(ctx, list any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockCache)(nil).AugmentList), ctx, list)
+}
+
 // ListByOptions mocks base method.
 func (m *MockCache) ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error) {
 	m.ctrl.T.Helper()
