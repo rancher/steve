@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/dates"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+	"github.com/rancher/steve/pkg/resources/virtual/pods"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -42,6 +43,12 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		converters = append(converters, events.TransformEventObject)
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
+	} else if gvk.Kind == "Pod" && gvk.Group == "" && gvk.Version == "v1" {
+		// Add Pod restart field converter
+		podConverter := &pods.Converter{
+			Columns: columns,
+		}
+		converters = append(converters, podConverter.Transform)
 	}
 
 	// Detecting if we need to convert date fields
