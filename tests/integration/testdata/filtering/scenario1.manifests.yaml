@@ -21,3 +21,24 @@ metadata:
 color: "black"
 number: 5
 numberString: "5"
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: red
+color: "red"
+number: 6
+numberString: "6"
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: blue
+  # Label values are limited to alphanumerics + a few other chars, but not bars
+  # so we include label-testing for completeness but there's not much interesting
+  # going on with them
+  labels:
+    colors: sapphire
+color: "blue"
+number: 7
+numberString: "7"
