@@ -33,6 +33,7 @@ const (
 	DoubleEquals     Operator = "=="
 	PartialEquals    Operator = "~"
 	In               Operator = "in"
+	NotContains      Operator = "notcontains"
 	NotEquals        Operator = "!="
 	NotPartialEquals Operator = "!~"
 	NotIn            Operator = "notin"

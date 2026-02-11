@@ -159,7 +159,7 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 		if len(vals) == 0 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "for 'in', 'notin' operators, values set can't be empty"))
 		}
-	case selection.Contains, selection.Equals, selection.DoubleEquals, selection.NotEquals:
+	case selection.Contains, selection.NotContains, selection.Equals, selection.DoubleEquals, selection.NotEquals:
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "exact-match compatibility requires one single value"))
 		}
@@ -371,6 +371,8 @@ const (
 	InToken
 	// LessThanToken represents less than
 	LessThanToken
+	// NotContainsToken represents the "notcontains" operator
+	NotContainsToken
 	// NotEqualsToken represents not equal
 	NotEqualsToken
 	// NotInToken represents not in
@@ -384,20 +386,21 @@ const (
 // string2token contains the mapping between lexer Token and token literal
 // (except IdentifierToken, EndOfStringToken and ErrorToken since it makes no sense)
 var string2token = map[string]Token{
-	")":        ClosedParToken,
-	",":        CommaToken,
-	"!":        DoesNotExistToken,
-	"==":       DoubleEqualsToken,
-	"=":        EqualsToken,
-	"~":        PartialEqualsToken,
-	">":        GreaterThanToken,
-	"in":       InToken,
-	"<":        LessThanToken,
-	"!=":       NotEqualsToken,
-	"!~":       NotPartialEqualsToken,
-	"notin":    NotInToken,
-	"contains": ContainsToken,
-	"(":        OpenParToken,
+	")":           ClosedParToken,
+	",":           CommaToken,
+	"!":           DoesNotExistToken,
+	"==":          DoubleEqualsToken,
+	"=":           EqualsToken,
+	"~":           PartialEqualsToken,
+	">":           GreaterThanToken,
+	"in":          InToken,
+	"<":           LessThanToken,
+	"!=":          NotEqualsToken,
+	"!~":          NotPartialEqualsToken,
+	"notin":       NotInToken,
+	"contains":    ContainsToken,
+	"notcontains": NotContainsToken,
+	"(":           OpenParToken,
 }
 
 // ScannedItem contains the Token and the literal produced by the lexer.
@@ -670,7 +673,7 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	switch operator {
 	case selection.In, selection.NotIn:
 		values, err = p.parseValues()
-	case selection.Contains, selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.PartialEquals, selection.NotPartialEquals:
+	case selection.Contains, selection.Equals, selection.DoubleEquals, selection.NotContains, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.PartialEquals, selection.NotPartialEquals:
 		values, err = p.parseSingleValue()
 	}
 	if err != nil {
@@ -722,6 +725,8 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 		op = selection.GreaterThan
 	case LessThanToken:
 		op = selection.LessThan
+	case NotContainsToken:
+		op = selection.NotContains
 	case NotInToken:
 		op = selection.NotIn
 	case NotEqualsToken:

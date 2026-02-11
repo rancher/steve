@@ -45,6 +45,7 @@ var mapK8sOpToRancherOp = map[selection.Operator]sqltypes.Op{
 	selection.NotEquals:        sqltypes.NotEq,
 	selection.NotPartialEquals: sqltypes.NotEq,
 	selection.Contains:         sqltypes.Contains,
+	selection.NotContains:      sqltypes.NotContains,
 	selection.In:               sqltypes.In,
 	selection.NotIn:            sqltypes.NotIn,
 	selection.Exists:           sqltypes.Exists,

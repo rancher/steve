@@ -12,6 +12,7 @@ const (
 	In        Op = "In"
 	NotIn     Op = "NotIn"
 	Contains  Op = "Contains"
+	NotContains  Op = "NotContains"
 	Lt        Op = "Lt"
 	Gt        Op = "Gt"
 )
