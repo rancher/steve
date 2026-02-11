@@ -2775,7 +2775,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
   WHERE
     ((o.key NOT IN (SELECT f1.key FROM "something_fields" f1
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
-		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND NOT hasBarredValue(lt1.value, ?))) AND
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
   ORDER BY f."metadata.name" ASC`,
 		expectedStmtArgs: []any{"sewingSupplies", "sewingSupplies", "needle03"},

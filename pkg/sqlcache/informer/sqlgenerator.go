@@ -1074,28 +1074,17 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, ma
 		if len(filter.Matches) != 1 {
 			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
 		}
-		clause := fmt.Sprintf("lt%d.label = ? AND hasBarredValue(lt%d.value, ?)", index, index)
-		matches := make([]any, 2)
-		matches[0] = labelName
-		matches[1] = filter.Matches[0]
-		return clause, matches, nil
+		// Labels can't have | characters so they're implemented like '='
+		filter.Op = sqltypes.Eq
+		return l.getLabelFilter(index, filter, mainFieldPrefix, isSummaryFilter, dbName)
 
 	case sqltypes.NotContains:
 		if len(filter.Matches) != 1 {
 			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
 		}
-		subFilter := sqltypes.Filter{
-			Field: filter.Field,
-			Op:    sqltypes.NotExists,
-		}
-		existenceClause, subParams, err := l.getLabelFilter(index, subFilter, mainFieldPrefix, isSummaryFilter, dbName)
-		if err != nil {
-			return "", nil, err
-		}
-		labelName := filter.Field[2]
-		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND NOT hasBarredValue(lt%d.value, ?))`, existenceClause, index, index)
-		params := append(subParams, labelName, filter.Matches[0])
-		return clause, params, nil
+		// Labels can't have | characters so they're implemented like '='
+		filter.Op = sqltypes.NotEq
+		return l.getLabelFilter(index, filter, mainFieldPrefix, isSummaryFilter, dbName)
 	}
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }
