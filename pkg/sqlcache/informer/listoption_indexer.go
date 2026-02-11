@@ -474,6 +474,7 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 	if namespaceSet.Len() == 0 {
 		return nil
 	}
+	// No need to sort this list as it goes into a SQL `metadata.namespace IN (...)` query
 	namespaces := namespaceSet.UnsortedList()
 	query, params, err := makeAugmentedDBQuery(namespaces)
 	if err != nil {
