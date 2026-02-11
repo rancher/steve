@@ -8,20 +8,18 @@ import (
 	"time"
 )
 
-// IndexedField represents a field that can be indexed in the SQL cache.
-// It provides both the column name(s) for storage and value extraction logic.
-// All methods return slices in consistent order for deterministic SQL generation.
+// IndexedField represents a single field that can be indexed in the SQL cache.
+// It provides the column name, SQL type, and value extraction logic.
 type IndexedField interface {
-	// ColumnNames returns the column names in order.
-	ColumnNames() []string
+	// ColumnName returns the column name.
+	ColumnName() string
 
-	// ColumnTypes returns the SQL types in the same order as ColumnNames.
-	ColumnTypes() []string
+	// ColumnType returns the SQL type for this column.
+	ColumnType() string
 
-	// GetValues extracts the value(s) from an unstructured object.
-	// Returns values in the same order as ColumnNames.
-	// Returns nil values for missing/invalid data.
-	GetValues(obj *unstructured.Unstructured) ([]any, error)
+	// GetValue extracts the value from an unstructured object.
+	// Returns nil for missing/invalid data.
+	GetValue(obj *unstructured.Unstructured) (any, error)
 }
 
 // JSONPathField represents a standard field accessed via JSON path
@@ -30,44 +28,44 @@ type JSONPathField struct {
 	Type string // Optional: TEXT (default), INTEGER, REAL, etc.
 }
 
-func (f *JSONPathField) ColumnNames() []string {
-	return []string{toColumnName(f.Path)}
+func (f *JSONPathField) ColumnName() string {
+	return toColumnName(f.Path)
 }
 
-func (f *JSONPathField) ColumnTypes() []string {
+func (f *JSONPathField) ColumnType() string {
 	sqlType := f.Type
 	if sqlType == "" {
 		sqlType = "TEXT"
 	}
-	return []string{sqlType}
+	return sqlType
 }
 
-func (f *JSONPathField) GetValues(obj *unstructured.Unstructured) ([]any, error) {
+func (f *JSONPathField) GetValue(obj *unstructured.Unstructured) (any, error) {
 	col := toColumnName(f.Path)
 	value, err := getField(obj, col)
 	if err != nil {
-		return []any{nil}, err
+		return nil, err
 	}
-	return []any{value}, nil
+	return value, nil
 }
 
-// ComputedField represents a field with custom column names and value extraction
+// ComputedField represents a field with custom column name and value extraction
 type ComputedField struct {
-	Names         []string
-	Types         []string
-	GetValuesFunc func(obj *unstructured.Unstructured) ([]any, error)
+	Name         string
+	Type         string
+	GetValueFunc func(obj *unstructured.Unstructured) (any, error)
 }
 
-func (f *ComputedField) ColumnNames() []string {
-	return f.Names
+func (f *ComputedField) ColumnName() string {
+	return f.Name
 }
 
-func (f *ComputedField) ColumnTypes() []string {
-	return f.Types
+func (f *ComputedField) ColumnType() string {
+	return f.Type
 }
 
-func (f *ComputedField) GetValues(obj *unstructured.Unstructured) ([]any, error) {
-	return f.GetValuesFunc(obj)
+func (f *ComputedField) GetValue(obj *unstructured.Unstructured) (any, error) {
+	return f.GetValueFunc(obj)
 }
 
 // restartsPattern matches "4 (3h38m ago)" or just "0"
@@ -76,33 +74,61 @@ var restartsPattern = regexp.MustCompile(`^(\d+)(?:\s+\((.+?)\s+ago\))?$`)
 // timeNow is mockable for testing
 var timeNow = time.Now
 
-// ExtractPodRestarts extracts restart count and timestamp from Pod metadata.fields[3].
-// Returns [count, timestamp_ms] where timestamp is the Unix time in milliseconds of the last restart.
-func ExtractPodRestarts(obj *unstructured.Unstructured) ([]any, error) {
+// ExtractPodRestartCount extracts restart count from Pod metadata.fields[3].
+func ExtractPodRestartCount(obj *unstructured.Unstructured) (any, error) {
 	value, found, err := unstructured.NestedFieldNoCopy(obj.Object, "metadata", "fields")
 	if err != nil || !found {
-		return []any{int64(0), int64(0)}, nil
+		return int64(0), nil
 	}
 
 	fields, ok := value.([]interface{})
 	if !ok || len(fields) <= 3 {
-		return []any{int64(0), int64(0)}, nil
+		return int64(0), nil
 	}
 
 	field3 := fields[3]
 
 	// If it's already a slice (from transform), extract values directly
 	if arr, ok := field3.([]interface{}); ok {
-		return []any{toInt64(arr, 0), toInt64(arr, 1)}, nil
+		return toInt64(arr, 0), nil
 	}
 
 	// If it's a string (from raw K8s), parse it
 	if str, ok := field3.(string); ok {
-		count, timestamp := parseRestarts(str)
-		return []any{count, timestamp}, nil
+		count, _ := parseRestarts(str)
+		return count, nil
 	}
 
-	return []any{int64(0), int64(0)}, nil
+	return int64(0), nil
+}
+
+// ExtractPodRestartTimestamp extracts restart timestamp from Pod metadata.fields[3].
+// Returns the Unix time in milliseconds of the last restart.
+func ExtractPodRestartTimestamp(obj *unstructured.Unstructured) (any, error) {
+	value, found, err := unstructured.NestedFieldNoCopy(obj.Object, "metadata", "fields")
+	if err != nil || !found {
+		return int64(0), nil
+	}
+
+	fields, ok := value.([]interface{})
+	if !ok || len(fields) <= 3 {
+		return int64(0), nil
+	}
+
+	field3 := fields[3]
+
+	// If it's already a slice (from transform), extract values directly
+	if arr, ok := field3.([]interface{}); ok {
+		return toInt64(arr, 1), nil
+	}
+
+	// If it's a string (from raw K8s), parse it
+	if str, ok := field3.(string); ok {
+		_, timestamp := parseRestarts(str)
+		return timestamp, nil
+	}
+
+	return int64(0), nil
 }
 
 // toInt64 safely extracts an int64 from a slice at the given index

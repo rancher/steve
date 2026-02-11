@@ -1248,12 +1248,8 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 }
 
 func (l *ListOptionIndexer) validateColumn(column string) error {
-	for _, field := range l.indexedFields {
-		for _, colName := range field.ColumnNames() {
-			if colName == column {
-				return nil
-			}
-		}
+	if _, ok := l.indexedFields[column]; ok {
+		return nil
 	}
 	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
 }
@@ -1261,27 +1257,14 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 // hasMultiColumnField checks if a base field has multiple columns (like _0, _1 suffixes).
 // This is used to detect fields that need special handling for sub-indexing (e.g., metadata.fields[3][0]).
 func (l *ListOptionIndexer) hasMultiColumnField(baseField string) bool {
-	lookingFor := baseField + "_0"
-	for _, field := range l.indexedFields {
-		for _, colName := range field.ColumnNames() {
-			if colName == lookingFor {
-				return true
-			}
-		}
-	}
-	return false
+	_, ok := l.indexedFields[baseField+"_0"]
+	return ok
 }
 
 // isIntegerColumn checks if a column is stored as INTEGER type.
 func (l *ListOptionIndexer) isIntegerColumn(columnName string) bool {
-	for _, field := range l.indexedFields {
-		colNames := field.ColumnNames()
-		colTypes := field.ColumnTypes()
-		for i, colName := range colNames {
-			if colName == columnName && colTypes[i] == "INTEGER" {
-				return true
-			}
-		}
+	if f, ok := l.indexedFields[columnName]; ok {
+		return f.ColumnType() == "INTEGER"
 	}
 	return false
 }

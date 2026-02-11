@@ -27,24 +27,25 @@ import (
 )
 
 // toIndexedFields converts [][]string to []IndexedField for test convenience
-func toIndexedFieldsGen(fields [][]string) []IndexedField {
-	result := make([]IndexedField, len(fields))
-	for i, f := range fields {
-		result[i] = &JSONPathField{Path: f}
+func toIndexedFieldsGen(fields [][]string) map[string]IndexedField {
+	result := make(map[string]IndexedField)
+	for _, f := range fields {
+		field := &JSONPathField{Path: f}
+		result[field.ColumnName()] = field
 	}
 	return result
 }
 
 // toIndexedFieldsFromColumnNames converts column names (like "metadata.name") to []IndexedField
 // The column names are used as-is since these tests are for constructQuery which uses column names directly
-func toIndexedFieldsFromColumnNames(colNames ...string) []IndexedField {
-	result := make([]IndexedField, len(colNames))
-	for i, name := range colNames {
+func toIndexedFieldsFromColumnNames(colNames ...string) map[string]IndexedField {
+	result := make(map[string]IndexedField)
+	for _, name := range colNames {
 		// Create a ComputedField that returns this exact column name
-		result[i] = &ComputedField{
-			Names:         []string{name},
-			Types:         []string{"TEXT"},
-			GetValuesFunc: nil, // Not needed for query construction tests
+		result[name] = &ComputedField{
+			Name:         name,
+			Type:         "TEXT",
+			GetValueFunc: nil, // Not needed for query construction tests
 		}
 	}
 	return result

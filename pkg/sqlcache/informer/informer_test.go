@@ -39,7 +39,8 @@ func TestNewInformer(t *testing.T) {
 		dynamicClient := NewMockResourceInterface(ctrl)
 		stmt := NewMockStmt(ctrl)
 
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		gvk := schema.GroupVersionKind{}
 
 		// NewStore() from store package logic. This package is only concerned with whether it returns err or not as NewStore
@@ -86,7 +87,8 @@ func TestNewInformer(t *testing.T) {
 		txClient := NewMockTxClient(gomock.NewController(t))
 		dynamicClient := NewMockResourceInterface(gomock.NewController(t))
 
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		gvk := schema.GroupVersionKind{}
 
 		// NewStore() from store package logic. This package is only concerned with whether it returns err or not as NewStore
@@ -110,7 +112,8 @@ func TestNewInformer(t *testing.T) {
 		dynamicClient := NewMockResourceInterface(ctrl)
 		stmt := NewMockStmt(ctrl)
 
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		gvk := schema.GroupVersionKind{}
 
 		// NewStore() from store package logic. This package is only concerned with whether it returns err or not as NewStore
@@ -146,7 +149,8 @@ func TestNewInformer(t *testing.T) {
 		dynamicClient := NewMockResourceInterface(ctrl)
 		stmt := NewMockStmt(ctrl)
 
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		gvk := schema.GroupVersionKind{}
 
 		// NewStore() from store package logic. This package is only concerned with whether it returns err or not as NewStore
@@ -201,7 +205,8 @@ func TestNewInformer(t *testing.T) {
 		}
 		newInformer = testNewInformer
 
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		gvk := schema.GroupVersionKind{}
 
 		// NewStore() from store package logic. This package is only concerned with whether it returns err or not as NewStore
@@ -271,7 +276,8 @@ func TestNewInformer(t *testing.T) {
 		}
 		newInformer = testNewInformer
 
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		gvk := schema.GroupVersionKind{}
 
 		transformFunc := func(input interface{}) (interface{}, error) {

@@ -493,10 +493,11 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(defaultTestNamespace)
 	typeGuidance := map[string]string{}
 
-	// Convert [][]string to []informer.IndexedField
-	indexedFields := make([]informer.IndexedField, len(fields))
-	for i, f := range fields {
-		indexedFields[i] = &informer.JSONPathField{Path: f}
+	// Convert [][]string to map[string]informer.IndexedField
+	indexedFields := make(map[string]informer.IndexedField)
+	for _, f := range fields {
+		field := &informer.JSONPathField{Path: f}
+		indexedFields[field.ColumnName()] = field
 	}
 
 	cache, err := cacheFactory.CacheFor(context.Background(), indexedFields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)

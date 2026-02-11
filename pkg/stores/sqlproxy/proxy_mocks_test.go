@@ -270,7 +270,7 @@ func (m *MockCacheFactory) EXPECT() *MockCacheFactoryMockRecorder {
 }
 
 // CacheFor mocks base method.
-func (m *MockCacheFactory) CacheFor(ctx context.Context, fields []informer.IndexedField, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced, watchable bool) (*factory.Cache, error) {
+func (m *MockCacheFactory) CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced, watchable bool) (*factory.Cache, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CacheFor", ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable)
 	ret0, _ := ret[0].(*factory.Cache)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +29,8 @@ type ListOptionIndexer struct {
 	*Indexer
 
 	namespaced    bool
-	indexedFields []IndexedField
+	indexedFields map[string]IndexedField // column name -> field for O(1) lookups
+	columnOrder   []string                // deterministic iteration order (sorted)
 	typeGuidance  map[string]string
 
 	// lock protects latestRV
@@ -93,9 +95,9 @@ type event struct {
 }
 
 type ListOptionIndexerOptions struct {
-	// Fields is a list of IndexedField instances for filtering & sorting.
-	// Each IndexedField specifies its column name(s), SQL type(s), and value extraction logic.
-	Fields []IndexedField
+	// Fields is a map of column name to IndexedField for filtering & sorting.
+	// Each IndexedField specifies its column name, SQL type, and value extraction logic.
+	Fields map[string]IndexedField
 	// Used for specifying types of non-TEXT database fields.
 	// The key is a fully-qualified field name, like 'metadata.fields[1]'.
 	// The value is a type name, most likely "INT" but could be "REAL". The default type is "TEXT",
@@ -116,16 +118,32 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
-	var indexedFields []IndexedField
+	// Build the map from default fields + options
+	indexedFields := make(map[string]IndexedField)
+
 	// Add default fields
 	for _, f := range defaultIndexedFields {
-		indexedFields = append(indexedFields, &JSONPathField{Path: strings.Split(f, ".")})
+		field := &JSONPathField{Path: strings.Split(f, ".")}
+		indexedFields[field.ColumnName()] = field
 	}
+
+	// Add namespace if namespaced
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, &JSONPathField{Path: strings.Split(defaultIndexNamespaced, ".")})
+		field := &JSONPathField{Path: strings.Split(defaultIndexNamespaced, ".")}
+		indexedFields[field.ColumnName()] = field
 	}
-	// Add provided fields (already IndexedField instances)
-	indexedFields = append(indexedFields, opts.Fields...)
+
+	// Merge in provided fields (overwrite if duplicate)
+	for k, v := range opts.Fields {
+		indexedFields[k] = v
+	}
+
+	// Sort keys once for deterministic order
+	columnOrder := make([]string, 0, len(indexedFields))
+	for name := range indexedFields {
+		columnOrder = append(columnOrder, name)
+	}
+	slices.Sort(columnOrder)
 
 	maxEventHistory := opts.GCKeepCount
 	if maxEventHistory <= 0 {
@@ -136,6 +154,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		Indexer:       i,
 		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
+		columnOrder:   columnOrder,
 		typeGuidance:  opts.TypeGuidance,
 		eventLog:      ring.NewCircularBuffer[*event](maxEventHistory),
 	}
@@ -151,24 +170,23 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.closeEventLog)
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
-	columnDefs := make([]string, 0, len(indexedFields)*2)
-	for _, field := range indexedFields {
-		colNames := field.ColumnNames()
-		colTypes := field.ColumnTypes()
-		for i, colName := range colNames {
-			sqlType := colTypes[i]
-			// Allow type guidance to override if specified
-			if override, ok := opts.TypeGuidance[colName]; ok {
-				sqlType = override
-			}
-			columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, sqlType))
+
+	// Build column definitions using sorted order
+	columnDefs := make([]string, 0, len(columnOrder))
+	for _, colName := range columnOrder {
+		field := indexedFields[colName]
+		sqlType := field.ColumnType()
+		// Allow type guidance to override if specified
+		if override, ok := opts.TypeGuidance[colName]; ok {
+			sqlType = override
 		}
+		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, sqlType))
 	}
 
 	dbName := db.Sanitize(i.GetName())
-	columns := make([]string, 0, len(indexedFields)*2)
-	qmarks := make([]string, 0, len(indexedFields)*2)
-	setStatements := make([]string, 0, len(indexedFields)*2)
+	columns := make([]string, 0, len(columnOrder))
+	qmarks := make([]string, 0, len(columnOrder))
+	setStatements := make([]string, 0, len(columnOrder))
 
 	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		dropFieldsQuery := fmt.Sprintf(dropFieldsFmt, dbName)
@@ -181,27 +199,25 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return err
 		}
 
-		for _, field := range indexedFields {
-			for _, colName := range field.ColumnNames() {
-				// create index for field
-				createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, colName, dbName, colName)
-				if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
-					return err
-				}
+		for _, colName := range columnOrder {
+			// create index for field
+			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, colName, dbName, colName)
+			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
+				return err
+			}
 
-				// format field into column for prepared statement
-				column := fmt.Sprintf(`"%s"`, colName)
-				columns = append(columns, column)
+			// format field into column for prepared statement
+			column := fmt.Sprintf(`"%s"`, colName)
+			columns = append(columns, column)
 
-				// add placeholder for column's value in prepared statement
-				qmarks = append(qmarks, "?")
+			// add placeholder for column's value in prepared statement
+			qmarks = append(qmarks, "?")
 
-				// add formatted set statement for prepared statement
-				// optimization: avoid SET for fields which cannot change
-				if !immutableFields.Has(colName) {
-					setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, colName, colName)
-					setStatements = append(setStatements, setStatement)
-				}
+			// add formatted set statement for prepared statement
+			// optimization: avoid SET for fields which cannot change
+			if !immutableFields.Has(colName) {
+				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, colName, colName)
+				setStatements = append(setStatements, setStatement)
 			}
 		}
 
@@ -382,21 +398,16 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 
 	args := []any{key}
 
-	for _, field := range l.indexedFields {
-		values, err := field.GetValues(unstrObj)
+	// Use columnOrder for deterministic iteration
+	for _, colName := range l.columnOrder {
+		field := l.indexedFields[colName]
+		value, err := field.GetValue(unstrObj)
 		if err != nil {
-			logrus.Errorf("cannot index field %v: %v", field.ColumnNames(), err)
-			// Use nil values on error
-			for range field.ColumnNames() {
-				args = append(args, normalizeValue(nil))
-			}
+			logrus.Errorf("cannot index field %v: %v", colName, err)
+			args = append(args, normalizeValue(nil))
 			continue
 		}
-
-		// Append values in order (GetValues returns same order as ColumnNames)
-		for _, value := range values {
-			args = append(args, normalizeValue(value))
-		}
+		args = append(args, normalizeValue(value))
 	}
 
 	_, err := tx.Stmt(l.addFieldsStmt).Exec(args...)

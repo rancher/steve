@@ -55,7 +55,7 @@ func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opt
 		return nil, "", err
 	}
 	ns_opts := ListOptionIndexerOptions{
-		Fields:       []IndexedField{},
+		Fields:       map[string]IndexedField{},
 		IsNamespaced: false,
 	}
 	listOptionIndexer, err := NewListOptionIndexer(ctx, s, ns_opts)
@@ -82,9 +82,9 @@ func makeListOptionIndexer(ctx context.Context, gvk schema.GroupVersionKind, opt
 	if opts.IsNamespaced {
 		idField := &JSONPathField{Path: []string{"id"}}
 		if opts.Fields == nil {
-			opts.Fields = []IndexedField{idField}
+			opts.Fields = map[string]IndexedField{idField.ColumnName(): idField}
 		} else {
-			opts.Fields = append(opts.Fields, idField)
+			opts.Fields[idField.ColumnName()] = idField
 		}
 	}
 
@@ -114,7 +114,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient := NewMockTxClient(ctrl)
 		store := NewMockStore(ctrl)
 		stmt := NewMockStmt(ctrl)
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
@@ -139,13 +140,13 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterAfterDeleteAll(gomock.Any()).Times(2)
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
-		// create field table
+		// create field table - columns are now sorted alphabetically
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" INT`)).Return(nil, nil)
-		// create field table indexes
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.creationTimestamp" TEXT, "metadata.name" TEXT, "metadata.namespace" TEXT, "something" INT`)).Return(nil, nil)
+		// create field table indexes - columns are now sorted alphabetically
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "something", id, "something")).Return(nil, nil)
 		// create labels table
 		txClient.EXPECT().Exec(fmt.Sprintf(dropLabelsStmtFmt, id)).Return(nil, nil)
@@ -171,7 +172,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 	tests = append(tests, testCase{description: "NewListOptionIndexer() with error returned from NewIndexer(), should return an error", test: func(t *testing.T) {
 		txClient := NewMockTxClient(gomock.NewController(t))
 		store := NewMockStore(gomock.NewController(t))
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
@@ -197,7 +199,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient := NewMockTxClient(ctrl)
 		store := NewMockStore(ctrl)
 		stmt := NewMockStmt(ctrl)
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
@@ -235,7 +238,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient := NewMockTxClient(ctrl)
 		store := NewMockStore(ctrl)
 		stmt := NewMockStmt(ctrl)
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
@@ -261,8 +265,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, fmt.Errorf("error"))
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.creationTimestamp" TEXT, "metadata.name" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, fmt.Errorf("error"))
 		store.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(fmt.Errorf("error")).Do(
 			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
 				err := f(txClient)
@@ -283,7 +287,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient := NewMockTxClient(ctrl)
 		store := NewMockStore(ctrl)
 		stmt := NewMockStmt(ctrl)
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
@@ -309,10 +314,10 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.creationTimestamp" TEXT, "metadata.name" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "something", id, "something")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(dropLabelsStmtFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, fmt.Errorf("error"))
@@ -336,7 +341,8 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient := NewMockTxClient(ctrl)
 		store := NewMockStore(ctrl)
 		stmt := NewMockStmt(ctrl)
-		fields := []IndexedField{&JSONPathField{Path: []string{"something"}}}
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
 		store.EXPECT().GetName().Return(id).AnyTimes()
@@ -362,10 +368,10 @@ func TestNewListOptionIndexer(t *testing.T) {
 		store.EXPECT().RegisterBeforeDropAll(gomock.Any()).AnyTimes()
 
 		txClient.EXPECT().Exec(fmt.Sprintf(dropFieldsFmt, id)).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.name" TEXT, "metadata.creationTimestamp" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsTableFmt, id, id, `"metadata.creationTimestamp" TEXT, "metadata.name" TEXT, "metadata.namespace" TEXT, "something" TEXT`)).Return(nil, nil)
+		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.name", id, "metadata.name")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.namespace", id, "metadata.namespace")).Return(nil, nil)
-		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "metadata.creationTimestamp", id, "metadata.creationTimestamp")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createFieldsIndexFmt, id, "something", id, "something")).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(dropLabelsStmtFmt, id)).Return(nil, nil)
 		txClient.EXPECT().Exec(fmt.Sprintf(createLabelsTableFmt, id, id)).Return(nil, nil)
@@ -427,11 +433,14 @@ func TestWatchEncryption(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 
+	field1 := &JSONPathField{Path: []string{"metadata", "somefield"}}
+	field2 := &JSONPathField{Path: []string{"spec", "replicas"}}
+	field3 := &JSONPathField{Path: []string{"spec", "minReplicas"}}
 	opts := ListOptionIndexerOptions{
-		Fields: []IndexedField{
-			&JSONPathField{Path: []string{"metadata", "somefield"}},
-			&JSONPathField{Path: []string{"spec", "replicas"}},
-			&JSONPathField{Path: []string{"spec", "minReplicas"}},
+		Fields: map[string]IndexedField{
+			field1.ColumnName(): field1,
+			field2.ColumnName(): field2,
+			field3.ColumnName(): field3,
 		},
 		IsNamespaced: true,
 	}
@@ -516,11 +525,14 @@ func TestWatchMany(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 
+	field1 := &JSONPathField{Path: []string{"metadata", "somefield"}}
+	field2 := &JSONPathField{Path: []string{"spec", "replicas"}}
+	field3 := &JSONPathField{Path: []string{"spec", "minReplicas"}}
 	opts := ListOptionIndexerOptions{
-		Fields: []IndexedField{
-			&JSONPathField{Path: []string{"metadata", "somefield"}},
-			&JSONPathField{Path: []string{"spec", "replicas"}},
-			&JSONPathField{Path: []string{"spec", "minReplicas"}},
+		Fields: map[string]IndexedField{
+			field1.ColumnName(): field1,
+			field2.ColumnName(): field2,
+			field3.ColumnName(): field3,
 		},
 		IsNamespaced: true,
 	}
@@ -781,8 +793,9 @@ func TestWatchFilter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
+			field := &JSONPathField{Path: []string{"metadata", "somefield"}}
 			opts := ListOptionIndexerOptions{
-				Fields:       []IndexedField{&JSONPathField{Path: []string{"metadata", "somefield"}}},
+				Fields:       map[string]IndexedField{field.ColumnName(): field},
 				IsNamespaced: true,
 			}
 			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
@@ -983,8 +996,9 @@ func TestNonNumberResourceVersion(t *testing.T) {
 	ctx := context.Background()
 	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
 
+	field := &JSONPathField{Path: []string{"metadata", "somefield"}}
 	opts := ListOptionIndexerOptions{
-		Fields:       []IndexedField{&JSONPathField{Path: []string{"metadata", "somefield"}}},
+		Fields:       map[string]IndexedField{field.ColumnName(): field},
 		IsNamespaced: true,
 	}
 	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
@@ -1053,8 +1067,9 @@ func TestWatchCancel(t *testing.T) {
 
 	ctx := context.Background()
 
+	field := &JSONPathField{Path: []string{"metadata", "somefield"}}
 	opts := ListOptionIndexerOptions{
-		Fields:       []IndexedField{&JSONPathField{Path: []string{"metadata", "somefield"}}},
+		Fields:       map[string]IndexedField{field.ColumnName(): field},
 		IsNamespaced: true,
 	}
 	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
