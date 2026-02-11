@@ -2675,7 +2675,6 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			},
 		},
 		},
-		//partitions: []partition.Partition{},
 		ns:          "",
 		expectedErr: "array checking works on exactly one field, 0 were specified",
 	})
@@ -2774,7 +2773,6 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			},
 		},
 		},
-		//partitions: []partition.Partition{},
 		ns:          "",
 		expectedErr: "array checking works on exactly one field, 0 were specified",
 	})
@@ -2814,7 +2812,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			}
 			lii := &ListOptionIndexer{
 				Indexer:       i,
-				indexedFields: []string{"metadata.queryField1", "status.queryField2", "metadata.fields"},
+				indexedFields: toIndexedFieldsFromColumnNames("metadata.queryField1", "status.queryField2", "metadata.fields"),
 			}
 			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
 			if test.expectedErr != "" {

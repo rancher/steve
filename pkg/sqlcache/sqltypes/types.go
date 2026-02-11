@@ -5,16 +5,16 @@ import "k8s.io/apimachinery/pkg/runtime/schema"
 type Op string
 
 const (
-	Eq        Op = "="
-	NotEq     Op = "!="
-	Exists    Op = "Exists"
-	NotExists Op = "NotExists"
-	In        Op = "In"
-	NotIn     Op = "NotIn"
-	Contains  Op = "Contains"
-	NotContains  Op = "NotContains"
-	Lt        Op = "Lt"
-	Gt        Op = "Gt"
+	Eq          Op = "="
+	NotEq       Op = "!="
+	Exists      Op = "Exists"
+	NotExists   Op = "NotExists"
+	In          Op = "In"
+	NotIn       Op = "NotIn"
+	Contains    Op = "Contains"
+	NotContains Op = "NotContains"
+	Lt          Op = "Lt"
+	Gt          Op = "Gt"
 )
 
 // SortOrder represents whether the list should be ascending or descending.

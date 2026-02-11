@@ -587,7 +587,7 @@ func (p *Parser) lookahead(context ParserContext) (Token, string) {
 	tok, lit := p.scannedItems[p.position].tok, p.scannedItems[p.position].literal
 	if context == Values {
 		switch tok {
-		case InToken, NotInToken, ContainsToken:
+		case InToken, NotInToken, ContainsToken, NotContainsToken:
 			tok = IdentifierToken
 		}
 	}
@@ -600,7 +600,7 @@ func (p *Parser) consume(context ParserContext) (Token, string) {
 	tok, lit := p.scannedItems[p.position-1].tok, p.scannedItems[p.position-1].literal
 	if context == Values {
 		switch tok {
-		case InToken, NotInToken:
+		case InToken, NotInToken, ContainsToken, NotContainsToken:
 			tok = IdentifierToken
 		}
 	}
