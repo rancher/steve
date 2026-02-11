@@ -60,6 +60,7 @@ func TestSelectorParse(t *testing.T) {
 		`x="double quotes with \\ and \" ok"`,
 		`x='single quotes with \\ and \' ok'`,
 		`x contains "app=nginx"`,
+		`x notcontains "app=nginx"`,
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -82,14 +83,22 @@ func TestSelectorParse(t *testing.T) {
 		"metadata.labels[missing/close-bracket",
 		"!metadata.labels(im.not.here)",
 		"x contains",
+		"x contains a,b",
+		"x notcontains a,b",
 	}
 	for _, test := range testGoodStrings {
+		if test == `x notcontains "app=nginx"` {
+			fmt.Println("stop here")
+		}
 		_, err := Parse(test)
 		if err != nil {
 			t.Errorf("%v: error %v (%#v)\n", test, err, err)
 		}
 	}
 	for _, test := range testBadStrings {
+		if test == "x notcontains a,b" {
+			fmt.Println("stop here")
+		}
 		_, err := Parse(test)
 		if err == nil {
 			t.Errorf("%v: did not get expected error\n", test)
@@ -107,6 +116,7 @@ func TestLexer(t *testing.T) {
 		{"notin", NotInToken},
 		{"in", InToken},
 		{"contains", ContainsToken},
+		{"notcontains", NotContainsToken},
 		{"=", EqualsToken},
 		{"==", DoubleEqualsToken},
 		{">", GreaterThanToken},
@@ -181,6 +191,7 @@ func TestLexerSequence(t *testing.T) {
 		{"key!~value", []Token{IdentifierToken, NotPartialEqualsToken, IdentifierToken}},
 		{`ip(status.podIP)`, []Token{IdentifierToken, OpenParToken, IdentifierToken, ClosedParToken}},
 		{`x contains "app=moose"`, []Token{IdentifierToken, ContainsToken, QuotedStringToken}},
+		{`x notcontains "app=moose"`, []Token{IdentifierToken, NotContainsToken, QuotedStringToken}},
 	}
 	for _, v := range testcases {
 		var tokens []Token
@@ -224,6 +235,7 @@ func TestParserLookahead(t *testing.T) {
 		{`key = "multi-word-string"`, []Token{IdentifierToken, EqualsToken, QuotedStringToken, EndOfStringToken}},
 		{`ip(status.podIP)`, []Token{IdentifierToken, OpenParToken, IdentifierToken, ClosedParToken, EndOfStringToken}},
 		{`metadata.labels.dog contains "cat=meow"`, []Token{IdentifierToken, ContainsToken, QuotedStringToken, EndOfStringToken}},
+		{`metadata.labels.dog notcontains "pig=oink"`, []Token{IdentifierToken, NotContainsToken, QuotedStringToken, EndOfStringToken}},
 	}
 	for _, v := range testcases {
 		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
@@ -263,6 +275,7 @@ func TestParseOperator(t *testing.T) {
 		{"!=", nil},
 		{"!~", nil},
 		{"contains", nil},
+		{"notcontains", nil},
 		{"!", fmt.Errorf("found '%s', expected: %v", selection.DoesNotExist, strings.Join(binaryOperators, ", "))},
 		{"exists", fmt.Errorf("found '%s', expected: %v", selection.Exists, strings.Join(binaryOperators, ", "))},
 		{"(", fmt.Errorf("found '%s', expected: %v", "(", strings.Join(binaryOperators, ", "))},

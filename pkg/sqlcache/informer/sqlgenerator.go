@@ -888,6 +888,7 @@ SELECT key, value FROM "%s_labels"
 // KEY in VALUES
 // KEY notin VALUES
 // KEY contains VALUES
+// KEY notcontains VALUES
 
 func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string) (string, []any, error) {
 	opString := ""
@@ -950,6 +951,15 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
 		}
 		clause := fmt.Sprintf("hasBarredValue(%s, ?)", fieldEntry)
+		matches := make([]any, 1)
+		matches[0] = filter.Matches[0]
+		return clause, matches, nil
+
+	case sqltypes.NotContains:
+		if len(filter.Matches) != 1 {
+			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
+		}
+		clause := fmt.Sprintf("NOT hasBarredValue(%s, ?)", fieldEntry)
 		matches := make([]any, 1)
 		matches[0] = filter.Matches[0]
 		return clause, matches, nil
@@ -1069,6 +1079,23 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, ma
 		matches[0] = labelName
 		matches[1] = filter.Matches[0]
 		return clause, matches, nil
+
+	case sqltypes.NotContains:
+		if len(filter.Matches) != 1 {
+			return "", nil, fmt.Errorf("array checking works on exactly one field, %d were specified", len(filter.Matches))
+		}
+		subFilter := sqltypes.Filter{
+			Field: filter.Field,
+			Op:    sqltypes.NotExists,
+		}
+		existenceClause, subParams, err := l.getLabelFilter(index, subFilter, mainFieldPrefix, isSummaryFilter, dbName)
+		if err != nil {
+			return "", nil, err
+		}
+		labelName := filter.Field[2]
+		clause := fmt.Sprintf(`(%s) OR (lt%d.label = ? AND NOT hasBarredValue(lt%d.value, ?))`, existenceClause, index, index)
+		params := append(subParams, labelName, filter.Matches[0])
+		return clause, params, nil
 	}
 	return "", nil, fmt.Errorf("unrecognized operator: %s", opString)
 }

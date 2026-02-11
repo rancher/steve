@@ -625,7 +625,7 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
-		description: "ParseQuery() should handle 'in' with multiple args",
+		description: "ParseQuery() should handle 'notin' with multiple args",
 		req: &types.APIRequest{
 			Request: &http.Request{
 				URL: &url.URL{RawQuery: "filter=a3NotIn in (x3a, x3b)"},
@@ -670,6 +670,117 @@ func TestParseQuery(t *testing.T) {
 							Field:   []string{"a4NotIn"},
 							Matches: []string{"x4b"},
 							Op:      sqltypes.NotIn,
+							Partial: false,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'contains' and 'CONTAINS' with one arg",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1In contains x1,a2In CONTAINS x2"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"a1In"},
+							Matches: []string{"x1"},
+							Op:      sqltypes.Contains,
+						},
+						{
+							Field:   []string{"a2In"},
+							Matches: []string{"x2"},
+							Op:      sqltypes.Contains,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should flag 'contains' with multiple args",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a2In contains (x2a, x2b)"},
+			},
+		},
+		errExpected: true,
+		errorText:   "found '(', expected: identifier",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'notcontains' and 'NOTCONTAINS' with one arg",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a1NotIn notcontains x1,a2NotIn NOTCONTAINS x2"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"a1NotIn"},
+							Matches: []string{"x1"},
+							Op:      sqltypes.NotContains,
+							Partial: false,
+						},
+						{
+							Field:   []string{"a2NotIn"},
+							Matches: []string{"x2"},
+							Op:      sqltypes.NotContains,
+							Partial: false,
+						},
+					},
+				},
+			},
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should flag 'notcontains' with multiple args",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a3NotIn contains (x3a, x3b)"},
+			},
+		},
+		errExpected: true,
+		errorText:   "found '(', expected: identifier",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should handle 'contains' and 'notcontains' in mixed case",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "filter=a4In contains x4a,a4NotIn notcontains x4b"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			Filters: []sqltypes.OrFilter{
+				{
+					Filters: []sqltypes.Filter{
+						{
+							Field:   []string{"a4In"},
+							Matches: []string{"x4a"},
+							Op:      sqltypes.Contains,
+							Partial: false,
+						},
+						{
+							Field:   []string{"a4NotIn"},
+							Matches: []string{"x4b"},
+							Op:      sqltypes.NotContains,
 							Partial: false,
 						},
 					},
