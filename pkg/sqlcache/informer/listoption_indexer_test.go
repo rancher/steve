@@ -114,7 +114,7 @@ func TestNewListOptionIndexer(t *testing.T) {
 		txClient := NewMockTxClient(ctrl)
 		store := NewMockStore(ctrl)
 		stmt := NewMockStmt(ctrl)
-		field := &JSONPathField{Path: []string{"something"}}
+		field := &JSONPathField{Path: []string{"something"}, Type: "INT"}
 		fields := map[string]IndexedField{field.ColumnName(): field}
 		id := "somename"
 		// logic for NewIndexer(), only interested in if this results in error or not
@@ -162,7 +162,6 @@ func TestNewListOptionIndexer(t *testing.T) {
 
 		opts := ListOptionIndexerOptions{
 			Fields:       fields,
-			TypeGuidance: map[string]string{"something": "INT"},
 			IsNamespaced: true,
 		}
 		loi, err := NewListOptionIndexer(context.Background(), store, opts)

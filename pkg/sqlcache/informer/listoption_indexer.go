@@ -48,7 +48,10 @@ type ListOptionIndexer struct {
 }
 
 var (
-	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
+	defaultIndexedFields = []IndexedField{
+		&JSONPathField{Path: []string{"metadata", "name"}},
+		&JSONPathField{Path: []string{"metadata", "creationTimestamp"}},
+	}
 	defaultIndexNamespaced = "metadata.namespace"
 	immutableFields        = sets.New(
 		"metadata.creationTimestamp",
@@ -122,8 +125,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	indexedFields := make(map[string]IndexedField)
 
 	// Add default fields
-	for _, f := range defaultIndexedFields {
-		field := &JSONPathField{Path: strings.Split(f, ".")}
+	for _, field := range defaultIndexedFields {
 		indexedFields[field.ColumnName()] = field
 	}
 
@@ -138,7 +140,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		indexedFields[k] = v
 	}
 
-	// Sort keys once for deterministic order
+	// Sort keys for deterministic order. This ensures consistent SQL schema
+	// generation and prepared statement parameter ordering across restarts.
 	columnOrder := make([]string, 0, len(indexedFields))
 	for name := range indexedFields {
 		columnOrder = append(columnOrder, name)
@@ -171,16 +174,12 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
 
-	// Build column definitions using sorted order
+	// Build column definitions using sorted order.
+	// Each IndexedField specifies its SQL type via ColumnType().
 	columnDefs := make([]string, 0, len(columnOrder))
 	for _, colName := range columnOrder {
 		field := indexedFields[colName]
-		sqlType := field.ColumnType()
-		// Allow type guidance to override if specified
-		if override, ok := opts.TypeGuidance[colName]; ok {
-			sqlType = override
-		}
-		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, sqlType))
+		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, field.ColumnType()))
 	}
 
 	dbName := db.Sanitize(i.GetName())

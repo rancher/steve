@@ -1215,10 +1215,11 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
 	}
 
-	// Check if this is a multi-column field without sub-index (like metadata.fields[3] with _0/_1 columns)
+	// Check if this is a multi-column field without sub-index (like metadata.fields[3] with _0/_1 columns).
+	// This fallback allows querying multi-column fields (e.g., "metadata.fields[3]<5") without
+	// explicitly specifying the sub-index. Defaults to _0 for backward compatibility.
 	hasMultiCol := l.hasMultiColumnField(fieldToValidate)
 	if hasMultiCol {
-		// Default to first element when no sub-index specified
 		return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
 	}
 

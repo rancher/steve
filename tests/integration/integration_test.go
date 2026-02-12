@@ -88,13 +88,10 @@ func (i *IntegrationSuite) SetupSuite() {
 	i.Require().NoError(err)
 
 	// TODO: Move to Steve's constructor
-	sqlproxy.TypeGuidanceTable[schema.GroupVersionKind{Group: "fruits.cattle.io", Version: "v1", Kind: "Banana"}] = map[string]string{
-		"number": "INT",
-	}
-	sqlproxy.TypeSpecificIndexedFields["fruits.cattle.io_v1_Banana"] = []informer.IndexedField{
-		&informer.JSONPathField{Path: []string{"color"}},
-		&informer.JSONPathField{Path: []string{"number"}},
-		&informer.JSONPathField{Path: []string{"numberString"}},
+	sqlproxy.TypeSpecificIndexedFields["fruits.cattle.io_v1_Banana"] = map[string]informer.IndexedField{
+		"color":        &informer.JSONPathField{Path: []string{"color"}},
+		"number":       &informer.JSONPathField{Path: []string{"number"}, Type: "INTEGER"},
+		"numberString": &informer.JSONPathField{Path: []string{"numberString"}},
 	}
 }
 

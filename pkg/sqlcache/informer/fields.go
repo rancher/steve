@@ -74,6 +74,9 @@ var restartsPattern = regexp.MustCompile(`^(\d+)(?:\s+\((.+?)\s+ago\))?$`)
 // timeNow is mockable for testing
 var timeNow = time.Now
 
+// podRestartFieldIndex is the index of the restart field in Pod metadata.fields
+const podRestartFieldIndex = 3
+
 // ExtractPodRestartCount extracts restart count from Pod metadata.fields[3].
 func ExtractPodRestartCount(obj *unstructured.Unstructured) (any, error) {
 	value, found, err := unstructured.NestedFieldNoCopy(obj.Object, "metadata", "fields")
@@ -82,19 +85,19 @@ func ExtractPodRestartCount(obj *unstructured.Unstructured) (any, error) {
 	}
 
 	fields, ok := value.([]interface{})
-	if !ok || len(fields) <= 3 {
+	if !ok || len(fields) <= podRestartFieldIndex {
 		return int64(0), nil
 	}
 
-	field3 := fields[3]
+	restartField := fields[podRestartFieldIndex]
 
 	// If it's already a slice (from transform), extract values directly
-	if arr, ok := field3.([]interface{}); ok {
+	if arr, ok := restartField.([]interface{}); ok {
 		return toInt64(arr, 0), nil
 	}
 
 	// If it's a string (from raw K8s), parse it
-	if str, ok := field3.(string); ok {
+	if str, ok := restartField.(string); ok {
 		count, _ := parseRestarts(str)
 		return count, nil
 	}
@@ -111,19 +114,19 @@ func ExtractPodRestartTimestamp(obj *unstructured.Unstructured) (any, error) {
 	}
 
 	fields, ok := value.([]interface{})
-	if !ok || len(fields) <= 3 {
+	if !ok || len(fields) <= podRestartFieldIndex {
 		return int64(0), nil
 	}
 
-	field3 := fields[3]
+	restartField := fields[podRestartFieldIndex]
 
 	// If it's already a slice (from transform), extract values directly
-	if arr, ok := field3.([]interface{}); ok {
+	if arr, ok := restartField.([]interface{}); ok {
 		return toInt64(arr, 1), nil
 	}
 
 	// If it's a string (from raw K8s), parse it
-	if str, ok := field3.(string); ok {
+	if str, ok := restartField.(string); ok {
 		_, timestamp := parseRestarts(str)
 		return timestamp, nil
 	}

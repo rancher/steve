@@ -1482,20 +1482,20 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	var tests []testCase
 	tests = append(tests,
 		testCase{
-			description: "TestNewListOptionIndexerTypeGuidance() with type-guidance INT on non-ints sorts as string",
+			description: "TestNewListOptionIndexerTypeGuidance() with INTEGER type on non-ints sorts as string",
 			opts: ListOptionIndexerOptions{
-				Fields:       toIndexedFieldsGen(fields),
-				IsNamespaced: true,
-				TypeGuidance: map[string]string{
-					"metadata.someNumericValue": "INT",
+				Fields: map[string]IndexedField{
+					"metadata.someNumericValue": &JSONPathField{Path: []string{"metadata", "someNumericValue"}, Type: "INTEGER"},
+					"metadata.favoriteFruit":    &JSONPathField{Path: []string{"metadata", "favoriteFruit"}},
 				},
+				IsNamespaced: true,
 			},
 			sortFields:           []string{"metadata", "someNumericValue"},
 			expectedListAscObjs:  []map[string]any{obj01, obj05, obj11, obj17, obj18, obj100},
 			expectedListDescObjs: []map[string]any{obj100, obj18, obj17, obj11, obj05, obj01},
 		})
 	tests = append(tests,
-		testCase{description: "TestNewListOptionIndexerTypeGuidance() without type-guidance sorts as strings",
+		testCase{description: "TestNewListOptionIndexerTypeGuidance() without type specification sorts as strings",
 			opts: ListOptionIndexerOptions{
 				Fields:       toIndexedFieldsGen(fields),
 				IsNamespaced: true,
@@ -1535,13 +1535,13 @@ func TestNewListOptionIndexerTypeGuidance(t *testing.T) {
 	//obj18|19
 	//obj05|131
 	tests = append(tests,
-		testCase{description: "TestNewListOptionIndexerTypeGuidance() with type-guidance as int on a non-number sorts as string",
+		testCase{description: "TestNewListOptionIndexerTypeGuidance() with INTEGER type on a non-number sorts as string",
 			opts: ListOptionIndexerOptions{
-				Fields:       toIndexedFieldsGen(fields),
-				IsNamespaced: true,
-				TypeGuidance: map[string]string{
-					"metadata.favoriteFruit": "INT",
+				Fields: map[string]IndexedField{
+					"metadata.someNumericValue": &JSONPathField{Path: []string{"metadata", "someNumericValue"}},
+					"metadata.favoriteFruit":    &JSONPathField{Path: []string{"metadata", "favoriteFruit"}, Type: "INTEGER"},
 				},
+				IsNamespaced: true,
 			},
 			sortFields:           []string{"metadata", "favoriteFruit"},
 			expectedListAscObjs:  []map[string]any{obj17, obj18, obj05, obj01, obj11, obj100},
