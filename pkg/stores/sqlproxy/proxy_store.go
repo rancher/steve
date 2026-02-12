@@ -1029,11 +1029,6 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		} else {
 			err = fmt.Errorf("listbyoptions %v: %w", gvk, err)
 		}
-	} else {
-		//t1 := time.Now()
-		err = s.AugmentRelationships(ctx, gvk, list, apiOp) //, apiOp, schema)
-		//t2 := time.Now()
-		//fmt.Printf("QQQ: AugmentRelationships took %v\n", t2.Sub(t1))
 	}
 
 	return
