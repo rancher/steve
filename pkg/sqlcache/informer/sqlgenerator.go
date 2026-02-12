@@ -897,22 +897,10 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		return "", nil, err
 	}
 
-	// Check if this is an INTEGER column - need to cast parameter to integer for proper comparison
-	//
-	// Note: We determine this by checking the actual column type from the IndexedField.
-	//
+	// Check if this is an INTEGER column - need to cast parameter to integer for proper comparison.
+	// Use the same column resolution logic as getValidFieldEntry.
 	columnName := toColumnName(filter.Field)
-	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
-	// Determine the actual column name to check for INTEGER type
-	var actualColumnName string
-	if hasSubIndex {
-		actualColumnName = baseField + "_" + subIndex
-	} else if l.hasMultiColumnField(columnName) {
-		actualColumnName = columnName + "_0" // Default to _0 for multi-column fields
-	} else {
-		actualColumnName = columnName
-	}
-	isIntegerCol := l.isIntegerColumn(actualColumnName)
+	isIntegerCol := l.isIntegerColumn(l.resolveColumnName(columnName))
 
 	switch filter.Op {
 	case sqltypes.Eq:
@@ -1260,6 +1248,26 @@ func (l *ListOptionIndexer) validateColumn(column string) error {
 func (l *ListOptionIndexer) hasMultiColumnField(baseField string) bool {
 	_, ok := l.indexedFields[baseField+"_0"]
 	return ok
+}
+
+// resolveColumnName resolves a query column name to the actual indexed column name.
+// Most fields are single-value and map directly. For rare multi-column fields
+// (e.g., metadata.fields[3]_0, metadata.fields[3]_1), handles sub-index patterns
+// and falls back to _0 suffix when no sub-index is specified.
+func (l *ListOptionIndexer) resolveColumnName(columnName string) string {
+	// Fast path: direct column lookup (covers most cases)
+	if _, ok := l.indexedFields[columnName]; ok {
+		return columnName
+	}
+	// Slow path: multi-column field resolution
+	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
+	if hasSubIndex && l.hasMultiColumnField(baseField) {
+		return baseField + "_" + subIndex
+	}
+	if l.hasMultiColumnField(columnName) {
+		return columnName + "_0"
+	}
+	return columnName
 }
 
 // isIntegerColumn checks if a column is stored as INTEGER type.
