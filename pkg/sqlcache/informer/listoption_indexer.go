@@ -491,16 +491,15 @@ func makeAugmentedDBQuery(namespaces []string) (string, []any, error) {
 	if len(namespaces) == 0 {
 		return "", nil, fmt.Errorf("nothing to select")
 	}
-	q := make([]string, 0)
-	q = append(q, `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL`)
-	q = append(q, `    FROM "_v1_Pod_fields" f1`)
-	q = append(q, `    JOIN "_v1_Pod_labels" lt1 ON f1.key = lt1.key`)
-	q = append(q, fmt.Sprintf(`    WHERE f1."metadata.namespace" IN (?%s)`, strings.Repeat(", ?", len(namespaces)-1)))
+	query := `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL
+    FROM "_v1_Pod_fields" f1
+    JOIN "_v1_Pod_labels" lt1 ON f1.key = lt1.key
+    WHERE f1."metadata.namespace" IN (?` + strings.Repeat(", ?", len(namespaces)-1) + ")"
 	params := make([]any, len(namespaces), len(namespaces))
 	for i, ns := range namespaces {
 		params[i] = ns
 	}
-	return strings.Join(q, "\n"), params, nil
+	return query, params, nil
 }
 
 func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstructured.UnstructuredList, query string, params []any) error {
