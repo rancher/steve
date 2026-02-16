@@ -1,0 +1,121 @@
+name: Tag and bump in rancher/rancher
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_ref:
+        required: true
+        default: "main"
+      tag_prefix:
+        required: true
+        default: "v0.7"
+
+permissions:
+  id-tokens: write
+  contents: write
+
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name : Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # To get all tags
+          fetch-depth: 0
+
+      - name: Compute tag
+        id: tag
+        run: |
+          git tag
+          latest_patch=$(git tag | grep "^$PREFIX\." | sed "s|$PREFIX\.||" | sort -n | tail -n 1)
+          latest_tag=$PREFIX.$latest_patch
+          # If latest is already at HEAD, then we don't need to create it
+          if git tag --points-at HEAD | grep -c "$latest_tag"; then
+            echo "Tag $latest_tag already is already on latest commit, no need to create a new tag"
+            echo "tag=$latest_tag" >> $GITHUB_OUTPUT
+            echo "needs_create=false" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $latest_tag is on older commit, will create a new tag"
+            new_patch=$((latest_patch+1))
+            echo "tag=$PREFIX.$new_patch" >> $GITHUB_OUTPUT
+            echo "needs_create=true" >> $GITHUB_OUTPUT
+          fi
+        env:
+          PREFIX: ${{ github.event.inputs.tag_prefix }}
+
+      - name: Create Tag
+        if: ${{ steps.tag.outputs.needs_create == 'true' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'refs/tags/${{ steps.tag.outputs.tag }}',
+                sha: context.sha
+            })
+
+      - uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            github/token/rancher--rancher--pull_requests--write token | RANCHER_TOKEN
+
+      - name: Checkout rancher repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          repository: ${{ github.repository_owner }}/rancher
+          ref: "${{ github.event.inputs.rancher_ref }}"
+          token: ${{ env.RANCHER_TOKEN }}
+          path: rancher
+          # Allow making git push request later on
+          persist-credentials: true
+
+      - name: Configure the committer
+        run: |
+          cd rancher
+          user_id=$(gh api "/users/$APP_USER" --jq .id)
+          git config --global user.name "$APP_USER"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
+
+      - name: Bump steve and push
+        env:
+          GH_TOKEN: ${{ env.RANCHER_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          RANCHER_REF: ${{ github.event.inputs.rancher_ref }}
+        # go generate and waiting for release might take some time..
+        timeout-minutes: 10
+        run: |
+          cd rancher
+
+          BRANCH="bump-steve-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git checkout -b "$BRANCH"
+
+          go mod edit -require=github.com/rancher/steve@$TAG
+          go mod tidy
+          go generate ./...
+
+          git add .
+          git commit -m "Bump steve to $TAG"
+
+          git push origin $BRANCH
+
+          # Release is created by another GHA workflow triggered by the push, so
+          # we gotta wait for it to be created
+          while ! gh release view --repo rancher/steve "$TAG" >/dev/null 2>&1; do
+            echo "Waiting for steve release $TAG to be created"
+            sleep 10
+          done
+
+          old_steve=$(go mod graph | grep 'github.com/rancher/rancher github.com/rancher/steve' | sed 's|.*@||')
+          body=$(../.github/workflows/scripts/release-message.sh $old_steve $TAG)
+
+          gh pr create \
+            --title "[$RANCHER_REF] Bump steve to $TAG" \
+            --body "$body" \
+            --repo ${{ github.repository_owner }}/rancher \
+            --head "${{ github.repository_owner }}:$BRANCH" \
+            --base "$RANCHER_REF"
