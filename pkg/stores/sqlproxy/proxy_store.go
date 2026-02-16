@@ -1119,6 +1119,9 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 }
 
 func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
+	if !canList(apiSchema) {
+		return nil, apierror.NewAPIError(validation.MethodNotAllowed, fmt.Sprintf("resource %s is not a listable resource", apiSchema.ID))
+	}
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
 	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
@@ -1140,4 +1143,14 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 		return nil, fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
 	return inf, nil
+}
+
+func canList(schema *types.APISchema) bool {
+	for _, verb := range attributes.Verbs(schema) {
+		if verb == "list" {
+			return true
+		}
+	}
+
+	return false
 }
