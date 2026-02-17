@@ -2749,7 +2749,6 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 			},
 		},
 		},
-		//partitions: []partition.Partition{},
 		ns:          "",
 		expectedErr: "array checking works on exactly one field, 0 were specified",
 	})
