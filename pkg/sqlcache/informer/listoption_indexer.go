@@ -442,7 +442,7 @@ func (l *ListOptionIndexer) dropLabels(tx db.TxClient) error {
 // 3. Then walk this list again, and for each selector that can actually select one of the pods from step 2,
 // add that information from the pod into a `metadata.associatedData` block.
 
-func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList) error {
+func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
 	var namespaceSet = sets.Set[string]{}
 	for _, data := range list.Items {
 		relationships, found, err := unstructured.NestedFieldNoCopy(data.Object, "metadata", "relationships")
@@ -451,22 +451,32 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 		}
 		for _, rel := range relationships.([]any) {
 			rel2 := rel.(map[string]any)
-			_, selectorOK := rel2["selector"]
-			if !selectorOK {
-				continue
-			}
 			toType, toTypeOK := rel2["toType"]
-			if !toTypeOK || toType != "pod" {
+			if !toTypeOK || toType != childSchemaName {
 				continue
 			}
 			toNamespace := ""
-			toNamespaceAny, toNamespaceOK := rel2["toNamespace"]
-			if toNamespaceOK {
-				toNamespaceAsString, convOK := toNamespaceAny.(string)
-				if convOK {
-					toNamespace = toNamespaceAsString
+			if useSelectors {
+				_, selectorOK := rel2["selector"]
+				if !selectorOK {
+					continue
 				}
-
+				toNamespaceAny, toNamespaceOK := rel2["toNamespace"]
+				if toNamespaceOK {
+					toNamespaceAsString, convOK := toNamespaceAny.(string)
+					if convOK {
+						toNamespace = toNamespaceAsString
+					}
+				}
+			} else {
+				toId, toIdOK := rel2["toId"]
+				if !toIdOK {
+					continue
+				}
+				parts := strings.SplitN(toId.(string), "/", 2)
+				if len(parts) == 2 {
+					toNamespace = parts[0]
+				}
 			}
 			namespaceSet.Insert(toNamespace)
 		}
@@ -476,24 +486,26 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 	}
 	// No need to sort this list as it goes into a SQL `metadata.namespace IN (...)` query
 	namespaces := namespaceSet.UnsortedList()
-	query, params, err := makeAugmentedDBQuery(namespaces)
+	tableBaseName := childGVK.Group + "_" + childGVK.Version + "_" + childGVK.Kind
+	fmt.Println(childGVK)
+	query, params, err := makeAugmentedDBQuery(namespaces, tableBaseName)
 	if err != nil {
 		return err
 	}
-	err = l.finishAugmenting(ctx, list, query, params)
+	err = l.finishAugmenting(ctx, list, query, params, childGVK, childSchemaName, useSelectors)
 	if err != nil {
 		logrus.Debugf("Error augmenting the info: %s\n", err)
 	}
 	return nil
 }
 
-func makeAugmentedDBQuery(namespaces []string) (string, []any, error) {
+func makeAugmentedDBQuery(namespaces []string, tableBaseName string) (string, []any, error) {
 	if len(namespaces) == 0 {
 		return "", nil, fmt.Errorf("nothing to select")
 	}
 	query := `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL
-    FROM "_v1_Pod_fields" f1
-    JOIN "_v1_Pod_labels" lt1 ON f1.key = lt1.key
+    FROM "` + tableBaseName + `_fields" f1
+    JOIN "` + tableBaseName + `_labels" lt1 ON f1.key = lt1.key
     WHERE f1."metadata.namespace" IN (?` + strings.Repeat(", ?", len(namespaces)-1) + ")"
 	params := make([]any, len(namespaces), len(namespaces))
 	for i, ns := range namespaces {
@@ -502,7 +514,7 @@ func makeAugmentedDBQuery(namespaces []string) (string, []any, error) {
 	return query, params, nil
 }
 
-func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstructured.UnstructuredList, query string, params []any) error {
+func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstructured.UnstructuredList, query string, params []any, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
 	stmt := l.Prepare(query)
 	var err error
 	defer func() {
@@ -533,20 +545,22 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 		return nil
 	}
 
-	// And now plug in the new data into metadata.augmentedRelationships
+	// And now plug in the new data into metadata.associatedData
 	sortedItems := sortTheItems(items)
-	podGVK := &schema.GroupVersionKind{
-		Group:   "",
-		Version: "v1",
-		Kind:    "Pod",
+	if useSelectors {
+		return l.getAssociatedDataBySelector(list.Items, sortedItems, childGVK, childSchemaName)
+	} else {
+		return l.getAssociatedDataById(list.Items, sortedItems, childGVK, childSchemaName)
 	}
-	//NextDeployment:
-	for _, listItem := range list.Items {
+}
+
+func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
+	for _, listItem := range parentItems {
 		relationships, found, err := unstructured.NestedFieldNoCopy(listItem.Object, "metadata", "relationships")
 		if err != nil || !found {
-			// This should not have happened because we did a DB query on relationships
 			continue
 		}
+		relatedDataItems := make([]any, 0)
 		finalSelector := ""
 		finalNamespace := ""
 		for _, rel := range relationships.([]any) {
@@ -556,18 +570,17 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 				continue
 			}
 			toType, toTypeOK := rel2["toType"]
-			if !toTypeOK || toType != "pod" {
+			if !toTypeOK || toType != childSchemaName {
 				continue
 			}
 			finalNamespace = rel2["toNamespace"].(string)
 			finalSelector = selector.(string)
-			break
 		}
 		if finalSelector == "" {
 			continue
 		}
 		// Find the slice we care about
-		podSelectorWrapper, ok := sortedItems[finalNamespace]
+		podSelectorWrapper, ok := dbRows[finalNamespace]
 		if !ok {
 			continue
 		}
@@ -580,14 +593,6 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 			}
 			selectorHash[parts[0]] = parts[1]
 		}
-		associationBlock := map[string]any{
-			"GVK": map[string]any{
-				"group":   podGVK.Group,
-				"version": podGVK.Version,
-				"kind":    podGVK.Kind,
-			},
-			"data": make([]any, 0),
-		}
 		for podName, podInfo := range *podSelectorWrapper {
 			podSelectors := podInfo.labelAsSelectors
 			acceptThis := true
@@ -597,13 +602,75 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 				}
 			}
 			if acceptThis {
-				associationBlock["data"] = append(associationBlock["data"].([]any), map[string]any{
+				relatedDataItems = append(relatedDataItems, map[string]any{
 					"podName": podName,
 					"state":   podInfo.stateInfo,
 				})
 			}
 		}
-		if len(associationBlock["data"].([]any)) > 0 {
+		if len(relatedDataItems) > 0 {
+			associationBlock := map[string]any{
+				"GVK": map[string]any{
+					"group":   childGVK.Group,
+					"version": childGVK.Version,
+					"kind":    childGVK.Kind,
+				},
+				"data": relatedDataItems,
+			}
+			associationWrapper := []any{associationBlock}
+			err = unstructured.SetNestedSlice(listItem.Object, associationWrapper, "metadata", "associatedData")
+			if err != nil {
+				logrus.Errorf("Can't set data: %s\n", err)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (l *ListOptionIndexer) getAssociatedDataById(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
+	for _, listItem := range parentItems {
+		relationships, found, err := unstructured.NestedFieldNoCopy(listItem.Object, "metadata", "relationships")
+		if err != nil || !found {
+			continue
+		}
+		relatedDataItems := make([]any, 0)
+		for _, rel := range relationships.([]any) {
+			rel2 := rel.(map[string]any)
+			toType, toTypeOK := rel2["toType"]
+			if !toTypeOK || toType != childSchemaName {
+				continue
+			}
+			toId, toIdOK := rel2["toId"]
+			if !toIdOK {
+				continue
+			}
+			idParts := strings.SplitN(toId.(string), "/", 2)
+			thisNamespace := idParts[0]
+			finalName := idParts[1]
+			// Find the slice we care about
+			podSelectorWrapper, ok := dbRows[thisNamespace]
+			if !ok {
+				continue
+			}
+			for childName, childInfo := range *podSelectorWrapper {
+				if childName == finalName {
+					relatedDataItems = append(relatedDataItems, map[string]any{
+						"podName": childName,
+						"state":   childInfo.stateInfo,
+					})
+				}
+			}
+		}
+		if len(relatedDataItems) > 0 {
+			associationBlock := map[string]any{
+				"GVK": map[string]any{
+					"group":   childGVK.Group,
+					"version": childGVK.Version,
+					"kind":    childGVK.Kind,
+				},
+				"data": relatedDataItems,
+			}
 			associationWrapper := []any{associationBlock}
 			err = unstructured.SetNestedSlice(listItem.Object, associationWrapper, "metadata", "associatedData")
 			if err != nil {

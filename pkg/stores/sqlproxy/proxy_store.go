@@ -90,7 +90,7 @@ var (
 		gvkKey("", "v1", "PersistentVolumeClaim"): {
 			{"spec", "volumeName"}},
 		gvkKey("", "v1", "Pod"): {
-			// TODO: Move these to commonIndexFields if everyone needs them
+			// TODO: Move these to commonIndexFields if GVKs other than jobs & pods need them
 			{"metadata", "state", "error"},
 			{"metadata", "state", "message"},
 			{"metadata", "state", "transitioning"},
@@ -139,6 +139,10 @@ var (
 		},
 		gvkKey("batch", "v1", "Job"): {
 			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
+			// TODO: Move these to commonIndexFields if GVKs other than jobs & pods need them
+			{"metadata", "state", "error"},
+			{"metadata", "state", "message"},
+			{"metadata", "state", "transitioning"},
 			{"spec", "template", "spec", "containers", "image"},
 		},
 		gvkKey("catalog.cattle.io", "v1", "App"): {
@@ -350,7 +354,7 @@ type SchemaCollection interface {
 type Cache interface {
 	// AugmentList takes a list of resources, and for some of them,
 	// adds related data to each item in the list
-	AugmentList(ctx context.Context, list *unstructured.UnstructuredList)
+	AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool)
 
 	// ListByOptions returns objects according to the specified list options and partitions.
 	// Specifically:
@@ -1029,32 +1033,49 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		} else {
 			err = fmt.Errorf("listbyoptions %v: %w", gvk, err)
 		}
+	} else {
+		err = s.AugmentRelationships(ctx, gvk, list, apiOp)
 	}
 
 	return
 }
 
 func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersionKind, list *unstructured.UnstructuredList, apiOp *types.APIRequest) error {
-	gvksToAugment := []schema.GroupVersionKind{
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"},
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"},
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"},
-		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"},
+	type GVKWithSchemaName struct {
+		gvk          schema.GroupVersionKind
+		schemaName   string
+		useSelectors bool
+	}
+	podGVK := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+	jobGVK := schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}
+	schemaNameFromGVK := map[schema.GroupVersionKind]GVKWithSchemaName{
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}:  {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"}:   {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}: {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}:        {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}:    {jobGVK, "batch.job", false},
+	}
+	gvksToAugment := make([]schema.GroupVersionKind, 0, len(schemaNameFromGVK))
+	for k := range schemaNameFromGVK {
+		gvksToAugment = append(gvksToAugment, k)
 	}
 	if slices.Contains(gvksToAugment, gvk) {
+		childInfo, ok := schemaNameFromGVK[gvk]
+		if !ok {
+			return fmt.Errorf("No child schema name found for gvk %s", gvk)
+		}
 		schemas1 := apiOp.Schemas
 		schemas2 := schemas1.Schemas
-
-		podSchema, ok := schemas2["pod"]
+		dependentSchema, ok := schemas2[childInfo.schemaName]
 		if !ok {
-			return fmt.Errorf("No pod schema found")
+			return fmt.Errorf("No schema name found for gvk %s", gvk)
 		}
-		podClusterInf, doneCache, err := s.cacheForWithDeps(ctx, apiOp, podSchema)
+		podClusterInf, doneCache, err := s.cacheForWithDeps(ctx, apiOp, dependentSchema)
 		if err != nil {
 			return err
 		}
 		defer doneCache()
-		return podClusterInf.AugmentList(ctx, list)
+		return podClusterInf.AugmentList(ctx, list, childInfo.gvk, childInfo.schemaName, childInfo.useSelectors)
 	}
 	return nil
 }

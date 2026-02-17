@@ -54,15 +54,15 @@ func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 }
 
 // AugmentList mocks base method.
-func (m *MockCache) AugmentList(ctx context.Context, list *unstructured.UnstructuredList) {
+func (m *MockCache) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AugmentList", ctx, list)
+	m.ctrl.Call(m, "AugmentList", ctx, list, childGVK, childSchemaName, useSelectors)
 }
 
 // AugmentList indicates an expected call of AugmentList.
-func (mr *MockCacheMockRecorder) AugmentList(ctx, list any) *gomock.Call {
+func (mr *MockCacheMockRecorder) AugmentList(ctx, list, childGVK, childSchemaName, useSelectors any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockCache)(nil).AugmentList), ctx, list)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockCache)(nil).AugmentList), ctx, list, childGVK, childSchemaName, useSelectors)
 }
 
 // ListByOptions mocks base method.

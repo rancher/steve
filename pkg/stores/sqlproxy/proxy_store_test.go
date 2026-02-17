@@ -879,7 +879,7 @@ func TestAugmentRelationships(t *testing.T) {
 				false).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			cf.EXPECT().DoneWithCache(c)
-			bloi.EXPECT().AugmentList(ctx, &originalList).Return(nil)
+			bloi.EXPECT().AugmentList(ctx, &originalList, gomock.Any(), gomock.Any(), true).Return(nil)
 			err := s.AugmentRelationships(ctx, gvk, &originalList, apiOp)
 			assert.Nil(t, err)
 		},

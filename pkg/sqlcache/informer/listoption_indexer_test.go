@@ -429,7 +429,7 @@ func TestMakeAugmentedDBQuery(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			query, params, err := makeAugmentedDBQuery(test.podSelectors)
+			query, params, err := makeAugmentedDBQuery(test.podSelectors, "_v1_Pod")
 			if test.expectedErr != nil {
 				assert.Error(t, err)
 				return
