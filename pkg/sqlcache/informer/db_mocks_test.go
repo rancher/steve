@@ -204,21 +204,6 @@ func (mr *MockClientMockRecorder) ReadInt(rows any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadInt", reflect.TypeOf((*MockClient)(nil).ReadInt), rows)
 }
 
-// ReadNStrings mocks base method.
-func (m *MockClient) ReadNStrings(rows db.Rows, numColumns int) ([][]string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadNStrings", rows, numColumns)
-	ret0, _ := ret[0].([][]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ReadNStrings indicates an expected call of ReadNStrings.
-func (mr *MockClientMockRecorder) ReadNStrings(rows, numColumns any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadNStrings", reflect.TypeOf((*MockClient)(nil).ReadNStrings), rows, numColumns)
-}
-
 // ReadObjects mocks base method.
 func (m *MockClient) ReadObjects(rows db.Rows, typ reflect.Type) ([]any, error) {
 	m.ctrl.T.Helper()
@@ -264,19 +249,19 @@ func (mr *MockClientMockRecorder) ReadStrings(rows any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings", reflect.TypeOf((*MockClient)(nil).ReadStrings), rows)
 }
 
-// ReadStrings2 mocks base method.
-func (m *MockClient) ReadStrings2(rows db.Rows) ([][]string, error) {
+// ReadStringsN mocks base method.
+func (m *MockClient) ReadStringsN(rows db.Rows, numColumns int) ([][]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadStrings2", rows)
+	ret := m.ctrl.Call(m, "ReadStringsN", rows, numColumns)
 	ret0, _ := ret[0].([][]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ReadStrings2 indicates an expected call of ReadStrings2.
-func (mr *MockClientMockRecorder) ReadStrings2(rows any) *gomock.Call {
+// ReadStringsN indicates an expected call of ReadStringsN.
+func (mr *MockClientMockRecorder) ReadStringsN(rows, numColumns any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings2", reflect.TypeOf((*MockClient)(nil).ReadStrings2), rows)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStringsN", reflect.TypeOf((*MockClient)(nil).ReadStringsN), rows, numColumns)
 }
 
 // Serialize mocks base method.

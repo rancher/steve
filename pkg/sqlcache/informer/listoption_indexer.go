@@ -532,7 +532,7 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 		}
 		elapsed := time.Since(now)
 		logLongQuery(elapsed, query, params)
-		items, err = l.ReadNStrings(rows, 8)
+		items, err = l.ReadStringsN(rows, 8)
 		if err != nil {
 			return fmt.Errorf("finishAugmenting: error reading objects: %w", err)
 		}

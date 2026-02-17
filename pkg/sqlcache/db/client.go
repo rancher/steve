@@ -54,8 +54,7 @@ type Client interface {
 	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
-	ReadStrings2(rows Rows) ([][]string, error)
-	ReadNStrings(rows Rows, numColumns int) ([][]string, error)
+	ReadStringsN(rows Rows, numColumns int) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
 	ReadStringIntString(rows Rows) ([][]string, error)
 	Upsert(tx TxClient, stmt Stmt, key string, obj SerializedObject) error
@@ -323,34 +322,6 @@ func (c *client) ReadStrings(rows Rows) ([]string, error) {
 	return result, nil
 }
 
-// ReadStrings2 scans the given rows into pairs of strings, and then returns the strings as a slice.
-func (c *client) ReadStrings2(rows Rows) ([][]string, error) {
-	c.connLock.RLock()
-	defer c.connLock.RUnlock()
-
-	var result [][]string
-	for rows.Next() {
-		var key1, key2 string
-		err := rows.Scan(&key1, &key2)
-		if err != nil {
-			return nil, closeRowsOnError(rows, err)
-		}
-
-		result = append(result, []string{key1, key2})
-	}
-	err := rows.Err()
-	if err != nil {
-		return nil, closeRowsOnError(rows, err)
-	}
-
-	err = rows.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
 // ReadStringIntString scans the given rows into (string, string, string) tuples, and then returns a slice of them.
 func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
 	c.connLock.RLock()
@@ -381,8 +352,8 @@ func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
 	return result, nil
 }
 
-// ReadNStrings scans the given rows into string-slices of the specified number of columns
-func (c *client) ReadNStrings(rows Rows, numColumns int) ([][]string, error) {
+// ReadStringsN scans the given rows into string-slices of the specified number of columns
+func (c *client) ReadStringsN(rows Rows, numColumns int) ([][]string, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
