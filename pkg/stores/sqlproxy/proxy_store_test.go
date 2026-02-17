@@ -710,9 +710,6 @@ func TestListByPartitions(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			//if test.description == "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields from schema." {
-			//	fmt.Println("break here")
-			//}
 			test.test(t)
 		})
 	}
