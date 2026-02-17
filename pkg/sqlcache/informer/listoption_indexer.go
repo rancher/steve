@@ -469,11 +469,11 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 					}
 				}
 			} else {
-				toId, toIdOK := rel2["toId"]
-				if !toIdOK {
+				toID, toIDOK := rel2["toId"]
+				if !toIDOK {
 					continue
 				}
-				parts := strings.SplitN(toId.(string), "/", 2)
+				parts := strings.SplitN(toID.(string), "/", 2)
 				if len(parts) == 2 {
 					toNamespace = parts[0]
 				}
@@ -549,9 +549,8 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 	sortedItems := sortTheItems(items)
 	if useSelectors {
 		return l.getAssociatedDataBySelector(list.Items, sortedItems, childGVK, childSchemaName)
-	} else {
-		return l.getAssociatedDataById(list.Items, sortedItems, childGVK, childSchemaName)
 	}
+	return l.getAssociatedDataByID(list.Items, sortedItems, childGVK, childSchemaName)
 }
 
 func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
@@ -628,7 +627,7 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 	return nil
 }
 
-func (l *ListOptionIndexer) getAssociatedDataById(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
+func (l *ListOptionIndexer) getAssociatedDataByID(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
 	for _, listItem := range parentItems {
 		relationships, found, err := unstructured.NestedFieldNoCopy(listItem.Object, "metadata", "relationships")
 		if err != nil || !found {
@@ -641,11 +640,11 @@ func (l *ListOptionIndexer) getAssociatedDataById(parentItems []unstructured.Uns
 			if !toTypeOK || toType != childSchemaName {
 				continue
 			}
-			toId, toIdOK := rel2["toId"]
-			if !toIdOK {
+			toID, toIDOK := rel2["toId"]
+			if !toIDOK {
 				continue
 			}
-			idParts := strings.SplitN(toId.(string), "/", 2)
+			idParts := strings.SplitN(toID.(string), "/", 2)
 			thisNamespace := idParts[0]
 			finalName := idParts[1]
 			// Find the slice we care about
