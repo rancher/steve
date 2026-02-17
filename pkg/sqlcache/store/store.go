@@ -176,7 +176,7 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			}
 			continue
 		}
-		result, err := s.ReadStrings2(rows)
+		result, err := s.ReadStringsN(rows, 2)
 		if err != nil {
 			logrus.Infof("Error reading objects for table %s, key %s: %s", labelDep.TargetGVK, key, err)
 			continue
@@ -222,7 +222,7 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			}
 			continue
 		}
-		result, err := s.ReadStrings2(rows)
+		result, err := s.ReadStringsN(rows, 2)
 		if err != nil {
 			logrus.Infof("Error reading objects for table %s, key %s: %s", nonLabelDep.TargetGVK, key, err)
 			continue

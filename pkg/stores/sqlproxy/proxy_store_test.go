@@ -754,9 +754,6 @@ func TestListByPartitions(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			//if test.description == "client ListByPartitions() with ListByOptions() error returned should return an errors. Should pass fields from schema." {
-			//	fmt.Println("break here")
-			//}
 			test.test(t)
 		})
 	}
@@ -923,7 +920,7 @@ func TestAugmentRelationships(t *testing.T) {
 				false).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			cf.EXPECT().DoneWithCache(c)
-			bloi.EXPECT().AugmentList(ctx, &originalList).Return(nil)
+			bloi.EXPECT().AugmentList(ctx, &originalList, gomock.Any(), gomock.Any(), true).Return(nil)
 			err := s.AugmentRelationships(ctx, gvk, &originalList, apiOp)
 			assert.Nil(t, err)
 		},
