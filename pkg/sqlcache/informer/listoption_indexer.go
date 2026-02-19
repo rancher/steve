@@ -579,7 +579,7 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 			continue
 		}
 		// Find the slice we care about
-		podSelectorWrapper, ok := dbRows[finalNamespace]
+		childSelectorWrapper, ok := dbRows[finalNamespace]
 		if !ok {
 			continue
 		}
@@ -592,18 +592,18 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 			}
 			selectorHash[parts[0]] = parts[1]
 		}
-		for podName, podInfo := range *podSelectorWrapper {
-			podSelectors := podInfo.labelAsSelectors
+		for childName, childInfo := range *childSelectorWrapper {
+			childSelectors := childInfo.labelAsSelectors
 			acceptThis := true
 			for deploymentLabel, deploymentValue := range selectorHash {
-				if podSelectors[deploymentLabel] != deploymentValue {
+				if childSelectors[deploymentLabel] != deploymentValue {
 					acceptThis = false
 				}
 			}
 			if acceptThis {
 				relatedDataItems = append(relatedDataItems, map[string]any{
-					"podName": podName,
-					"state":   podInfo.stateInfo,
+					"childName": childName,
+					"state":     childInfo.stateInfo,
 				})
 			}
 		}
