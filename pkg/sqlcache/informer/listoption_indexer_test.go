@@ -418,7 +418,7 @@ func TestMakeAugmentedDBQuery(t *testing.T) {
 		expectedParams: []any{"ns1"},
 	})
 	tests = append(tests, testCase{description: "TestMakeAugmentedDBQuery: 3 namespaces",
-		podSelectors: []string{"ns2", "ns3", "ns4"},
+		podSelectors: []string{"ns2", "ns4", "ns3"},
 		expectedQuery: `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL
     FROM "_v1_Pod_fields" f1
     JOIN "_v1_Pod_labels" lt1 ON f1.key = lt1.key
