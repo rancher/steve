@@ -1,0 +1,23 @@
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: yellow
+color: "yellow"
+number: 11
+numberString: "11"
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: green
+color: "green"
+number: 1
+numberString: "1"
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: black
+color: "black"
+number: 5
+numberString: "5"
