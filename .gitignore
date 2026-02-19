@@ -8,6 +8,7 @@
 /dist
 *.swp
 .idea
+.vscode
 steve
 
 informer_object_cache.db
