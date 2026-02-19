@@ -124,6 +124,87 @@ func TestSyntheticWatcher(t *testing.T) {
 	assert.Greater(t, results[4].createdAt, results[0].createdAt)
 }
 
+func TestIsUpdateObjectScenarios(t *testing.T) {
+	//scenario 1
+	oldNM := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "metrics.k8s.io/v1beta1",
+			"kind":       "NodeMetrics",
+			"metadata": map[string]interface{}{
+				"name": "node-1",
+			},
+			"timestamp": "t1",
+		},
+	}
+	staleNM := oldNM.DeepCopy()
+	updatedNM := oldNM.DeepCopy()
+	updatedNM.Object["timestamp"] = "t2"
+
+	//scenario 2
+	oldResource := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "metrics.k8s.io/v1beta1",
+			"metadata": map[string]interface{}{
+				"name": "node-1",
+			},
+			"timestamp": "t1",
+		},
+	}
+	updatedTSResource := oldResource.DeepCopy()
+	updatedTSResource.Object["timestamp"] = "t2"
+
+	//scenario 3
+	oldResource1 := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "metrics.k8s.io/v1beta1",
+			"metadata": map[string]interface{}{
+				"name": "node-1",
+			},
+			"timestamp": "t1",
+		},
+	}
+
+	tests := []struct {
+		name   string
+		oldObj objectHolder
+		newObj objectHolder
+		want   bool
+	}{
+		{
+			name:   "NodeMetrics has same timestamp",
+			oldObj: objectHolder{unstructuredObject: oldNM},
+			newObj: objectHolder{unstructuredObject: staleNM},
+			want:   false,
+		},
+		{
+			name:   "NodeMetrics has different timestamp",
+			oldObj: objectHolder{unstructuredObject: oldNM},
+			newObj: objectHolder{unstructuredObject: updatedNM},
+			want:   true,
+		},
+		{
+			name:   "Generic resource has different timestamp, but same version",
+			oldObj: objectHolder{unstructuredObject: oldResource, version: "v1"},
+			newObj: objectHolder{unstructuredObject: updatedTSResource, version: "v1"},
+			want:   false,
+		},
+		{
+			name:   "Generic resource has different version",
+			oldObj: objectHolder{unstructuredObject: oldResource1, version: "v1"},
+			newObj: objectHolder{unstructuredObject: oldResource1, version: "v2"},
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isUpdatedObject(tt.oldObj, tt.newObj)
+			assert.Equal(t, tt.want, result)
+		})
+	}
+
+}
+
 func makeCSList(objs ...v1.ComponentStatus) (*unstructured.UnstructuredList, error) {
 	unList := make([]unstructured.Unstructured, len(objs))
 	for i, cs := range objs {
