@@ -528,8 +528,7 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 	if namespaceSet.Len() == 0 {
 		return nil
 	}
-	// No need to sort this list as it goes into a SQL `metadata.namespace IN (...)` query
-	namespaces := namespaceSet.UnsortedList()
+	namespaces := sets.List(namespaceSet) // Set.List() sorts the elements
 	tableBaseName := childGVK.Group + "_" + childGVK.Version + "_" + childGVK.Kind
 	fmt.Println(childGVK)
 	query, params, err := makeAugmentedDBQuery(namespaces, tableBaseName)
@@ -623,7 +622,7 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 			continue
 		}
 		// Find the slice we care about
-		podSelectorWrapper, ok := dbRows[finalNamespace]
+		childSelectorWrapper, ok := dbRows[finalNamespace]
 		if !ok {
 			continue
 		}
@@ -636,18 +635,18 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 			}
 			selectorHash[parts[0]] = parts[1]
 		}
-		for podName, podInfo := range *podSelectorWrapper {
-			podSelectors := podInfo.labelAsSelectors
+		for childName, childInfo := range *childSelectorWrapper {
+			childSelectors := childInfo.labelAsSelectors
 			acceptThis := true
 			for deploymentLabel, deploymentValue := range selectorHash {
-				if podSelectors[deploymentLabel] != deploymentValue {
+				if childSelectors[deploymentLabel] != deploymentValue {
 					acceptThis = false
 				}
 			}
 			if acceptThis {
 				relatedDataItems = append(relatedDataItems, map[string]any{
-					"podName": podName,
-					"state":   podInfo.stateInfo,
+					"childName": childName,
+					"state":     childInfo.stateInfo,
 				})
 			}
 		}
@@ -663,7 +662,6 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 			associationWrapper := []any{associationBlock}
 			err = unstructured.SetNestedSlice(listItem.Object, associationWrapper, "metadata", "associatedData")
 			if err != nil {
-				logrus.Errorf("Can't set data: %s\n", err)
 				return err
 			}
 		}

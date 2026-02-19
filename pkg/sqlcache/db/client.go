@@ -358,11 +358,13 @@ func (c *client) ReadStringsN(rows Rows, numColumns int) ([][]string, error) {
 	defer c.connLock.RUnlock()
 
 	var result [][]string
+	stringPointers := make([]any, numColumns)
 	for rows.Next() {
+		// stringList needs be reinitialized on each iteration or all the final data in
+		// the `result` array will be the last row!
 		stringList := make([]string, numColumns)
-		stringPointers := make([]any, numColumns)
-		for i, s := range stringList {
-			stringPointers[i] = &s
+		for i := range stringList {
+			stringPointers[i] = &stringList[i]
 		}
 		err := rows.Scan(stringPointers...)
 		if err != nil {

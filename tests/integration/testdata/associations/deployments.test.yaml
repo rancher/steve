@@ -1,0 +1,35 @@
+schemaID: apps.deployments
+tests:
+- description: user:user-a,namespace:socksess,query:filter=metadata.namespace=socksess
+  user: user-a
+  namespace: socksess
+  query: filter=metadata.namespace=socksess
+  expected:
+    data:
+    - id: "socksess/postgres"
+      metadata:
+        name: postgres
+        namespace: socksess
+        associatedData:
+        - GVK:
+            group: ""
+            version: v1
+            kind: Pod
+          data:
+          - childName: postgres
+            # state values aren't compared
+            state: {}
+    - id: "socksess/socksess"
+      metadata:
+        name: socksess
+        namespace: socksess
+        associatedData:
+        - GVK:
+            group: ""
+            version: v1
+            kind: Pod
+          data:
+          - childName: socksess
+            # state values aren't compared
+            state: {}
+
