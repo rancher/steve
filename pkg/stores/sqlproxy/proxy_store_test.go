@@ -46,7 +46,7 @@ import (
 	clientgotesting "k8s.io/client-go/testing"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder
+//go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./proxy_mocks_test.go github.com/rancher/steve/pkg/stores/sqlproxy Cache,ClientGetter,CacheFactory,SchemaColumnSetter,RelationshipNotifier,TransformBuilder,SchemaCollection
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./sql_informer_mocks_test.go github.com/rancher/steve/pkg/sqlcache/informer ByOptionsLister
 //go:generate mockgen --build_flags=--mod=mod -package sqlproxy -destination ./dynamic_mocks_test.go k8s.io/client-go/dynamic ResourceInterface
 
@@ -89,20 +89,33 @@ func TestNewProxyStore(t *testing.T) {
 				},
 			}
 
-			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
-			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			sc := NewMockSchemaCollection(gomock.NewController(t))
+			sc.EXPECT().ByGVK(attributes.GVK(nsSchema)).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
+
+			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
 				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
-				attributes.GVK(&nsSchema),
+				attributes.GVK(nsSchema),
 				noTypeGuidance,
 				false,
 				true).Return(c, nil)
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -118,8 +131,9 @@ func TestNewProxyStore(t *testing.T) {
 			scc := NewMockSchemaColumnSetter(gomock.NewController(t))
 			cg := NewMockClientGetter(gomock.NewController(t))
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
+			sc := NewMockSchemaCollection(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, false)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, false)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -137,10 +151,23 @@ func TestNewProxyStore(t *testing.T) {
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 
-			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(fmt.Errorf("error"))
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			sc := NewMockSchemaCollection(gomock.NewController(t))
+			sc.EXPECT().ByGVK(attributes.GVK(nsSchema)).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
 
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
+			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(fmt.Errorf("error"))
+
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -158,11 +185,24 @@ func TestNewProxyStore(t *testing.T) {
 			rn := NewMockRelationshipNotifier(gomock.NewController(t))
 			cf := NewMockCacheFactory(gomock.NewController(t))
 
-			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
-			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			sc := NewMockSchemaCollection(gomock.NewController(t))
+			sc.EXPECT().ByGVK(attributes.GVK(nsSchema)).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
 
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
+			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
+
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -181,21 +221,34 @@ func TestNewProxyStore(t *testing.T) {
 			cf := NewMockCacheFactory(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 
-			nsSchema := baseNSSchema
-			scc.EXPECT().SetColumns(context.Background(), &nsSchema).Return(nil)
-			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			sc := NewMockSchemaCollection(gomock.NewController(t))
+			sc.EXPECT().ByGVK(attributes.GVK(nsSchema)).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
+
+			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
+			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
 				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
-				attributes.GVK(&nsSchema),
+				attributes.GVK(nsSchema),
 				noTypeGuidance,
 				false,
 				true).Return(nil, fmt.Errorf("error"))
 
-			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, cf, true)
+			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, true)
 			assert.Nil(t, err)
 			assert.Equal(t, scc, s.columnSetter)
 			assert.Equal(t, cg, s.clientGetter)
@@ -855,6 +908,18 @@ func TestReset(t *testing.T) {
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			tb := NewMockTransformBuilder(gomock.NewController(t))
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			sc := NewMockSchemaCollection(gomock.NewController(t))
+
 			s := &Store{
 				ctx:              context.Background(),
 				namespaceCache:   nsc,
@@ -863,19 +928,21 @@ func TestReset(t *testing.T) {
 				columnSetter:     cs,
 				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
 				transformBuilder: tb,
+				schemas:          sc,
 			}
-			nsSchema := baseNSSchema
-			gvk := attributes.GVK(&nsSchema)
+			gvk := attributes.GVK(nsSchema)
 			cf.EXPECT().Stop(gvk).Return(nil)
+			sc.EXPECT().ByGVK(namespaceGVK).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
-			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
 				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
-				attributes.GVK(&nsSchema),
+				attributes.GVK(nsSchema),
 				gomock.Any(),
 				false,
 				true).Return(nsc, nil)
@@ -894,6 +961,7 @@ func TestReset(t *testing.T) {
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			tb := NewMockTransformBuilder(gomock.NewController(t))
 
+			sc := NewMockSchemaCollection(gomock.NewController(t))
 			s := &Store{
 				ctx:              context.Background(),
 				clientGetter:     cg,
@@ -901,6 +969,7 @@ func TestReset(t *testing.T) {
 				columnSetter:     cs,
 				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
 				transformBuilder: tb,
+				schemas:          sc,
 			}
 
 			gvk := schema.GroupVersionKind{}
@@ -917,6 +986,7 @@ func TestReset(t *testing.T) {
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			tb := NewMockTransformBuilder(gomock.NewController(t))
 
+			sc := NewMockSchemaCollection(gomock.NewController(t))
 			s := &Store{
 				ctx:              context.Background(),
 				clientGetter:     cg,
@@ -924,12 +994,24 @@ func TestReset(t *testing.T) {
 				columnSetter:     cs,
 				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
 				transformBuilder: tb,
+				schemas:          sc,
 			}
 
-			nsSchema := baseNSSchema
-			gvk := attributes.GVK(&nsSchema)
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			gvk := attributes.GVK(nsSchema)
 
 			cf.EXPECT().Stop(gvk).Return(nil)
+			sc.EXPECT().ByGVK(namespaceGVK).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(fmt.Errorf("error"))
 			err := s.Reset(gvk)
 			assert.NotNil(t, err)
@@ -943,6 +1025,7 @@ func TestReset(t *testing.T) {
 			cs := NewMockSchemaColumnSetter(gomock.NewController(t))
 			tb := NewMockTransformBuilder(gomock.NewController(t))
 
+			sc := NewMockSchemaCollection(gomock.NewController(t))
 			s := &Store{
 				ctx:              context.Background(),
 				clientGetter:     cg,
@@ -950,13 +1033,25 @@ func TestReset(t *testing.T) {
 				columnSetter:     cs,
 				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
 				transformBuilder: tb,
+				schemas:          sc,
 			}
-			nsSchema := baseNSSchema
-			gvk := attributes.GVK(&nsSchema)
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			gvk := attributes.GVK(nsSchema)
 
 			cf.EXPECT().Stop(gvk).Return(nil)
+			sc.EXPECT().ByGVK(namespaceGVK).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
-			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
+			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(nil, fmt.Errorf("error"))
 			err := s.Reset(gvk)
 			assert.NotNil(t, err)
 		},
@@ -970,6 +1065,7 @@ func TestReset(t *testing.T) {
 			ri := NewMockResourceInterface(gomock.NewController(t))
 			tb := NewMockTransformBuilder(gomock.NewController(t))
 
+			sc := NewMockSchemaCollection(gomock.NewController(t))
 			s := &Store{
 				ctx:              context.Background(),
 				clientGetter:     cg,
@@ -977,20 +1073,32 @@ func TestReset(t *testing.T) {
 				columnSetter:     cs,
 				cfInitializer:    func() (CacheFactory, error) { return cf, nil },
 				transformBuilder: tb,
+				schemas:          sc,
 			}
-			nsSchema := baseNSSchema
-			gvk := attributes.GVK(&nsSchema)
+			nsSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":    "",
+						"version":  "v1",
+						"kind":     "Namespace",
+						"resource": "namespaces",
+					},
+				},
+			}
+			gvk := attributes.GVK(nsSchema)
 
 			cf.EXPECT().Stop(gvk).Return(nil)
+			sc.EXPECT().ByGVK(namespaceGVK).Return("namespace")
+			sc.EXPECT().Schema("namespace").Return(nsSchema)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
-			cg.EXPECT().TableAdminClient(nil, &nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			cf.EXPECT().CacheFor(context.Background(),
 				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
-				attributes.GVK(&nsSchema),
+				attributes.GVK(nsSchema),
 				gomock.Any(),
 				false,
 				true).Return(nil, fmt.Errorf("error"))
