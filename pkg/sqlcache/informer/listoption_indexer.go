@@ -618,7 +618,6 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 			associationWrapper := []any{associationBlock}
 			err = unstructured.SetNestedSlice(listItem.Object, associationWrapper, "metadata", "associatedData")
 			if err != nil {
-				logrus.Errorf("Can't set data: %s\n", err)
 				return err
 			}
 		}
