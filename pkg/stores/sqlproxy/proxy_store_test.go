@@ -814,6 +814,7 @@ func TestAugmentRelationships(t *testing.T) {
 					"kind":       "Pod",
 					"group":      "",
 					"namespaced": true,
+					"verbs":      []string{"list", "watch"},
 				}},
 			}
 			apiSchemas := &types.APISchemas{
@@ -873,7 +874,7 @@ func TestAugmentRelationships(t *testing.T) {
 				attributes.GVK(podSchema),
 				gomock.Any(),
 				attributes.Namespaced(podSchema),
-				false).Return(c, nil)
+				true).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			cf.EXPECT().DoneWithCache(c)
 			bloi.EXPECT().AugmentList(ctx, &originalList, gomock.Any(), gomock.Any(), true).Return(nil)
