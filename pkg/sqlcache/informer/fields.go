@@ -1,11 +1,12 @@
 package informer
 
 import (
-	rescommon "github.com/rancher/steve/pkg/resources/common"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"regexp"
 	"strconv"
 	"time"
+
+	rescommon "github.com/rancher/steve/pkg/resources/common"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // IndexedField represents a single field that can be indexed in the SQL cache.
