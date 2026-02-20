@@ -25,14 +25,12 @@ var testdataPodRestartsDir = filepath.Join("testdata", "podrestarts")
 func (i *IntegrationSuite) TestPodRestarts() {
 	ctx := i.T().Context()
 
-	// Apply manifests once
 	manifestsFile := filepath.Join(testdataPodRestartsDir, "podrestarts.manifests.yaml")
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
 	i.doManifest(ctx, manifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
 		gvrs[gvr] = struct{}{}
 		return i.doApply(ctx, obj, gvr)
 	})
-	// Cleanup manifests after all tests complete
 	defer i.doManifestReversed(ctx, manifestsFile, i.doDelete)
 
 	// Wait for pods to stabilize - restarting-pod needs time to restart once
@@ -44,7 +42,6 @@ func (i *IntegrationSuite) TestPodRestarts() {
 }
 
 func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
-	// Custom authenticator
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
 		info, ok, err := auth.Impersonation(req)
 		if ok || err != nil {
@@ -74,7 +71,6 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 		time.Sleep(2 * time.Second)
 	}
 
-	// Load and run test scenarios
 	matches, err := filepath.Glob(filepath.Join(testdataPodRestartsDir, "*.test.yaml"))
 	i.Require().NoError(err)
 
@@ -105,7 +101,6 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 					i.Require().NoError(err)
 					defer resp.Body.Close()
 
-					// Check that the request succeeds (status 200)
 					i.Assert().Equal(http.StatusOK, resp.StatusCode, "request should succeed")
 
 					type Response struct {
@@ -120,32 +115,26 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 					err = json.NewDecoder(resp.Body).Decode(&parsed)
 					i.Require().NoError(err)
 
-					// Extract pod names from response
 					var actualNames []string
 					for _, pod := range parsed.Data {
 						actualNames = append(actualNames, pod.Metadata.Name)
 					}
 
-					// Verify expected pods
 					if test.ExpectContains {
-						// Check that all expected pods are present
 						expectedNames := make([]string, 0, len(test.Expect))
 						for _, expected := range test.Expect {
 							expectedNames = append(expectedNames, expected["name"])
 						}
 
-						// Verify each expected pod is in the actual results
 						for _, expectedName := range expectedNames {
 							i.Assert().Contains(actualNames, expectedName, "expected pod %q to be in response", expectedName)
 						}
 					} else {
-						// Check exact match (order matters) - build comparable lists
 						expectedNames := make([]string, 0, len(test.Expect))
 						for _, expected := range test.Expect {
 							expectedNames = append(expectedNames, expected["name"])
 						}
 
-						// Use assert.Equal to get nice diff output
 						i.Assert().Equal(expectedNames, actualNames, "pod list order mismatch")
 					}
 				})
