@@ -28,10 +28,10 @@ import (
 type ListOptionIndexer struct {
 	*Indexer
 
-	namespaced    bool
-	indexedFields map[string]IndexedField // column name -> field for O(1) lookups
-	columnOrder   []string                // deterministic iteration order (sorted)
-	typeGuidance  map[string]string
+	namespaced     bool
+	indexedFields  map[string]IndexedField // UI field ID -> field for O(1) lookups
+	columnOrder    []string                // all UI field IDs (sorted, for deterministic iteration)
+	uniqueColumns  []string                // unique database column names (for schema creation and value extraction)
 
 	// lock protects latestRV
 	lock     sync.RWMutex
@@ -101,11 +101,6 @@ type ListOptionIndexerOptions struct {
 	// Fields is a map of column name to IndexedField for filtering & sorting.
 	// Each IndexedField specifies its column name, SQL type, and value extraction logic.
 	Fields map[string]IndexedField
-	// Used for specifying types of non-TEXT database fields.
-	// The key is a fully-qualified field name, like 'metadata.fields[1]'.
-	// The value is a type name, most likely "INT" but could be "REAL". The default type is "TEXT",
-	// and we don't (currently) use NULL or BLOB types.
-	TypeGuidance map[string]string
 	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
 	// namespaced
 	IsNamespaced bool
@@ -136,8 +131,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	}
 
 	// Merge in provided fields (overwrite if duplicate)
-	for k, v := range opts.Fields {
-		indexedFields[k] = v
+	for _, v := range opts.Fields {
+		indexedFields[v.ColumnName()] = v
 	}
 
 	// Sort keys for deterministic order. This ensures consistent SQL schema
@@ -147,6 +142,21 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		columnOrder = append(columnOrder, name)
 	}
 	slices.Sort(columnOrder)
+
+	// Build list of unique database columns (deduplicating by ColumnName())
+	// Multiple UI field IDs may map to the same database column
+	seenColumns := make(map[string]bool)
+	uniqueColumns := make([]string, 0)
+	for _, mapKey := range columnOrder {
+		field := indexedFields[mapKey]
+		colName := field.ColumnName()
+		if !seenColumns[colName] {
+			seenColumns[colName] = true
+			uniqueColumns = append(uniqueColumns, colName)
+		}
+	}
+	// Sort unique columns for deterministic schema generation
+	slices.Sort(uniqueColumns)
 
 	maxEventHistory := opts.GCKeepCount
 	if maxEventHistory <= 0 {
@@ -158,7 +168,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
 		columnOrder:   columnOrder,
-		typeGuidance:  opts.TypeGuidance,
+		uniqueColumns: uniqueColumns,
 		eventLog:      ring.NewCircularBuffer[*event](maxEventHistory),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
@@ -174,11 +184,18 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
 
-	// Build column definitions using sorted order.
+	// Build column definitions using unique columns
 	// Each IndexedField specifies its SQL type via ColumnType().
-	columnDefs := make([]string, 0, len(columnOrder))
-	for _, colName := range columnOrder {
-		field := indexedFields[colName]
+	columnDefs := make([]string, 0, len(uniqueColumns))
+	for _, colName := range uniqueColumns {
+		// Find a field with this column name to get the type
+		var field IndexedField
+		for _, mapKey := range columnOrder {
+			if indexedFields[mapKey].ColumnName() == colName {
+				field = indexedFields[mapKey]
+				break
+			}
+		}
 		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, field.ColumnType()))
 	}
 
@@ -198,15 +215,16 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return err
 		}
 
-		for _, colName := range columnOrder {
+		// Create indexes and build prepared statement components for unique columns
+		for _, actualColumnName := range uniqueColumns {
 			// create index for field
-			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, colName, dbName, colName)
+			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, actualColumnName, dbName, actualColumnName)
 			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
 				return err
 			}
 
 			// format field into column for prepared statement
-			column := fmt.Sprintf(`"%s"`, colName)
+			column := fmt.Sprintf(`"%s"`, actualColumnName)
 			columns = append(columns, column)
 
 			// add placeholder for column's value in prepared statement
@@ -214,8 +232,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 			// add formatted set statement for prepared statement
 			// optimization: avoid SET for fields which cannot change
-			if !immutableFields.Has(colName) {
-				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, colName, colName)
+			if !immutableFields.Has(actualColumnName) {
+				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, actualColumnName, actualColumnName)
 				setStatements = append(setStatements, setStatement)
 			}
 		}
@@ -318,7 +336,6 @@ func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) 
 	}
 	if err := l.Deserialize(serialized, into); err != nil {
 		return watch.Error, err
-
 	}
 	return watch.EventType(typ), nil
 }
@@ -397,12 +414,20 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 
 	args := []any{key}
 
-	// Use columnOrder for deterministic iteration
-	for _, colName := range l.columnOrder {
-		field := l.indexedFields[colName]
+	// Iterate over unique columns to extract values
+	// We need to find a field that maps to each unique column name
+	for _, actualColumnName := range l.uniqueColumns {
+		// Find a field with this column name
+		var field IndexedField
+		for _, mapKey := range l.columnOrder {
+			if l.indexedFields[mapKey].ColumnName() == actualColumnName {
+				field = l.indexedFields[mapKey]
+				break
+			}
+		}
 		value, err := field.GetValue(unstrObj)
 		if err != nil {
-			logrus.Errorf("cannot index field %v: %v", colName, err)
+			logrus.Errorf("cannot index field %v: %v", actualColumnName, err)
 			args = append(args, normalizeValue(nil))
 			continue
 		}

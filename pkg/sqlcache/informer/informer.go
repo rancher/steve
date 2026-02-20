@@ -144,7 +144,6 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields m
 
 	opts := ListOptionIndexerOptions{
 		Fields:       fields,
-		TypeGuidance: typeGuidance,
 		IsNamespaced: namespaced,
 		GCKeepCount:  gcKeepCount,
 	}

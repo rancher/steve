@@ -64,6 +64,9 @@ const (
 var (
 	paramScheme = runtime.NewScheme()
 	paramCodec  = runtime.NewParameterCodec(paramScheme)
+	// TypeSpecificIndexedFields maps GVK keys to their indexed fields.
+	// The inner map key is the UI field identifier (what the UI sends for sorting/filtering).
+	// The IndexedField.ColumnName() returns the SQL column name (currently always matches the key).
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
 	TypeSpecificIndexedFields = map[string]map[string]informer.IndexedField{
 		gvkKey("", "v1", "Event"): {
@@ -91,12 +94,19 @@ var (
 			"spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "containers", "image"}},
 			"spec.nodeName":         &informer.JSONPathField{Path: []string{"spec", "nodeName"}},
 			"status.podIP":          &informer.JSONPathField{Path: []string{"status", "podIP"}},
-			"metadata.fields[3]_0": &informer.ComputedField{
+			// Restart count - UI field ID "metadata.fields[3]" or "metadata.fields[3][0]"
+			"metadata.fields[3]": &informer.ComputedField{
 				Name:         "metadata.fields[3]_0",
 				Type:         "INTEGER",
 				GetValueFunc: informer.ExtractPodRestartCount,
 			},
-			"metadata.fields[3]_1": &informer.ComputedField{
+			"metadata.fields[3][0]": &informer.ComputedField{
+				Name:         "metadata.fields[3]_0",
+				Type:         "INTEGER",
+				GetValueFunc: informer.ExtractPodRestartCount,
+			},
+			// Restart timestamp - UI field ID "metadata.fields[3][1]"
+			"metadata.fields[3][1]": &informer.ComputedField{
 				Name:         "metadata.fields[3]_1",
 				Type:         "INTEGER",
 				GetValueFunc: informer.ExtractPodRestartTimestamp,
