@@ -153,9 +153,9 @@ func (i *IntegrationSuite) TestListSortPodsByStateName() {
 	type Response struct {
 		Data []struct {
 			Metadata struct {
-				Name string `json:"name"`
-				Fields []any `json:"fields"`
-				State struct {
+				Name   string `json:"name"`
+				Fields []any  `json:"fields"`
+				State  struct {
 					Name string `json:"name"`
 				} `json:"state"`
 			} `json:"metadata"`
