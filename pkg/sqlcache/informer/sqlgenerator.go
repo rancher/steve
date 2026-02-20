@@ -896,10 +896,6 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		return "", nil, err
 	}
 
-	// Check if this is an INTEGER field - need to cast parameter to integer for proper comparison.
-	fieldID := smartJoin(filter.Field)
-	isIntegerCol := l.isIntegerField(fieldID)
-
 	switch filter.Op {
 	case sqltypes.Eq:
 		if filter.Partial {
@@ -910,12 +906,6 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
 		param := formatMatchTarget(filter)
-		if isIntegerCol && !filter.Partial {
-			// For INTEGER columns, convert string parameter to integer
-			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
-				return clause, []any{intVal}, nil
-			}
-		}
 		return clause, []any{param}, nil
 	case sqltypes.NotEq:
 		if filter.Partial {
@@ -926,12 +916,6 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
 		param := formatMatchTarget(filter)
-		if isIntegerCol && !filter.Partial {
-			// For INTEGER columns, convert string parameter to integer
-			if intVal, err := strconv.ParseInt(param, 10, 64); err == nil {
-				return clause, []any{intVal}, nil
-			}
-		}
 		return clause, []any{param}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:

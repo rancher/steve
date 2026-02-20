@@ -444,7 +444,7 @@ func normalizeValue(value any) any {
 	case nil:
 		return ""
 	case int, int64, float64, bool:
-		return v
+		return fmt.Sprint(v)
 	case string:
 		return v
 	case []string:
