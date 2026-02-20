@@ -560,19 +560,19 @@ func getFieldAndColInfo(s *types.APISchema, gvk schema.GroupVersionKind) (map[st
 	fields := make(map[string]informer.IndexedField)
 	colDefs := common.GetColumnDefinitions(s)
 	typeGuidance := getTypeGuidance(colDefs, gvk)
-	
+
 	if colDefs != nil {
 		for _, colDef := range colDefs {
 			fieldStr := strings.TrimPrefix(colDef.Field, "$")
 			fieldStr = strings.TrimPrefix(fieldStr, ".")
 			fieldPath := queryhelper.SafeSplit(fieldStr)
-			
+
 			// Get type from typeGuidance if available
 			fieldType := ""
 			if typ, ok := typeGuidance[fieldStr]; ok {
 				fieldType = typ
 			}
-			
+
 			field := &informer.JSONPathField{
 				Path: fieldPath,
 				Type: fieldType,

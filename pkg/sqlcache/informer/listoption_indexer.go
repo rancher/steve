@@ -28,10 +28,10 @@ import (
 type ListOptionIndexer struct {
 	*Indexer
 
-	namespaced     bool
-	indexedFields  map[string]IndexedField // UI field ID -> field for O(1) lookups
-	columnOrder    []string                // all UI field IDs (sorted, for deterministic iteration)
-	uniqueColumns  []string                // unique database column names (for schema creation and value extraction)
+	namespaced    bool
+	indexedFields map[string]IndexedField // UI field ID -> field for O(1) lookups
+	columnOrder   []string                // all UI field IDs (sorted, for deterministic iteration)
+	uniqueColumns []string                // unique database column names (for schema creation and value extraction)
 
 	// lock protects latestRV
 	lock     sync.RWMutex
