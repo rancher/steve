@@ -23,15 +23,16 @@ import (
 )
 
 const (
-	defaultLimit            = 100000
-	filterParam             = "filter"
-	sortParam               = "sort"
-	pageSizeParam           = "pagesize"
-	pageParam               = "page"
-	revisionParam           = "revision"
-	summaryParam            = "summary"
-	projectsOrNamespacesVar = "projectsornamespaces"
-	projectIDFieldLabel     = "field.cattle.io/projectId"
+	defaultLimit               = 100000
+	filterParam                = "filter"
+	includeAssociatedDataParam = "includeAssociatedData"
+	sortParam                  = "sort"
+	pageSizeParam              = "pagesize"
+	pageParam                  = "page"
+	revisionParam              = "revision"
+	summaryParam               = "summary"
+	projectsOrNamespacesVar    = "projectsornamespaces"
+	projectIDFieldLabel        = "field.cattle.io/projectId"
 
 	orOp  = ","
 	notOp = "!"
@@ -207,6 +208,12 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 		opts.SummaryFieldList = fieldLists
 	} else if q.Has(summaryParam) {
 		return opts, errors.New("unable to parse requirement: summary parameter given with no fields to summarize")
+	}
+
+	assocDataParams := q[includeAssociatedDataParam]
+	if len(assocDataParams) > 0 {
+		lastParam := assocDataParams[len(assocDataParams)-1]
+		opts.IncludeAssociatedData = strings.ToLower(lastParam) == "true"
 	}
 
 	return opts, nil

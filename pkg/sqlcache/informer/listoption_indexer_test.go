@@ -14,6 +14,8 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/store"
 	"go.uber.org/mock/gomock"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -390,6 +392,63 @@ func TestNewListOptionIndexer(t *testing.T) {
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
+	}
+}
+
+func TestMakeAugmentedDBQuery(t *testing.T) {
+	type testCase struct {
+		description    string
+		podSelectors   []string
+		expectedQuery  string
+		expectedParams []any
+		expectedErr    error
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{description: "TestMakeAugmentedDBQuery: no selectors",
+		podSelectors: nil,
+		expectedErr:  fmt.Errorf("nothing to select"),
+	})
+	tests = append(tests, testCase{description: "TestMakeAugmentedDBQuery: one namespace",
+		podSelectors: []string{"ns1"},
+		expectedQuery: `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL
+    FROM "_v1_Pod_fields" f1
+    JOIN "_v1_Pod_labels" lt1 ON f1.key = lt1.key
+    WHERE f1."metadata.namespace" IN (?)`,
+		expectedParams: []any{"ns1"},
+	})
+	tests = append(tests, testCase{description: "TestMakeAugmentedDBQuery: 3 namespaces",
+		podSelectors: []string{"ns2", "ns4", "ns3"},
+		expectedQuery: `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL
+    FROM "_v1_Pod_fields" f1
+    JOIN "_v1_Pod_labels" lt1 ON f1.key = lt1.key
+    WHERE f1."metadata.namespace" IN (?, ?, ?)`,
+		expectedParams: []any{"ns2", "ns3", "ns4"},
+	})
+
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			query, params, err := makeAugmentedDBQuery(test.podSelectors, "_v1_Pod")
+			if test.expectedErr != nil {
+				assert.Error(t, err)
+				return
+			}
+			require.Nil(t, err)
+			assert.Equal(t, test.expectedQuery, query)
+			expectedParamsAsString := make([]string, len(test.expectedParams), len(test.expectedParams))
+			for i, s := range test.expectedParams {
+				expectedParamsAsString[i] = s.(string)
+			}
+			actualParamsAsString := make([]string, len(params), len(params))
+			for i, s := range params {
+				actualParamsAsString[i] = s.(string)
+			}
+			cmpFunc := func(a, b any) int { return strings.Compare(a.(string), b.(string)) }
+			sortedExpectedParams := slices.SortedStableFunc(slices.Values(test.expectedParams), cmpFunc)
+			sortedParams := slices.SortedStableFunc(slices.Values(params), cmpFunc)
+			assert.Equal(t, sortedExpectedParams, sortedParams)
+		})
 	}
 }
 

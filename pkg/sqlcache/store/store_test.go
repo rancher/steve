@@ -802,7 +802,7 @@ func TestAddWithOneUpdate(t *testing.T) {
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 			args1 := []any{"field.cattle.io/projectId"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
-			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
+			c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
 			rawStmt2 := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
@@ -821,7 +821,7 @@ func TestAddWithOneUpdate(t *testing.T) {
 			args2 := []any{}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
 
-			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
+			c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
 			// Override check:
 			rawStmt2 = `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
@@ -868,7 +868,7 @@ func TestAddWithExternalUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		args1 := []any{"field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
-		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
+		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
 		rawStmt1b := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt1b))
@@ -888,7 +888,7 @@ func TestAddWithExternalUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 		args2 := []any{}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
-		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
+		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
 
 		rawStmt3b := `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3b))
@@ -943,7 +943,7 @@ func TestAddWithSelfUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		args1 := []any{"field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
-		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
+		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
 		rawStmt1b := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt1b))
@@ -963,7 +963,7 @@ func TestAddWithSelfUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 		args2 := []any{}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
-		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"field.cattle.io/fixer", "moose1"}}, nil)
+		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"field.cattle.io/fixer", "moose1"}}, nil)
 
 		rawStmt3b := `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3b))
@@ -1030,7 +1030,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 			args1 := []any{"field.cattle.io/projectId"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
-			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
+			c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
 			rawStmt2 := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
@@ -1047,7 +1047,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 			args2 := []any{}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
 
-			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"field.cattle.io/fixer", "moose1"}}, nil)
+			c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"field.cattle.io/fixer", "moose1"}}, nil)
 			// Override check:
 			rawStmt2 = `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))

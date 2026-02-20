@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -433,6 +434,297 @@ func (l *ListOptionIndexer) deleteLabels(tx db.TxClient) error {
 func (l *ListOptionIndexer) dropLabels(tx db.TxClient) error {
 	_, err := tx.Stmt(l.dropLabelsStmt).Exec()
 	return err
+}
+
+// Augment the items in the list with the following approach:
+// If we're using selectors (this is the case for all parent types pointing to child pods):
+// 1. Find all items that have a `relationship` block that includes `toType="pod"` and a non-empty selector field, and include the item's namespace in the namespace-search list
+// 2. Search the DB for all pods that are in the namespace-search list -- grab the pod's namespace, name, and fields we want (name, state info)
+// 3. Then walk this list again, and for each selector that can actually select one of the pods from step 2,
+// add that information from the pod into a `metadata.associatedData` block.
+//
+// Otherwise, we're just looking for `relationship` blocks that contain a `toId` field.
+// The `type` field is implicit in these blocks.
+// Matching is done on the child node's ID.
+
+func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
+	var namespaceSet = sets.Set[string]{}
+	for _, data := range list.Items {
+		relationships, found, err := unstructured.NestedFieldNoCopy(data.Object, "metadata", "relationships")
+		if err != nil || !found {
+			continue
+		}
+		for _, rel := range relationships.([]any) {
+			rel2 := rel.(map[string]any)
+			toType, toTypeOK := rel2["toType"]
+			if !toTypeOK || toType != childSchemaName {
+				continue
+			}
+			toNamespace := ""
+			if useSelectors {
+				_, selectorOK := rel2["selector"]
+				if !selectorOK {
+					continue
+				}
+				toNamespaceAny, toNamespaceOK := rel2["toNamespace"]
+				if toNamespaceOK {
+					toNamespaceAsString, convOK := toNamespaceAny.(string)
+					if convOK {
+						toNamespace = toNamespaceAsString
+					}
+				}
+			} else {
+				toID, toIDOK := rel2["toId"]
+				if !toIDOK {
+					continue
+				}
+				parts := strings.SplitN(toID.(string), "/", 2)
+				if len(parts) == 2 {
+					toNamespace = parts[0]
+				}
+			}
+			namespaceSet.Insert(toNamespace)
+		}
+	}
+	if namespaceSet.Len() == 0 {
+		return nil
+	}
+	namespaces := sets.List(namespaceSet) // Set.List() sorts the elements
+	tableBaseName := childGVK.Group + "_" + childGVK.Version + "_" + childGVK.Kind
+	query, params, err := makeAugmentedDBQuery(namespaces, tableBaseName)
+	if err != nil {
+		return err
+	}
+	err = l.finishAugmenting(ctx, list, query, params, childGVK, childSchemaName, useSelectors)
+	if err != nil {
+		logrus.Debugf("Error augmenting the info: %s\n", err)
+	}
+	return nil
+}
+
+func makeAugmentedDBQuery(namespaces []string, tableBaseName string) (string, []any, error) {
+	if len(namespaces) == 0 {
+		return "", nil, fmt.Errorf("nothing to select")
+	}
+	query := `SELECT f1."metadata.namespace" as NS,  f1."metadata.name" as POD, f1."metadata.state.name" AS STATENAME, f1."metadata.state.error" AS ERROR, f1."metadata.state.message" AS SMESSAGE, f1."metadata.state.transitioning" AS TRANSITIONING, lt1.label as LAB, lt1.value as VAL
+    FROM "` + tableBaseName + `_fields" f1
+    JOIN "` + tableBaseName + `_labels" lt1 ON f1.key = lt1.key
+    WHERE f1."metadata.namespace" IN (?` + strings.Repeat(", ?", len(namespaces)-1) + ")"
+	params := make([]any, len(namespaces), len(namespaces))
+	for i, ns := range namespaces {
+		params[i] = ns
+	}
+	return query, params, nil
+}
+
+func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstructured.UnstructuredList, query string, params []any, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
+	stmt := l.Prepare(query)
+	var err error
+	defer func() {
+		if cerr := stmt.Close(); cerr != nil && err == nil {
+			err = errors.Join(err, cerr)
+		}
+	}()
+
+	var items [][]string
+	err = l.WithTransaction(ctx, false, func(tx db.TxClient) error {
+		now := time.Now()
+		rows, err := tx.Stmt(stmt).QueryContext(ctx, params...)
+		if err != nil {
+			return err
+		}
+		elapsed := time.Since(now)
+		logLongQuery(elapsed, query, params)
+		items, err = l.ReadStringsN(rows, 8)
+		if err != nil {
+			return fmt.Errorf("finishAugmenting: error reading objects: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil
+	}
+	if len(items) == 0 {
+		return nil
+	}
+
+	// And now plug in the new data into metadata.associatedData
+	sortedItems := sortTheItems(items)
+	if useSelectors {
+		return l.getAssociatedDataBySelector(list.Items, sortedItems, childGVK, childSchemaName)
+	}
+	return l.getAssociatedDataByID(list.Items, sortedItems, childGVK, childSchemaName)
+}
+
+func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
+	for _, listItem := range parentItems {
+		relationships, found, err := unstructured.NestedFieldNoCopy(listItem.Object, "metadata", "relationships")
+		if err != nil || !found {
+			continue
+		}
+		relatedDataItems := make([]any, 0)
+		finalSelector := ""
+		finalNamespace := ""
+		for _, rel := range relationships.([]any) {
+			rel2 := rel.(map[string]any)
+			selector, selectorOK := rel2["selector"]
+			if !selectorOK {
+				continue
+			}
+			toType, toTypeOK := rel2["toType"]
+			if !toTypeOK || toType != childSchemaName {
+				continue
+			}
+			finalNamespace = rel2["toNamespace"].(string)
+			finalSelector = selector.(string)
+		}
+		if finalSelector == "" {
+			continue
+		}
+		// Find the slice we care about
+		childSelectorWrapper, ok := dbRows[finalNamespace]
+		if !ok {
+			continue
+		}
+		selectorHash := make(map[string]string)
+		selectorParts := strings.Split(finalSelector, ",")
+		for _, selectorPart := range selectorParts {
+			parts := strings.SplitN(selectorPart, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			selectorHash[parts[0]] = parts[1]
+		}
+		for childName, childInfo := range *childSelectorWrapper {
+			childSelectors := childInfo.labelAsSelectors
+			acceptThis := true
+			for deploymentLabel, deploymentValue := range selectorHash {
+				if childSelectors[deploymentLabel] != deploymentValue {
+					acceptThis = false
+				}
+			}
+			if acceptThis {
+				relatedDataItems = append(relatedDataItems, map[string]any{
+					"childName": childName,
+					"state":     childInfo.stateInfo,
+				})
+			}
+		}
+		if len(relatedDataItems) > 0 {
+			associationBlock := map[string]any{
+				"gvk": map[string]any{
+					"group":   childGVK.Group,
+					"version": childGVK.Version,
+					"kind":    childGVK.Kind,
+				},
+				"data": relatedDataItems,
+			}
+			associationWrapper := []any{associationBlock}
+			err = unstructured.SetNestedSlice(listItem.Object, associationWrapper, "metadata", "associatedData")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (l *ListOptionIndexer) getAssociatedDataByID(parentItems []unstructured.Unstructured, dbRows podsByNamespace, childGVK schema.GroupVersionKind, childSchemaName string) error {
+	for _, listItem := range parentItems {
+		relationships, found, err := unstructured.NestedFieldNoCopy(listItem.Object, "metadata", "relationships")
+		if err != nil || !found {
+			continue
+		}
+		relatedDataItems := make([]any, 0)
+		for _, rel := range relationships.([]any) {
+			rel2 := rel.(map[string]any)
+			toType, toTypeOK := rel2["toType"]
+			if !toTypeOK || toType != childSchemaName {
+				continue
+			}
+			toID, toIDOK := rel2["toId"]
+			if !toIDOK {
+				continue
+			}
+			idParts := strings.SplitN(toID.(string), "/", 2)
+			thisNamespace := idParts[0]
+			finalName := idParts[1]
+			// Find the slice we care about
+			podSelectorWrapper, ok := dbRows[thisNamespace]
+			if !ok {
+				continue
+			}
+			for childName, childInfo := range *podSelectorWrapper {
+				if childName == finalName {
+					relatedDataItems = append(relatedDataItems, map[string]any{
+						"podName": childName,
+						"state":   childInfo.stateInfo,
+					})
+				}
+			}
+		}
+		if len(relatedDataItems) > 0 {
+			associationBlock := map[string]any{
+				"gvk": map[string]any{
+					"group":   childGVK.Group,
+					"version": childGVK.Version,
+					"kind":    childGVK.Kind,
+				},
+				"data": relatedDataItems,
+			}
+			associationWrapper := []any{associationBlock}
+			err = unstructured.SetNestedSlice(listItem.Object, associationWrapper, "metadata", "associatedData")
+			if err != nil {
+				logrus.Errorf("Can't set data: %s\n", err)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+type podSelectorInfo struct {
+	stateInfo        map[string]any
+	labelAsSelectors map[string]string
+}
+
+// These need to be pointers so they can be updated while being created.
+// There must be a better way to do this...
+type podSelectorWrapper map[string]*podSelectorInfo
+
+type podsByNamespace map[string]*podSelectorWrapper
+
+func sortTheItems(items [][]string) podsByNamespace {
+	itemsByNamespace := podsByNamespace{}
+	for _, valueList := range items {
+		namespaceName := valueList[0]
+		psw, ok := itemsByNamespace[namespaceName]
+		if !ok {
+			psw = &podSelectorWrapper{}
+			itemsByNamespace[namespaceName] = psw
+		}
+		podName := valueList[1]
+		podBlock, ok := (*psw)[podName]
+		if !ok {
+			podBlock = &podSelectorInfo{
+				// The state info is the same for every instance of
+				// pod P with a different label, so we can assign it the first time
+				// and don't need to check subsequent instances of pod P
+				// Repeat: pod P repeats because the relational info is redundant when
+				// we join pod fields with pod labels
+				stateInfo: map[string]any{
+					"name":          valueList[2],
+					"error":         valueList[3],
+					"message":       valueList[4],
+					"transitioning": valueList[5],
+				},
+				labelAsSelectors: make(map[string]string),
+			}
+			(*psw)[podName] = podBlock
+		}
+		podBlock.labelAsSelectors[valueList[6]] = valueList[7]
+	}
+	return itemsByNamespace
 }
 
 // ListByOptions returns objects according to the specified list options and partitions.

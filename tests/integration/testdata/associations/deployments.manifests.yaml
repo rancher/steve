@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kia
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: socksess
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forte
+  namespace: kia
+spec:
+  selector:
+    matchLabels:
+      app: forte
+  template:
+    metadata:
+      labels:
+        app: forte
+    spec:
+      containers:
+      - image: docker.io/morspin/forte:v0.1.1
+        name: forte
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: socksess
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - image: docker.io/morspin/postgres:v0.1.1
+        name: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: socksess
+  namespace: socksess
+spec:
+  selector:
+    matchLabels:
+      app: socksess
+  template:
+    metadata:
+      labels:
+        app: socksess
+    spec:
+      containers:
+      - image: docker.io/morspin/socksess:v0.1.1
+        name: socksess

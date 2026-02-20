@@ -202,8 +202,12 @@ func (i *IntegrationSuite) doManifestWithHeader(ctx context.Context, manifestFil
 	for {
 		obj := &unstructured.Unstructured{Object: map[string]any{}}
 		err := dec.Decode(obj.Object)
-		if errors.Is(err, io.EOF) {
-			break
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			err2 := fmt.Errorf("error loading file %s: %s\n", manifestFile, err)
+			i.Require().NoError(err2)
 		}
 
 		if obj.Object == nil {

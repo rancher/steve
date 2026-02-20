@@ -18,6 +18,7 @@ import (
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	gomock "go.uber.org/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 )
 
@@ -43,6 +44,20 @@ func NewMockByOptionsLister(ctrl *gomock.Controller) *MockByOptionsLister {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 	return m.recorder
+}
+
+// AugmentList mocks base method.
+func (m *MockByOptionsLister) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AugmentList", ctx, list, childGVK, childSchemaName, useSelectors)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AugmentList indicates an expected call of AugmentList.
+func (mr *MockByOptionsListerMockRecorder) AugmentList(ctx, list, childGVK, childSchemaName, useSelectors any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockByOptionsLister)(nil).AugmentList), ctx, list, childGVK, childSchemaName, useSelectors)
 }
 
 // DropAll mocks base method.

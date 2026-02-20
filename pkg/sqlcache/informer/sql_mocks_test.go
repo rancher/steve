@@ -308,19 +308,19 @@ func (mr *MockStoreMockRecorder) ReadStrings(rows any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings", reflect.TypeOf((*MockStore)(nil).ReadStrings), rows)
 }
 
-// ReadStrings2 mocks base method.
-func (m *MockStore) ReadStrings2(rows db.Rows) ([][]string, error) {
+// ReadStringsN mocks base method.
+func (m *MockStore) ReadStringsN(rows db.Rows, numColumns int) ([][]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadStrings2", rows)
+	ret := m.ctrl.Call(m, "ReadStringsN", rows, numColumns)
 	ret0, _ := ret[0].([][]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ReadStrings2 indicates an expected call of ReadStrings2.
-func (mr *MockStoreMockRecorder) ReadStrings2(rows any) *gomock.Call {
+// ReadStringsN indicates an expected call of ReadStringsN.
+func (mr *MockStoreMockRecorder) ReadStringsN(rows, numColumns any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings2", reflect.TypeOf((*MockStore)(nil).ReadStrings2), rows)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStringsN", reflect.TypeOf((*MockStore)(nil).ReadStringsN), rows, numColumns)
 }
 
 // RegisterAfterAdd mocks base method.
