@@ -906,17 +906,12 @@ func TestAugmentRelationships(t *testing.T) {
 			copy(augmentedList.Items, originalItems)
 			cg.EXPECT().TableAdminClient(apiOp, podSchema, "", &WarningBuffer{}).Return(nil, nil)
 			cf.EXPECT().CacheFor(ctx,
-				[][]string{{"id"}, {"metadata", "state", "name"},
-					{"metadata", "state", "error"},
-					{"metadata", "state", "message"},
-					{"metadata", "state", "transitioning"},
-					{"spec", "containers", "image"}, {"spec", "nodeName"}, {"status", "podIP"}},
+				gomock.Any(), // map[string]informer.IndexedField{}
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(), // can't do (*tablelistconvert.Client)(nil),
 				attributes.GVK(podSchema),
-				gomock.Any(),
 				attributes.Namespaced(podSchema),
 				true).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
