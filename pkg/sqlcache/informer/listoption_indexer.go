@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +29,9 @@ type ListOptionIndexer struct {
 	*Indexer
 
 	namespaced    bool
-	indexedFields []string
+	indexedFields map[string]IndexedField // UI field ID -> field for O(1) lookups
+	columnOrder   []string                // all UI field IDs (sorted, for deterministic iteration)
+	uniqueColumns []string                // unique database column names (for schema creation and value extraction)
 
 	// lock protects latestRV
 	lock     sync.RWMutex
@@ -45,7 +48,10 @@ type ListOptionIndexer struct {
 }
 
 var (
-	defaultIndexedFields   = []string{"metadata.name", "metadata.creationTimestamp"}
+	defaultIndexedFields = []IndexedField{
+		&JSONPathField{Path: []string{"metadata", "name"}},
+		&JSONPathField{Path: []string{"metadata", "creationTimestamp"}},
+	}
 	defaultIndexNamespaced = "metadata.namespace"
 	immutableFields        = sets.New(
 		"metadata.creationTimestamp",
@@ -92,16 +98,9 @@ type event struct {
 }
 
 type ListOptionIndexerOptions struct {
-	// Fields is a list of fields within the object that we want indexed for
-	// filtering & sorting. Each field is specified as a slice.
-	//
-	// For example, .metadata.resourceVersion should be specified as []string{"metadata", "resourceVersion"}
-	Fields [][]string
-	// Used for specifying types of non-TEXT database fields.
-	// The key is a fully-qualified field name, like 'metadata.fields[1]'.
-	// The value is a type name, most likely "INT" but could be "REAL". The default type is "TEXT",
-	// and we don't (currently) use NULL or BLOB types.
-	TypeGuidance map[string]string
+	// Fields is a map of column name to IndexedField for filtering & sorting.
+	// Each IndexedField specifies its column name, SQL type, and value extraction logic.
+	Fields map[string]IndexedField
 	// IsNamespaced determines whether the GVK for this ListOptionIndexer is
 	// namespaced
 	IsNamespaced bool
@@ -117,16 +116,43 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
-	var indexedFields []string
-	for _, f := range defaultIndexedFields {
-		indexedFields = append(indexedFields, f)
+	indexedFields := make(map[string]IndexedField)
+
+	for _, field := range defaultIndexedFields {
+		fieldID := smartJoin(field.(*JSONPathField).Path)
+		indexedFields[fieldID] = field
 	}
+
 	if opts.IsNamespaced {
-		indexedFields = append(indexedFields, defaultIndexNamespaced)
+		field := &JSONPathField{Path: strings.Split(defaultIndexNamespaced, ".")}
+		indexedFields[defaultIndexNamespaced] = field
 	}
-	for _, f := range opts.Fields {
-		indexedFields = append(indexedFields, toColumnName(f))
+
+	for k, v := range opts.Fields {
+		indexedFields[k] = v
 	}
+
+	// Sort keys for deterministic order. This ensures consistent SQL schema
+	// generation and prepared statement parameter ordering across restarts.
+	columnOrder := make([]string, 0, len(indexedFields))
+	for name := range indexedFields {
+		columnOrder = append(columnOrder, name)
+	}
+	slices.Sort(columnOrder)
+
+	// Build list of unique database columns (deduplicating by ColumnName())
+	// Multiple UI field IDs may map to the same database column
+	seenColumns := make(map[string]bool)
+	uniqueColumns := make([]string, 0)
+	for _, mapKey := range columnOrder {
+		field := indexedFields[mapKey]
+		colName := field.ColumnName()
+		if !seenColumns[colName] {
+			seenColumns[colName] = true
+			uniqueColumns = append(uniqueColumns, colName)
+		}
+	}
+	slices.Sort(uniqueColumns)
 
 	maxEventHistory := opts.GCKeepCount
 	if maxEventHistory <= 0 {
@@ -137,6 +163,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		Indexer:       i,
 		namespaced:    opts.IsNamespaced,
 		indexedFields: indexedFields,
+		columnOrder:   columnOrder,
+		uniqueColumns: uniqueColumns,
 		eventLog:      ring.NewCircularBuffer[*event](maxEventHistory),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
@@ -151,21 +179,23 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.closeEventLog)
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
-	columnDefs := make([]string, len(indexedFields))
-	for index, field := range indexedFields {
-		typeName := "TEXT"
-		newTypeName, ok := opts.TypeGuidance[field]
-		if ok {
-			typeName = newTypeName
+
+	columnDefs := make([]string, 0, len(uniqueColumns))
+	for _, colName := range uniqueColumns {
+		var field IndexedField
+		for _, mapKey := range columnOrder {
+			if indexedFields[mapKey].ColumnName() == colName {
+				field = indexedFields[mapKey]
+				break
+			}
 		}
-		column := fmt.Sprintf(`"%s" %s`, field, typeName)
-		columnDefs[index] = column
+		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, field.ColumnType()))
 	}
 
 	dbName := db.Sanitize(i.GetName())
-	columns := make([]string, 0, len(indexedFields))
-	qmarks := make([]string, 0, len(indexedFields))
-	setStatements := make([]string, 0, len(indexedFields))
+	columns := make([]string, 0, len(columnOrder))
+	qmarks := make([]string, 0, len(columnOrder))
+	setStatements := make([]string, 0, len(columnOrder))
 
 	err = l.WithTransaction(ctx, true, func(tx db.TxClient) error {
 		dropFieldsQuery := fmt.Sprintf(dropFieldsFmt, dbName)
@@ -178,24 +208,20 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return err
 		}
 
-		for _, field := range indexedFields {
-			// create index for field
-			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
+		for _, actualColumnName := range uniqueColumns {
+			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, actualColumnName, dbName, actualColumnName)
 			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
 				return err
 			}
 
-			// format field into column for prepared statement
-			column := fmt.Sprintf(`"%s"`, field)
+			column := fmt.Sprintf(`"%s"`, actualColumnName)
 			columns = append(columns, column)
-
-			// add placeholder for column's value in prepared statement
 			qmarks = append(qmarks, "?")
 
 			// add formatted set statement for prepared statement
 			// optimization: avoid SET for fields which cannot change
-			if !immutableFields.Has(field) {
-				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, field, field)
+			if !immutableFields.Has(actualColumnName) {
+				setStatement := fmt.Sprintf(`"%s" = excluded."%s"`, actualColumnName, actualColumnName)
 				setStatements = append(setStatements, setStatement)
 			}
 		}
@@ -298,7 +324,6 @@ func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) 
 	}
 	if err := l.Deserialize(serialized, into); err != nil {
 		return watch.Error, err
-
 	}
 	return watch.EventType(typ), nil
 }
@@ -370,34 +395,53 @@ func (l *ListOptionIndexer) closeEventLog(_ db.TxClient) error {
 
 // addIndexFields saves sortable/filterable fields into tables
 func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) error {
+	unstrObj, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("expected unstructured.Unstructured, got %T", obj)
+	}
+
 	args := []any{key}
-	for _, field := range l.indexedFields {
-		value, err := getField(obj, field)
+
+	for _, actualColumnName := range l.uniqueColumns {
+		var field IndexedField
+		for _, mapKey := range l.columnOrder {
+			if l.indexedFields[mapKey].ColumnName() == actualColumnName {
+				field = l.indexedFields[mapKey]
+				break
+			}
+		}
+		value, err := field.GetValue(unstrObj)
 		if err != nil {
 			logrus.Errorf("cannot index object of type [%s] with key [%s] for indexer [%s]: %v", l.GetType().String(), key, l.GetName(), err)
 			return err
 		}
-		switch typedValue := value.(type) {
-		case nil:
-			args = append(args, "")
-		case int, bool, string, int64, float64:
-			args = append(args, fmt.Sprint(typedValue))
-		case []string:
-			args = append(args, strings.Join(typedValue, "|"))
-		case []interface{}:
-			var s []string
-			for _, v := range typedValue {
-				s = append(s, fmt.Sprint(v))
-			}
-			args = append(args, strings.Join(s, "|"))
-		default:
-			err2 := fmt.Errorf("field %v has a non-supported type value: %v", field, value)
-			return err2
-		}
+		args = append(args, normalizeValue(value))
 	}
 
 	_, err := tx.Stmt(l.addFieldsStmt).Exec(args...)
 	return err
+}
+
+// normalizeValue converts a value to a SQL-compatible type
+func normalizeValue(value any) any {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case int, int64, float64, bool:
+		return fmt.Sprint(v)
+	case string:
+		return v
+	case []string:
+		return strings.Join(v, "|")
+	case []interface{}:
+		strValues := make([]string, len(v))
+		for i, item := range v {
+			strValues[i] = fmt.Sprint(item)
+		}
+		return strings.Join(strValues, "|")
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 // labels are stored in tables that shadow the underlying object table for each GVK

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/rancher/steve/pkg/sqlcache/db"
+	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -87,13 +88,10 @@ func (i *IntegrationSuite) SetupSuite() {
 	i.Require().NoError(err)
 
 	// TODO: Move to Steve's constructor
-	sqlproxy.TypeGuidanceTable[schema.GroupVersionKind{Group: "fruits.cattle.io", Version: "v1", Kind: "Banana"}] = map[string]string{
-		"number": "INT",
-	}
-	sqlproxy.TypeSpecificIndexedFields["fruits.cattle.io_v1_Banana"] = [][]string{
-		{"color"},
-		{"number"},
-		{"numberString"},
+	sqlproxy.TypeSpecificIndexedFields["fruits.cattle.io_v1_Banana"] = map[string]informer.IndexedField{
+		"color":        &informer.JSONPathField{Path: []string{"color"}},
+		"number":       &informer.JSONPathField{Path: []string{"number"}, Type: "INTEGER"},
+		"numberString": &informer.JSONPathField{Path: []string{"numberString"}},
 	}
 }
 

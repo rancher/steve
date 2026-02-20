@@ -56,7 +56,7 @@ type guardedInformer struct {
 	wg sync.WaitGroup
 }
 
-type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, typeGuidance map[string]string, namespace bool, watchable bool, gcKeepCount int) (*informer.Informer, error)
+type newInformer func(ctx context.Context, client dynamic.ResourceInterface, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespace bool, watchable bool, gcKeepCount int) (*informer.Informer, error)
 
 type Cache struct {
 	informer.ByOptionsLister
@@ -145,7 +145,7 @@ func logCacheInitializationDuration(gvk schema.GroupVersionKind) func() {
 //     a context for a single cache to be able to stop that cache (eg: on schema refresh) without impacting the other caches.
 //
 // Don't forget to call DoneWithCache with the given informer once done with it.
-func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (*Cache, error) {
+func (f *CacheFactory) CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*Cache, error) {
 	// Second, check if the informer and its accompanying informer-specific mutex exist already in the informers cache
 	// If not, start by creating such informer-specific mutex. That is used later to ensure no two goroutines create
 	// informers for the same GVK at the same type
@@ -168,7 +168,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if initialized, err := f.ensureInformerInitialized(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable); err != nil {
+		if initialized, err := f.ensureInformerInitialized(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable); err != nil {
 			return nil, err
 		} else if gi.informer == nil {
 			// Special case for race condition: if Stop() is called while or immediately after this informer was initialized
@@ -195,7 +195,7 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields [][]string, external
 
 // ensureInformerInitialized handles the informer initialization, if needed, in which case, it returns true
 // On success with gi.mutex.RLock() held
-func (f *CacheFactory) ensureInformerInitialized(gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (bool, error) {
+func (f *CacheFactory) ensureInformerInitialized(gi *guardedInformer, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (bool, error) {
 	// Fast path: read-lock and informer already initialized
 	gi.mutex.RLock()
 	if gi.informer != nil {
@@ -213,7 +213,7 @@ func (f *CacheFactory) ensureInformerInitialized(gi *guardedInformer, fields [][
 		return false, nil
 	}
 
-	if err := f.initializeInformerLocked(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, typeGuidance, namespaced, watchable); err != nil {
+	if err := f.initializeInformerLocked(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable); err != nil {
 		gi.mutex.Unlock()
 		// Error logging is already handled in initializeInformerLocked or caller can handle it
 		return false, err
@@ -225,12 +225,12 @@ func (f *CacheFactory) ensureInformerInitialized(gi *guardedInformer, fields [][
 	return true, nil
 }
 
-func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) error {
+func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) error {
 	_, encryptResourceAlways := defaultEncryptedResourceTypes[gvk]
 	shouldEncrypt := f.encryptAll || encryptResourceAlways
 	// In non-test code this invokes pkg/sqlcache/informer/informer.go: NewInformer()
 	// search for "func NewInformer(ctx"
-	i, err := f.newInformer(gi.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, typeGuidance, namespaced, watchable, f.gcKeepCount)
+	i, err := f.newInformer(gi.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, f.gcKeepCount)
 	if err != nil {
 		log.Errorf("creating informer for %v: %v", gvk, err)
 		return err

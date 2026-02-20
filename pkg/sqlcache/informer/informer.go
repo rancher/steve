@@ -77,8 +77,8 @@ var newInformer = cache.NewSharedIndexInformer
 
 // NewInformer returns a new SQLite-backed Informer for the type specified by schema in unstructured.Unstructured form
 // using the specified client
-func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool,
-	typeGuidance map[string]string, namespaced bool, watchable bool, gcKeepCount int) (*Informer, error) {
+func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields map[string]IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool,
+	namespaced bool, watchable bool, gcKeepCount int) (*Informer, error) {
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
 		return client.Watch(ctx, options)
 	}
@@ -148,7 +148,6 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields [
 
 	opts := ListOptionIndexerOptions{
 		Fields:       fields,
-		TypeGuidance: typeGuidance,
 		IsNamespaced: namespaced,
 		GCKeepCount:  gcKeepCount,
 	}

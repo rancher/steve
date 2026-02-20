@@ -64,171 +64,198 @@ const (
 var (
 	paramScheme = runtime.NewScheme()
 	paramCodec  = runtime.NewParameterCodec(paramScheme)
+	// TypeSpecificIndexedFields maps GVK keys to their indexed fields.
+	// The inner map key is the UI field identifier (what the UI sends for sorting/filtering).
+	// The IndexedField.ColumnName() returns the SQL column name (currently always matches the key).
 	// Please keep the gvkKey entries in alphabetical order, on a field-by-field basis
-	TypeSpecificIndexedFields = map[string][][]string{
+	TypeSpecificIndexedFields = map[string]map[string]informer.IndexedField{
 		gvkKey("", "v1", "Event"): {
-			{"_type"},
-			{"involvedObject", "kind"},
-			{"involvedObject", "uid"},
-			{"message"},
-			{"reason"},
+			"_type":               &informer.JSONPathField{Path: []string{"_type"}},
+			"involvedObject.kind": &informer.JSONPathField{Path: []string{"involvedObject", "kind"}},
+			"involvedObject.uid":  &informer.JSONPathField{Path: []string{"involvedObject", "uid"}},
+			"message":             &informer.JSONPathField{Path: []string{"message"}},
+			"reason":              &informer.JSONPathField{Path: []string{"reason"}},
 		},
 		gvkKey("", "v1", "Namespace"): {
-			{"spec", "displayName"},
+			"spec.displayName": &informer.JSONPathField{Path: []string{"spec", "displayName"}},
 		},
 		gvkKey("", "v1", "Node"): {
-			{"spec", "taints", "key"},
-			{"status", "addresses", "type"},
-			{"status", "nodeInfo", "kubeletVersion"},
-			{"status", "nodeInfo", "operatingSystem"},
+			"spec.taints.key":                 &informer.JSONPathField{Path: []string{"spec", "taints", "key"}},
+			"status.addresses.type":           &informer.JSONPathField{Path: []string{"status", "addresses", "type"}},
+			"status.nodeInfo.kubeletVersion":  &informer.JSONPathField{Path: []string{"status", "nodeInfo", "kubeletVersion"}},
+			"status.nodeInfo.operatingSystem": &informer.JSONPathField{Path: []string{"status", "nodeInfo", "operatingSystem"}},
 		},
 		gvkKey("", "v1", "PersistentVolume"): {
-			{"status", "reason"},
-			{"spec", "persistentVolumeReclaimPolicy"},
+			"status.reason":                      &informer.JSONPathField{Path: []string{"status", "reason"}},
+			"spec.persistentVolumeReclaimPolicy": &informer.JSONPathField{Path: []string{"spec", "persistentVolumeReclaimPolicy"}},
 		},
 		gvkKey("", "v1", "PersistentVolumeClaim"): {
-			{"spec", "volumeName"}},
+			"spec.volumeName": &informer.JSONPathField{Path: []string{"spec", "volumeName"}},
+		},
 		gvkKey("", "v1", "Pod"): {
-			{"spec", "containers", "image"},
-			{"spec", "nodeName"},
-			{"status", "podIP"},
+			"spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "containers", "image"}},
+			"spec.nodeName":         &informer.JSONPathField{Path: []string{"spec", "nodeName"}},
+			"status.podIP":          &informer.JSONPathField{Path: []string{"status", "podIP"}},
+			// Restart count - UI field ID "metadata.fields[3]" or "metadata.fields[3][0]"
+			"metadata.fields[3]": &informer.ComputedField{
+				Name:         "metadata.fields[3]_0",
+				Type:         "INTEGER",
+				GetValueFunc: informer.ExtractPodRestartCount,
+			},
+			"metadata.fields[3][0]": &informer.ComputedField{
+				Name:         "metadata.fields[3]_0",
+				Type:         "INTEGER",
+				GetValueFunc: informer.ExtractPodRestartCount,
+			},
+			// Restart timestamp - UI field ID "metadata.fields[3][1]"
+			"metadata.fields[3][1]": &informer.ComputedField{
+				Name:         "metadata.fields[3]_1",
+				Type:         "INTEGER",
+				GetValueFunc: informer.ExtractPodRestartTimestamp,
+			},
 		},
 		gvkKey("", "v1", "ReplicationController"): {
-			{"spec", "template", "spec", "containers", "image"}},
+			"spec.template.spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
+		},
 		gvkKey("", "v1", "Secret"): {
-			{"_type"},
-			{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"},
-			{"spec", "clusterName"},
-			{"spec", "displayName"},
+			"_type": &informer.JSONPathField{Path: []string{"_type"}},
+			"metadata.annotations[management.cattle.io/project-scoped-secret-copy]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "management.cattle.io/project-scoped-secret-copy"}},
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+			"spec.displayName": &informer.JSONPathField{Path: []string{"spec", "displayName"}},
 		},
 		gvkKey("", "v1", "Service"): {
-			{"spec", "clusterIP"},
-			{"spec", "type"},
+			"spec.clusterIP": &informer.JSONPathField{Path: []string{"spec", "clusterIP"}},
+			"spec.type":      &informer.JSONPathField{Path: []string{"spec", "type"}},
 		},
 		gvkKey("apps", "v1", "DaemonSet"): {
-			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
-			{"spec", "template", "spec", "containers", "image"},
+			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
+			"spec.template.spec.containers.image":                   &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
 		gvkKey("apps", "v1", "Deployment"): {
-			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
-			{"spec", "template", "spec", "containers", "image"},
+			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
+			"spec.template.spec.containers.image":                   &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
 		gvkKey("apps", "v1", "ReplicaSet"): {
-			{"spec", "template", "spec", "containers", "image"},
+			"spec.template.spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
 		gvkKey("apps", "v1", "StatefulSet"): {
-			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
-			{"spec", "template", "spec", "containers", "image"},
+			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
+			"spec.template.spec.containers.image":                   &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
 		gvkKey("autoscaling", "v2", "HorizontalPodAutoscaler"): {
-			{"spec", "scaleTargetRef", "name"},
-			{"spec", "minReplicas"},
-			{"spec", "maxReplicas"},
-			{"status", "currentReplicas"},
+			"spec.scaleTargetRef.name": &informer.JSONPathField{Path: []string{"spec", "scaleTargetRef", "name"}},
+			"spec.minReplicas":         &informer.JSONPathField{Path: []string{"spec", "minReplicas"}},
+			"spec.maxReplicas":         &informer.JSONPathField{Path: []string{"spec", "maxReplicas"}},
+			"status.currentReplicas":   &informer.JSONPathField{Path: []string{"status", "currentReplicas"}},
 		},
 		gvkKey("batch", "v1", "CronJob"): {
-			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
-			{"spec", "jobTemplate", "spec", "template", "spec", "containers", "image"},
-			{"status", "lastScheduleTime"},
-			{"status", "lastSuccessfulTime"},
+			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
+			"spec.jobTemplate.spec.template.spec.containers.image":  &informer.JSONPathField{Path: []string{"spec", "jobTemplate", "spec", "template", "spec", "containers", "image"}},
+			"status.lastScheduleTime":                               &informer.JSONPathField{Path: []string{"status", "lastScheduleTime"}},
+			"status.lastSuccessfulTime":                             &informer.JSONPathField{Path: []string{"status", "lastSuccessfulTime"}},
 		},
 		gvkKey("batch", "v1", "Job"): {
-			{"metadata", "annotations", "field.cattle.io/publicEndpoints"},
-			{"spec", "template", "spec", "containers", "image"},
+			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
+			"spec.template.spec.containers.image":                   &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
 		gvkKey("catalog.cattle.io", "v1", "App"): {
-			{"spec", "chart", "metadata", "name"},
+			"spec.chart.metadata.name": &informer.JSONPathField{Path: []string{"spec", "chart", "metadata", "name"}},
 		},
 		gvkKey("catalog.cattle.io", "v1", "ClusterRepo"): {
-			{"metadata", "annotations", "clusterrepo.cattle.io/hidden"},
-			{"spec", "gitBranch"},
-			{"spec", "gitRepo"},
+			"metadata.annotations[clusterrepo.cattle.io/hidden]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "clusterrepo.cattle.io/hidden"}},
+			"spec.gitBranch": &informer.JSONPathField{Path: []string{"spec", "gitBranch"}},
+			"spec.gitRepo":   &informer.JSONPathField{Path: []string{"spec", "gitRepo"}},
 		},
 		gvkKey("catalog.cattle.io", "v1", "Operation"): {
-			{"status", "action"},
-			{"status", "namespace"},
-			{"status", "releaseName"},
+			"status.action":      &informer.JSONPathField{Path: []string{"status", "action"}},
+			"status.namespace":   &informer.JSONPathField{Path: []string{"status", "namespace"}},
+			"status.releaseName": &informer.JSONPathField{Path: []string{"status", "releaseName"}},
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
-			{"spec", "clusterName"}},
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "MachineDeployment"): {
-			{"spec", "clusterName"}},
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+		},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
-			{"spec", "internal"},
-			{"spec", "displayName"},
-			{"status", "allocatable", "cpu"},
-			{"status", "allocatable", "cpuRaw"},
-			{"status", "allocatable", "memory"},
-			{"status", "allocatable", "memoryRaw"},
-			{"status", "allocatable", "pods"},
-			{"status", "requested", "cpu"},
-			{"status", "requested", "cpuRaw"},
-			{"status", "requested", "memory"},
-			{"status", "requested", "memoryRaw"},
-			{"status", "requested", "pods"},
-			{"status", "connected"},
-			{"status", "provider"},
+			"spec.internal":                &informer.JSONPathField{Path: []string{"spec", "internal"}},
+			"spec.displayName":             &informer.JSONPathField{Path: []string{"spec", "displayName"}},
+			"status.allocatable.cpu":       &informer.JSONPathField{Type: "", Path: []string{"status", "allocatable", "cpu"}},
+			"status.allocatable.cpuRaw":    &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "cpuRaw"}},
+			"status.allocatable.memory":    &informer.JSONPathField{Type: "", Path: []string{"status", "allocatable", "memory"}},
+			"status.allocatable.memoryRaw": &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "memoryRaw"}},
+			"status.allocatable.pods":      &informer.JSONPathField{Type: "INT", Path: []string{"status", "allocatable", "pods"}},
+			"status.requested.cpu":         &informer.JSONPathField{Type: "", Path: []string{"status", "requested", "cpu"}},
+			"status.requested.cpuRaw":      &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "cpuRaw"}},
+			"status.requested.memory":      &informer.JSONPathField{Type: "", Path: []string{"status", "requested", "memory"}},
+			"status.requested.memoryRaw":   &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "memoryRaw"}},
+			"status.requested.pods":        &informer.JSONPathField{Type: "INT", Path: []string{"status", "requested", "pods"}},
+			"status.connected":             &informer.JSONPathField{Path: []string{"status", "connected"}},
+			"status.provider":              &informer.JSONPathField{Path: []string{"status", "provider"}},
 		},
 		gvkKey("management.cattle.io", "v3", "ClusterRoleTemplateBinding"): {
-			{"clusterName"},
-			{"userName"},
-			{"userPrincipalName"},
+			"clusterName":       &informer.JSONPathField{Path: []string{"clusterName"}},
+			"userName":          &informer.JSONPathField{Path: []string{"userName"}},
+			"userPrincipalName": &informer.JSONPathField{Path: []string{"userPrincipalName"}},
 		},
 		gvkKey("management.cattle.io", "v3", "GlobalRoleBinding"): {
-			{"userName"},
-			{"userPrincipalName"},
+			"userName":          &informer.JSONPathField{Path: []string{"userName"}},
+			"userPrincipalName": &informer.JSONPathField{Path: []string{"userPrincipalName"}},
 		},
 		gvkKey("management.cattle.io", "v3", "Node"): {
-			{"status", "nodeName"}},
+			"status.nodeName": &informer.JSONPathField{Path: []string{"status", "nodeName"}},
+		},
 		gvkKey("management.cattle.io", "v3", "NodePool"): {
-			{"spec", "clusterName"}},
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+		},
 		gvkKey("management.cattle.io", "v3", "NodeTemplate"): {
-			{"spec", "clusterName"}},
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+		},
 		gvkKey("management.cattle.io", "v3", "Project"): {
-			{"spec", "clusterName"},
-			{"spec", "displayName"},
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+			"spec.displayName": &informer.JSONPathField{Path: []string{"spec", "displayName"}},
 		},
 		gvkKey("management.cattle.io", "v3", "ProjectRoleTemplateBinding"): {
-			{"userName"},
-			{"userPrincipalName"},
+			"userName":          &informer.JSONPathField{Path: []string{"userName"}},
+			"userPrincipalName": &informer.JSONPathField{Path: []string{"userPrincipalName"}},
 		},
 		gvkKey("management.cattle.io", "v3", "RoleTemplate"): {
-			{"context"},
+			"context": &informer.JSONPathField{Path: []string{"context"}},
 		},
 		gvkKey("management.cattle.io", "v3", "User"): {
-			{"principalIds"},
+			"principalIds": &informer.JSONPathField{Path: []string{"principalIds"}},
 		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
-			{"spec", "rules", "host"},
-			{"spec", "ingressClassName"},
+			"spec.rules.host":       &informer.JSONPathField{Path: []string{"spec", "rules", "host"}},
+			"spec.ingressClassName": &informer.JSONPathField{Path: []string{"spec", "ingressClassName"}},
 		},
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
-			{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"},
-			{"status", "allocatable", "cpu"},
-			{"status", "allocatable", "cpuRaw"},
-			{"status", "allocatable", "memory"},
-			{"status", "allocatable", "memoryRaw"},
-			{"status", "allocatable", "pods"},
-			{"status", "clusterName"},
-			{"status", "provider"},
-			{"status", "requested", "cpu"},
-			{"status", "requested", "cpuRaw"},
-			{"status", "requested", "memory"},
-			{"status", "requested", "memoryRaw"},
-			{"status", "requested", "pods"},
+			"metadata.annotations[provisioning.cattle.io/management-cluster-display-name]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"}},
+			"status.allocatable.cpu":       &informer.JSONPathField{Path: []string{"status", "allocatable", "cpu"}},
+			"status.allocatable.cpuRaw":    &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "cpuRaw"}},
+			"status.allocatable.memory":    &informer.JSONPathField{Path: []string{"status", "allocatable", "memory"}},
+			"status.allocatable.memoryRaw": &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "memoryRaw"}},
+			"status.allocatable.pods":      &informer.JSONPathField{Type: "INT", Path: []string{"status", "allocatable", "pods"}},
+			"status.clusterName":           &informer.JSONPathField{Path: []string{"status", "clusterName"}},
+			"status.provider":              &informer.JSONPathField{Path: []string{"status", "provider"}},
+			"status.requested.cpu":         &informer.JSONPathField{Path: []string{"status", "requested", "cpu"}},
+			"status.requested.cpuRaw":      &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "cpuRaw"}},
+			"status.requested.memory":      &informer.JSONPathField{Path: []string{"status", "requested", "memory"}},
+			"status.requested.memoryRaw":   &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "memoryRaw"}},
+			"status.requested.pods":        &informer.JSONPathField{Type: "INT", Path: []string{"status", "requested", "pods"}},
 		},
 		gvkKey("rke.cattle.io", "v1", "ETCDSnapshot"): {
-			{"snapshotFile", "createdAt"},
-			{"spec", "clusterName"},
+			"snapshotFile.createdAt": &informer.JSONPathField{Path: []string{"snapshotFile", "createdAt"}},
+			"spec.clusterName":       &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
 		},
 		gvkKey("storage.k8s.io", "v1", "StorageClass"): {
-			{"provisioner"},
-			{"metadata", "annotations", "storageclass.kubernetes.io/is-default-class"},
+			"provisioner": &informer.JSONPathField{Path: []string{"provisioner"}},
+			"metadata.annotations[storageclass.kubernetes.io/is-default-class]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "storageclass.kubernetes.io/is-default-class"}},
 		},
 	}
-	commonIndexFields = [][]string{
-		{`id`},
-		{`metadata`, `state`, `name`},
+	commonIndexFields = map[string]informer.IndexedField{
+		"id":                  &informer.JSONPathField{Path: []string{"id"}},
+		"metadata.state.name": &informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
 	}
 	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
@@ -392,7 +419,7 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields [][]string, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (*factory.Cache, error)
+	CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
 	DoneWithCache(*factory.Cache)
 	Stop(gvk schema.GroupVersionKind) error
 }
@@ -479,9 +506,11 @@ func (s *Store) initializeNamespaceCache() error {
 	}
 
 	gvk := attributes.GVK(nsSchema)
-	fields, cols, typeGuidance := getFieldAndColInfo(nsSchema, gvk)
-	// get any type-specific fields that steve is interested in
-	fields = append(fields, getFieldForGVK(gvk)...)
+	fields, cols := getFieldAndColInfo(nsSchema, gvk)
+	// get any type-specific fields that steve is interested in (merge into map)
+	for k, v := range getFieldForGVK(gvk) {
+		fields[k] = v
+	}
 
 	// get the type-specific transform func
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(nsSchema), attributes.CRDJSONPathParsers(nsSchema))
@@ -495,7 +524,6 @@ func (s *Store) initializeNamespaceCache() error {
 		transformFunc,
 		tableClient,
 		gvk,
-		typeGuidance,
 		false,
 		true)
 	if err != nil {
@@ -506,12 +534,16 @@ func (s *Store) initializeNamespaceCache() error {
 	return nil
 }
 
-func getFieldForGVK(gvk schema.GroupVersionKind) [][]string {
-	fields := [][]string{}
-	fields = append(fields, commonIndexFields...)
+func getFieldForGVK(gvk schema.GroupVersionKind) map[string]informer.IndexedField {
+	fields := make(map[string]informer.IndexedField)
+	// Add common fields
+	for k, v := range commonIndexFields {
+		fields[k] = v
+	}
+	// Add type-specific fields
 	typeFields := TypeSpecificIndexedFields[gvkKey(gvk.Group, gvk.Version, gvk.Kind)]
-	if typeFields != nil {
-		fields = append(fields, typeFields...)
+	for k, v := range typeFields {
+		fields[k] = v
 	}
 	return fields
 }
@@ -521,21 +553,34 @@ func gvkKey(group, version, kind string) string {
 }
 
 // getFieldAndColInfo converts object field names from types.APISchema's format into steve's
-// cache.sql.informer's slice format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
+// cache.sql.informer's IndexedField format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 // It also returns type info for each field
-func getFieldAndColInfo(schema *types.APISchema, gvk schema.GroupVersionKind) ([][]string, []common.ColumnDefinition, map[string]string) {
-	var fields [][]string
-	colDefs := common.GetColumnDefinitions(schema)
-	if colDefs != nil {
-		for _, colDef := range colDefs {
-			field := strings.TrimPrefix(colDef.Field, "$")
-			field = strings.TrimPrefix(field, ".")
-			fields = append(fields, queryhelper.SafeSplit(field))
-		}
-	}
+func getFieldAndColInfo(s *types.APISchema, gvk schema.GroupVersionKind) (map[string]informer.IndexedField, []common.ColumnDefinition) {
+	fields := make(map[string]informer.IndexedField)
+	colDefs := common.GetColumnDefinitions(s)
 	typeGuidance := getTypeGuidance(colDefs, gvk)
 
-	return fields, colDefs, typeGuidance
+	if colDefs != nil {
+		for _, colDef := range colDefs {
+			fieldStr := strings.TrimPrefix(colDef.Field, "$")
+			fieldStr = strings.TrimPrefix(fieldStr, ".")
+			fieldPath := queryhelper.SafeSplit(fieldStr)
+
+			// Get type from typeGuidance if available
+			fieldType := ""
+			if typ, ok := typeGuidance[fieldStr]; ok {
+				fieldType = typ
+			}
+
+			field := &informer.JSONPathField{
+				Path: fieldPath,
+				Type: fieldType,
+			}
+			fields[field.ColumnName()] = field
+		}
+	}
+
+	return fields, colDefs
 }
 
 // ByID looks up a single object by its ID.
@@ -750,9 +795,7 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 // Create creates a single object in the store.
 func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params types.APIObject) (*unstructured.Unstructured, []types.Warning, error) {
-	var (
-		resp *unstructured.Unstructured
-	)
+	var resp *unstructured.Unstructured
 
 	input := params.Data()
 
@@ -896,30 +939,14 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 }
 
 var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
-	schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
-		"status.allocatable.cpuRaw":    "REAL",
-		"status.allocatable.memoryRaw": "REAL",
-		"status.allocatable.pods":      "INT",
-		"status.requested.cpuRaw":      "REAL",
-		"status.requested.memoryRaw":   "REAL",
-		"status.requested.pods":        "INT",
+	{Group: "", Version: "v1", Kind: "Secret"}: {
+		"metadata.fields[2]": "INT",
 	},
-	schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}: {
-		"status.allocatable.cpuRaw":    "REAL",
-		"status.allocatable.memoryRaw": "REAL",
-		"status.allocatable.pods":      "INT",
-		"status.requested.cpuRaw":      "REAL",
-		"status.requested.memoryRaw":   "REAL",
-		"status.requested.pods":        "INT",
+	{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
+		"metadata.fields[1]": "INT",
 	},
-	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
-		"metadata.fields[2]": "INT", // name: Data
-	},
-	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
-		"metadata.fields[1]": "INT", // name: Secrets
-	},
-	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ConfigMap"}: {
-		"metadata.fields[1]": "INT", // name: Data
+	{Group: "", Version: "v1", Kind: "ConfigMap"}: {
+		"metadata.fields[1]": "INT",
 	},
 }
 
@@ -936,7 +963,7 @@ func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind
 		trimmedField := strings.TrimPrefix(col.Field, "$")
 		trimmedField = strings.TrimPrefix(trimmedField, ".")
 		if colType == "integer" || colType == "boolean" || ptn.MatchString(td.Description) {
-			//TODO: What do "REAL" (float) types look like?
+			// TODO: What do "REAL" (float) types look like?
 			colType = "INT"
 		}
 		if colType != "string" {
@@ -1039,7 +1066,6 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 		eg.Go(func() error {
 			defer cancel()
 			c, err := s.watchByPartition(p, apiOp, schema, wr)
-
 			if err != nil {
 				return err
 			}
@@ -1133,15 +1159,18 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	}
 
 	gvk := attributes.GVK(apiSchema)
-	//TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
+	// TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
 	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
-	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
-	fields = append(fields, getFieldForGVK(gvk)...)
+	fields, cols := getFieldAndColInfo(apiSchema, gvk)
+	// Merge type-specific fields into map
+	for k, v := range getFieldForGVK(gvk) {
+		fields[k] = v
+	}
 
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))
+	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))
 	if err != nil {
 		return nil, fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
