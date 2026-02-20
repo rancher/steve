@@ -491,7 +491,6 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		Resource: "configmaps",
 	}
 	dynamicResource := dynamicClient.Resource(configMapGVR).Namespace(defaultTestNamespace)
-	typeGuidance := map[string]string{}
 
 	// Convert [][]string to map[string]informer.IndexedField
 	indexedFields := make(map[string]informer.IndexedField)
@@ -500,7 +499,7 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		indexedFields[field.ColumnName()] = field
 	}
 
-	cache, err := cacheFactory.CacheFor(context.Background(), indexedFields, nil, nil, transformFunc, dynamicResource, configMapGVK, typeGuidance, true, true)
+	cache, err := cacheFactory.CacheFor(context.Background(), indexedFields, nil, nil, transformFunc, dynamicResource, configMapGVK, true, true)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make cache: %w", err)
 	}

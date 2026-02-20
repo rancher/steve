@@ -70,7 +70,6 @@ func TestNewProxyStore(t *testing.T) {
 		description string
 		test        func(t *testing.T)
 	}
-	noTypeGuidance := map[string]string{}
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "NewProxyStore() with no errors returned should return no errors. Should initialize and assign" +
@@ -118,7 +117,6 @@ func TestNewProxyStore(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				noTypeGuidance,
 				false,
 				true).Return(c, nil)
 			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, true)
@@ -257,7 +255,6 @@ func TestNewProxyStore(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				noTypeGuidance,
 				false,
 				true).Return(nil, fmt.Errorf("error"))
 
@@ -378,7 +375,6 @@ func TestListByPartitions(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -554,7 +550,6 @@ func TestListByPartitions(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				false).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -652,7 +647,6 @@ func TestListByPartitions(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				true).Return(nil, fmt.Errorf("error"))
 
@@ -749,7 +743,6 @@ func TestListByPartitions(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -882,7 +875,6 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(theSchema),
-				gomock.Any(),
 				attributes.Namespaced(theSchema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -957,7 +949,6 @@ func TestReset(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				gomock.Any(),
 				false,
 				true).Return(nsc, nil)
 			cf.EXPECT().DoneWithCache(nsc)
@@ -1120,7 +1111,6 @@ func TestReset(t *testing.T) {
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				gomock.Any(),
 				false,
 				true).Return(nil, fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })

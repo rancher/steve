@@ -419,7 +419,7 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, typeGuidance map[string]string, namespaced bool, watchable bool) (*factory.Cache, error)
+	CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool) (*factory.Cache, error)
 	DoneWithCache(*factory.Cache)
 	Stop(gvk schema.GroupVersionKind) error
 }
@@ -506,7 +506,7 @@ func (s *Store) initializeNamespaceCache() error {
 	}
 
 	gvk := attributes.GVK(nsSchema)
-	fields, cols, typeGuidance := getFieldAndColInfo(nsSchema, gvk)
+	fields, cols := getFieldAndColInfo(nsSchema, gvk)
 	// get any type-specific fields that steve is interested in (merge into map)
 	for k, v := range getFieldForGVK(gvk) {
 		fields[k] = v
@@ -524,7 +524,6 @@ func (s *Store) initializeNamespaceCache() error {
 		transformFunc,
 		tableClient,
 		gvk,
-		typeGuidance,
 		false,
 		true)
 	if err != nil {
@@ -556,7 +555,7 @@ func gvkKey(group, version, kind string) string {
 // getFieldAndColInfo converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's IndexedField format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 // It also returns type info for each field
-func getFieldAndColInfo(s *types.APISchema, gvk schema.GroupVersionKind) (map[string]informer.IndexedField, []common.ColumnDefinition, map[string]string) {
+func getFieldAndColInfo(s *types.APISchema, gvk schema.GroupVersionKind) (map[string]informer.IndexedField, []common.ColumnDefinition) {
 	fields := make(map[string]informer.IndexedField)
 	colDefs := common.GetColumnDefinitions(s)
 	typeGuidance := getTypeGuidance(colDefs, gvk)
@@ -581,7 +580,7 @@ func getFieldAndColInfo(s *types.APISchema, gvk schema.GroupVersionKind) (map[st
 		}
 	}
 
-	return fields, colDefs, typeGuidance
+	return fields, colDefs
 }
 
 // ByID looks up a single object by its ID.
@@ -1162,7 +1161,7 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	gvk := attributes.GVK(apiSchema)
 	// TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
 	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
-	fields, cols, typeGuidance := getFieldAndColInfo(apiSchema, gvk)
+	fields, cols := getFieldAndColInfo(apiSchema, gvk)
 	// Merge type-specific fields into map
 	for k, v := range getFieldForGVK(gvk) {
 		fields[k] = v
@@ -1171,7 +1170,7 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, typeGuidance, ns, controllerschema.IsListWatchable(apiSchema))
+	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema))
 	if err != nil {
 		return nil, fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
