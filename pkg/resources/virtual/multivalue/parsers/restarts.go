@@ -1,0 +1,37 @@
+package parsers
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"time"
+
+	rescommon "github.com/rancher/steve/pkg/resources/common"
+)
+
+// Now is mockable for testing
+var Now = time.Now
+
+// restartsPattern matches "4 (3h38m ago)" or just "0"
+var restartsPattern = regexp.MustCompile(`^(\d+)(?:\s+\((.+?)\s+ago\))?$`)
+
+// ParseRestarts parses pod restart values like "4 (3h38m ago)" into [count, timestamp_ms]
+func ParseRestarts(value string) ([]interface{}, error) {
+	matches := restartsPattern.FindStringSubmatch(value)
+	if matches == nil {
+		return nil, fmt.Errorf("invalid restarts format: %q", value)
+	}
+
+	count, _ := strconv.ParseInt(matches[1], 10, 64)
+
+	var timestamp interface{}
+	if matches[2] != "" {
+		// Parse duration like "3h38m"
+		dur, err := rescommon.ParseHumanReadableDuration(matches[2])
+		if err == nil {
+			timestamp = Now().Add(-dur).UnixMilli()
+		}
+	}
+
+	return []interface{}{count, timestamp}, nil
+}

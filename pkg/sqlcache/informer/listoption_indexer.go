@@ -2,6 +2,7 @@ package informer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -179,10 +180,37 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		}
 
 		for _, field := range indexedFields {
+			typeName := "TEXT"
+			newTypeName, ok := opts.TypeGuidance[field]
+			if ok {
+				typeName = newTypeName
+			}
+
 			// create index for field
 			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, field, dbName, field)
 			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
 				return err
+			}
+
+			// Create JSON indexes for JSONB columns
+			if typeName == "JSONB" {
+				// Index for first element (e.g., restart count)
+				jsonIndexQuery0 := fmt.Sprintf(
+					`CREATE INDEX "%s_%s_0_index" ON "%s_fields"(json_extract("%s", '$[0]'))`,
+					dbName, field, dbName, field,
+				)
+				if _, err := tx.Exec(jsonIndexQuery0); err != nil {
+					return err
+				}
+
+				// Index for second element (e.g., timestamp)
+				jsonIndexQuery1 := fmt.Sprintf(
+					`CREATE INDEX "%s_%s_1_index" ON "%s_fields"(json_extract("%s", '$[1]'))`,
+					dbName, field, dbName, field,
+				)
+				if _, err := tx.Exec(jsonIndexQuery1); err != nil {
+					return err
+				}
 			}
 
 			// format field into column for prepared statement
@@ -380,6 +408,13 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 		switch typedValue := value.(type) {
 		case nil:
 			args = append(args, "")
+		case []interface{}:
+			// Store JSON arrays as-is for JSONB columns
+			jsonBytes, err := json.Marshal(typedValue)
+			if err != nil {
+				return fmt.Errorf("failed to marshal array field %v: %v", field, err)
+			}
+			args = append(args, string(jsonBytes))
 		case int, bool, string, int64, float64:
 			args = append(args, fmt.Sprint(typedValue))
 		case []string:
