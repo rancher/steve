@@ -91,12 +91,10 @@ func ExtractPodRestartCount(obj *unstructured.Unstructured) (any, error) {
 
 	restartField := fields[podRestartFieldIndex]
 
-	// If it's already a slice (from transform), extract values directly
 	if arr, ok := restartField.([]interface{}); ok {
 		return toInt64(arr, 0), nil
 	}
 
-	// If it's a string (from raw K8s), parse it
 	if str, ok := restartField.(string); ok {
 		count, _ := parseRestarts(str)
 		return count, nil
@@ -120,12 +118,10 @@ func ExtractPodRestartTimestamp(obj *unstructured.Unstructured) (any, error) {
 
 	restartField := fields[podRestartFieldIndex]
 
-	// If it's already a slice (from transform), extract values directly
 	if arr, ok := restartField.([]interface{}); ok {
 		return toInt64(arr, 1), nil
 	}
 
-	// If it's a string (from raw K8s), parse it
 	if str, ok := restartField.(string); ok {
 		_, timestamp := parseRestarts(str)
 		return timestamp, nil
@@ -134,7 +130,6 @@ func ExtractPodRestartTimestamp(obj *unstructured.Unstructured) (any, error) {
 	return int64(0), nil
 }
 
-// toInt64 safely extracts an int64 from a slice at the given index
 func toInt64(arr []interface{}, idx int) int64 {
 	if idx >= len(arr) || arr[idx] == nil {
 		return 0

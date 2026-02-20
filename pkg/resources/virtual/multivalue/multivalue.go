@@ -30,9 +30,7 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 
 	updated := false
 
-	// Process each registered field config
 	for _, fieldConfig := range c.Fields {
-		// Find the column index for this field
 		index := findColumnIndex(c.Columns, fieldConfig.ColumnName)
 		if index == -1 || index >= len(fields) {
 			continue
@@ -42,20 +40,17 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 			continue
 		}
 
-		// Only process string values
 		value, ok := fields[index].(string)
 		if !ok {
 			continue
 		}
 
-		// Parse the value using the field's parser
 		arrayValue, err := fieldConfig.ParseFunc(value)
 		if err != nil {
 			logrus.Debugf("failed to parse %s value %q: %v", fieldConfig.ColumnName, value, err)
 			continue
 		}
 
-		// Store as array - values are extracted into separate columns by IndexedField.GetValue
 		fields[index] = arrayValue
 		updated = true
 	}

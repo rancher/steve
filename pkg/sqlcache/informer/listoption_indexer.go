@@ -116,22 +116,18 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		return nil, err
 	}
 
-	// Build the map from default fields + options
 	indexedFields := make(map[string]IndexedField)
 
-	// Add default fields
 	for _, field := range defaultIndexedFields {
 		fieldID := smartJoin(field.(*JSONPathField).Path)
 		indexedFields[fieldID] = field
 	}
 
-	// Add namespace if namespaced
 	if opts.IsNamespaced {
 		field := &JSONPathField{Path: strings.Split(defaultIndexNamespaced, ".")}
 		indexedFields[defaultIndexNamespaced] = field
 	}
 
-	// Merge in provided fields (overwrite if duplicate)
 	for k, v := range opts.Fields {
 		indexedFields[k] = v
 	}
@@ -156,7 +152,6 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			uniqueColumns = append(uniqueColumns, colName)
 		}
 	}
-	// Sort unique columns for deterministic schema generation
 	slices.Sort(uniqueColumns)
 
 	maxEventHistory := opts.GCKeepCount
@@ -185,11 +180,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropLabels)
 	l.RegisterBeforeDropAll(l.dropFields)
 
-	// Build column definitions using unique columns
-	// Each IndexedField specifies its SQL type via ColumnType().
 	columnDefs := make([]string, 0, len(uniqueColumns))
 	for _, colName := range uniqueColumns {
-		// Find a field with this column name to get the type
 		var field IndexedField
 		for _, mapKey := range columnOrder {
 			if indexedFields[mapKey].ColumnName() == colName {
@@ -216,19 +208,14 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 			return err
 		}
 
-		// Create indexes and build prepared statement components for unique columns
 		for _, actualColumnName := range uniqueColumns {
-			// create index for field
 			createFieldsIndexQuery := fmt.Sprintf(createFieldsIndexFmt, dbName, actualColumnName, dbName, actualColumnName)
 			if _, err := tx.Exec(createFieldsIndexQuery); err != nil {
 				return err
 			}
 
-			// format field into column for prepared statement
 			column := fmt.Sprintf(`"%s"`, actualColumnName)
 			columns = append(columns, column)
-
-			// add placeholder for column's value in prepared statement
 			qmarks = append(qmarks, "?")
 
 			// add formatted set statement for prepared statement
@@ -415,10 +402,7 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 
 	args := []any{key}
 
-	// Iterate over unique columns to extract values
-	// We need to find a field that maps to each unique column name
 	for _, actualColumnName := range l.uniqueColumns {
-		// Find a field with this column name
 		var field IndexedField
 		for _, mapKey := range l.columnOrder {
 			if l.indexedFields[mapKey].ColumnName() == actualColumnName {

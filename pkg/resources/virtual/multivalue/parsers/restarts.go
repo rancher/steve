@@ -10,10 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Now is mockable for testing
 var Now = time.Now
 
-// restartsPattern matches "4 (3h38m ago)" or just "0"
 var restartsPattern = regexp.MustCompile(`^(\d+)(?:\s+\((.+?)\s+ago\))?$`)
 
 // ParseRestarts parses pod restart values like "4 (3h38m ago)" into [count, timestamp_ms]
@@ -27,7 +25,6 @@ func ParseRestarts(value string) ([]interface{}, error) {
 
 	var timestamp interface{}
 	if matches[2] != "" {
-		// Parse duration like "3h38m"
 		dur, err := rescommon.ParseHumanReadableDuration(matches[2])
 		if err != nil {
 			logrus.Errorf("failed to parse restart duration %q: %v", matches[2], err)

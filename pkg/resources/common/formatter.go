@@ -245,9 +245,7 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 		return
 	}
 
-	// Check if this GVK has any multi-value fields of interest before reading the slice
 	if gvk != PodGVK {
-		// Future: expand this check when adding other multi-value field formatters
 		return
 	}
 
@@ -268,18 +266,15 @@ func convertMetadataMultiValueFields(request *types.APIRequest, gvk schema2.Grou
 			continue
 		}
 
-		// Check if this is a multi-value field stored as array
 		arr, ok := curValue[index].([]interface{})
 		if !ok || len(arr) < 2 {
 			continue
 		}
 
-		// v1/Pod - Handle restarts field
 		if col.Name == "Restarts" && gvk == PodGVK {
-			// Use formatters package which wraps CompositeInt for type-safe formatting
 			curValue[index] = formatters.FormatRestarts(arr)
 			changedFields = true
-			break // Only one Restarts field per schema
+			break
 		}
 
 		// Future: Add other multi-value field formatters here
@@ -301,7 +296,6 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 		return
 	}
 
-	// Check if there are any date fields of interest before reading the slice
 	gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
 	if !isCRD && !gvkFound {
 		return
@@ -337,7 +331,6 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 		}
 
 		if _, err := time.Parse(time.RFC3339, timeValue); err == nil {
-			// it's already a timestamp, so we don't need to do anything
 			continue
 		}
 

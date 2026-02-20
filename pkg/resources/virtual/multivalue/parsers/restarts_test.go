@@ -60,12 +60,10 @@ func TestParseRestarts(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, result, 2)
 
-			// Check count
 			count, ok := result[0].(int64)
 			require.True(t, ok)
 			assert.Equal(t, int64(tt.wantCount), count)
 
-			// Check timestamp
 			if tt.wantTimestamp != nil {
 				require.NotNil(t, result[1])
 				timestamp, ok := result[1].(int64)
