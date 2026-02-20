@@ -595,19 +595,13 @@ func hasBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Va
 	default:
 		return nil, fmt.Errorf("hasBarredValue: unsupported type for arg1: expected a string, got :%T", args[0])
 	}
-	var err error
 	switch argTyped := args[1].(type) {
-	case int:
-		arg2 = fmt.Sprintf("%d", argTyped)
 	case string:
 		arg2 = argTyped
 	case []byte:
 		arg2 = string(argTyped)
 	default:
 		return nil, fmt.Errorf("hasBarredValue: unsupported type for arg2: expected a string, got: %T", args[0])
-	}
-	if err != nil {
-		return nil, fmt.Errorf("problem with arg2: %w", err)
 	}
 	parts := strings.Split(arg1, "|")
 	return slices.Contains(parts, arg2), nil
