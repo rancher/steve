@@ -57,21 +57,14 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 
 	var steveHandler http.Handler
 	var err error
-	if sqlCache {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache: true,
-			SQLCacheFactoryOptions: factory.CacheFactoryOptions{
-				GCInterval:  15 * time.Minute,
-				GCKeepCount: 1000,
-			},
-			AuthMiddleware: authMiddleware,
-		})
-	} else {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache:       false,
-			AuthMiddleware: authMiddleware,
-		})
-	}
+	steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
+		SQLCache: true,
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+		},
+		AuthMiddleware: authMiddleware,
+	})
 	i.Require().NoError(err)
 
 	steveServer := httptest.NewServer(steveHandler)
@@ -152,7 +145,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 						for _, expected := range test.Expect {
 							expectedNames = append(expectedNames, expected["name"])
 						}
-						
+
 						// Verify each expected pod is in the actual results
 						for _, expectedName := range expectedNames {
 							i.Assert().Contains(actualNames, expectedName, "expected pod %q to be in response", expectedName)
@@ -163,7 +156,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 						for _, expected := range test.Expect {
 							expectedNames = append(expectedNames, expected["name"])
 						}
-						
+
 						// Use assert.Equal to get nice diff output
 						i.Assert().Equal(expectedNames, actualNames, "pod list order mismatch")
 					}

@@ -80,8 +80,10 @@ var (
 			"spec.displayName": &informer.JSONPathField{Path: []string{"spec", "displayName"}},
 		},
 		gvkKey("", "v1", "Node"): {
-			"status.nodeInfo.kubeletVersion":  &informer.JSONPathField{Path: []string{"status", "nodeInfo", "kubeletVersion"}},
-			"status.nodeInfo.operatingSystem": &informer.JSONPathField{Path: []string{"status", "nodeInfo", "operatingSystem"}},
+			"spec.taints.key":                     &informer.JSONPathField{Path: []string{"spec", "taints", "key"}},
+			"status.addresses.type":               &informer.JSONPathField{Path: []string{"status", "addresses", "type"}},
+			"status.nodeInfo.kubeletVersion":      &informer.JSONPathField{Path: []string{"status", "nodeInfo", "kubeletVersion"}},
+			"status.nodeInfo.operatingSystem":     &informer.JSONPathField{Path: []string{"status", "nodeInfo", "operatingSystem"}},
 		},
 		gvkKey("", "v1", "PersistentVolume"): {
 			"status.reason":                        &informer.JSONPathField{Path: []string{"status", "reason"}},
@@ -219,6 +221,9 @@ var (
 		},
 		gvkKey("management.cattle.io", "v3", "RoleTemplate"): {
 			"context": &informer.JSONPathField{Path: []string{"context"}},
+		},
+		gvkKey("management.cattle.io", "v3", "User"): {
+			{"principalIds"},
 		},
 		gvkKey("networking.k8s.io", "v1", "Ingress"): {
 			"spec.rules.host":      &informer.JSONPathField{Path: []string{"spec", "rules", "host"}},
@@ -1151,6 +1156,9 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 }
 
 func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
+	if !canList(apiSchema) {
+		return nil, apierror.NewAPIError(validation.MethodNotAllowed, fmt.Sprintf("resource %s is not a listable resource", apiSchema.ID))
+	}
 	// warnings from inside the informer are discarded
 	buffer := WarningBuffer{}
 	client, err := s.clientGetter.TableAdminClient(apiOp, apiSchema, "", &buffer)
@@ -1175,4 +1183,14 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 		return nil, fmt.Errorf("cachefor %v: %w", gvk, err)
 	}
 	return inf, nil
+}
+
+func canList(schema *types.APISchema) bool {
+	for _, verb := range attributes.Verbs(schema) {
+		if verb == "list" {
+			return true
+		}
+	}
+
+	return false
 }

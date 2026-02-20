@@ -128,7 +128,11 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields m
 
 	// In non-test mode `newInformer` is cache.NewSharedIndexInformer
 	// defined in k8s.io/client-go/tools/cache/shared_informer.go : func NewSharedIndexInformer(lw ...
-	sii := newInformer(listWatcher, example, resyncPeriod, cache.Indexers{})
+
+	// We disable the WatchList feature here for two reasons:
+	// 1. The WatchList feature makes our virtual function run twice for the initial objects, causing issues
+	// 2. THe synthetic watcher doesn't support it
+	sii := newInformer(&noWatchListListWatch{ListWatch: listWatcher}, example, resyncPeriod, cache.Indexers{})
 	if transform != nil {
 		if err := sii.SetTransform(transform); err != nil {
 			return nil, err
@@ -193,4 +197,13 @@ func SetSyntheticWatchableInterval(interval time.Duration) {
 
 func informerNameFromGVK(gvk schema.GroupVersionKind) string {
 	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
+}
+
+// noWatchListListWatch disables WatchList feature
+type noWatchListListWatch struct {
+	*cache.ListWatch
+}
+
+func (n *noWatchListListWatch) IsWatchListSemanticsUnSupported() bool {
+	return true
 }

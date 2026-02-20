@@ -1,0 +1,24 @@
+schemaID: management.cattle.io.users
+tests:
+  - description: "Filter by principalId: local://user-one-principal"
+    query: "filter=principalIds~local://user-one-principal"
+    expected:
+      - user-one
+  - description: "Filter by principalId: local://admin-principal"
+    query: "filter=principalIds~local://admin-principal"
+    expected:
+      - admin-user
+  - description: "Filter by principalId: local://another-id-for-user2"
+    query: "filter=principalIds~local://another-id-for-user2"
+    expected:
+      - user-two
+  - description: "Filter by non-existent principalId"
+    query: "filter=principalIds~local://non-existent-id"
+    expected: []
+  - description: "Filter by multiple principalIds (AND logic): local://user-one-principal AND local://another-id-for-user1"
+    query: "filter=principalIds~local://user-one-principal&filter=principalIds~local://another-id-for-user1"
+    expected:
+      - user-one
+  - description: "Filter by multiple principalIds (AND logic) for different users"
+    query: "filter=principalIds~local://user-one-principal&filter=principalIds~local://admin-principal"
+    expected: []

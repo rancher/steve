@@ -428,9 +428,8 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 		}
 		value, err := field.GetValue(unstrObj)
 		if err != nil {
-			logrus.Errorf("cannot index field %v: %v", actualColumnName, err)
-			args = append(args, normalizeValue(nil))
-			continue
+			logrus.Errorf("cannot index object of type [%s] with key [%s] for indexer [%s]: %v", l.GetType().String(), key, l.GetName(), err)
+			return err
 		}
 		args = append(args, normalizeValue(value))
 	}
