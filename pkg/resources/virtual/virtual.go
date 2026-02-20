@@ -47,6 +47,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	for _, col := range columns {
 		gvkDateFields, gvkFound := rescommon.DateFieldsByGVK[gvk]
 		hasCRDDate := isCRD && col.Type == "date"
+		hasCRDDate = false
 		hasBuiltInDate := gvkFound && slices.Contains(gvkDateFields, col.Name)
 		if hasCRDDate || hasBuiltInDate {
 			converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {

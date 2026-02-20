@@ -248,6 +248,7 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 			gvkDateFields, gvkFound := DateFieldsByGVK[gvk]
 
 			hasCRDDateField := isCRD && col.Type == "date"
+			hasCRDDateField = false
 			hasGVKDateFieldMapping := gvkFound && slices.Contains(gvkDateFields, col.Name)
 			if hasCRDDateField || hasGVKDateFieldMapping {
 				index := GetIndexValueFromString(col.Field)
