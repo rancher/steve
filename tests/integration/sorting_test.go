@@ -218,49 +218,47 @@ func (i *IntegrationSuite) TestListSortPodsByStateName() {
 		}
 	})
 
-	if len(podsByMDStateName) > 0 {
-		// Verify filtering by each state name works
-		i.Run("filtering pods by metadata.state.name", func() {
-			for mdStateName, podList := range podsByMDStateName {
-				url := fmt.Sprintf("%s/v1/pods?filter=metadata.state.name=%s", baseURL, mdStateName)
-				fmt.Println(url)
-				resp, err := http.Get(url)
-				i.Require().NoError(err)
-				defer resp.Body.Close()
+	// Verify filtering by each state name works
+	i.Run("filtering pods by metadata.state.name", func() {
+		for mdStateName, podList := range podsByMDStateName {
+			url := fmt.Sprintf("%s/v1/pods?filter=metadata.state.name=%s", baseURL, mdStateName)
+			fmt.Println(url)
+			resp, err := http.Get(url)
+			i.Require().NoError(err)
+			defer resp.Body.Close()
 
-				i.Require().Equal(http.StatusOK, resp.StatusCode)
-				var parsed Response
-				err = json.NewDecoder(resp.Body).Decode(&parsed)
-				i.Require().NoError(err)
+			i.Require().Equal(http.StatusOK, resp.StatusCode)
+			var parsed Response
+			err = json.NewDecoder(resp.Body).Decode(&parsed)
+			i.Require().NoError(err)
 
-				i.Require().Equal(len(parsed.Data), len(podList))
-				podNames := make(map[string]struct{})
-				for _, data := range parsed.Data {
-					podNames[data.Metadata.Name] = struct{}{}
-				}
-				i.Require().Equal(podList, podNames)
+			i.Require().Equal(len(parsed.Data), len(podList))
+			podNames := make(map[string]struct{})
+			for _, data := range parsed.Data {
+				podNames[data.Metadata.Name] = struct{}{}
 			}
-		})
-		i.Run("filtering pods by metadata.fields[2]", func() {
-			for mdfStateName, podList := range podsByMDFieldStateName {
-				url := fmt.Sprintf("%s/v1/pods?filter=metadata.fields[2]=%s", baseURL, mdfStateName)
-				fmt.Println(url)
-				resp, err := http.Get(url)
-				i.Require().NoError(err)
-				defer resp.Body.Close()
+			i.Require().Equal(podList, podNames)
+		}
+	})
+	i.Run("filtering pods by metadata.fields[2]", func() {
+		for mdfStateName, podList := range podsByMDFieldStateName {
+			url := fmt.Sprintf("%s/v1/pods?filter=metadata.fields[2]=%s", baseURL, mdfStateName)
+			fmt.Println(url)
+			resp, err := http.Get(url)
+			i.Require().NoError(err)
+			defer resp.Body.Close()
 
-				i.Require().Equal(http.StatusOK, resp.StatusCode)
-				var parsed Response
-				err = json.NewDecoder(resp.Body).Decode(&parsed)
-				i.Require().NoError(err)
+			i.Require().Equal(http.StatusOK, resp.StatusCode)
+			var parsed Response
+			err = json.NewDecoder(resp.Body).Decode(&parsed)
+			i.Require().NoError(err)
 
-				i.Require().Equal(len(parsed.Data), len(podList))
-				podNames := make(map[string]struct{})
-				for _, data := range parsed.Data {
-					podNames[data.Metadata.Name] = struct{}{}
-				}
-				i.Require().Equal(podList, podNames)
+			i.Require().Equal(len(parsed.Data), len(podList))
+			podNames := make(map[string]struct{})
+			for _, data := range parsed.Data {
+				podNames[data.Metadata.Name] = struct{}{}
 			}
-		})
-	}
+			i.Require().Equal(podList, podNames)
+		}
+	})
 }
