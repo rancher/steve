@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/dates"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+	"github.com/rancher/steve/pkg/resources/virtual/pods"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,8 +39,13 @@ func NewTransformBuilder(cache common.SummaryCache) *TransformBuilder {
 // GetTransformFunc returns the func to transform a raw object into a fixed object, if needed
 func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
-	if gvk.Kind == "Event" && gvk.Group == "" && gvk.Version == "v1" {
-		converters = append(converters, events.TransformEventObject)
+	converters = append(converters, t.defaultFields.TransformCommon)
+	if gvk.Group == "" && gvk.Version == "v1" {
+		if gvk.Kind == "Event" {
+			converters = append(converters, events.TransformEventObject)
+		} else if gvk.Kind == "Pod" {
+			converters = append(converters, pods.TransformPodObject)
+		}
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
 	}
@@ -52,8 +58,6 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		JSONPaths: jsonPaths,
 	}
 	converters = append(converters, dateConverter.Transform)
-
-	converters = append(converters, t.defaultFields.TransformCommon)
 
 	return func(raw interface{}) (interface{}, error) {
 		obj, isSignal, err := common.GetUnstructured(raw)

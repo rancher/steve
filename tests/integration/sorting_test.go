@@ -108,3 +108,157 @@ func (i *IntegrationSuite) testSortScenario(ctx context.Context, scenario string
 		})
 	}
 }
+
+// Verify metadata.state.name and metadata.fields[2] are in sync.
+
+func (i *IntegrationSuite) TestListSortPodsByStateName() {
+	ctx := i.T().Context()
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
+		SQLCache: true,
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+		},
+	})
+	i.Require().NoError(err)
+
+	httpServer := httptest.NewServer(steveHandler)
+	defer httpServer.Close()
+
+	baseURL := httpServer.URL
+
+	// Grab one file to make this look like other tests
+	matches, err := filepath.Glob(filepath.Join(testdataSortingDir, "*.test.yaml"))
+	i.Require().NoError(err)
+	i.Require().Less(0, len(matches))
+	// We don't actually process any yaml files here, but this helps wait for the server to be ready.
+	scenario := filepath.Base(matches[0])
+	scenario = strings.TrimSuffix(scenario, ".test.yaml")
+	scenarioManifests := filepath.Join(testdataSortingDir, scenario+".manifests.yaml")
+
+	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
+	i.doManifest(ctx, scenarioManifests, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
+		gvrs[gvr] = struct{}{}
+		return i.doApply(ctx, obj, gvr)
+	})
+	for gvr := range gvrs {
+		i.waitForSchema(baseURL, gvr)
+	}
+
+	defer i.maybeStopAndDebug(baseURL)
+
+	podsByMDStateName := make(map[string]map[string]struct{})
+	podsByMDFieldStateName := make(map[string]map[string]struct{})
+
+	type Response struct {
+		Data []struct {
+			Metadata struct {
+				Name   string `json:"name"`
+				Fields []any  `json:"fields"`
+				State  struct {
+					Name string `json:"name"`
+				} `json:"state"`
+			} `json:"metadata"`
+		} `json:"data"`
+	}
+
+	i.Run("sorting pods", func() {
+		url := fmt.Sprintf("%s/v1/pods?sort=metadata.state.name,metadata.name", baseURL)
+		fmt.Println(url)
+		resp, err := http.Get(url)
+		i.Require().NoError(err)
+		defer resp.Body.Close()
+
+		i.Require().Equal(http.StatusOK, resp.StatusCode)
+		var parsed Response
+		err = json.NewDecoder(resp.Body).Decode(&parsed)
+		i.Require().NoError(err)
+		i.Require().Less(0, len(parsed.Data))
+
+		lastStateName := ""
+		lastName := ""
+		for _, data := range parsed.Data {
+			mdName := data.Metadata.Name
+			mdStateName := data.Metadata.State.Name
+			i.Require().GreaterOrEqual(len(data.Metadata.Fields), 2)
+			i.Require().NotEqual("", mdName)
+			i.Require().NotEqual("", mdStateName)
+			mdfStateName, ok := data.Metadata.Fields[2].(string)
+			i.Require().True(ok)
+
+			// Verify metadata.state.name and metadata.fields[2] differ only by case of the first letter
+			i.Require().Equal(len(mdStateName), len(mdfStateName))
+			if len(mdStateName) > 1 {
+				i.Require().Equal(mdStateName[1:len(mdStateName)], mdfStateName[1:len(mdfStateName)])
+			}
+			// md.stateName is camelCase
+			// md.fields[2] is UpperCamelCase
+			firstStateName := mdStateName[0:1]
+			firstField2Name := mdfStateName[0:1]
+			i.Require().Equal(strings.ToUpper(firstStateName), firstField2Name)
+			i.Require().Equal(strings.ToLower(firstField2Name), firstStateName)
+
+			// Verify metadata.state.name and metadata.name are sorted ascending
+			if lastStateName == mdStateName {
+				// verify the second -- allow for equal names just in case there are
+				// two pods with same name in different namespaces.
+				i.Require().LessOrEqual(lastName, mdName)
+			} else {
+				i.Require().Less(lastStateName, mdStateName)
+				lastStateName = mdStateName
+			}
+			lastName = mdName
+			_, ok = podsByMDStateName[mdStateName]
+			if !ok {
+				podsByMDStateName[mdStateName] = make(map[string]struct{})
+				podsByMDFieldStateName[mdfStateName] = make(map[string]struct{})
+			}
+			podsByMDStateName[mdStateName][mdName] = struct{}{}
+			podsByMDFieldStateName[mdfStateName][mdName] = struct{}{}
+		}
+	})
+
+	// Verify filtering by each state name works
+	i.Run("filtering pods by metadata.state.name", func() {
+		for mdStateName, podList := range podsByMDStateName {
+			url := fmt.Sprintf("%s/v1/pods?filter=metadata.state.name=%s", baseURL, mdStateName)
+			fmt.Println(url)
+			resp, err := http.Get(url)
+			i.Require().NoError(err)
+			defer resp.Body.Close()
+
+			i.Require().Equal(http.StatusOK, resp.StatusCode)
+			var parsed Response
+			err = json.NewDecoder(resp.Body).Decode(&parsed)
+			i.Require().NoError(err)
+
+			i.Require().Equal(len(parsed.Data), len(podList))
+			podNames := make(map[string]struct{})
+			for _, data := range parsed.Data {
+				podNames[data.Metadata.Name] = struct{}{}
+			}
+			i.Require().Equal(podList, podNames)
+		}
+	})
+	i.Run("filtering pods by metadata.fields[2]", func() {
+		for mdfStateName, podList := range podsByMDFieldStateName {
+			url := fmt.Sprintf("%s/v1/pods?filter=metadata.fields[2]=%s", baseURL, mdfStateName)
+			fmt.Println(url)
+			resp, err := http.Get(url)
+			i.Require().NoError(err)
+			defer resp.Body.Close()
+
+			i.Require().Equal(http.StatusOK, resp.StatusCode)
+			var parsed Response
+			err = json.NewDecoder(resp.Body).Decode(&parsed)
+			i.Require().NoError(err)
+
+			i.Require().Equal(len(parsed.Data), len(podList))
+			podNames := make(map[string]struct{})
+			for _, data := range parsed.Data {
+				podNames[data.Metadata.Name] = struct{}{}
+			}
+			i.Require().Equal(podList, podNames)
+		}
+	})
+}
