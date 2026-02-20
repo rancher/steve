@@ -26,7 +26,7 @@ import (
 
 var (
 	testdataListDir = filepath.Join("testdata", "list")
-	jsonOutputDir      = filepath.Join("testdata", "list", "json")
+	jsonOutputDir   = filepath.Join("testdata", "list", "json")
 )
 
 // ListTestConfig defines the structure for list test YAML files
@@ -46,7 +46,7 @@ type ListTestConfig struct {
 
 func (i *IntegrationSuite) TestList() {
 	ctx := i.T().Context()
-	
+
 	// Apply common manifests once for both test modes
 	commonManifestsFile := filepath.Join(testdataListDir, "common.manifests.yaml")
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
@@ -56,7 +56,7 @@ func (i *IntegrationSuite) TestList() {
 	})
 	// Cleanup common manifests after all tests complete
 	defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
-	
+
 	// Run SQL mode first, then non-SQL mode sequentially
 	i.Run("SQL", func() {
 		i.runListTest(ctx, true, gvrs)
