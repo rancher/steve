@@ -40,7 +40,7 @@ func (i *IntegrationSuite) TestPodRestarts() {
 	i.T().Log("Waiting for pods to stabilize (8 seconds)...")
 	time.Sleep(8 * time.Second)
 
-	// Run SQL mode only - these tests are specifically for SQL cache with COMPOSITE_INT support
+	// Run SQL mode only - these tests are specifically for SQL cache with multi-value field support
 	i.runPodRestartsTest(ctx, true, gvrs)
 }
 

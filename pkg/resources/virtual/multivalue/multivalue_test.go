@@ -68,7 +68,7 @@ func TestConverter_Transform(t *testing.T) {
 			require.True(t, found)
 			require.Len(t, fields, 5)
 
-			// Check that field[3] is now an array (COMPOSITE_INT fields are stored as arrays)
+			// Check that field[3] is now an array (multi-value fields are stored as arrays)
 			restartField, ok := fields[3].([]interface{})
 			require.True(t, ok, "field should be array")
 			require.Len(t, restartField, 2)

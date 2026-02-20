@@ -55,7 +55,7 @@ func (c *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 			continue
 		}
 
-		// Store as array - SQL layer handles COMPOSITE_INT fields directly
+		// Store as array - values are extracted into separate columns by IndexedField.GetValue
 		fields[index] = arrayValue
 		updated = true
 	}

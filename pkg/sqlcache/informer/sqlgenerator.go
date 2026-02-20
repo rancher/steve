@@ -1328,7 +1328,6 @@ func getField(a any, field string) (any, error) {
 					return nil, fmt.Errorf("[listoption indexer] given index is too large for slice of len %d", len(t))
 				}
 				// Preserve the type of array elements instead of stringifying
-				// This is important for COMPOSITE_INT fields that need the slice
 				obj = t[key]
 			} else if i == len(subFields)-1 {
 				// If the last layer is an array, return array.map(a => a[subfield])
