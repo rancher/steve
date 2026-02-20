@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"slices"
 	"strings"
 	"sync"
 
@@ -1048,37 +1047,30 @@ func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersio
 	}
 	podGVK := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
 	jobGVK := schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}
-	schemaNameFromGVK := map[schema.GroupVersionKind]GVKWithSchemaName{
+	dependentChildInfoFromParentGVK := map[schema.GroupVersionKind]GVKWithSchemaName{
 		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}:  {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"}:   {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}: {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}:        {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}:    {jobGVK, "batch.job", false},
 	}
-	gvksToAugment := make([]schema.GroupVersionKind, 0, len(schemaNameFromGVK))
-	for k := range schemaNameFromGVK {
-		gvksToAugment = append(gvksToAugment, k)
+	childInfo, ok := dependentChildInfoFromParentGVK[gvk]
+	if !ok {
+		logrus.Warnf("No associatedData defined for GVK %s", gvk)
+		return nil
 	}
-	if slices.Contains(gvksToAugment, gvk) {
-		childInfo, ok := schemaNameFromGVK[gvk]
-		if !ok {
-			return fmt.Errorf("No child schema name found for gvk %s", gvk)
-		}
-		schemas1 := apiOp.Schemas
-		schemas2 := schemas1.Schemas
-		dependentSchema, ok := schemas2[childInfo.schemaName]
-		if !ok {
-			return fmt.Errorf("No schema name found for gvk %s", gvk)
-		}
-		podClusterInf, doneCache, err := s.cacheForWithDeps(ctx, apiOp, dependentSchema)
-		if err != nil {
-			return err
-		}
-		defer doneCache()
-		return podClusterInf.AugmentList(ctx, list, childInfo.gvk, childInfo.schemaName, childInfo.useSelectors)
+	schemas1 := apiOp.Schemas
+	schemas2 := schemas1.Schemas
+	dependentSchema, ok := schemas2[childInfo.schemaName]
+	if !ok {
+		return fmt.Errorf("No schema name found for gvk %s", gvk)
 	}
-	logrus.Warnf("there is no associatedData defined for GVK %s", gvk)
-	return nil
+	childResourceInf, doneCache, err := s.cacheForWithDeps(ctx, apiOp, dependentSchema)
+	if err != nil {
+		return err
+	}
+	defer doneCache()
+	return childResourceInf.AugmentList(ctx, list, childInfo.gvk, childInfo.schemaName, childInfo.useSelectors)
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions

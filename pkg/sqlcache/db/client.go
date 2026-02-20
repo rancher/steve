@@ -322,7 +322,7 @@ func (c *client) ReadStrings(rows Rows) ([]string, error) {
 	return result, nil
 }
 
-// ReadStringIntString scans the given rows into (string, string, string) tuples, and then returns a slice of them.
+// ReadStringIntString scans the given rows into (string, int, string) tuples, and then returns a slice of them.
 func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()

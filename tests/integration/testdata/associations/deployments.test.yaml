@@ -11,7 +11,7 @@ tests:
         name: postgres
         namespace: socksess
         associatedData:
-        - GVK:
+        - gvk:
             group: ""
             version: v1
             kind: Pod
@@ -24,7 +24,7 @@ tests:
         name: socksess
         namespace: socksess
         associatedData:
-        - GVK:
+        - gvk:
             group: ""
             version: v1
             kind: Pod

@@ -437,10 +437,15 @@ func (l *ListOptionIndexer) dropLabels(tx db.TxClient) error {
 }
 
 // Augment the items in the list with the following approach:
-// 1. Find all items that have a relationship block that includes `toType="pod"` and a non-empty selector field, and include the item's namespace in the namespace-search list
-// 2. Search the DB for all pods that are in the namespace-search list -- grab the pod's namespace, name, and fields we want (health, state info)
+// If we're using selectors (this is the case for all parent types pointing to child pods):
+// 1. Find all items that have a `relationship` block that includes `toType="pod"` and a non-empty selector field, and include the item's namespace in the namespace-search list
+// 2. Search the DB for all pods that are in the namespace-search list -- grab the pod's namespace, name, and fields we want (name, state info)
 // 3. Then walk this list again, and for each selector that can actually select one of the pods from step 2,
 // add that information from the pod into a `metadata.associatedData` block.
+//
+// Otherwise, we're just looking for `relationship` blocks that contain a `toId` field.
+// The `type` field is implicit in these blocks.
+// Matching is done on the child node's ID.
 
 func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
 	var namespaceSet = sets.Set[string]{}
@@ -486,7 +491,6 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 	}
 	namespaces := sets.List(namespaceSet) // Set.List() sorts the elements
 	tableBaseName := childGVK.Group + "_" + childGVK.Version + "_" + childGVK.Kind
-	fmt.Println(childGVK)
 	query, params, err := makeAugmentedDBQuery(namespaces, tableBaseName)
 	if err != nil {
 		return err
@@ -608,7 +612,7 @@ func (l *ListOptionIndexer) getAssociatedDataBySelector(parentItems []unstructur
 		}
 		if len(relatedDataItems) > 0 {
 			associationBlock := map[string]any{
-				"GVK": map[string]any{
+				"gvk": map[string]any{
 					"group":   childGVK.Group,
 					"version": childGVK.Version,
 					"kind":    childGVK.Kind,
@@ -661,7 +665,7 @@ func (l *ListOptionIndexer) getAssociatedDataByID(parentItems []unstructured.Uns
 		}
 		if len(relatedDataItems) > 0 {
 			associationBlock := map[string]any{
-				"GVK": map[string]any{
+				"gvk": map[string]any{
 					"group":   childGVK.Group,
 					"version": childGVK.Version,
 					"kind":    childGVK.Kind,

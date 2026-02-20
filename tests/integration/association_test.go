@@ -120,7 +120,7 @@ func (i *IntegrationSuite) testAssociationsScenarios(ctx context.Context, scenar
 					Group   string `json:"group"`
 					Version string `json:"version"`
 					Kind    string `json:"kind"`
-				} `json:"GVK"`
+				} `json:"gvk"`
 				Data []struct {
 					ChildName string `json:"childName"`
 					State     struct {
@@ -200,7 +200,7 @@ func (i *IntegrationSuite) testAssociationsScenarios(ctx context.Context, scenar
 					expAssocData, ok := expAssocDataRaw.(map[string]any)
 					i.Require().True(ok)
 					gotAssocData := got1.Metadata.AssociatedData[i2]
-					expGVKRaw, ok := expAssocData["GVK"]
+					expGVKRaw, ok := expAssocData["gvk"]
 					i.Require().True(ok)
 					expGVK, ok := expGVKRaw.(map[string]any)
 					i.Require().Equal(expGVK["group"], gotAssocData.GVK.Group)
