@@ -1,4 +1,3 @@
-// Package common provides cache.TransformFunc's for /v1 Event objects
 package pods
 
 import (
