@@ -173,11 +173,7 @@ func (i *IntegrationSuite) TestListSortPodsByStateName() {
 		var parsed Response
 		err = json.NewDecoder(resp.Body).Decode(&parsed)
 		i.Require().NoError(err)
-
-		if len(parsed.Data) == 0 {
-			fmt.Printf("Warning: TestListSortPodsByStateName: retrieved 0 pods, expected more\n")
-			return
-		}
+		i.Require().Less(0, len(parsed.Data))
 
 		lastStateName := ""
 		lastName := ""
