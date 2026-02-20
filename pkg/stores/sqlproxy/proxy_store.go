@@ -180,16 +180,16 @@ var (
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			"spec.internal":                &informer.JSONPathField{Path: []string{"spec", "internal"}},
 			"spec.displayName":             &informer.JSONPathField{Path: []string{"spec", "displayName"}},
-			"status.allocatable.cpu":       &informer.JSONPathField{Path: []string{"status", "allocatable", "cpu"}},
-			"status.allocatable.cpuRaw":    &informer.JSONPathField{Path: []string{"status", "allocatable", "cpuRaw"}},
-			"status.allocatable.memory":    &informer.JSONPathField{Path: []string{"status", "allocatable", "memory"}},
-			"status.allocatable.memoryRaw": &informer.JSONPathField{Path: []string{"status", "allocatable", "memoryRaw"}},
-			"status.allocatable.pods":      &informer.JSONPathField{Path: []string{"status", "allocatable", "pods"}},
-			"status.requested.cpu":         &informer.JSONPathField{Path: []string{"status", "requested", "cpu"}},
-			"status.requested.cpuRaw":      &informer.JSONPathField{Path: []string{"status", "requested", "cpuRaw"}},
-			"status.requested.memory":      &informer.JSONPathField{Path: []string{"status", "requested", "memory"}},
-			"status.requested.memoryRaw":   &informer.JSONPathField{Path: []string{"status", "requested", "memoryRaw"}},
-			"status.requested.pods":        &informer.JSONPathField{Path: []string{"status", "requested", "pods"}},
+			"status.allocatable.cpu":       &informer.JSONPathField{Type: "", Path: []string{"status", "allocatable", "cpu"}},
+			"status.allocatable.cpuRaw":    &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "cpuRaw"}},
+			"status.allocatable.memory":    &informer.JSONPathField{Type: "", Path: []string{"status", "allocatable", "memory"}},
+			"status.allocatable.memoryRaw": &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "memoryRaw"}},
+			"status.allocatable.pods":      &informer.JSONPathField{Type: "INT", Path: []string{"status", "allocatable", "pods"}},
+			"status.requested.cpu":         &informer.JSONPathField{Type: "", Path: []string{"status", "requested", "cpu"}},
+			"status.requested.cpuRaw":      &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "cpuRaw"}},
+			"status.requested.memory":      &informer.JSONPathField{Type: "", Path: []string{"status", "requested", "memory"}},
+			"status.requested.memoryRaw":   &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "memoryRaw"}},
+			"status.requested.pods":        &informer.JSONPathField{Type: "INT", Path: []string{"status", "requested", "pods"}},
 			"status.connected":             &informer.JSONPathField{Path: []string{"status", "connected"}},
 			"status.provider":              &informer.JSONPathField{Path: []string{"status", "provider"}},
 		},
@@ -232,17 +232,17 @@ var (
 		gvkKey("provisioning.cattle.io", "v1", "Cluster"): {
 			"metadata.annotations[provisioning.cattle.io/management-cluster-display-name]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "provisioning.cattle.io/management-cluster-display-name"}},
 			"status.allocatable.cpu":       &informer.JSONPathField{Path: []string{"status", "allocatable", "cpu"}},
-			"status.allocatable.cpuRaw":    &informer.JSONPathField{Path: []string{"status", "allocatable", "cpuRaw"}},
+			"status.allocatable.cpuRaw":    &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "cpuRaw"}},
 			"status.allocatable.memory":    &informer.JSONPathField{Path: []string{"status", "allocatable", "memory"}},
-			"status.allocatable.memoryRaw": &informer.JSONPathField{Path: []string{"status", "allocatable", "memoryRaw"}},
-			"status.allocatable.pods":      &informer.JSONPathField{Path: []string{"status", "allocatable", "pods"}},
+			"status.allocatable.memoryRaw": &informer.JSONPathField{Type: "REAL", Path: []string{"status", "allocatable", "memoryRaw"}},
+			"status.allocatable.pods":      &informer.JSONPathField{Type: "INT", Path: []string{"status", "allocatable", "pods"}},
 			"status.clusterName":           &informer.JSONPathField{Path: []string{"status", "clusterName"}},
 			"status.provider":              &informer.JSONPathField{Path: []string{"status", "provider"}},
 			"status.requested.cpu":         &informer.JSONPathField{Path: []string{"status", "requested", "cpu"}},
-			"status.requested.cpuRaw":      &informer.JSONPathField{Path: []string{"status", "requested", "cpuRaw"}},
+			"status.requested.cpuRaw":      &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "cpuRaw"}},
 			"status.requested.memory":      &informer.JSONPathField{Path: []string{"status", "requested", "memory"}},
-			"status.requested.memoryRaw":   &informer.JSONPathField{Path: []string{"status", "requested", "memoryRaw"}},
-			"status.requested.pods":        &informer.JSONPathField{Path: []string{"status", "requested", "pods"}},
+			"status.requested.memoryRaw":   &informer.JSONPathField{Type: "REAL", Path: []string{"status", "requested", "memoryRaw"}},
+			"status.requested.pods":        &informer.JSONPathField{Type: "INT", Path: []string{"status", "requested", "pods"}},
 		},
 		gvkKey("rke.cattle.io", "v1", "ETCDSnapshot"): {
 			"snapshotFile.createdAt": &informer.JSONPathField{Path: []string{"snapshotFile", "createdAt"}},
@@ -940,30 +940,14 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 }
 
 var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
-	{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}: {
-		"status.allocatable.cpuRaw":    "REAL",
-		"status.allocatable.memoryRaw": "REAL",
-		"status.allocatable.pods":      "INT",
-		"status.requested.cpuRaw":      "REAL",
-		"status.requested.memoryRaw":   "REAL",
-		"status.requested.pods":        "INT",
-	},
-	{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}: {
-		"status.allocatable.cpuRaw":    "REAL",
-		"status.allocatable.memoryRaw": "REAL",
-		"status.allocatable.pods":      "INT",
-		"status.requested.cpuRaw":      "REAL",
-		"status.requested.memoryRaw":   "REAL",
-		"status.requested.pods":        "INT",
-	},
 	{Group: "", Version: "v1", Kind: "Secret"}: {
-		"metadata.fields[2]": "INT", // name: Data
+		"metadata.fields[2]": "INT",
 	},
 	{Group: "", Version: "v1", Kind: "ServiceAccount"}: {
-		"metadata.fields[1]": "INT", // name: Secrets
+		"metadata.fields[1]": "INT",
 	},
 	{Group: "", Version: "v1", Kind: "ConfigMap"}: {
-		"metadata.fields[1]": "INT", // name: Data
+		"metadata.fields[1]": "INT",
 	},
 }
 
