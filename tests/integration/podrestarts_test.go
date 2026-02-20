@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -109,33 +108,22 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 					// Check that the request succeeds (status 200)
 					i.Assert().Equal(http.StatusOK, resp.StatusCode, "request should succeed")
 
-					// Read and parse response body
-					body, err := io.ReadAll(resp.Body)
-					i.Require().NoError(err)
+					type Response struct {
+						Data []struct {
+							Metadata struct {
+								Name string `json:"name"`
+							} `json:"metadata"`
+						} `json:"data"`
+					}
 
-					var result map[string]interface{}
-					err = json.Unmarshal(body, &result)
+					var parsed Response
+					err = json.NewDecoder(resp.Body).Decode(&parsed)
 					i.Require().NoError(err)
-
-					// Get the data array
-					data, ok := result["data"].([]interface{})
-					i.Require().True(ok, "response should have data array")
 
 					// Extract pod names from response
 					var actualNames []string
-					for _, item := range data {
-						pod, ok := item.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						metadata, ok := pod["metadata"].(map[string]interface{})
-						if !ok {
-							continue
-						}
-						name, ok := metadata["name"].(string)
-						if ok {
-							actualNames = append(actualNames, name)
-						}
+					for _, pod := range parsed.Data {
+						actualNames = append(actualNames, pod.Metadata.Name)
 					}
 
 					// Verify expected pods
