@@ -370,10 +370,6 @@ func (c *client) ReadStringsN(rows Rows, numColumns int) ([][]string, error) {
 		if err != nil {
 			return nil, closeRowsOnError(rows, err)
 		}
-		for i, sp := range stringPointers {
-			stringList[i] = *((sp).(*string))
-		}
-
 		result = append(result, stringList)
 	}
 	err := rows.Err()
