@@ -177,18 +177,23 @@ func (i *IntegrationSuite) testAssociationsScenarios(ctx context.Context, scenar
 				i.Require().True(ok)
 				expName, ok := expNameRaw.(string)
 				i.Require().True(ok)
+				i.Require().Equal(expName, got1Metadata.Name)
+
 				expNamespaceRaw, ok := expMetadata["namespace"]
 				i.Require().True(ok)
 				expNamespace, ok := expNamespaceRaw.(string)
 				i.Require().True(ok)
+				i.Require().Equal(expNamespace, got1Metadata.Namespace)
 
 				expADRaw, ok := expMetadata["associatedData"]
-				i.Require().True(ok)
+				if strings.Contains(test.Query, "includeAssociatedData=true") {
+					i.Require().True(ok)
+				} else {
+					i.Require().False(ok)
+					continue
+				}
 				expAD, ok := expADRaw.([]any)
 				i.Require().True(ok)
-
-				i.Require().Equal(expName, got1Metadata.Name)
-				i.Require().Equal(expNamespace, got1Metadata.Namespace)
 				i.Require().Equal(len(expAD), len(got1Metadata.AssociatedData))
 
 				for i2, expAssocDataRaw := range expAD {

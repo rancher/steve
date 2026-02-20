@@ -27,12 +27,13 @@ const (
 
 // ListOptions represents the query parameters that may be included in a list request.
 type ListOptions struct {
-	Filters              []OrFilter
-	ProjectsOrNamespaces OrFilter
-	SortList             SortList
-	SummaryFieldList     SummaryFieldList
-	Pagination           Pagination
-	Revision             string
+	Filters               []OrFilter
+	ProjectsOrNamespaces  OrFilter
+	SortList              SortList
+	SummaryFieldList      SummaryFieldList
+	Pagination            Pagination
+	IncludeAssociatedData bool
+	Revision              string
 }
 
 // Filter represents a field to filter by.

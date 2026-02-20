@@ -1,9 +1,9 @@
 schemaID: apps.deployments
 tests:
-- description: user:user-a,namespace:socksess,query:filter=metadata.namespace=socksess
+- description: "user:user-a,namespace:socksess,query:filter=metadata.namespace=socksess&includeAssociatedData=true"
   user: user-a
   namespace: socksess
-  query: filter=metadata.namespace=socksess
+  query: "filter=metadata.namespace=socksess&includeAssociatedData=true"
   expected:
     data:
     - id: "socksess/postgres"
@@ -33,3 +33,17 @@ tests:
             # state values aren't compared
             state: {}
 
+- description: "user:user-a,namespace:socksess,query:filter=metadata.namespace=socksess"
+  user: user-a
+  namespace: socksess
+  query: "filter=metadata.namespace=socksess"
+  expected:
+    data:
+    - id: "socksess/postgres"
+      metadata:
+        name: postgres
+        namespace: socksess
+    - id: "socksess/socksess"
+      metadata:
+        name: socksess
+        namespace: socksess
