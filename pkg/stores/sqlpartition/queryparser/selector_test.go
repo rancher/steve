@@ -61,6 +61,7 @@ func TestSelectorParse(t *testing.T) {
 		`x='single quotes with \\ and \' ok'`,
 		`x contains "app=nginx"`,
 		`x notcontains "app=nginx"`,
+		"x notcontains notcontains",
 	}
 	testBadStrings := []string{
 		"!no-label-absence-test",
@@ -87,18 +88,12 @@ func TestSelectorParse(t *testing.T) {
 		"x notcontains a,b",
 	}
 	for _, test := range testGoodStrings {
-		if test == `x notcontains "app=nginx"` {
-			fmt.Println("stop here")
-		}
 		_, err := Parse(test)
 		if err != nil {
 			t.Errorf("%v: error %v (%#v)\n", test, err, err)
 		}
 	}
 	for _, test := range testBadStrings {
-		if test == "x notcontains a,b" {
-			fmt.Println("stop here")
-		}
 		_, err := Parse(test)
 		if err == nil {
 			t.Errorf("%v: did not get expected error\n", test)
