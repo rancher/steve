@@ -1076,9 +1076,8 @@ func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersio
 		}
 		defer doneCache()
 		return podClusterInf.AugmentList(ctx, list, childInfo.gvk, childInfo.schemaName, childInfo.useSelectors)
-	} else {
-		logrus.Warnf("there is no associatedData defined for GVK %s", gvk)
 	}
+	logrus.Warnf("there is no associatedData defined for GVK %s", gvk)
 	return nil
 }
 
