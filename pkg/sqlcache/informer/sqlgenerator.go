@@ -71,7 +71,6 @@ var (
 	namespacesDbName        = "_v1_Namespace"
 	projectIDFieldLabel     = "field.cattle.io/projectId"
 	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
-	fieldPathPattern        = regexp.MustCompile(`^(.+\[\d+\])(\[(\d+)\])$`)
 
 	ErrInvalidColumn   = errors.New("supplied column is invalid")
 	ErrUnknownRevision = errors.New("unknown revision")
@@ -897,10 +896,9 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 		return "", nil, err
 	}
 
-	// Check if this is an INTEGER column - need to cast parameter to integer for proper comparison.
-	// Use the same column resolution logic as getValidFieldEntry.
-	columnName := toColumnName(filter.Field)
-	isIntegerCol := l.isIntegerColumn(l.resolveColumnName(columnName))
+	// Check if this is an INTEGER field - need to cast parameter to integer for proper comparison.
+	fieldID := smartJoin(filter.Field)
+	isIntegerCol := l.isIntegerField(fieldID)
 
 	switch filter.Op {
 	case sqltypes.Eq:
@@ -1133,37 +1131,42 @@ func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter
 }
 
 func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, mainFieldPrefix string) (string, error) {
-	columnName := toColumnName(fieldParts)
+	fieldID := smartJoin(fieldParts)
 	var columnValueName string
-	if mainFieldPrefix == "" {
-		columnValueName = fmt.Sprintf("%q", columnName)
-	} else {
-		columnValueName = fmt.Sprintf("%s.%q", mainFieldPrefix, columnName)
-	}
-	err := l.validateColumn(columnName)
-	if err == nil {
+	
+	// Try direct field lookup first
+	if field, ok := l.indexedFields[fieldID]; ok {
+		columnName := field.ColumnName()
+		if mainFieldPrefix == "" {
+			columnValueName = fmt.Sprintf("%q", columnName)
+		} else {
+			columnValueName = fmt.Sprintf("%s.%q", mainFieldPrefix, columnName)
+		}
 		return columnValueName, nil
 	}
+	
+	// Fallback for numeric-indexed field expressions like spec.containers.image[2]
 	if len(fieldParts) == 1 || containsNonNumericRegex.MatchString(fieldParts[len(fieldParts)-1]) {
-		// Can't be a numeric-indexed field expression like spec.containers.image[2]
-		return "", err
+		return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 	}
-	columnNameToValidate := toColumnName(fieldParts[:len(fieldParts)-1])
-	if err2 := l.validateColumn(columnNameToValidate); err2 != nil {
-		// Return the original error message
-		return "", err
+	
+	// Check if base field (without numeric index) exists
+	baseFieldID := smartJoin(fieldParts[:len(fieldParts)-1])
+	if field, ok := l.indexedFields[baseFieldID]; ok {
+		index, err := strconv.Atoi(fieldParts[len(fieldParts)-1])
+		if err != nil {
+			return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
+		}
+		columnName := field.ColumnName()
+		if mainFieldPrefix == "" {
+			columnValueName = fmt.Sprintf(`extractBarredValue(%q, %d)`, columnName, index)
+		} else {
+			columnValueName = fmt.Sprintf(`extractBarredValue(%s.%q, %d)`, mainFieldPrefix, columnName, index)
+		}
+		return columnValueName, nil
 	}
-	index, err2 := strconv.Atoi(fieldParts[len(fieldParts)-1])
-	if err2 != nil {
-		// Return the original error message
-		return "", err
-	}
-	if mainFieldPrefix == "" {
-		columnValueName = fmt.Sprintf(`extractBarredValue(%q, %d)`, columnNameToValidate, index)
-	} else {
-		columnValueName = fmt.Sprintf(`extractBarredValue(%s.%q, %d)`, mainFieldPrefix, columnNameToValidate, index)
-	}
-	return columnValueName, nil
+	
+	return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 }
 
 // Suppose the query access something like 'spec.containers[3].image' but only
@@ -1179,41 +1182,20 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 // Indices are 0-based.
 
 func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
-	columnName := toColumnName(fields)
-
-	// Check for array sub-index pattern like "metadata.fields[3][0]"
-	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
-
-	// If we have a sub-index (like metadata.fields[3][0]), first check for multi-column fields.
-	// Multi-column fields (like ComputedField with metadata.fields[3]_0, metadata.fields[3]_1)
-	// take priority over single-column base fields (like JSONPathField with metadata.fields[3]).
-	if hasSubIndex && l.hasMultiColumnField(baseField) {
-		// Direct column access: metadata.fields[3][0] -> "metadata.fields[3]_0"
-		return fmt.Sprintf(`COALESCE(%s."%s_%s", 0)`, prefix, baseField, subIndex), nil
+	fieldID := smartJoin(fields)
+	
+	// Try direct field lookup first
+	if field, ok := l.indexedFields[fieldID]; ok {
+		return fmt.Sprintf(`%s."%s"`, prefix, field.ColumnName()), nil
 	}
-
-	// Validate the base field (without the sub-index)
-	fieldToValidate := columnName
-	if hasSubIndex {
-		fieldToValidate = baseField
-	}
-
-	err := l.validateColumn(fieldToValidate)
-	if err == nil {
-		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
-	}
-
-	// Check if this is a multi-column field without sub-index (like metadata.fields[3] with _0/_1 columns).
-	// This fallback allows querying multi-column fields (e.g., "metadata.fields[3]<5") without
-	// explicitly specifying the sub-index. Defaults to _0 for backward compatibility.
-	hasMultiCol := l.hasMultiColumnField(fieldToValidate)
-	if hasMultiCol {
-		return fmt.Sprintf(`COALESCE(%s."%s_0", 0)`, prefix, columnName), nil
-	}
-
+	
+	// Fallback: handle numeric indices in the path (e.g., spec.containers.3.image)
+	// Look for a numeric part anywhere in the path and try to find the base field without it
 	if len(fields) <= 2 {
-		return "", err
+		return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 	}
+	
+	// Find the last numeric index in the field parts
 	idx := -1
 	for i := len(fields) - 1; i > 0; i-- {
 		if !containsNonNumericRegex.MatchString(fields[i]) {
@@ -1221,58 +1203,27 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 			break
 		}
 	}
+	
 	if idx == -1 {
-		// We don't have an index onto a valid field
-		return "", err
+		return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 	}
+	
+	// Build the base field without the numeric index
 	indexField := fields[idx]
-	// fields[len(fields):] gives empty array
 	otherFields := append(fields[0:idx], fields[idx+1:]...)
-	leadingColumnName := toColumnName(otherFields)
-	if l.validateColumn(leadingColumnName) != nil {
-		// We have an index, but not onto a valid field
-		return "", err
+	baseFieldID := smartJoin(otherFields)
+	
+	// Check if the base field exists
+	if field, ok := l.indexedFields[baseFieldID]; ok {
+		return fmt.Sprintf(`extractBarredValue(%s."%s", "%s")`, prefix, field.ColumnName(), indexField), nil
 	}
-	return fmt.Sprintf(`extractBarredValue(%s."%s", "%s")`, prefix, leadingColumnName, indexField), nil
+	
+	return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 }
 
-func (l *ListOptionIndexer) validateColumn(column string) error {
-	if _, ok := l.indexedFields[column]; ok {
-		return nil
-	}
-	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
-}
-
-// hasMultiColumnField checks if a base field has multiple columns (like _0, _1 suffixes).
-// This is used to detect fields that need special handling for sub-indexing (e.g., metadata.fields[3][0]).
-func (l *ListOptionIndexer) hasMultiColumnField(baseField string) bool {
-	_, ok := l.indexedFields[baseField+"_0"]
-	return ok
-}
-
-// resolveColumnName resolves a query column name to the actual indexed column name.
-// Most fields are single-value and map directly. For rare multi-column fields
-// (e.g., metadata.fields[3]_0, metadata.fields[3]_1), handles sub-index patterns
-// and falls back to _0 suffix when no sub-index is specified.
-func (l *ListOptionIndexer) resolveColumnName(columnName string) string {
-	// Fast path: direct column lookup (covers most cases)
-	if _, ok := l.indexedFields[columnName]; ok {
-		return columnName
-	}
-	// Slow path: multi-column field resolution
-	baseField, subIndex, hasSubIndex := parseFieldPath(columnName)
-	if hasSubIndex && l.hasMultiColumnField(baseField) {
-		return baseField + "_" + subIndex
-	}
-	if l.hasMultiColumnField(columnName) {
-		return columnName + "_0"
-	}
-	return columnName
-}
-
-// isIntegerColumn checks if a column is stored as INTEGER type.
-func (l *ListOptionIndexer) isIntegerColumn(columnName string) bool {
-	if f, ok := l.indexedFields[columnName]; ok {
+// isIntegerField checks if a field is stored as INTEGER type.
+func (l *ListOptionIndexer) isIntegerField(fieldID string) bool {
+	if f, ok := l.indexedFields[fieldID]; ok {
 		return f.ColumnType() == "INTEGER"
 	}
 	return false
@@ -1583,15 +1534,4 @@ func smartJoin(s []string) string {
 // toColumnName returns the column name corresponding to a field expressed as string slice
 func toColumnName(s []string) string {
 	return db.Sanitize(smartJoin(s))
-}
-
-// parseFieldPath extracts base field and sub-index if present
-// e.g., "metadata.fields[3][0]" -> ("metadata.fields[3]", "0", true)
-func parseFieldPath(field string) (baseField string, subIndex string, hasSubIndex bool) {
-	// Check for pattern like "metadata.fields[3][0]"
-	matches := fieldPathPattern.FindStringSubmatch(field)
-	if matches != nil {
-		return matches[1], matches[3], true
-	}
-	return field, "", false
 }

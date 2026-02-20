@@ -121,18 +121,19 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 
 	// Add default fields
 	for _, field := range defaultIndexedFields {
-		indexedFields[field.ColumnName()] = field
+		fieldID := smartJoin(field.(*JSONPathField).Path)
+		indexedFields[fieldID] = field
 	}
 
 	// Add namespace if namespaced
 	if opts.IsNamespaced {
 		field := &JSONPathField{Path: strings.Split(defaultIndexNamespaced, ".")}
-		indexedFields[field.ColumnName()] = field
+		indexedFields[defaultIndexNamespaced] = field
 	}
 
 	// Merge in provided fields (overwrite if duplicate)
-	for _, v := range opts.Fields {
-		indexedFields[v.ColumnName()] = v
+	for k, v := range opts.Fields {
+		indexedFields[k] = v
 	}
 
 	// Sort keys for deterministic order. This ensures consistent SQL schema
