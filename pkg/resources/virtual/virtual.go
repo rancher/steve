@@ -11,6 +11,8 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/dates"
 	"github.com/rancher/steve/pkg/resources/virtual/events"
+	"github.com/rancher/steve/pkg/resources/virtual/multivalue"
+	"github.com/rancher/steve/pkg/resources/virtual/multivalue/parsers"
 	"github.com/rancher/steve/pkg/resources/virtual/pods"
 
 	"github.com/sirupsen/logrus"
@@ -40,14 +42,30 @@ func NewTransformBuilder(cache common.SummaryCache) *TransformBuilder {
 func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
 	converters = append(converters, t.defaultFields.TransformCommon)
-	if gvk.Group == "" && gvk.Version == "v1" {
-		if gvk.Kind == "Event" {
-			converters = append(converters, events.TransformEventObject)
-		} else if gvk.Kind == "Pod" {
-			converters = append(converters, pods.TransformPodObject)
-		}
-	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
+
+	// v1/Event
+	if gvk == rescommon.EventGVK {
+		converters = append(converters, events.TransformEventObject)
+
+		// management.cattle.io/v3/Cluster
+	} else if gvk == rescommon.MgmtClusterGVK {
 		converters = append(converters, clusters.TransformManagedCluster)
+
+		// v1/Pod
+	} else if gvk == rescommon.PodGVK {
+		converters = append(converters, pods.TransformPodObject)
+
+		// Register multi-value converter
+		multiValueConverter := &multivalue.Converter{
+			Columns: columns,
+			Fields: []multivalue.FieldConfig{
+				{
+					ColumnName: "Restarts",
+					ParseFunc:  parsers.ParseRestarts,
+				},
+			},
+		}
+		converters = append(converters, multiValueConverter.Transform)
 	}
 
 	// Detecting if we need to convert date fields

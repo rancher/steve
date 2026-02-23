@@ -70,7 +70,6 @@ func TestNewProxyStore(t *testing.T) {
 		description string
 		test        func(t *testing.T)
 	}
-	noTypeGuidance := map[string]string{}
 	var tests []testCase
 	tests = append(tests, testCase{
 		description: "NewProxyStore() with no errors returned should return no errors. Should initialize and assign" +
@@ -104,14 +103,20 @@ func TestNewProxyStore(t *testing.T) {
 
 			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				map[string]informer.IndexedField{
+					idField.ColumnName():      idField,
+					stateField.ColumnName():   stateField,
+					displayField.ColumnName(): displayField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				noTypeGuidance,
 				false,
 				true).Return(c, nil)
 			s, err := NewProxyStore(context.Background(), scc, cg, rn, nil, sc, cf, true)
@@ -236,14 +241,20 @@ func TestNewProxyStore(t *testing.T) {
 
 			scc.EXPECT().SetColumns(context.Background(), nsSchema).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				map[string]informer.IndexedField{
+					idField.ColumnName():      idField,
+					stateField.ColumnName():   stateField,
+					displayField.ColumnName(): displayField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				noTypeGuidance,
 				false,
 				true).Return(nil, fmt.Errorf("error"))
 
@@ -337,7 +348,8 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			gvkField := &informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = map[string]informer.IndexedField{gvkField.ColumnName(): gvkField}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -348,14 +360,21 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
+			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				map[string]informer.IndexedField{
+					someField.ColumnName():  someField,
+					idField.ColumnName():    idField,
+					stateField.ColumnName(): stateField,
+					gvkField.ColumnName():   gvkField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -424,7 +443,8 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			gvkField := &informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = map[string]informer.IndexedField{gvkField.ColumnName(): gvkField}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -502,7 +522,8 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			gvkField := &informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = map[string]informer.IndexedField{gvkField.ColumnName(): gvkField}
 
 			attributes.SetGVK(schema, gvk)
 			// ListByPartitions copies point so we need some original record of items to ensure as asserting listToReturn's
@@ -514,14 +535,21 @@ func TestListByPartitions(t *testing.T) {
 
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			// note also the watchable bool is expected to be false
+			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				map[string]informer.IndexedField{
+					someField.ColumnName():  someField,
+					idField.ColumnName():    idField,
+					stateField.ColumnName(): stateField,
+					gvkField.ColumnName():   gvkField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				false).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -591,7 +619,8 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			gvkField := &informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = map[string]informer.IndexedField{gvkField.ColumnName(): gvkField}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -603,14 +632,21 @@ func TestListByPartitions(t *testing.T) {
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				map[string]informer.IndexedField{
+					someField.ColumnName():  someField,
+					idField.ColumnName():    idField,
+					stateField.ColumnName(): stateField,
+					gvkField.ColumnName():   gvkField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				true).Return(nil, fmt.Errorf("error"))
 
@@ -680,7 +716,8 @@ func TestListByPartitions(t *testing.T) {
 				Version: "test",
 				Kind:    "gvk",
 			}
-			TypeSpecificIndexedFields["some_test_gvk"] = [][]string{{"gvk", "specific", "fields"}}
+			gvkField := &informer.JSONPathField{Path: []string{"gvk", "specific", "fields"}}
+			TypeSpecificIndexedFields["some_test_gvk"] = map[string]informer.IndexedField{gvkField.ColumnName(): gvkField}
 
 			setupContext(req)
 			attributes.SetGVK(schema, gvk)
@@ -691,14 +728,21 @@ func TestListByPartitions(t *testing.T) {
 			assert.Nil(t, err)
 			cg.EXPECT().TableAdminClient(req, schema, "", &WarningBuffer{}).Return(ri, nil)
 			// This tests that fields are being extracted from schema columns and the type specific fields map
+			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {`id`}, {`metadata`, `state`, `name`}, {"gvk", "specific", "fields"}},
+				map[string]informer.IndexedField{
+					someField.ColumnName():  someField,
+					idField.ColumnName():    idField,
+					stateField.ColumnName(): stateField,
+					gvkField.ColumnName():   gvkField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(schema),
-				gomock.Any(),
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -817,14 +861,20 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			setupContext(apiOp)
 			attributes.SetGVK(theSchema, gvk)
 			cg.EXPECT().TableAdminClient(apiOp, theSchema, "", &WarningBuffer{}).Return(ri, nil)
+			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
-				[][]string{{"some", "field"}, {"id"}, {"metadata", "state", "name"}},
+				map[string]informer.IndexedField{
+					someField.ColumnName():  someField,
+					idField.ColumnName():    idField,
+					stateField.ColumnName(): stateField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(theSchema),
-				gomock.Any(),
 				attributes.Namespaced(theSchema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
@@ -885,14 +935,20 @@ func TestReset(t *testing.T) {
 			sc.EXPECT().Schema("namespace").Return(nsSchema)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				map[string]informer.IndexedField{
+					idField.ColumnName():      idField,
+					stateField.ColumnName():   stateField,
+					displayField.ColumnName(): displayField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				gomock.Any(),
 				false,
 				true).Return(nsc, nil)
 			cf.EXPECT().DoneWithCache(nsc)
@@ -1041,14 +1097,20 @@ func TestReset(t *testing.T) {
 			sc.EXPECT().Schema("namespace").Return(nsSchema)
 			cs.EXPECT().SetColumns(gomock.Any(), gomock.Any()).Return(nil)
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
+			idField := &informer.JSONPathField{Path: []string{"id"}}
+			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
 			cf.EXPECT().CacheFor(context.Background(),
-				[][]string{{`id`}, {`metadata`, `state`, `name`}, {"spec", "displayName"}},
+				map[string]informer.IndexedField{
+					idField.ColumnName():      idField,
+					stateField.ColumnName():   stateField,
+					displayField.ColumnName(): displayField,
+				},
 				gomock.Any(),
 				gomock.Any(),
 				gomock.Any(),
 				&tablelistconvert.Client{ResourceInterface: ri},
 				attributes.GVK(nsSchema),
-				gomock.Any(),
 				false,
 				true).Return(nil, fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })

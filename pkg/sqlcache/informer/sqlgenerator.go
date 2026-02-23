@@ -895,6 +895,7 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 	if err != nil {
 		return "", nil, err
 	}
+
 	switch filter.Op {
 	case sqltypes.Eq:
 		if filter.Partial {
@@ -904,7 +905,8 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			opString = "="
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		param := formatMatchTarget(filter)
+		return clause, []any{param}, nil
 	case sqltypes.NotEq:
 		if filter.Partial {
 			opString = "NOT LIKE"
@@ -913,7 +915,8 @@ func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string
 			opString = "!="
 		}
 		clause := fmt.Sprintf("%s %s ?%s", fieldEntry, opString, escapeString)
-		return clause, []any{formatMatchTarget(filter)}, nil
+		param := formatMatchTarget(filter)
+		return clause, []any{param}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:
 		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
@@ -1112,37 +1115,42 @@ func (l *ListOptionIndexer) getProjectsOrNamespacesLabelFilter(index int, filter
 }
 
 func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, mainFieldPrefix string) (string, error) {
-	columnName := toColumnName(fieldParts)
+	fieldID := smartJoin(fieldParts)
 	var columnValueName string
-	if mainFieldPrefix == "" {
-		columnValueName = fmt.Sprintf("%q", columnName)
-	} else {
-		columnValueName = fmt.Sprintf("%s.%q", mainFieldPrefix, columnName)
-	}
-	err := l.validateColumn(columnName)
-	if err == nil {
+
+	// Try direct field lookup first
+	if field, ok := l.indexedFields[fieldID]; ok {
+		columnName := field.ColumnName()
+		if mainFieldPrefix == "" {
+			columnValueName = fmt.Sprintf("%q", columnName)
+		} else {
+			columnValueName = fmt.Sprintf("%s.%q", mainFieldPrefix, columnName)
+		}
 		return columnValueName, nil
 	}
+
+	// Fallback for numeric-indexed field expressions like spec.containers.image[2]
 	if len(fieldParts) == 1 || containsNonNumericRegex.MatchString(fieldParts[len(fieldParts)-1]) {
-		// Can't be a numeric-indexed field expression like spec.containers.image[2]
-		return "", err
+		return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 	}
-	columnNameToValidate := toColumnName(fieldParts[:len(fieldParts)-1])
-	if err2 := l.validateColumn(columnNameToValidate); err2 != nil {
-		// Return the original error message
-		return "", err
+
+	// Check if base field (without numeric index) exists
+	baseFieldID := smartJoin(fieldParts[:len(fieldParts)-1])
+	if field, ok := l.indexedFields[baseFieldID]; ok {
+		index, err := strconv.Atoi(fieldParts[len(fieldParts)-1])
+		if err != nil {
+			return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
+		}
+		columnName := field.ColumnName()
+		if mainFieldPrefix == "" {
+			columnValueName = fmt.Sprintf(`extractBarredValue(%q, %d)`, columnName, index)
+		} else {
+			columnValueName = fmt.Sprintf(`extractBarredValue(%s.%q, %d)`, mainFieldPrefix, columnName, index)
+		}
+		return columnValueName, nil
 	}
-	index, err2 := strconv.Atoi(fieldParts[len(fieldParts)-1])
-	if err2 != nil {
-		// Return the original error message
-		return "", err
-	}
-	if mainFieldPrefix == "" {
-		columnValueName = fmt.Sprintf(`extractBarredValue(%q, %d)`, columnNameToValidate, index)
-	} else {
-		columnValueName = fmt.Sprintf(`extractBarredValue(%s.%q, %d)`, mainFieldPrefix, columnNameToValidate, index)
-	}
-	return columnValueName, nil
+
+	return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 }
 
 // Suppose the query access something like 'spec.containers[3].image' but only
@@ -1158,14 +1166,20 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 // Indices are 0-based.
 
 func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
-	columnName := toColumnName(fields)
-	err := l.validateColumn(columnName)
-	if err == nil {
-		return fmt.Sprintf(`%s."%s"`, prefix, columnName), nil
+	fieldID := smartJoin(fields)
+
+	// Try direct field lookup first
+	if field, ok := l.indexedFields[fieldID]; ok {
+		return fmt.Sprintf(`%s."%s"`, prefix, field.ColumnName()), nil
 	}
+
+	// Fallback: handle numeric indices in the path (e.g., spec.containers.3.image)
+	// Look for a numeric part anywhere in the path and try to find the base field without it
 	if len(fields) <= 2 {
-		return "", err
+		return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 	}
+
+	// Find the last numeric index in the field parts
 	idx := -1
 	for i := len(fields) - 1; i > 0; i-- {
 		if !containsNonNumericRegex.MatchString(fields[i]) {
@@ -1173,28 +1187,30 @@ func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (
 			break
 		}
 	}
+
 	if idx == -1 {
-		// We don't have an index onto a valid field
-		return "", err
+		return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 	}
+
+	// Build the base field without the numeric index
 	indexField := fields[idx]
-	// fields[len(fields):] gives empty array
 	otherFields := append(fields[0:idx], fields[idx+1:]...)
-	leadingColumnName := toColumnName(otherFields)
-	if l.validateColumn(leadingColumnName) != nil {
-		// We have an index, but not onto a valid field
-		return "", err
+	baseFieldID := smartJoin(otherFields)
+
+	// Check if the base field exists
+	if field, ok := l.indexedFields[baseFieldID]; ok {
+		return fmt.Sprintf(`extractBarredValue(%s."%s", "%s")`, prefix, field.ColumnName(), indexField), nil
 	}
-	return fmt.Sprintf(`extractBarredValue(%s."%s", "%s")`, prefix, leadingColumnName, indexField), nil
+
+	return "", fmt.Errorf("column is invalid [%s]: %w", fieldID, ErrInvalidColumn)
 }
 
-func (l *ListOptionIndexer) validateColumn(column string) error {
-	for _, v := range l.indexedFields {
-		if v == column {
-			return nil
-		}
+// isIntegerField checks if a field is stored as INTEGER type.
+func (l *ListOptionIndexer) isIntegerField(fieldID string) bool {
+	if f, ok := l.indexedFields[fieldID]; ok {
+		return f.ColumnType() == "INTEGER"
 	}
-	return fmt.Errorf("column is invalid [%s]: %w", column, ErrInvalidColumn)
+	return false
 }
 
 func (f filterComponentsT) copy() filterComponentsT {
@@ -1311,7 +1327,8 @@ func getField(a any, field string) (any, error) {
 				if key >= len(t) {
 					return nil, fmt.Errorf("[listoption indexer] given index is too large for slice of len %d", len(t))
 				}
-				obj = fmt.Sprintf("%v", t[key])
+				// Preserve the type of array elements instead of stringifying
+				obj = t[key]
 			} else if i == len(subFields)-1 {
 				// If the last layer is an array, return array.map(a => a[subfield])
 				result := make([]string, len(t))

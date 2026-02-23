@@ -17,7 +17,7 @@ func TestParseHumanReadableDuration(t *testing.T) {
 		{
 			name:     "years + days",
 			input:    "2y10d",
-			expected: (2*365+10)*24*time.Hour,
+			expected: (2*365 + 10) * 24 * time.Hour,
 		},
 		{
 			name:     "years + days + hours + mins + secs",
