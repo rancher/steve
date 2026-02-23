@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/steve/pkg/resources/virtual/events"
 	"github.com/rancher/steve/pkg/resources/virtual/multivalue"
 	"github.com/rancher/steve/pkg/resources/virtual/multivalue/parsers"
+	"github.com/rancher/steve/pkg/resources/virtual/pods"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -40,16 +41,21 @@ func NewTransformBuilder(cache common.SummaryCache) *TransformBuilder {
 // GetTransformFunc returns the func to transform a raw object into a fixed object, if needed
 func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns []rescommon.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc {
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
-
+  converters = append(converters, t.defaultFields.TransformCommon)
+  
 	// v1/Event
 	if gvk == rescommon.EventGVK {
 		converters = append(converters, events.TransformEventObject)
-	} else if gvk == rescommon.MgmtClusterGVK { // management.cattle.io/v3/Cluster
+   
+  // management.cattle.io/v3/Cluster
+	} else if gvk == rescommon.MgmtClusterGVK { 
 		converters = append(converters, clusters.TransformManagedCluster)
-	}
-
-	// v1/Pod - Register multi-value converter
-	if gvk == rescommon.PodGVK {
+	
+  // v1/Pod
+  } else if gvk == rescommon.PodGVK {
+    converters = append(converters, pods.TransformPodObject)
+    
+    // Register multi-value converter
 		multiValueConverter := &multivalue.Converter{
 			Columns: columns,
 			Fields: []multivalue.FieldConfig{
@@ -58,7 +64,7 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 					ParseFunc:  parsers.ParseRestarts,
 				},
 			},
-		}
+    }
 		converters = append(converters, multiValueConverter.Transform)
 	}
 
@@ -70,8 +76,6 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		JSONPaths: jsonPaths,
 	}
 	converters = append(converters, dateConverter.Transform)
-
-	converters = append(converters, t.defaultFields.TransformCommon)
 
 	return func(raw interface{}) (interface{}, error) {
 		obj, isSignal, err := common.GetUnstructured(raw)
