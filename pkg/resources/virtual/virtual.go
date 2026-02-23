@@ -4,7 +4,9 @@ package virtual
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
@@ -19,6 +21,27 @@ import (
 )
 
 var now = time.Now
+
+var restartsPattern = regexp.MustCompile(`^(\d+)(?:\s+\((.+?)\s+ago\))?`)
+
+// ParseRestarts parses pod restart values like "4 (3h38m ago)" into a map
+func ParseRestarts(value string) (map[string]any, error) {
+	matches := restartsPattern.FindStringSubmatch(value)
+	if matches == nil {
+		return nil, fmt.Errorf("invalid restarts format: %q", value)
+	}
+	count, _ := strconv.ParseInt(matches[1], 10, 64)
+	var timestamp int64
+	if matches[2] != "" {
+		dur, err := rescommon.ParseTimestampOrHumanReadableDuration(matches[2])
+		if err != nil {
+			logrus.Errorf("failed to parse restart duration %q: %v", matches[2], err)
+		} else {
+			timestamp = now().Add(-dur).UnixMilli()
+		}
+	}
+	return map[string]any{"count": count, "timestamp": timestamp}, nil
+}
 
 // TransformBuilder builds transform functions for specified GVKs through GetTransformFunc
 type TransformBuilder struct {
@@ -41,6 +64,40 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 		converters = append(converters, events.TransformEventObject)
 	} else if gvk.Kind == "Cluster" && gvk.Group == "management.cattle.io" && gvk.Version == "v3" {
 		converters = append(converters, clusters.TransformManagedCluster)
+	}
+
+	// Pod Logic
+	if gvk.Kind == "Pod" && gvk.Version == "v1" {
+		for _, col := range columns {
+			if col.Name == "Restarts" {
+				converters = append(converters, func(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+					index := rescommon.GetIndexValueFromString(col.Field)
+					if index == -1 {
+						return obj, nil
+					}
+
+					fields, found, err := unstructured.NestedSlice(obj.Object, "metadata", "fields")
+					if err != nil || !found || index >= len(fields) {
+						return obj, nil
+					}
+
+					val, ok := fields[index].(string)
+					if !ok {
+						return obj, nil
+					}
+
+					parsed, err := ParseRestarts(val)
+					if err != nil {
+						logrus.Warnf("Failed to parse restarts: %v", err)
+						return obj, nil
+					}
+
+					fields[index] = parsed
+					unstructured.SetNestedSlice(obj.Object, fields, "metadata", "fields")
+					return obj, nil
+				})
+			}
+		}
 	}
 
 	// Detecting if we need to convert date fields

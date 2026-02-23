@@ -630,6 +630,31 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 			args = append(args, fmt.Sprint(typedValue))
 		case []string:
 			args = append(args, strings.Join(typedValue, "|"))
+		case map[string]any:
+			isPod := false
+			if u, ok := obj.(*unstructured.Unstructured); ok {
+				isPod = u.GroupVersionKind().Kind == "Pod"
+			}
+			if isPod {
+				// The pod restart transform func will split pod restart column (eg: `X (D ago)`)
+				// into two fields. We want to sort / filter on count.
+				if count, ok := typedValue["count"]; ok {
+					switch c := count.(type) {
+					case int64:
+						args = append(args, c)
+					case int:
+						args = append(args, fmt.Sprint(c))
+					case float64:
+						args = append(args, fmt.Sprint(int64(c)))
+					default:
+						args = append(args, "")
+					}
+				} else {
+					args = append(args, "")
+				}
+			} else {
+				args = append(args, "")
+			}
 		default:
 			err2 := fmt.Errorf("field %v has a non-supported type value: %v", field, value)
 			return err2

@@ -931,6 +931,9 @@ var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 		"status.requested.memoryRaw":   "REAL",
 		"status.requested.pods":        "INT",
 	},
+	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}: {
+		"metadata.fields[3]": "INT", // name: Restarts
+	},
 	schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}: {
 		"metadata.fields[2]": "INT", // name: Data
 	},
