@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/informer/internal/ring"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -491,7 +492,7 @@ func (l *ListOptionIndexer) dropLabels(tx db.TxClient) error {
 // The `type` field is implicit in these blocks.
 // Matching is done on the child node's ID.
 
-func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
+func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error {
 	var namespaceSet = sets.Set[string]{}
 	for _, data := range list.Items {
 		relationships, found, err := unstructured.NestedFieldNoCopy(data.Object, "metadata", "relationships")
@@ -539,7 +540,7 @@ func (l *ListOptionIndexer) AugmentList(ctx context.Context, list *unstructured.
 	if err != nil {
 		return err
 	}
-	err = l.finishAugmenting(ctx, list, query, params, childGVK, childSchemaName, useSelectors)
+	err = l.finishAugmenting(ctx, list, query, params, childGVK, childSchemaName, useSelectors, accessList)
 	if err != nil {
 		logrus.Debugf("Error augmenting the info: %s\n", err)
 	}
@@ -561,7 +562,7 @@ func makeAugmentedDBQuery(namespaces []string, tableBaseName string) (string, []
 	return query, params, nil
 }
 
-func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstructured.UnstructuredList, query string, params []any, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
+func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstructured.UnstructuredList, query string, params []any, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error {
 	stmt := l.Prepare(query)
 	var err error
 	defer func() {
@@ -588,6 +589,22 @@ func (l *ListOptionIndexer) finishAugmenting(ctx context.Context, list *unstruct
 	if err != nil {
 		return nil
 	}
+	if len(items) == 0 {
+		return nil
+	}
+
+	if accessList != nil {
+		var filteredItems [][]string
+		for _, item := range items {
+			ns := item[0]
+			name := item[1]
+			if accessList.Grants("list", ns, name) || accessList.Grants("get", ns, name) {
+				filteredItems = append(filteredItems, item)
+			}
+		}
+		items = filteredItems
+	}
+
 	if len(items) == 0 {
 		return nil
 	}

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: associated-data-test
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-a
+  namespace: associated-data-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-a
+  template:
+    metadata:
+      labels:
+        app: nginx-a
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-b
+  namespace: associated-data-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-b
+  template:
+    metadata:
+      labels:
+        app: nginx-b
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-c
+  namespace: associated-data-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-c
+  template:
+    metadata:
+      labels:
+        app: nginx-c
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: associated-data-reader
+  namespace: associated-data-test
+rules:
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  resourceNames: ["nginx-a", "nginx-b"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  resourceNames: ["nginx-a-0", "nginx-b-0"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-associated-data
+  namespace: associated-data-test
+subjects:
+- kind: User
+  name: restricted-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: associated-data-reader
+  apiGroup: rbac.authorization.k8s.io

@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
+	accesscontrol "github.com/rancher/steve/pkg/accesscontrol"
 	partition "github.com/rancher/steve/pkg/sqlcache/partition"
 	sqltypes "github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	gomock "go.uber.org/mock/gomock"
@@ -47,17 +48,17 @@ func (m *MockByOptionsLister) EXPECT() *MockByOptionsListerMockRecorder {
 }
 
 // AugmentList mocks base method.
-func (m *MockByOptionsLister) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
+func (m *MockByOptionsLister) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AugmentList", ctx, list, childGVK, childSchemaName, useSelectors)
+	ret := m.ctrl.Call(m, "AugmentList", ctx, list, childGVK, childSchemaName, useSelectors, accessList)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AugmentList indicates an expected call of AugmentList.
-func (mr *MockByOptionsListerMockRecorder) AugmentList(ctx, list, childGVK, childSchemaName, useSelectors any) *gomock.Call {
+func (mr *MockByOptionsListerMockRecorder) AugmentList(ctx, list, childGVK, childSchemaName, useSelectors, accessList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockByOptionsLister)(nil).AugmentList), ctx, list, childGVK, childSchemaName, useSelectors)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockByOptionsLister)(nil).AugmentList), ctx, list, childGVK, childSchemaName, useSelectors, accessList)
 }
 
 // DropAll mocks base method.

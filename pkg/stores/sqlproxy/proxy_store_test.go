@@ -853,13 +853,16 @@ func TestAugmentRelationships(t *testing.T) {
 				transformBuilder: tb,
 			}
 			podSchema := &types.APISchema{
-				Schema: &schemas.Schema{Attributes: map[string]interface{}{
-					"version":    "v1",
-					"kind":       "Pod",
-					"group":      "",
-					"namespaced": true,
-					"verbs":      []string{"list", "watch"},
-				}},
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"version":    "v1",
+						"kind":       "Pod",
+						"group":      "",
+						"namespaced": true,
+						"verbs":      []string{"list", "watch"},
+					},
+					ResourceMethods: []string{"GET"},
+				},
 			}
 			apiSchemas := &types.APISchemas{
 				Schemas: map[string]*types.APISchema{
@@ -916,7 +919,7 @@ func TestAugmentRelationships(t *testing.T) {
 				true).Return(c, nil)
 			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 			cf.EXPECT().DoneWithCache(c)
-			bloi.EXPECT().AugmentList(ctx, &originalList, gomock.Any(), gomock.Any(), true).Return(nil)
+			bloi.EXPECT().AugmentList(ctx, &originalList, gomock.Any(), gomock.Any(), true, gomock.Any()).Return(nil)
 			err := s.AugmentRelationships(ctx, gvk, &originalList, apiOp)
 			assert.Nil(t, err)
 		},

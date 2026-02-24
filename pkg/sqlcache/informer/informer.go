@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
@@ -66,7 +67,7 @@ func (f *WatchFilter) matches(obj metav1.Object) bool {
 }
 
 type ByOptionsLister interface {
-	AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error
+	AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error
 	ListByOptions(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string) (*unstructured.UnstructuredList, int, *types.APISummary, string, error)
 	Watch(ctx context.Context, options WatchOptions, eventsCh chan<- watch.Event) error
 	GetLatestResourceVersion() []string
@@ -180,8 +181,8 @@ func (i *Informer) RunWithContext(ctx context.Context) {
 	wg.Wait()
 }
 
-func (i *Informer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool) error {
-	return i.ByOptionsLister.AugmentList(ctx, list, childGVK, childSchemaName, useSelectors)
+func (i *Informer) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error {
+	return i.ByOptionsLister.AugmentList(ctx, list, childGVK, childSchemaName, useSelectors, accessList)
 }
 
 // ListByOptions returns objects according to the specified list options and partitions.
