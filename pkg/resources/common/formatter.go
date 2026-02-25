@@ -323,6 +323,14 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 		if !hasCRDDateField && !hasGVKDateFieldMapping {
 			continue
 		}
+		if col.Name == "Duration" {
+			humanDuration, ok := getHumanDurationFromActualStartEndTime(unstr)
+			if ok {
+				curValue[index] = humanDuration
+				changedFields = true
+				continue
+			}
+		}
 
 		timeValue, ok := curValue[index].(string)
 		if !ok {
@@ -361,6 +369,36 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 			logrus.Errorf("failed to set value back to metadata.fields slice: %s", err.Error())
 		}
 	}
+}
+
+func getHumanDurationFromActualStartEndTime(unstr *unstructured.Unstructured) (string, bool) {
+	status, found, err := unstructured.NestedMap(unstr.Object, "status")
+	if !found || err != nil {
+		return "", false
+	}
+	startTime, found, err := unstructured.NestedString(status, "startTime")
+	if !found || err != nil {
+		return "", false
+	}
+	endTime, found, err := unstructured.NestedString(status, "completionTime")
+	if !found || err != nil {
+		return "", false
+	}
+	startTimeRFC, err := time.Parse(time.RFC3339, startTime)
+	if err != nil {
+		return "", false
+	}
+	endTimeRFC, err := time.Parse(time.RFC3339, endTime)
+	if err != nil {
+		return "", false
+	}
+	durationTime := endTimeRFC.Sub(startTimeRFC)
+	humanDuration := duration.HumanDuration(durationTime)
+	if humanDuration == "<invalid>" {
+		logrus.Warnf(`couldn't convert value %v into human duration for "Duration" column`, durationTime)
+		return "", false
+	}
+	return humanDuration, true
 }
 
 func isDuration(value string) (time.Duration, bool) {
