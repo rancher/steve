@@ -1,9 +1,12 @@
 package sqlproxy
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -36,6 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
 	krequest "k8s.io/apiserver/pkg/endpoints/request"
@@ -1698,6 +1702,203 @@ func TestUpdate(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestPatch(t *testing.T) {
+	type input struct {
+		apiOp  *types.APIRequest
+		schema *types.APISchema
+		params types.APIObject
+		id     string
+	}
+
+	type expected struct {
+		patchType apitypes.PatchType
+		resp      *unstructured.Unstructured
+		warning   []types.Warning
+		err       error
+	}
+
+	testCases := []struct {
+		name              string
+		input             input
+		expected          expected
+		expectedPatchBody string
+	}{
+		{
+			name: "default content-type uses strategic merge patch",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{ID: "testing"},
+					},
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPatch,
+						Body:   io.NopCloser(strings.NewReader(`{"metadata":{"labels":{"a":"b"}}}`)),
+						Header: http.Header{},
+					},
+					Method: http.MethodPatch,
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{Object: map[string]interface{}{"metadata": map[string]interface{}{"namespace": "testing-ns"}}},
+				id:     "testing-secret",
+			},
+			expectedPatchBody: `{"metadata":{"labels":{"a":"b"}}}`,
+			expected: expected{
+				patchType: apitypes.StrategicMergePatchType,
+				resp: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name": "testing-secret",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "merge patch content-type is respected",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{ID: "testing"},
+					},
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPatch,
+						Body:   io.NopCloser(strings.NewReader(`{"metadata":{"labels":{"a":"b"}}}`)),
+						Header: http.Header{"Content-Type": []string{string(apitypes.MergePatchType)}},
+					},
+					Method: http.MethodPatch,
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{Object: map[string]interface{}{"metadata": map[string]interface{}{"namespace": "testing-ns"}}},
+				id:     "testing-secret",
+			},
+			expectedPatchBody: `{"metadata":{"labels":{"a":"b"}}}`,
+			expected: expected{
+				patchType: apitypes.MergePatchType,
+				resp: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name": "testing-secret",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+		{
+			name: "json patch content-type is respected",
+			input: input{
+				apiOp: &types.APIRequest{
+					Schema: &types.APISchema{
+						Schema: &schemas.Schema{ID: "testing"},
+					},
+					Request: &http.Request{
+						URL:    &url.URL{},
+						Method: http.MethodPatch,
+						Body:   io.NopCloser(strings.NewReader(`[{"op":"replace","path":"/metadata/labels/a","value":"b"}]`)),
+						Header: http.Header{"Content-Type": []string{string(apitypes.JSONPatchType)}},
+					},
+					Method: http.MethodPatch,
+				},
+				schema: &types.APISchema{
+					Schema: &schemas.Schema{
+						ID: "testing",
+						Attributes: map[string]interface{}{
+							"version":    "v1",
+							"kind":       "Secret",
+							"namespaced": true,
+						},
+					},
+				},
+				params: types.APIObject{Object: map[string]interface{}{"metadata": map[string]interface{}{"namespace": "testing-ns"}}},
+				id:     "testing-secret",
+			},
+			expectedPatchBody: `[{"op":"replace","path":"/metadata/labels/a","value":"b"}]`,
+			expected: expected{
+				patchType: apitypes.JSONPatchType,
+				resp: &unstructured.Unstructured{Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name": "testing-secret",
+					},
+				}},
+				warning: []types.Warning{},
+				err:     nil,
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			testClientFactory, err := client.NewFactory(&rest.Config{}, false)
+			assert.NoError(t, err)
+
+			fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
+
+			var gotPatchType apitypes.PatchType
+			var gotPatch []byte
+
+			fakeClient.PrependReactor("patch", "*", func(action clientgotesting.Action) (handled bool, ret runtime.Object, err error) {
+				patchAction, ok := action.(clientgotesting.PatchAction)
+				if !ok {
+					return true, nil, fmt.Errorf("unexpected patch action type %T", action)
+				}
+
+				gotPatchType = patchAction.GetPatchType()
+				gotPatch = patchAction.GetPatch()
+
+				return true, tt.expected.resp, tt.expected.err
+			})
+
+			testStore := Store{
+				clientGetter: &testFactory{Factory: testClientFactory,
+					fakeClient: fakeClient,
+				},
+			}
+
+			value, warning, err := testStore.Update(tt.input.apiOp, tt.input.schema, tt.input.params, tt.input.id)
+
+			assert.Equal(t, tt.expected.patchType, gotPatchType)
+			if tt.expected.patchType == apitypes.StrategicMergePatchType {
+				var expectedJSON map[string]interface{}
+				var actualJSON map[string]interface{}
+				assert.NoError(t, json.Unmarshal([]byte(tt.expectedPatchBody), &expectedJSON))
+				assert.NoError(t, json.Unmarshal(gotPatch, &actualJSON))
+				assert.Equal(t, expectedJSON, actualJSON)
+			} else {
+				assert.True(t, bytes.Equal([]byte(tt.expectedPatchBody), gotPatch))
+			}
+
+			assert.Equal(t, tt.expected.resp, value)
+			assert.Equal(t, tt.expected.warning, warning)
+			assert.Equal(t, tt.expected.err, err)
 		})
 	}
 }
