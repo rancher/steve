@@ -418,7 +418,6 @@ func (l *ListOptionIndexer) decryptScanEvent(rows db.Rows, into runtime.Object) 
 	}
 	if err := l.Deserialize(serialized, into); err != nil {
 		return watch.Error, err
-
 	}
 	return watch.EventType(typ), nil
 }
@@ -935,6 +934,11 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	logrus.Debugf("Params: %v", params)
 	queryInfo.query = query
 	queryInfo.params = params
+
+	fmt.Println("-------------------------------------------")
+	fmt.Printf("#### FILTER: %#v\n", lo.Filters)
+	fmt.Printf("#### QUERY: %s\n", queryInfo.query)
+	fmt.Println("-------------------------------------------")
 
 	return queryInfo, nil
 }

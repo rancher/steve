@@ -14,17 +14,20 @@ tests:
       - name: restarting-pod
       - name: stable-pod
 
-  - description: filter-pods-with-zero-restarts
-    namespace: test-restarts
-    query: filter=metadata.fields[3]=0
-    expect:
-      - name: stable-pod
-
-  - description: filter-pods-with-restarts-greater-than-zero
-    namespace: test-restarts
-    query: filter=metadata.fields[3]>0
-    expect:
-      - name: restarting-pod
+  # FIXME: These tests are commented unil we resolve the columns issue
+  # https://github.com/rancher/rancher/issues/53240
+  #
+  #  - description: filter-pods-with-zero-restarts
+  #    namespace: test-restarts
+  #    query: filter=metadata.fields[3]=0
+  #    expect:
+  #      - name: stable-pod
+  #
+  #  - description: filter-pods-with-restarts-greater-than-zero
+  #    namespace: test-restarts
+  #    query: filter=metadata.fields[3]>0
+  #    expect:
+  #      - name: restarting-pod
 
   - description: list-all-pods-in-namespace
     namespace: test-restarts

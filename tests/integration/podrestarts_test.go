@@ -22,6 +22,21 @@ import (
 
 var testdataPodRestartsDir = filepath.Join("testdata", "podrestarts")
 
+// ListTestConfig defines the structure for list test YAML files
+type PostRestartsTestConfig struct {
+	SchemaID string `yaml:"schemaID"`
+	Tests    []struct {
+		Description    string              `yaml:"description"`
+		User           string              `yaml:"user"`
+		Namespace      string              `yaml:"namespace"`
+		Query          string              `yaml:"query"`
+		Expect         []map[string]string `yaml:"expect"`
+		ExpectExcludes bool                `yaml:"expectExcludes"`
+		ExpectContains bool                `yaml:"expectContains"`
+		RunOn          string              `yaml:"runOn"` // Restrict test execution: "sql" (SQL cache only), "nonsql" (non-SQL cache only), or "" (run on both)
+	} `yaml:"tests"`
+}
+
 func (i *IntegrationSuite) TestPodRestarts() {
 	ctx := i.T().Context()
 
@@ -79,7 +94,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 		name = strings.TrimSuffix(name, ".test.yaml")
 
 		i.Run(name, func() {
-			var config ListTestConfig
+			var config PostRestartsTestConfig
 			data, err := os.ReadFile(testFile)
 			i.Require().NoError(err)
 			err = yaml.Unmarshal(data, &config)
@@ -141,4 +156,17 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 			}
 		})
 	}
+}
+
+func buildURLRaw(baseURL, schemaID, namespace, query string) string {
+	var url string
+	if namespace != "" {
+		url = fmt.Sprintf("%s/v1/%s/%s", baseURL, schemaID, namespace)
+	} else {
+		url = fmt.Sprintf("%s/v1/%s", baseURL, schemaID)
+	}
+	if query != "" {
+		url += "?" + query
+	}
+	return url
 }
