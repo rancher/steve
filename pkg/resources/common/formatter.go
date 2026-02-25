@@ -372,16 +372,14 @@ func convertMetadataTimestampFields(request *types.APIRequest, gvk schema2.Group
 }
 
 func getHumanDurationFromActualStartEndTime(unstr *unstructured.Unstructured) (string, bool) {
-	status, found, err := unstructured.NestedMap(unstr.Object, "status")
+	startTime, found, err := unstructured.NestedString(unstr.Object, "status", "startTime")
 	if !found || err != nil {
 		return "", false
 	}
-	startTime, found, err := unstructured.NestedString(status, "startTime")
+	endTime, found, err := unstructured.NestedString(unstr.Object, "status", "completionTime")
 	if !found || err != nil {
-		return "", false
-	}
-	endTime, found, err := unstructured.NestedString(status, "completionTime")
-	if !found || err != nil {
+		// This is deliberate -- if there's no completionTime,
+		// Duration should be the same as Age, which is what will happen in the fallback code.
 		return "", false
 	}
 	startTimeRFC, err := time.Parse(time.RFC3339, startTime)
