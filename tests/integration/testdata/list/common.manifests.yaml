@@ -82,6 +82,11 @@ kind: Namespace
 metadata:
   name: test-ns-9
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bandpractice
+---
 # ClusterRole for full secret access (used by user-a, user-d, user-e)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -756,3 +761,61 @@ metadata:
   namespace: test-ns-9
   labels:
     test-label: '2'
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: bandpractice
+  name: drums
+spec:
+  containers:
+    - image: "band/fleetwoodmac:v0.14.2"
+      name: fleetwoodmac
+    - image: "band/santana:v7.3"
+      name: santana
+    - image: "band/shakira:v2.13.2"
+      name: shakira
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: bandpractice
+  name: guitar
+spec:
+  containers:
+    - image: "band/fleetwoodmac:v0.14.2"
+      name: fleetwoodmac
+    - image: "band/santana:v7.1"
+      name: santana
+    - image: "band/shakira:v2.13.4"
+      name: shakira
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: bandpractice
+  name: bass
+spec:
+  containers:
+    - image: "band/fleetwoodmac:v0.14.3"
+      name: fleetwoodmac
+    - image: "band/santana:v7.1"
+      name: santana
+    - image: "band/shakira:v2.13.2"
+      name: shakira
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: bandpractice
+  name: piano
+spec:
+  containers:
+    - image: "band/fleetwoodmac:v0.14"
+      name: fleetwoodmac
+    - image: "band/santana:v7.1.2"
+      name: santana
+    - image: "band/shakira:v2.13"
+      name: shakira
+
