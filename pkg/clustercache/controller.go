@@ -150,7 +150,17 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 		opts := &client.Options{
 			Schema: schema.Schema,
 		}
-		summaryInformer := informer.NewFilteredSummaryInformerWithOptions(h.summaryClient, gvr, opts, metav1.NamespaceAll, 2*time.Hour,
+		kubeconfigGVK := schema2.GroupVersionKind{Group: "ext.cattle.io", Version: "v1", Kind: "Kubeconfig"}
+		tokenGVK := schema2.GroupVersionKind{Group: "ext.cattle.io", Version: "v1", Kind: "Token"}
+		client := h.summaryClient
+		// Due to a bug in Rancher's extension apiserver for the token and kubeconfig APIs, we
+		// must disable the WatchList features for those APIs.
+		if gvk == kubeconfigGVK || gvk == tokenGVK {
+			client = &noWatchListClient{
+				ExtendedInterface: h.summaryClient,
+			}
+		}
+		summaryInformer := informer.NewFilteredSummaryInformerWithOptions(client, gvr, opts, metav1.NamespaceAll, 2*time.Hour,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, nil)
 		ctx, cancel := context.WithCancel(h.ctx)
 		w := &watcher{
@@ -299,4 +309,13 @@ func callAll(handlers []interface{}, gvr schema2.GroupVersionKind, key string, o
 	}
 
 	return obj, merr.NewErrors(errs...)
+}
+
+// noWatchListListWatch disables WatchList feature
+type noWatchListClient struct {
+	client.ExtendedInterface
+}
+
+func (n *noWatchListClient) IsWatchListSemanticsUnSupported() bool {
+	return true
 }
