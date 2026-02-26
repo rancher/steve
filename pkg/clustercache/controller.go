@@ -153,6 +153,8 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 		kubeconfigGVK := schema2.GroupVersionKind{Group: "ext.cattle.io", Version: "v1", Kind: "Kubeconfig"}
 		tokenGVK := schema2.GroupVersionKind{Group: "ext.cattle.io", Version: "v1", Kind: "Token"}
 		client := h.summaryClient
+		// Due to a bug in Rancher's extension apiserver for the token and kubeconfig APIs, we
+		// must disable the WatchList features for those APIs.
 		if gvk == kubeconfigGVK || gvk == tokenGVK {
 			client = &noWatchListClient{
 				ExtendedInterface: h.summaryClient,
