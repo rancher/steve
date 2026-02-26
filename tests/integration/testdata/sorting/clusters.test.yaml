@@ -1,3 +1,11 @@
+---
+# Test the following:
+# 1. When a management.cattle.io.cluster is processed, its memory & cpu fields are transformed
+# 2. When a provisioning.cattle.io.cluster is processed, we copy in all the fields from the
+#    associated management.cattle.io.cluster
+# 3. We can sort provisioning.cattle.io.clusters on memory & cpu even when the original values
+#    have different units  (e.g.: ...Ki and ...Mi for memory, c and m for cpu)
+
 schemaID: provisioning.cattle.io.clusters
 tests:
 - query: sort=metadata.name
@@ -7,10 +15,72 @@ tests:
   - default/burundi
   - default/mali
   - default/rwanda
-- query: sort=status.clusterName,metadata.name
+# Sort by CPU
+- query: sort=status.allocatable.cpuRaw,metadata.name
   expected:
-  - default/mali # bamako
-  - default/botswana # gaborone
-  - default/burundi # gitega
-  - default/rwanda # kigali
-  - default/angola # luanda
+  - default/botswana # 98m
+  - default/burundi # 325m
+  - default/mali # 7
+  - default/rwanda # 7000m
+  - default/angola # 14250m
+
+# Sort by Memory
+- query: sort=status.allocatable.memoryRaw,metadata.name
+  expected:
+  - default/rwanda # 900Ki
+  - default/mali # 1200Ki
+  - default/angola # 2610Ki
+  - default/burundi # 4Mi
+  - default/botswana # 12Mi
+
+# Sort by pod count
+- query: sort=status.allocatable.pods,metadata.name
+  expected:
+  - default/burundi # 8
+  - default/angola # 11
+  - default/botswana # 14
+  - default/rwanda # 17
+  - default/mali # 20
+
+# Alphabetical sort by raw cpu
+- query: sort=status.allocatable.cpu,metadata.name
+  expected:
+  - default/angola # 14250m
+  - default/burundi # 325m
+  - default/mali # 7
+  - default/rwanda # 7000m
+  - default/botswana # 98m
+
+# Alphabetical sort by raw memory
+- query: sort=status.allocatable.memory,metadata.name
+  expected:
+  - default/mali # 1200Ki
+  - default/botswana # 12Mi
+  - default/angola # 2610Ki
+  - default/burundi # 4Mi
+  - default/rwanda # 900Ki
+
+# filter on original cpu
+- query: filter=status.allocatable.cpu=7000m
+  expected:
+  - default/rwanda # 7000m
+
+# filter on processed cpu
+- query: filter=status.allocatable.cpuRaw=14.25
+  expected:
+  - default/angola # 14250m
+
+# filter on original memory
+- query: filter=status.allocatable.memory=12Mi
+  expected:
+  - default/botswana # 12Mi
+
+# filter on processed memory
+- query: filter=status.allocatable.memoryRaw=4194304
+  expected:
+  - default/burundi # 4Mi
+
+# filter on pods
+- query: filter=status.allocatable.pods=20
+  expected:
+  - default/mali
