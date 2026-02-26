@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"net/http"
 
 	steveauth "github.com/rancher/steve/pkg/auth"
 	authcli "github.com/rancher/steve/pkg/auth/cli"
@@ -11,6 +12,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/ratelimit"
 	"github.com/urfave/cli/v2"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 type Config struct {
@@ -24,6 +26,8 @@ type Config struct {
 	PprofListenAddr string
 
 	WebhookConfig authcli.WebhookConfig
+
+	EnableHeaderAuthentication bool
 }
 
 func (c *Config) MustServer(ctx context.Context) *server.Server {
@@ -50,6 +54,17 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if c.EnableHeaderAuthentication {
+		impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
+			info, ok, err := steveauth.Impersonation(req)
+			if ok || err != nil {
+				return info, ok, err
+			}
+			return steveauth.AlwaysAdmin(req)
+		}
+		auth = steveauth.ToMiddleware(steveauth.AuthenticatorFunc(impersonateOrAdmin))
 	}
 
 	return server.New(ctx, restConfig, &server.Options{
@@ -97,6 +112,12 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "pprof-listen-addr",
 			Value:       "localhost:6060",
 			Destination: &config.PprofListenAddr,
+		},
+		&cli.BoolFlag{
+			Name:        "enable-header-auth",
+			DefaultText: "Use HTTP header Impersonate-User and Impersonate-Group to impersonate a user and groups (default is admin and system:masters group)",
+			Value:       false,
+			Destination: &config.EnableHeaderAuthentication,
 		},
 	}
 
