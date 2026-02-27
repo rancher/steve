@@ -107,11 +107,21 @@ func NewIndexer(ctx context.Context, indexers cache.Indexers, s Store) (*Indexer
 	i.RegisterAfterUpdate(i.AfterUpsert)
 	i.RegisterBeforeDropAll(i.dropIndices)
 
-	i.deleteIndicesStmt = s.Prepare(fmt.Sprintf(deleteIndicesFmt, dbName))
-	i.dropIndicesStmt = s.Prepare(fmt.Sprintf(dropIndicesFmt, dbName))
-	i.listByIndexStmt = s.Prepare(fmt.Sprintf(listByIndexFmt, dbName))
-	i.listKeysByIndexStmt = s.Prepare(fmt.Sprintf(listKeyByIndexFmt, dbName))
-	i.listIndexValuesStmt = s.Prepare(fmt.Sprintf(listIndexValuesFmt, dbName))
+	if i.deleteIndicesStmt, err = s.Prepare(fmt.Sprintf(deleteIndicesFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if i.dropIndicesStmt, err = s.Prepare(fmt.Sprintf(dropIndicesFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if i.listByIndexStmt, err = s.Prepare(fmt.Sprintf(listByIndexFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if i.listKeysByIndexStmt, err = s.Prepare(fmt.Sprintf(listKeyByIndexFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if i.listIndexValuesStmt, err = s.Prepare(fmt.Sprintf(listIndexValuesFmt, dbName)); err != nil {
+		return nil, err
+	}
 
 	return i, nil
 }
@@ -150,7 +160,12 @@ func (i *Indexer) AfterUpsert(key string, obj any, tx db.TxClient) error {
 	multiInsertQuery := fmt.Sprintf(addIndexFmt,
 		db.Sanitize(i.Store.GetName()),
 		strings.Join(slices.Repeat([]string{addIndexValuesPlaceholderFmt}, rowsToInsert), ", "))
-	if _, err := tx.Stmt(i.Prepare(multiInsertQuery)).Exec(valuesToInsert...); err != nil {
+	stmt, err := i.Prepare(multiInsertQuery)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	if _, err := tx.Stmt(stmt).Exec(valuesToInsert...); err != nil {
 		return err
 	}
 
@@ -185,7 +200,10 @@ func (i *Indexer) Index(indexName string, obj any) (result []any, err error) {
 	// atypical case - more than one value to lookup
 	// HACK: sql.Statement.Query does not allow to pass slices in as of go 1.19 - create an ad-hoc statement
 	query := fmt.Sprintf(selectQueryFmt, db.Sanitize(i.GetName()), strings.Repeat(", ?", len(values)-1))
-	stmt := i.Prepare(query)
+	stmt, err := i.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
 
 	defer func() {
 		if cerr := stmt.Close(); cerr != nil {

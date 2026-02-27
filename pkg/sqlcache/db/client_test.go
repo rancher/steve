@@ -470,7 +470,8 @@ func TestPrepare(t *testing.T) {
 		sqlStmt := &sql.Stmt{}
 		c.EXPECT().Prepare("something").Return(sqlStmt, nil)
 
-		stmt := client.Prepare("something")
+		stmt, err := client.Prepare("something")
+		assert.NoError(t, err)
 		assert.Equal(t, sqlStmt, stmt.SQLStmt())
 		assert.Equal(t, "something", stmt.GetQueryString())
 	},
@@ -483,7 +484,8 @@ func TestPrepare(t *testing.T) {
 		client := SetupClient(t, c, e, d)
 		c.EXPECT().Prepare("something").Return(nil, fmt.Errorf("error"))
 
-		assert.Panics(t, func() { client.Prepare("something") })
+		_, err := client.Prepare("something")
+		assert.Error(t, err)
 	},
 	})
 	t.Parallel()
