@@ -52,7 +52,7 @@ func TestNewInformer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
+		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt, nil).AnyTimes()
 
 		// NewIndexer() logic (within NewListOptionIndexer(). This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go
@@ -125,7 +125,7 @@ func TestNewInformer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
+		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt, nil).AnyTimes()
 
 		// NewIndexer() logic (within NewListOptionIndexer(). This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go
@@ -162,7 +162,7 @@ func TestNewInformer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
+		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt, nil).AnyTimes()
 
 		// NewIndexer() logic (within NewListOptionIndexer(). This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go
@@ -218,7 +218,7 @@ func TestNewInformer(t *testing.T) {
 					t.Fail()
 				}
 			})
-		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt).AnyTimes()
+		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt, nil).AnyTimes()
 
 		// NewIndexer() logic (within NewListOptionIndexer(). This test is only concerned with whether it returns err or not as NewIndexer
 		// is tested in depth in its own indexer_test.go

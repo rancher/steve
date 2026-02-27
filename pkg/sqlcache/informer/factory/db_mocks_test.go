@@ -72,11 +72,12 @@ func (mr *MockClientMockRecorder) NewConnection(isTemp any) *gomock.Call {
 }
 
 // Prepare mocks base method.
-func (m *MockClient) Prepare(stmt string) db.Stmt {
+func (m *MockClient) Prepare(stmt string) (db.Stmt, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Prepare", stmt)
 	ret0, _ := ret[0].(db.Stmt)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Prepare indicates an expected call of Prepare.
