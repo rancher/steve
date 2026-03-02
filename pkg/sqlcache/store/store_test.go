@@ -899,8 +899,8 @@ func TestAddWithExternalUpdates(t *testing.T) {
          WHERE f."spec.projectName" != ex2."spec.projectName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3)).Return(preparedStmt, nil)
 		args2 := []any{}
-		c.EXPECT().QueryForRows(gomock.Any(), 
-preparedStmt, args2)
+		c.EXPECT().QueryForRows(gomock.Any(),
+			preparedStmt, args2)
 		preparedStmt.EXPECT().Close()
 		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
 
@@ -1031,8 +1031,8 @@ func TestAddWithBothUpdates(t *testing.T) {
 
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-  JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-  WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
+	JOIN "management.cattle.io_v3_Project_fields" ex2
+	WHERE lt1.label = ? AND lt1.value = ex2."metadata.name" AND f."spec.displayName" != ex2."spec.displayName"`
 		rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
   JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
   WHERE f."spec.projectName" != ex2."spec.projectName"`
@@ -1152,10 +1152,11 @@ func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient, update
 	name := "testStoreObject"
 	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
 	namespaceProjectLabelDep := sqltypes.ExternalLabelDependency{
-		SourceGVK:            gvkKey("", "v1", "Namespace"),
-		SourceLabelName:      "field.cattle.io/projectId",
-		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
-		TargetKeyFieldName:   "metadata.name",
+		SourceGVK: gvkKey("", "v1", "Namespace"),
+		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
+		SourceLabelTargetField: map[string]string{
+			"field.cattle.io/projectId": "metadata.name",
+		},
 		TargetFinalFieldName: "spec.displayName",
 	}
 	namespaceNonLabelDep := sqltypes.ExternalDependency{

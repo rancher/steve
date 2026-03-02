@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/rancher/lasso/pkg/log"
@@ -170,26 +171,50 @@ func (s *Store) checkUpdateExternalInfo(key string) {
 
 func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
-		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
-  LEFT OUTER JOIN "%s_labels" lt1 ON f.key = lt1.key
-  JOIN "%s_fields" ex2 ON lt1.value = ex2."%s"
- WHERE lt1.label = ? AND f."%s" != ex2."%s"`,
-			labelDep.TargetFinalFieldName,
-			labelDep.SourceGVK,
-			labelDep.SourceGVK,
-			labelDep.TargetGVK,
-			labelDep.TargetKeyFieldName,
-			labelDep.TargetFinalFieldName,
-			labelDep.TargetFinalFieldName,
-		)
-		getStmt, err := s.Prepare(rawGetStmt)
-		if err != nil {
-			if !isDBError(err) {
-				logrus.Infof("Error preparing statement for table %s, key %s: %v", labelDep.TargetGVK, key, err)
-			}
+		type labelTargetPair struct {
+			sourceLabelName string
+			targetFieldName string
+		}
+
+		pairs := make([]labelTargetPair, 0, len(labelDep.SourceLabelTargetField))
+		for sourceLabelName, targetFieldName := range labelDep.SourceLabelTargetField {
+			pairs = append(pairs, labelTargetPair{sourceLabelName: sourceLabelName, targetFieldName: targetFieldName})
+		}
+		if len(pairs) == 0 {
 			continue
 		}
-		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
+
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].sourceLabelName == pairs[j].sourceLabelName {
+				return pairs[i].targetFieldName < pairs[j].targetFieldName
+			}
+			return pairs[i].sourceLabelName < pairs[j].sourceLabelName
+		})
+
+		joins := make([]string, 0, len(pairs))
+		whereClauses := make([]string, 0, 2*len(pairs)+1)
+		args := make([]any, 0, len(pairs))
+		for i, pair := range pairs {
+			labelAlias := fmt.Sprintf("lt%d", i+1)
+			joins = append(joins, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" %s ON f.key = %s.key`, labelDep.SourceGVK, labelAlias, labelAlias))
+			whereClauses = append(whereClauses, fmt.Sprintf(`%s.label = ?`, labelAlias))
+			whereClauses = append(whereClauses, fmt.Sprintf(`%s.value = ex2."%s"`, labelAlias, pair.targetFieldName))
+			args = append(args, pair.sourceLabelName)
+		}
+		whereClauses = append(whereClauses, fmt.Sprintf(`f."%s" != ex2."%s"`, labelDep.TargetFinalFieldName, labelDep.TargetFinalFieldName))
+
+		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
+  %s
+  JOIN "%s_fields" ex2
+ WHERE %s`,
+			labelDep.TargetFinalFieldName,
+			labelDep.SourceGVK,
+			strings.Join(joins, " "),
+			labelDep.TargetGVK,
+			strings.Join(whereClauses, " AND "),
+		)
+		getStmt := s.Prepare(rawGetStmt)
+		rows, err := s.QueryForRows(s.ctx, getStmt, args...)
 		getStmt.Close()
 		if err != nil {
 			if !isDBError(err) {
@@ -290,8 +315,8 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 				finalTargetValue)
 		}
 	}
-	return nil
 
+	return nil
 }
 
 // If the new value will change a non-empty current value, return [true, error:nil]

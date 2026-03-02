@@ -89,10 +89,12 @@ type ExternalDependency struct {
 }
 
 type ExternalLabelDependency struct {
-	SourceGVK            string
-	SourceLabelName      string
-	TargetGVK            string
-	TargetKeyFieldName   string
+	SourceGVK string
+	TargetGVK string
+
+	// SourceLabelTargetField pairs a SourceGVK resource label value with a TargetGVK field value.
+	SourceLabelTargetField map[string]string
+
 	TargetFinalFieldName string
 }
 
