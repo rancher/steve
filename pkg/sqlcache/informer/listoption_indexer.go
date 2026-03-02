@@ -935,11 +935,6 @@ func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions 
 	queryInfo.query = query
 	queryInfo.params = params
 
-	fmt.Println("-------------------------------------------")
-	fmt.Printf("#### FILTER: %#v\n", lo.Filters)
-	fmt.Printf("#### QUERY: %s\n", queryInfo.query)
-	fmt.Println("-------------------------------------------")
-
 	return queryInfo, nil
 }
 
