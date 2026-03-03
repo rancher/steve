@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/rancher/apiserver/pkg/types"
+	accesscontrol "github.com/rancher/steve/pkg/accesscontrol"
 	common "github.com/rancher/steve/pkg/resources/common"
 	informer "github.com/rancher/steve/pkg/sqlcache/informer"
 	factory "github.com/rancher/steve/pkg/sqlcache/informer/factory"
@@ -52,6 +53,20 @@ func NewMockCache(ctrl *gomock.Controller) *MockCache {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockCache) EXPECT() *MockCacheMockRecorder {
 	return m.recorder
+}
+
+// AugmentList mocks base method.
+func (m *MockCache) AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AugmentList", ctx, list, childGVK, childSchemaName, useSelectors, accessList)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AugmentList indicates an expected call of AugmentList.
+func (mr *MockCacheMockRecorder) AugmentList(ctx, list, childGVK, childSchemaName, useSelectors, accessList any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AugmentList", reflect.TypeOf((*MockCache)(nil).AugmentList), ctx, list, childGVK, childSchemaName, useSelectors, accessList)
 }
 
 // ListByOptions mocks base method.

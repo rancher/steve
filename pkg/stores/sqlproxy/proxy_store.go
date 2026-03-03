@@ -93,9 +93,13 @@ var (
 			"spec.volumeName": &informer.JSONPathField{Path: []string{"spec", "volumeName"}},
 		},
 		gvkKey("", "v1", "Pod"): {
-			"spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "containers", "image"}},
-			"spec.nodeName":         &informer.JSONPathField{Path: []string{"spec", "nodeName"}},
-			"status.podIP":          &informer.JSONPathField{Path: []string{"status", "podIP"}},
+			// TODO: Move these to commonIndexFields if GVKs other than jobs & pods need them
+			"metadata.state.error":         &informer.JSONPathField{Path: []string{"metadata", "state", "error"}},
+			"metadata.state.message":       &informer.JSONPathField{Path: []string{"metadata", "state", "message"}},
+			"metadata.state.transitioning": &informer.JSONPathField{Path: []string{"metadata", "state", "transitioning"}},
+			"spec.containers.image":        &informer.JSONPathField{Path: []string{"spec", "containers", "image"}},
+			"spec.nodeName":                &informer.JSONPathField{Path: []string{"spec", "nodeName"}},
+			"status.podIP":                 &informer.JSONPathField{Path: []string{"status", "podIP"}},
 			// Restart count - UI field ID "metadata.fields[3]" or "metadata.fields[3][0]"
 			"metadata.fields[3]": &informer.ComputedField{
 				Name:         "metadata.fields[3]_0",
@@ -155,8 +159,12 @@ var (
 			"status.lastSuccessfulTime":                             &informer.JSONPathField{Path: []string{"status", "lastSuccessfulTime"}},
 		},
 		gvkKey("batch", "v1", "Job"): {
+			// TODO: Move these to commonIndexFields if GVKs other than jobs & pods need them
 			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
-			"spec.template.spec.containers.image":                   &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
+			"metadata.state.error":                &informer.JSONPathField{Path: []string{"metadata", "state", "error"}},
+			"metadata.state.message":              &informer.JSONPathField{Path: []string{"metadata", "state", "message"}},
+			"metadata.state.transitioning":        &informer.JSONPathField{Path: []string{"metadata", "state", "transitioning"}},
+			"spec.template.spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
 		gvkKey("catalog.cattle.io", "v1", "App"): {
 			"spec.chart.metadata.name": &informer.JSONPathField{Path: []string{"spec", "chart", "metadata", "name"}},
@@ -370,6 +378,10 @@ type SchemaCollection interface {
 }
 
 type Cache interface {
+	// AugmentList takes a list of resources, and for some of them,
+	// adds related data to each item in the list
+	AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error
+
 	// ListByOptions returns objects according to the specified list options and partitions.
 	// Specifically:
 	//   - an unstructured list of resources belonging to any of the specified partitions
@@ -1047,9 +1059,49 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		} else {
 			err = fmt.Errorf("listbyoptions %v: %w", gvk, err)
 		}
+	} else if opts.IncludeAssociatedData {
+		err = s.AugmentRelationships(ctx, gvk, list, apiOp)
 	}
 
 	return
+}
+
+func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersionKind, list *unstructured.UnstructuredList, apiOp *types.APIRequest) error {
+	type GVKWithSchemaName struct {
+		gvk          schema.GroupVersionKind
+		schemaName   string
+		useSelectors bool
+	}
+	podGVK := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+	jobGVK := schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}
+	dependentChildInfoFromParentGVK := map[schema.GroupVersionKind]GVKWithSchemaName{
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}:  {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"}:   {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}: {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}:        {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}:    {jobGVK, "batch.job", false},
+	}
+	childInfo, ok := dependentChildInfoFromParentGVK[gvk]
+	if !ok {
+		logrus.Warnf("No associatedData defined for GVK %s", gvk)
+		return nil
+	}
+	schemas1 := apiOp.Schemas
+	schemas2 := schemas1.Schemas
+	dependentSchema, ok := schemas2[childInfo.schemaName]
+	if !ok {
+		// trace log because this is expected behaviour in most cases -
+		// there must be a reason why the user has read access to the parent resource only
+		logrus.Tracef("no read-access for resource %s", childInfo.schemaName)
+		return nil
+	}
+	childResourceInf, doneCache, err := s.cacheForWithDeps(ctx, apiOp, dependentSchema)
+	if err != nil {
+		return err
+	}
+	defer doneCache()
+	accessList := accesscontrol.GetAccessListMap(dependentSchema)
+	return childResourceInf.AugmentList(ctx, list, childInfo.gvk, childInfo.schemaName, childInfo.useSelectors, accessList)
 }
 
 // WatchByPartitions returns a channel of events for a list or resource belonging to any of the specified partitions
