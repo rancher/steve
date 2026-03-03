@@ -29,6 +29,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -538,6 +539,7 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 
 func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, schema *types.APISchema, labelTest string, expectedNum int) error {
 	q := getFilteredQuery("", labelTest)
+	t1 := time.Now()
 	return wait.PollUntilContextCancel(ctx, time.Millisecond*100, true, func(ctx context.Context) (done bool, err error) {
 		req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
 		if err != nil {
@@ -549,10 +551,15 @@ func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, sch
 		partitions := []partition.Partition{defaultPartition}
 		_, total, _, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
 		if err != nil {
+			logrus.Errorf("waitForObjectsBySchema: error getting list of objects for schema %s, labelTest %s at time %v: %v", schema.ID, labelTest, time.Since(t1), err)
 			// note that we don't return the error since that would stop the polling
 			return false, nil
 		}
-		return total == expectedNum, nil
+		if total != expectedNum {
+			logrus.Errorf("waitForObjectsBySchema: schema %s, labelTest %s at time %v: want %d objects, got %d", schema.ID, labelTest, time.Since(t1), expectedNum, total)
+			return false, nil
+		}
+		return true, nil
 	})
 }
 
