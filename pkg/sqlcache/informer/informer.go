@@ -87,7 +87,7 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields m
 	if !watchable {
 		watchFunc = func(options metav1.ListOptions) (watch.Interface, error) {
 			ctx, cancel := context.WithCancel(ctx)
-			return newSyntheticWatcher(ctx, cancel).watch(client, options, defaultRefreshTime)
+			return newSyntheticWatcher(ctx, cancel, gvk).watch(client, options, defaultRefreshTime)
 		}
 	}
 	listWatcher := &cache.ListWatch{

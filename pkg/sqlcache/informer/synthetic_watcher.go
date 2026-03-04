@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 )
@@ -20,15 +21,17 @@ type SyntheticWatcher struct {
 	stopChanLock sync.Mutex
 	context      context.Context
 	cancelFunc   context.CancelFunc
+	gvk          schema.GroupVersionKind
 }
 
-func newSyntheticWatcher(context context.Context, cancel context.CancelFunc) *SyntheticWatcher {
+func newSyntheticWatcher(context context.Context, cancel context.CancelFunc, gvk schema.GroupVersionKind) *SyntheticWatcher {
 	return &SyntheticWatcher{
 		stopChan:   make(chan struct{}),
 		doneChan:   make(chan struct{}),
 		resultChan: make(chan watch.Event, 0),
 		context:    context,
 		cancelFunc: cancel,
+		gvk:        gvk,
 	}
 }
 
@@ -51,9 +54,14 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 		previousState := make(map[string]objectHolder)
 		ticker := time.NewTicker(interval)
 
+		initialSyncSent := false
+
 		for {
 			select {
 			case <-ticker.C:
+				options.SendInitialEvents = nil
+				options.ResourceVersionMatch = ""
+				options.AllowWatchBookmarks = false
 				list, err := client.List(rw.context, options)
 				if err != nil {
 					logrus.Errorf("synthetic watcher: client.List => error: %s", err)
@@ -103,6 +111,12 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 				}
 				previousState = currentState
 
+				if !initialSyncSent {
+					sendInitialSyncBookmark(list.GetResourceVersion(), rw.gvk, rw.resultChan)
+					initialSyncSent = true
+					logrus.Debugf("synthetic watcher: sent initial events end bookmark for %v", rw.gvk)
+				}
+
 			case <-rw.stopChan:
 				rw.cancelFunc()
 				return
@@ -112,6 +126,23 @@ func (rw *SyntheticWatcher) receive(client dynamic.ResourceInterface, options me
 			}
 		}
 	}()
+}
+
+// sendInitialSyncBookmark constructs and sends a synthetic watch.Bookmark event.
+// This satisfies the client-go Reflector's requirement for the KEP-3157 WatchList protocol,
+// signaling that the initial stream of events has finished and stopping the timeout ticker.
+func sendInitialSyncBookmark(resourceVersion string, gvk schema.GroupVersionKind, resultChan chan watch.Event) {
+	bookmarkObj := &unstructured.Unstructured{}
+	bookmarkObj.SetAnnotations(map[string]string{
+		metav1.InitialEventsAnnotationKey: "true",
+	})
+	bookmarkObj.SetResourceVersion(resourceVersion)
+	bookmarkObj.SetGroupVersionKind(gvk)
+
+	resultChan <- watch.Event{
+		Type:   watch.Bookmark,
+		Object: bookmarkObj,
+	}
 }
 
 func createWatchEvent(event watch.EventType, u *unstructured.Unstructured) (watch.Event, error) {
