@@ -7,9 +7,7 @@
     "release/v0.7",
     "release/v0.6",
     "release/v0.5",
-    "release/v0.4",
-    "release/v0.3",
-    "release/v0.2"
+    "release/v0.4"
   ],
   "prHourlyLimit": 2,
   "packageRules": [
@@ -19,21 +17,13 @@
         "/k8s.io/*/",
         "/sigs.k8s.io/*/",
         "/go.opentelemetry.io/*/",
-        "/github.com/prometheus/*/"
-      ]
-    },
-    {
-      "matchUpdateTypes": [
-        "major",
-        "minor"
-      ],
-      "enabled": false,
-      "matchPackageNames": [
+        "/github.com/prometheus/*/",
         "/github.com/rancher/remotedialer/*/",
         "/github.com/rancher/norman/*/",
         "/github.com/rancher/wrangler/*/",
         "/github.com/rancher/apiserver/*/",
-        "/github.com/rancher/dynamiclistener/*/"
+        "/github.com/rancher/dynamiclistener/*/",
+        "/github.com/rancher/lasso/*/"
       ]
     }
   ]
