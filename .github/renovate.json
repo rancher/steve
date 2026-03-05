@@ -18,23 +18,12 @@
         "/sigs.k8s.io/*/",
         "/go.opentelemetry.io/*/",
         "/github.com/prometheus/*/",
-        "github.com/rancher/lasso",
-        "github.com/rancher/wrangler/v3",
-        "github.com/rancher/dynamiclistener"
-      ]
-    },
-    {
-      "matchUpdateTypes": [
-        "major",
-        "minor"
-      ],
-      "enabled": false,
-      "matchPackageNames": [
         "/github.com/rancher/remotedialer/*/",
         "/github.com/rancher/norman/*/",
         "/github.com/rancher/wrangler/*/",
         "/github.com/rancher/apiserver/*/",
-        "/github.com/rancher/dynamiclistener/*/"
+        "/github.com/rancher/dynamiclistener/*/",
+        "/github.com/rancher/lasso/*/"
       ]
     }
   ]
