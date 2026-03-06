@@ -70,7 +70,7 @@ var (
 	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 	namespacesDbName        = "_v1_Namespace"
 	projectIDFieldLabel     = "field.cattle.io/projectId"
-	subfieldRegex           = regexp.MustCompile(`([a-zA-Z]+)|(\[[-a-zA-Z./]+])|(\[[0-9]+])`)
+	subfieldRegex           = regexp.MustCompile(`([a-zA-Z0-9_]+)|(\[[-a-zA-Z0-9_./]+])|(\[[0-9]+])`)
 
 	ErrInvalidColumn   = errors.New("supplied column is invalid")
 	ErrUnknownRevision = errors.New("unknown revision")
