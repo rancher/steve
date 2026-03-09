@@ -665,9 +665,11 @@ func (l *ListOptionIndexer) constructSummaryQueryForField(fieldParts []string, f
 }
 
 func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, queryInfo *QueryInfo, field []string) (map[string]any, error) {
-	stmt := l.Prepare(queryInfo.query)
+	stmt, err := l.Prepare(queryInfo.query)
+	if err != nil {
+		return nil, err
+	}
 	params := queryInfo.params
-	var err error
 	defer func() {
 		if cerr := stmt.Close(); cerr != nil && err == nil {
 			err = errors.Join(err, cerr)
@@ -715,9 +717,11 @@ func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, que
 }
 
 func (l *ListOptionIndexer) executeSummaryQuery(ctx context.Context, queryInfo *QueryInfo) (*types.APISummary, error) {
-	stmt := l.Prepare(queryInfo.query)
+	stmt, err := l.Prepare(queryInfo.query)
+	if err != nil {
+		return nil, err
+	}
 	params := queryInfo.params
-	var err error
 	defer func() {
 		if cerr := stmt.Close(); cerr != nil && err == nil {
 			err = errors.Join(err, cerr)

@@ -51,7 +51,7 @@ const (
 // Client defines a database client that provides encrypting, decrypting, and database resetting
 type Client interface {
 	WithTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error
-	Prepare(stmt string) Stmt
+	Prepare(stmt string) (Stmt, error)
 	QueryForRows(ctx context.Context, stmt Stmt, params ...any) (Rows, error)
 	ReadObjects(rows Rows, typ reflect.Type) ([]any, error)
 	ReadStrings(rows Rows) ([]string, error)
@@ -158,6 +158,7 @@ type WithTransactionFunction func(tx TxClient) error
 
 // client is the main implementation of Client. Other implementations exist for test purposes
 type client struct {
+	Client
 	conn      Connection
 	connLock  sync.RWMutex
 	encryptor Encryptor
@@ -242,17 +243,17 @@ func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor
 }
 
 // Prepare prepares the given string into a sql statement on the client's connection.
-func (c *client) Prepare(queryString string) Stmt {
+func (c *client) Prepare(queryString string) (Stmt, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 	prepared, err := c.conn.Prepare(queryString)
 	if err != nil {
-		panic(fmt.Errorf("Error preparing statement: %s\n%w", queryString, err))
+		return nil, fmt.Errorf("preparing statement: %s: %w", queryString, err)
 	}
 	return &stmt{
 		Stmt:        prepared,
 		queryString: queryString,
-	}
+	}, nil
 }
 
 // QueryForRows queries the given stmt with the given params and returns the resulting rows. The query wil be retried

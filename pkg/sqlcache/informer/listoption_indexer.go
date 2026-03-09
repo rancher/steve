@@ -253,19 +253,31 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	if len(setStatements) > 0 {
 		addFieldsOnConflict = "UPDATE SET " + strings.Join(setStatements, ", ")
 	}
-	l.addFieldsStmt = l.Prepare(fmt.Sprintf(
+	if l.addFieldsStmt, err = l.Prepare(fmt.Sprintf(
 		`INSERT INTO "%s_fields"(key, %s) VALUES (?, %s) ON CONFLICT DO %s`,
 		dbName,
 		strings.Join(columns, ", "),
 		strings.Join(qmarks, ", "),
 		addFieldsOnConflict,
-	))
-	l.deleteFieldsStmt = l.Prepare(fmt.Sprintf(deleteFieldsFmt, dbName))
-	l.dropFieldsStmt = l.Prepare(fmt.Sprintf(dropFieldsFmt, dbName))
+	)); err != nil {
+		return nil, err
+	}
+	if l.deleteFieldsStmt, err = l.Prepare(fmt.Sprintf(deleteFieldsFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if l.dropFieldsStmt, err = l.Prepare(fmt.Sprintf(dropFieldsFmt, dbName)); err != nil {
+		return nil, err
+	}
 
-	l.upsertLabelsStmt = l.Prepare(fmt.Sprintf(upsertLabelsStmtFmt, dbName))
-	l.deleteLabelsStmt = l.Prepare(fmt.Sprintf(deleteLabelsStmtFmt, dbName))
-	l.dropLabelsStmt = l.Prepare(fmt.Sprintf(dropLabelsStmtFmt, dbName))
+	if l.upsertLabelsStmt, err = l.Prepare(fmt.Sprintf(upsertLabelsStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if l.deleteLabelsStmt, err = l.Prepare(fmt.Sprintf(deleteLabelsStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if l.dropLabelsStmt, err = l.Prepare(fmt.Sprintf(dropLabelsStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
 
 	return l, nil
 }
@@ -826,7 +838,10 @@ type QueryInfo struct {
 }
 
 func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryInfo) (result *unstructured.UnstructuredList, total int, token string, err error) {
-	stmt := l.Prepare(queryInfo.query)
+	stmt, err := l.Prepare(queryInfo.query)
+	if err != nil {
+		return nil, 0, "", err
+	}
 	defer func() {
 		if cerr := stmt.Close(); cerr != nil && err == nil {
 			err = errors.Join(err, cerr)
@@ -849,7 +864,10 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 
 		total = len(items)
 		if queryInfo.countQuery != "" {
-			countStmt := l.Prepare(queryInfo.countQuery)
+			countStmt, err := l.Prepare(queryInfo.countQuery)
+			if err != nil {
+				return err
+			}
 			defer func() {
 				if cerr := countStmt.Close(); cerr != nil {
 					err = errors.Join(err, cerr)
