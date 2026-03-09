@@ -1,8 +1,6 @@
 module github.com/rancher/steve
 
-go 1.24.0
-
-toolchain go1.24.4
+go 1.25.0
 
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14
@@ -33,7 +31,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/mock v0.5.2
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/protobuf v1.36.5
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.1
