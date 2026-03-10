@@ -1,0 +1,223 @@
+scenarios:
+- name: zero_to_some
+  schemaID: refresh.cattle.io.zerotosomes
+  crdName: zerotosomes.refresh.cattle.io
+  resource:
+    apiVersion: refresh.cattle.io/v1
+    kind: ZeroToSome
+    metadata:
+      name: test-resource
+      namespace: default
+    foo: bar
+  expectedInitial:
+    - [test-resource, $timestamp]
+  expectedUpdated:
+    - [test-resource, bar]
+  initialCRD:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: zerotosomes.refresh.cattle.io
+    spec:
+      group: refresh.cattle.io
+      names:
+        kind: ZeroToSome
+        plural: zerotosomes
+        singular: zerotosome
+      scope: Namespaced
+      versions:
+      - name: v1
+        served: true
+        storage: true
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              foo:
+                type: string
+  updatedCRD:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: zerotosomes.refresh.cattle.io
+    spec:
+      group: refresh.cattle.io
+      names:
+        kind: ZeroToSome
+        plural: zerotosomes
+        singular: zerotosome
+      scope: Namespaced
+      versions:
+      - name: v1
+        served: true
+        storage: true
+        additionalPrinterColumns:
+        - name: Foo
+          type: string
+          jsonPath: .foo
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              foo:
+                type: string
+- name: some_to_zero
+  schemaID: refresh.cattle.io.sometozeros
+  crdName: sometozeros.refresh.cattle.io
+  resource:
+    apiVersion: refresh.cattle.io/v1
+    kind: SomeToZero
+    metadata:
+      name: test-resource
+      namespace: default
+    foo: foo-value
+    bar: bar-value
+  expectedInitial:
+    - [test-resource, foo-value, bar-value]
+  expectedUpdated:
+    - [test-resource, $timestamp]
+  initialCRD:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: sometozeros.refresh.cattle.io
+    spec:
+      group: refresh.cattle.io
+      names:
+        kind: SomeToZero
+        plural: sometozeros
+        singular: sometozero
+      scope: Namespaced
+      versions:
+      - name: v1
+        served: true
+        storage: true
+        additionalPrinterColumns:
+        - name: Foo
+          type: string
+          jsonPath: .foo
+        - name: Bar
+          type: string
+          jsonPath: .bar
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              foo:
+                type: string
+              bar:
+                type: string
+  updatedCRD:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: sometozeros.refresh.cattle.io
+    spec:
+      group: refresh.cattle.io
+      names:
+        kind: SomeToZero
+        plural: sometozeros
+        singular: sometozero
+      scope: Namespaced
+      versions:
+      - name: v1
+        served: true
+        storage: true
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              foo:
+                type: string
+              bar:
+                type: string
+- name: some_to_different
+  schemaID: refresh.cattle.io.sometodifferents
+  crdName: sometodifferents.refresh.cattle.io
+  resource:
+    apiVersion: refresh.cattle.io/v1
+    kind: SomeToDifferent
+    metadata:
+      name: test-resource
+      namespace: default
+    foo: foo-value
+    bar: bar-value
+    baz: baz-value
+    qux: qux-value
+  expectedInitial:
+    - [test-resource, foo-value, bar-value]
+  expectedUpdated:
+    - [test-resource, foo-value, baz-value, qux-value]
+  initialCRD:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: sometodifferents.refresh.cattle.io
+    spec:
+      group: refresh.cattle.io
+      names:
+        kind: SomeToDifferent
+        plural: sometodifferents
+        singular: sometodifferent
+      scope: Namespaced
+      versions:
+      - name: v1
+        served: true
+        storage: true
+        additionalPrinterColumns:
+        - name: Foo
+          type: string
+          jsonPath: .foo
+        - name: Bar
+          type: string
+          jsonPath: .bar
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              foo:
+                type: string
+              bar:
+                type: string
+              baz:
+                type: string
+              qux:
+                type: string
+  updatedCRD:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: sometodifferents.refresh.cattle.io
+    spec:
+      group: refresh.cattle.io
+      names:
+        kind: SomeToDifferent
+        plural: sometodifferents
+        singular: sometodifferent
+      scope: Namespaced
+      versions:
+      - name: v1
+        served: true
+        storage: true
+        additionalPrinterColumns:
+        - name: Foo
+          type: string
+          jsonPath: .foo
+        - name: Baz
+          type: string
+          jsonPath: .baz
+        - name: Qux
+          type: string
+          jsonPath: .qux
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              foo:
+                type: string
+              bar:
+                type: string
+              baz:
+                type: string
+              qux:
+                type: string
