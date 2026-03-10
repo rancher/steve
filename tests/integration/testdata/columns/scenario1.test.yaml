@@ -11,6 +11,10 @@ tests:
 - schemaID: timestamps.cattle.io.dates
   expected:
   - [the-date, $skip, $skip, $timestamp, $skip, $timestamp, $skip, $timestamp]
+- schemaID: provisioning.cattle.io.clusters
+  query: filter=metadata.name=test-cluster&filter=metadata.namespace=default
+  expected:
+  - [test-cluster, $skip, $skip, $timestamp, $skip, $skip]
 - schemaID: events
   query: filter=metadata.name=event-1
   expected:
@@ -159,6 +163,14 @@ conditions:
     lastUpdateTime: "2020-01-01T00:00:00Z"
   - type: Selected
     lastUpdateTime: "2025-01-01T00:00:00Z"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: test-cluster
+  namespace: default
+spec:
+  kubernetesVersion: v1.28.0
 ---
 apiVersion: v1
 kind: ConfigMap
