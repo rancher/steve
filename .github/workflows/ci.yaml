@@ -26,7 +26,7 @@ jobs:
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
       with:
-        version: v1.64.8
+        version: v2.11.2
     - name: Install env-test
       run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
     - name: Build
