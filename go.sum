@@ -160,8 +160,8 @@ github.com/rancher/norman v0.7.1-0.20251002202451-d14394e537ab h1:mlAFQmWWLkNtuj
 github.com/rancher/norman v0.7.1-0.20251002202451-d14394e537ab/go.mod h1:vZ5qL+eKodJ7zOMQYdl6jwMrSFrqTKpA+KYSFEKew2M=
 github.com/rancher/remotedialer v0.6.0-rc.1 h1:HMwcJjjT4irqM+d++jPcpjoNfhPCaxoHIyPzdpghZhE=
 github.com/rancher/remotedialer v0.6.0-rc.1/go.mod h1:CW6Q8F8IESN05/yl48OSwhVi54nDwVQQriV16zAiGkg=
-github.com/rancher/wrangler/v3 v3.3.4 h1:Df+BlerYtTy5RDxEMZFG57kzz8KDe+Q4pJp/hyu5KcY=
-github.com/rancher/wrangler/v3 v3.3.4/go.mod h1:6NaqLD16x/cH2kzwhF35v5TTQTdaiGoomVyz//Hc0TY=
+github.com/rancher/wrangler/v3 v3.3.5 h1:z05UoabtD/JZxy9nJ6HdaOiQbB8hh5kFPouu2bUTCqg=
+github.com/rancher/wrangler/v3 v3.3.5/go.mod h1:6NaqLD16x/cH2kzwhF35v5TTQTdaiGoomVyz//Hc0TY=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
