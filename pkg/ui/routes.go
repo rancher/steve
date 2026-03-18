@@ -3,8 +3,6 @@ package ui
 import (
 	"net/http"
 	"strings"
-
-	"github.com/gorilla/mux"
 )
 
 func New(path string) http.Handler {
@@ -17,16 +15,15 @@ func New(path string) http.Handler {
 		},
 	})
 
-	router := mux.NewRouter()
-	router.UseEncodedPath()
+	router := http.NewServeMux()
 
-	router.Handle("/", http.RedirectHandler("/dashboard/", http.StatusFound))
+	router.Handle("/{$}", http.RedirectHandler("/dashboard/", http.StatusFound))
 	router.Handle("/dashboard", http.RedirectHandler("/dashboard/", http.StatusFound))
-	router.Handle("/dashboard/", vue.IndexFile())
+	router.Handle("/dashboard/{$}", vue.IndexFile())
+	router.Handle("/dashboard/", vue.IndexFileOnNotFound())
 	router.Handle("/favicon.png", vue.ServeFaviconDashboard())
 	router.Handle("/favicon.ico", vue.ServeFaviconDashboard())
-	router.PathPrefix("/dashboard/").Handler(vue.IndexFileOnNotFound())
-	router.PathPrefix("/k8s/clusters/local").HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	router.HandleFunc("/k8s/clusters/local/", func(rw http.ResponseWriter, req *http.Request) {
 		url := strings.TrimPrefix(req.URL.Path, "/k8s/clusters/local")
 		if url == "" {
 			url = "/"
