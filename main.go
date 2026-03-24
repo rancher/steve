@@ -5,8 +5,10 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/debug"
+	_ "github.com/rancher/steve/pkg/metrics"
 	stevecli "github.com/rancher/steve/pkg/server/cli"
 	"github.com/rancher/steve/pkg/version"
 	"github.com/rancher/wrangler/v3/pkg/signals"
@@ -45,6 +47,15 @@ func run(_ *cli.Context) error {
 		go func() {
 			if err := http.ListenAndServe(config.PprofListenAddr, nil); err != nil {
 				logrus.Fatalf("pprof server: %v\n", err)
+			}
+		}()
+	}
+	if config.MetricsEnabled {
+		go func() {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			if err := http.ListenAndServe(config.MetricsListenAddr, mux); err != nil {
+				logrus.Fatalf("metrics server: %v\n", err)
 			}
 		}()
 	}

@@ -14,5 +14,6 @@ func init() {
 		prometheus.MustRegister(ProxyTotalResponses)
 		prometheus.MustRegister(K8sClientResponseTime)
 		prometheus.MustRegister(ProxyStoreResponseTime)
+		prometheus.MustRegister(TestMetrics)
 	}
 }
