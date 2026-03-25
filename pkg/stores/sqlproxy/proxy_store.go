@@ -296,7 +296,8 @@ var (
 		SourceGVK: gvkKey("", "v1", "Secret"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
 		SourceLabelTargetField: map[string]string{
-			"management.cattle.io/project-scoped-secret": "metadata.name",
+			"management.cattle.io/project-scoped-secret":         "metadata.name",
+			"management.cattle.io/project-scoped-secret-cluster": "spec.clusterName",
 		},
 		TargetFinalFieldName: "spec.clusterName",
 	}
