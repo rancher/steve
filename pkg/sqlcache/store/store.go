@@ -80,19 +80,19 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 		exampleType = reflect.PointerTo(exampleType).Elem()
 	}
 	s := &Store{
-		ctx:                ctx,
-		name:               name,
-		gvk:                gvk,
-		externalUpdateInfo: externalUpdateInfo,
-		selfUpdateInfo:     selfUpdateInfo,
-		typ:                exampleType,
-		Client:             c,
-		keyFunc:            keyFunc,
-		shouldEncrypt:      shouldEncrypt,
-		afterAdd:           []func(key string, obj any, tx db.TxClient) error{},
-		afterUpdate:        []func(key string, obj any, tx db.TxClient) error{},
-		afterDelete:        []func(key string, obj any, tx db.TxClient) error{},
-		afterDeleteAll:     []func(tx db.TxClient) error{},
+		ctx:                    ctx,
+		name:                   name,
+		gvk:                    gvk,
+		externalUpdateInfo:     externalUpdateInfo,
+		selfUpdateInfo:         selfUpdateInfo,
+		typ:                    exampleType,
+		Client:                 c,
+		keyFunc:                keyFunc,
+		shouldEncrypt:          shouldEncrypt,
+		afterAdd:               []func(key string, obj any, tx db.TxClient) error{},
+		afterUpdate:            []func(key string, obj any, tx db.TxClient) error{},
+		afterDelete:            []func(key string, obj any, tx db.TxClient) error{},
+		afterDeleteAll:         []func(tx db.TxClient) error{},
 	}
 
 	dbName := db.Sanitize(s.name)

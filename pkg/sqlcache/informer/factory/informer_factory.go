@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rancher/lasso/pkg/log"
+	"github.com/rancher/steve/pkg/metrics"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
@@ -108,11 +109,12 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	dbClient, _, err := db.NewClient(ctx, nil, m, m, false)
+	dbClient, dbPath, err := db.NewClient(ctx, nil, m, m, false)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
+	metrics.StartDatabaseMetricsLogger(ctx, dbPath)
 	return &CacheFactory{
 		ctx:    ctx,
 		cancel: cancel,
