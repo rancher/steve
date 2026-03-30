@@ -104,15 +104,12 @@ type ExternalLabelDependency struct {
 	TargetFinalFieldName string
 
 	generatedQuery string
-	args           []any
 }
 
 // NewExternalLabelDependency pre-generates the query needed for the label and key pairs.
-func NewExternalLabelDependency(eld ExternalLabelDependency) ExternalLabelDependency {
-	eld.generatedQuery = ""
-
+func NewExternalLabelDependency(eld ExternalLabelDependency) (ExternalLabelDependency, error) {
 	if len(eld.SourceLabelTargetField) == 0 {
-		panic("ExternalLabelDependency must have at least 1 label and field pair")
+		return ExternalLabelDependency{}, fmt.Errorf("ExternalLabelDependency must have at least 1 label and field pair")
 	}
 
 	type pair struct {
@@ -138,7 +135,7 @@ func NewExternalLabelDependency(eld ExternalLabelDependency) ExternalLabelDepend
 	for i, pair := range pairs {
 		labelAlias := fmt.Sprintf("lt%d", i+1)
 		joins = append(joins, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" %s ON f.key = %s.key`, eld.SourceGVK, labelAlias, labelAlias))
-		whereClauses = append(whereClauses, fmt.Sprintf(`%s.label = ?`, labelAlias))
+		whereClauses = append(whereClauses, fmt.Sprintf(`%s.label = "%s"`, labelAlias, pair.sourceLabelName))
 		whereClauses = append(whereClauses, fmt.Sprintf(`%s.value = ex2."%s"`, labelAlias, pair.targetFieldName))
 		args = append(args, pair.sourceLabelName)
 	}
@@ -154,13 +151,21 @@ func NewExternalLabelDependency(eld ExternalLabelDependency) ExternalLabelDepend
 		eld.TargetGVK,
 		strings.Join(whereClauses, " AND "),
 	)
-	eld.args = args
+
+	return eld, nil
+}
+
+func MustNewExternalLabelDependency(eld ExternalLabelDependency) ExternalLabelDependency {
+	eld, err := NewExternalLabelDependency(eld)
+	if err != nil {
+		panic(err)
+	}
 
 	return eld
 }
 
-func (d ExternalLabelDependency) Query() (string, []any) {
-	return d.generatedQuery, d.args
+func (d ExternalLabelDependency) Query() string {
+	return d.generatedQuery
 }
 
 type ExternalGVKUpdates struct {

@@ -170,10 +170,10 @@ func (s *Store) checkUpdateExternalInfo(key string) {
 
 func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
-		rawGetStmt, args := labelDep.Query()
+		rawGetStmt := labelDep.Query()
 
 		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt, args...)
+		rows, err := s.QueryForRows(s.ctx, getStmt)
 		getStmt.Close()
 		if err != nil {
 			if !isDBError(err) {

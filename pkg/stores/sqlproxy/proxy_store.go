@@ -269,7 +269,7 @@ var (
 	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
 	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
-	namespaceProjectLabelDep = sqltypes.NewExternalLabelDependency(sqltypes.ExternalLabelDependency{
+	namespaceProjectLabelDep = sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
 		SourceGVK: gvkKey("", "v1", "Namespace"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
 		SourceLabelTargetField: map[string]string{
@@ -284,15 +284,16 @@ var (
 	}
 
 	secretGVK                    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
-	secretProjectLabelDisplayDep = sqltypes.NewExternalLabelDependency(sqltypes.ExternalLabelDependency{
+	secretProjectLabelDisplayDep = sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
 		SourceGVK: gvkKey("", "v1", "Secret"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
 		SourceLabelTargetField: map[string]string{
-			"management.cattle.io/project-scoped-secret": "metadata.name",
+			"management.cattle.io/project-scoped-secret":         "metadata.name",
+			"management.cattle.io/project-scoped-secret-cluster": "spec.clusterName",
 		},
 		TargetFinalFieldName: "spec.displayName",
 	})
-	secretProjectLabelClusterDep = sqltypes.NewExternalLabelDependency(sqltypes.ExternalLabelDependency{
+	secretProjectLabelClusterDep = sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
 		SourceGVK: gvkKey("", "v1", "Secret"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
 		SourceLabelTargetField: map[string]string{
