@@ -7,7 +7,7 @@ Adapted from client-go, Copyright 2014 The Kubernetes Authors.
 package store
 
 // Mocks for this test are generated with the following command.
-//go:generate go tool -modfile ../../../gotools/mockgen/go.mod mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,TxClient,Stmt
+//go:generate mockgen --build_flags=--mod=mod -package store -destination ./db_mocks_test.go github.com/rancher/steve/pkg/sqlcache/db Rows,Client,TxClient,Stmt
 
 import (
 	"context"
@@ -1031,8 +1031,8 @@ func TestAddWithBothUpdates(t *testing.T) {
 
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-	JOIN "management.cattle.io_v3_Project_fields" ex2
-	WHERE lt1.label = ? AND lt1.value = ex2."metadata.name" AND f."spec.displayName" != ex2."spec.displayName"`
+  JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
+  WHERE lt1.label = "field.cattle.io/projectId" AND f."spec.displayName" != ex2."spec.displayName"`
 		rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
   JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
   WHERE f."spec.projectName" != ex2."spec.projectName"`
@@ -1134,6 +1134,7 @@ func SetupMockDB(t *testing.T) (*MockClient, *MockTxClient) {
 
 	return dbC, txC
 }
+
 func SetupStore(t *testing.T, client *MockClient, shouldEncrypt bool) *Store {
 	name := "testStoreObject"
 	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}

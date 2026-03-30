@@ -210,13 +210,14 @@ func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thi
 	return err
 }
 
-func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, projectLabel string, secretType string) error {
+func (i *IntegrationSuite) createSecret(ctx context.Context, name string, thisTestLabel string, clusterName string, projectLabel string, secretType string) error {
 	obj := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: defaultTestNamespace,
 			Labels: map[string]string{
-				"management.cattle.io/project-scoped-secret": projectLabel,
+				"management.cattle.io/project-scoped-secret":         projectLabel,
+				"management.cattle.io/project-scoped-secret-cluster": clusterName,
 				testLabel: thisTestLabel,
 			},
 		},
@@ -1246,7 +1247,7 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 		{"portonovo", "french", "cotonou"},
 	}
 	for _, info := range secretInfo {
-		err = i.createSecret(ctx, info[0], labelTest, info[1], info[2])
+		err = i.createSecret(ctx, info[0], labelTest, info[1], info[1], info[2])
 		requireT.NoError(err)
 	}
 	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
