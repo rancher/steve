@@ -1,6 +1,12 @@
 package sqltypes
 
-import "k8s.io/apimachinery/pkg/runtime/schema"
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+)
 
 type Op string
 
@@ -96,6 +102,65 @@ type ExternalLabelDependency struct {
 	SourceLabelTargetField map[string]string
 
 	TargetFinalFieldName string
+
+	generatedQuery string
+	args           []any
+}
+
+// NewExternalLabelDependency pre-generates the query needed for the label and key pairs.
+func NewExternalLabelDependency(eld ExternalLabelDependency) ExternalLabelDependency {
+	eld.generatedQuery = ""
+
+	if len(eld.SourceLabelTargetField) == 0 {
+		panic("ExternalLabelDependency must have at least 1 label and field pair")
+	}
+
+	type pair struct {
+		sourceLabelName string
+		targetFieldName string
+	}
+
+	pairs := make([]pair, 0, len(eld.SourceLabelTargetField))
+	for sourceLabelName, targetFieldName := range eld.SourceLabelTargetField {
+		pairs = append(pairs, pair{sourceLabelName: sourceLabelName, targetFieldName: targetFieldName})
+	}
+
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].sourceLabelName == pairs[j].sourceLabelName {
+			return pairs[i].targetFieldName < pairs[j].targetFieldName
+		}
+		return pairs[i].sourceLabelName < pairs[j].sourceLabelName
+	})
+
+	joins := make([]string, 0, len(pairs))
+	whereClauses := make([]string, 0, 2*len(pairs)+1)
+	args := make([]any, 0, len(pairs))
+	for i, pair := range pairs {
+		labelAlias := fmt.Sprintf("lt%d", i+1)
+		joins = append(joins, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" %s ON f.key = %s.key`, eld.SourceGVK, labelAlias, labelAlias))
+		whereClauses = append(whereClauses, fmt.Sprintf(`%s.label = ?`, labelAlias))
+		whereClauses = append(whereClauses, fmt.Sprintf(`%s.value = ex2."%s"`, labelAlias, pair.targetFieldName))
+		args = append(args, pair.sourceLabelName)
+	}
+	whereClauses = append(whereClauses, fmt.Sprintf(`f."%s" != ex2."%s"`, eld.TargetFinalFieldName, eld.TargetFinalFieldName))
+
+	eld.generatedQuery = fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
+  %s
+  JOIN "%s_fields" ex2
+ WHERE %s`,
+		eld.TargetFinalFieldName,
+		eld.SourceGVK,
+		strings.Join(joins, " "),
+		eld.TargetGVK,
+		strings.Join(whereClauses, " AND "),
+	)
+	eld.args = args
+
+	return eld
+}
+
+func (d ExternalLabelDependency) Query() (string, []any) {
+	return d.generatedQuery, d.args
 }
 
 type ExternalGVKUpdates struct {
