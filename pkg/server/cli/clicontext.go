@@ -25,8 +25,8 @@ type Config struct {
 	PprofEnabled    bool
 	PprofListenAddr string
 
-	MetricsEnabled    bool
-	MetricsListenAddr string
+	MetricsEnabled        bool
+	MetricsListenAddr     string
 	MetricsUpdateInterval int
 
 	WebhookConfig authcli.WebhookConfig

@@ -39,7 +39,7 @@ var (
 )
 
 func SetUpdateInterval(interval int) {
-	intervalUpdated<-interval
+	intervalUpdated <- interval
 }
 
 func StartDatabaseMetricsLogger(ctx context.Context, dbPath string) {
