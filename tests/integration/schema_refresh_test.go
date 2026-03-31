@@ -76,10 +76,10 @@ func (i *IntegrationSuite) TestSchemaRefresh() {
 		// Load test configuration
 		configFile, err := os.Open(match)
 		i.Require().NoError(err)
-		defer configFile.Close()
 
 		var testConfig SchemaRefreshTestConfig
 		err = yaml.NewDecoder(configFile).Decode(&testConfig)
+		configFile.Close()
 		i.Require().NoError(err)
 
 		// Run each scenario in the file
