@@ -38,9 +38,9 @@ func TestNewExternalLabelDependency(t *testing.T) {
 			},
 
 			expectedQuery: `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
-  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-  JOIN "management.cattle.io_v3_Project_fields" ex2
- WHERE lt1.label = "field.cattle.io/projectId" AND lt1.value = ex2."metadata.name" AND f."spec.displayName" != ex2."spec.displayName"`,
+	LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
+	JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
+	WHERE lt1.label = "field.cattle.io/projectId" AND f."spec.displayName" != ex2."spec.displayName"`,
 		},
 		{
 			name: "two label and field pairs",
@@ -55,9 +55,9 @@ func TestNewExternalLabelDependency(t *testing.T) {
 			},
 
 			expectedQuery: `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Secret_fields" f
-  LEFT OUTER JOIN "_v1_Secret_labels" lt1 ON f.key = lt1.key LEFT OUTER JOIN "_v1_Secret_labels" lt2 ON f.key = lt2.key
-  JOIN "management.cattle.io_v3_Project_fields" ex2
- WHERE lt1.label = "management.cattle.io/project-scoped-secret" AND lt1.value = ex2."metadata.name" AND lt2.label = "management.cattle.io/project-scoped-secret-cluster" AND lt2.value = ex2."spec.clusterName" AND f."spec.displayName" != ex2."spec.displayName"`,
+	LEFT OUTER JOIN "_v1_Secret_labels" lt1 ON f.key = lt1.key
+	JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name" OR lt1.value = ex2."spec.clusterName"
+	WHERE lt1.label = "management.cattle.io/project-scoped-secret" OR lt1.label = "management.cattle.io/project-scoped-secret-cluster" AND f."spec.displayName" != ex2."spec.displayName"`,
 		},
 	}
 
