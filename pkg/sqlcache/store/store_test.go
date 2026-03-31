@@ -797,12 +797,12 @@ func TestAddWithOneUpdate(t *testing.T) {
 					}
 				}).Times(2)
 			rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
-			LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-			JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-			WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
-			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
-			args1 := []any{"field.cattle.io/projectId"}
-			c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
+				LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
+				JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
+				WHERE lt1.label = "field.cattle.io/projectId" AND f."spec.displayName" != ex2."spec.displayName"`
+			args1 := []any{}
+			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
+			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 			preparedStmt.EXPECT().Close()
 			c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
@@ -1152,14 +1152,14 @@ func gvkKey(group, version, kind string) string {
 func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient, updateExternal bool, updateSelf bool) *Store {
 	name := "testStoreObject"
 	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
-	namespaceProjectLabelDep := sqltypes.ExternalLabelDependency{
+	namespaceProjectLabelDep := sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
 		SourceGVK: gvkKey("", "v1", "Namespace"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
 		SourceLabelTargetField: map[string]string{
 			"field.cattle.io/projectId": "metadata.name",
 		},
 		TargetFinalFieldName: "spec.displayName",
-	}
+	})
 	namespaceNonLabelDep := sqltypes.ExternalDependency{
 		SourceGVK:            gvkKey("", "v1", "Pods"),
 		SourceFieldName:      "field.cattle.io/fixer",
