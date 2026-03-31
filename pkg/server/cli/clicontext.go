@@ -117,6 +117,10 @@ func Flags(config *Config) []cli.Flag {
 			Value:       "localhost:6080",
 			Destination: &config.MetricsListenAddr,
 		},
+		&cli.IntFlag{
+			Name:        "metrics-update-interval",
+			Destination: &config.MetricsUpdateInterval,
+		},
 		&cli.BoolFlag{
 			Name:        "enable-pprof",
 			Value:       false,
