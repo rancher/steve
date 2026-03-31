@@ -39,6 +39,9 @@ func main() {
 func run(_ *cli.Context) error {
 	ctx := signals.SetupSignalContext()
 	debugconfig.MustSetupDebug()
+	if config.MetricsUpdateInterval > 0 {
+		metrics.SetUpdateInterval(config.MetricsUpdateInterval)
+	}
 	s, err := config.ToServer(ctx, debugconfig.SQLCache)
 	if err != nil {
 		return err
@@ -58,9 +61,6 @@ func run(_ *cli.Context) error {
 				logrus.Fatalf("metrics server: %v\n", err)
 			}
 		}()
-		if config.MetricsUpdateInterval > 0 {
-			metrics.SetUpdateInterval(config.MetricsUpdateInterval)
-		}
 	}
 	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, &server.ListenOpts{DisplayServerLogs: true})
 }
