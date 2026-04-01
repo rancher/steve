@@ -1,13 +1,10 @@
-#!/bin/bash
+#!/bin/sh
+set -e
 
-if ! command -v setup-envtest; then
-	echo "setup-envtest is required for tests, but was not installed"
-	echo "see the 'Running Tests' section of the readme for install instructions"
-	exit 127
-fi
+./scripts/install-envtest.sh
 
-minor=$(go mod graph | grep ' k8s.io/client-go@' | head -n1 | cut -d@ -f2 | cut -d '.' -f 2)
-version="1.$minor.x"
+ENVTEST_VERSION=$(grep '^ENVTEST_VERSION=' scripts/install-envtest.sh | cut -d= -f2)
+SEMVER=${ENVTEST_VERSION#v}
 
-export KUBEBUILDER_ASSETS=$(setup-envtest use -p path "$version")
+export KUBEBUILDER_ASSETS=$(go tool -modfile gotools/setup-envtest/go.mod setup-envtest use -p path -i "${SEMVER}")
 go test ./...
