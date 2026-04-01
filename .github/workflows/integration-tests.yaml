@@ -26,7 +26,8 @@ jobs:
 
     - name: Install k3d
       run: |
-        curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+        ./scripts/install-k3d.sh
+        sudo mv ./bin/k3d /usr/local/bin/k3d
 
     - name: Download dependencies
       run: go mod download
