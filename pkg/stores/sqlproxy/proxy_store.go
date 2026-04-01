@@ -24,6 +24,7 @@ import (
 	"github.com/rancher/steve/pkg/stores/queryhelper"
 	"github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/rancher/wrangler/v3/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/sirupsen/logrus"
@@ -1184,6 +1185,26 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 		}
 		doneCacheFns = append(doneCacheFns, func() {
 			s.cacheFactory.DoneWithCache(mgmtClusterInf)
+		})
+	} else if gvk == secretGVK {
+		mcioProjectSchema := types.APISchema{
+			Schema: &schemas.Schema{
+				Attributes: map[string]interface{}{
+					"group":    "management.cattle.io",
+					"version":  "v3",
+					"kind":     "Project",
+					"resource": "projects",
+					"verbs":    []string{"get", "list", "watch"},
+				},
+			},
+		}
+		// v1.secrets depend on management.cattle.io.projects
+		mcioProjectInf, err := s.cacheFor(ctx, nil, &mcioProjectSchema)
+		if err != nil {
+			return nil, nil, err
+		}
+		doneCacheFns = append(doneCacheFns, func() {
+			s.cacheFactory.DoneWithCache(mcioProjectInf)
 		})
 	}
 
