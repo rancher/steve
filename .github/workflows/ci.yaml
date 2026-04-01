@@ -26,8 +26,6 @@ jobs:
       with:
         version: ${{ env.GOLANG_CI_LINT_VERSION }}
         install-only: true
-    - name: Install env-test
-      run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
     - name: Build
       run: make build-bin
     - name: Test
