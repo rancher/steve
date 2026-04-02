@@ -35,7 +35,7 @@ require (
 	github.com/rancher/lasso v0.2.5
 	github.com/rancher/norman v0.7.1-0.20251002202451-d14394e537ab
 	github.com/rancher/remotedialer v0.6.0-rc.1
-	github.com/rancher/wrangler/v3 v3.3.4
+	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	github.com/tinylib/msgp v1.6.3

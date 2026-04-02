@@ -1363,3 +1363,170 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 		})
 	}
 }
+
+func Test_getHumanDurationFromActualStartEndTime(t *testing.T) {
+	tests := []struct {
+		name        string
+		unstr       *unstructured.Unstructured
+		wantStatus  bool
+		wantNewTime string
+	}{
+		{
+			name: "calculate duration from start and end time",
+			unstr: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"creationTimestamp": "2022-04-11T22:05:27Z",
+						"fields": []string{
+							"item1",
+							"Complete",
+							"1/1",
+							"63s",
+							"63s",
+							"item1",
+						},
+						"name": "item1",
+					},
+					"status": map[string]interface{}{
+						"startTime":      "2026-02-25T22:54:00Z",
+						"completionTime": "2026-02-25T22:54:05Z",
+					},
+				},
+			},
+			wantStatus:  true,
+			wantNewTime: "5s",
+		},
+		{
+			name: "fallback if no completion time is given",
+			unstr: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"creationTimestamp": "2022-04-11T22:05:27Z",
+						"fields": []string{
+							"item1",
+							"Complete",
+							"1/1",
+							"64s",
+							"64s",
+							"item1",
+						},
+						"name": "item1",
+					},
+					"status": map[string]interface{}{
+						"startTime": "2026-02-25T22:54:00Z",
+					},
+				},
+			},
+			wantStatus:  false,
+			wantNewTime: "",
+		},
+		{
+			name: "fallback if no start time is given",
+			unstr: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"creationTimestamp": "2022-04-11T22:05:27Z",
+						"fields": []string{
+							"item1",
+							"Complete",
+							"1/1",
+							"64s",
+							"64s",
+							"item1",
+						},
+						"name": "item1",
+					},
+				},
+			},
+			wantStatus:  false,
+			wantNewTime: "",
+		},
+		{
+			name: "fallback if no completion time is given",
+			unstr: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"creationTimestamp": "2022-04-11T22:05:27Z",
+						"fields": []string{
+							"item1",
+							"Complete",
+							"1/1",
+							"64s",
+							"64s",
+							"item1",
+						},
+						"name": "item1",
+					},
+					"status": map[string]interface{}{
+						"startTime": "2026-02-25T22:54:00Z",
+					},
+				},
+			},
+			wantStatus:  false,
+			wantNewTime: "",
+		},
+		{
+			name: "fallback if start time isn't processable",
+			unstr: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"creationTimestamp": "2022-04-11T22:05:27Z",
+						"fields": []string{
+							"item1",
+							"Complete",
+							"1/1",
+							"64s",
+							"64s",
+							"item1",
+						},
+						"name": "item1",
+					},
+					"status": map[string]interface{}{
+						"startTime": "Midnight!",
+					},
+				},
+			},
+			wantStatus:  false,
+			wantNewTime: "",
+		},
+		{
+			name: "fallback if end time isn't processable",
+			unstr: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"creationTimestamp": "2022-04-11T22:05:27Z",
+						"fields": []string{
+							"item1",
+							"Complete",
+							"1/1",
+							"64s",
+							"64s",
+							"item1",
+						},
+						"name": "item1",
+					},
+					"status": map[string]interface{}{
+						"completionTime": "Midnight!",
+					},
+				},
+			},
+			wantStatus:  false,
+			wantNewTime: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			duration, useDuration := getHumanDurationFromActualStartEndTime(test.unstr)
+			if test.wantStatus {
+				require.Equal(t, test.wantNewTime, duration)
+				require.True(t, useDuration)
+			} else {
+				require.Equal(t, "", duration)
+				require.False(t, useDuration)
+			}
+		})
+	}
+
+}
