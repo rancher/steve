@@ -930,21 +930,19 @@ Refer to [tests/integration/README.md](./tests/integration/README.md) for docume
 
 ## Running Tests
 
-Some of steve's tests make use of [envtest](https://book.kubebuilder.io/reference/envtest) to run. Envtest allows tests to run against a "fake" kubernetes server with little/no overhead.
-
-To install the required `setup-envtest` binary, use the following command:
+Run the unit tests with:
 
 ```bash
-go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+make test
 ```
 
-Before running the tests, you must run the following command to setup the fake server:
+Run the integration tests with:
 
 ```bash
-# note that this will use a new/latest version of k8s. Our CI will run against the version of k8s that corresponds to steve's
-# current client-go version, as seen in scripts/test.sh
-export KUBEBUILDER_ASSETS=$(setup-envtest use -p path)
+make integration-tests
 ```
+
+See [tests/integration/README.md](./tests/integration/README.md) for more details on integration tests.
 
 # Versioning
 

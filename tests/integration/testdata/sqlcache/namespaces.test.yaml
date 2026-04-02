@@ -1,0 +1,48 @@
+schemaID: namespaces
+tests:
+- name: sorts by name
+  query: sort=metadata.name&filter=metadata.labels.test-label=namespaces-test
+  expectedNames:
+  - namibia
+  - nigeria
+  - principe
+  - togo
+- name: sorts by projectId label
+  query: sort=metadata.labels[field.cattle.io/projectId],metadata.name&filter=metadata.labels.test-label=namespaces-test
+  expectedNames:
+  - nigeria
+  - togo
+  - principe
+  - namibia
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namibia
+  labels:
+    test-label: namespaces-test
+    field.cattle.io/projectId: windhoek
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: togo
+  labels:
+    test-label: namespaces-test
+    field.cattle.io/projectId: lome
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nigeria
+  labels:
+    test-label: namespaces-test
+    field.cattle.io/projectId: abuja
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: principe
+  labels:
+    test-label: namespaces-test
+    field.cattle.io/projectId: saotome

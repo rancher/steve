@@ -1,0 +1,134 @@
+schemaID: provisioning.cattle.io.clusters
+namespace: sqlcache-clusters-test
+tests:
+- name: sorts by name
+  query: sort=metadata.name&filter=metadata.labels.test-label=clusters-test
+  expectedIDs:
+  - sqlcache-clusters-test/angola
+  - sqlcache-clusters-test/botswana
+  - sqlcache-clusters-test/burundi
+  - sqlcache-clusters-test/mali
+  - sqlcache-clusters-test/rwanda
+- name: sorts by cluster-name
+  query: sort=status.clusterName,metadata.name&filter=metadata.labels.test-label=clusters-test
+  expectedIDs:
+  - sqlcache-clusters-test/mali
+  - sqlcache-clusters-test/botswana
+  - sqlcache-clusters-test/burundi
+  - sqlcache-clusters-test/rwanda
+  - sqlcache-clusters-test/angola
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sqlcache-clusters-test
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: kigali
+  labels:
+    test-label: clusters-test
+status:
+  allocatable:
+    cpu: "7000m"
+    memory: "900Ki"
+    pods: "17"
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: luanda
+  labels:
+    test-label: clusters-test
+status:
+  allocatable:
+    cpu: "14250m"
+    memory: "2610Ki"
+    pods: "11"
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: gaborone
+  labels:
+    test-label: clusters-test
+status:
+  allocatable:
+    cpu: "98m"
+    memory: "12Mi"
+    pods: "14"
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: gitega
+  labels:
+    test-label: clusters-test
+status:
+  allocatable:
+    cpu: "325m"
+    memory: "4Mi"
+    pods: "8"
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: bamako
+  labels:
+    test-label: clusters-test
+status:
+  allocatable:
+    cpu: "7"
+    memory: "1200Ki"
+    pods: "20"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: rwanda
+  namespace: sqlcache-clusters-test
+  labels:
+    test-label: clusters-test
+status:
+  clusterName: kigali
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: angola
+  namespace: sqlcache-clusters-test
+  labels:
+    test-label: clusters-test
+status:
+  clusterName: luanda
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: botswana
+  namespace: sqlcache-clusters-test
+  labels:
+    test-label: clusters-test
+status:
+  clusterName: gaborone
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: burundi
+  namespace: sqlcache-clusters-test
+  labels:
+    test-label: clusters-test
+status:
+  clusterName: gitega
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: mali
+  namespace: sqlcache-clusters-test
+  labels:
+    test-label: clusters-test
+status:
+  clusterName: bamako

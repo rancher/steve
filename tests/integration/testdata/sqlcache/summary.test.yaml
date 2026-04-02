@@ -1,0 +1,83 @@
+schemaID: configmaps
+namespace: sqlcache-summary-test
+tests:
+- name: summary by single label
+  query: summary=metadata.labels.knot&filter=metadata.labels.test-label=summary-test
+  expectedSummary:
+    metadata.labels.knot:
+      bowline: 3
+      hitch: 2
+- name: summary by multiple labels
+  query: summary=metadata.labels.knot,metadata.labels.apple&filter=metadata.labels.test-label=summary-test
+  expectedSummary:
+    metadata.labels.knot:
+      bowline: 3
+      hitch: 2
+    metadata.labels.apple:
+      ambrosia: 2
+      envy: 1
+      nicola: 1
+      grapple: 1
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sqlcache-summary-test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: italy
+  namespace: sqlcache-summary-test
+  labels:
+    test-label: summary-test
+    knot: bowline
+    apple: envy
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: armenia
+  namespace: sqlcache-summary-test
+  labels:
+    test-label: summary-test
+    knot: hitch
+    apple: ambrosia
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spain
+  namespace: sqlcache-summary-test
+  labels:
+    test-label: summary-test
+    knot: bowline
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: austria
+  namespace: sqlcache-summary-test
+  labels:
+    test-label: summary-test
+    apple: nicola
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netherlands
+  namespace: sqlcache-summary-test
+  labels:
+    test-label: summary-test
+    knot: hitch
+    apple: ambrosia
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: denmark
+  namespace: sqlcache-summary-test
+  labels:
+    test-label: summary-test
+    knot: bowline
+    apple: grapple
