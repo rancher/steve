@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"gopkg.in/yaml.v3"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -139,7 +140,7 @@ func (i *IntegrationSuite) doDelete(ctx context.Context, obj *unstructured.Unstr
 	deleteOpts := metav1.DeleteOptions{}
 	logrus.Println("Deleting", obj.GetNamespace(), obj.GetName())
 	err := i.client.Resource(gvr).Namespace(namespace).Delete(ctx, obj.GetName(), deleteOpts)
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("deleting %s/%s: %w", namespace, obj.GetName(), err)
 	}
 	return nil
