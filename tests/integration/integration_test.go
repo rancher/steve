@@ -40,6 +40,7 @@ type IntegrationSuite struct {
 
 	restCfg         *rest.Config
 	client          *dynamic.DynamicClient
+	k8sClient       *kubernetes.Clientset
 	discoveryMapper *restmapper.DeferredDiscoveryRESTMapper
 	kubeconfigFile  string
 
@@ -72,10 +73,10 @@ func (i *IntegrationSuite) SetupSuite() {
 	i.client, err = dynamic.NewForConfig(i.restCfg)
 	i.Require().NoError(err)
 
-	clientset, err := kubernetes.NewForConfig(i.restCfg)
+	i.k8sClient, err = kubernetes.NewForConfig(i.restCfg)
 	i.Require().NoError(err)
 
-	discoveryClient := memory.NewMemCacheClient(clientset.Discovery())
+	discoveryClient := memory.NewMemCacheClient(i.k8sClient.Discovery())
 	i.discoveryMapper = restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
 
 	crdsDir := filepath.Join("testdata", "crds")

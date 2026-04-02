@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: extension-apiserver-authentication
+  namespace: kube-system
+data:
+  client-ca-file: |
+    -----BEGIN CERTIFICATE-----
+    MIIBeDCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhleHRlbnNp
+    b24tYXBpc2VydmVyLWNhMB4XDTcwMDEwMTAwMDAwMFoXDTcwMDEwMTAwMDAwMVow
+    IzEhMB8GA1UEAwwYZXh0ZW5zaW9uLWFwaXNlcnZlci1jYTBZMBMGByqGSM49AgEG
+    CCqGSM49AwEHA0IABPB2BzJ3Z3RmVpQkHwFAR1Rml+fgdGMBJRRmVHZ1BzE2VpQk
+    HwFARVpQkHwFAR1Rml1BzJ3Z3RmVpQkHwFAR1Rml+fgdGMjCBizAOBgNVHQ8BAf8E
+    BAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUZXh0ZW5zaW9uLWFwaXNl
+    cnZlci1jYTAfBgNVHSMEGDAWgBRleHRlbnNpb24tYXBpc2VydmVyLWNhMAoGCCqG
+    SM49BAMCA0kAMEYCIQDExample1Example1Example1Example1Example1Example1AIQD
+    Example2Example2Example2Example2Example2Example2
+    -----END CERTIFICATE-----
+  requestheader-allowed-names: |
+    ["system:auth-proxy"]
+  requestheader-client-ca-file: |
+    -----BEGIN CERTIFICATE-----
+    MIIBeDCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhleHRlbnNp
+    b24tYXBpc2VydmVyLWNhMB4XDTcwMDEwMTAwMDAwMFoXDTcwMDEwMTAwMDAwMVow
+    IzEhMB8GA1UEAwwYZXh0ZW5zaW9uLWFwaXNlcnZlci1jYTBZMBMGByqGSM49AgEG
+    CCqGSM49AwEHA0IABPB2BzJ3Z3RmVpQkHwFAR1Rml+fgdGMBJRRmVHZ1BzE2VpQk
+    HwFARVpQkHwFAR1Rml1BzJ3Z3RmVpQkHwFAR1Rml+fgdGMjCBizAOBgNVHQ8BAf8E
+    BAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUZXh0ZW5zaW9uLWFwaXNl
+    cnZlci1jYTAfBgNVHSMEGDAWgBRleHRlbnNpb24tYXBpc2VydmVyLWNhMAoGCCqG
+    SM49BAMCA0kAMEYCIQDExample1Example1Example1Example1Example1Example1AIQD
+    Example2Example2Example2Example2Example2Example2
+    -----END CERTIFICATE-----
