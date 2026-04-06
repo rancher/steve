@@ -98,7 +98,6 @@ type ExternalLabelDependency struct {
 	SourceGVK string
 	TargetGVK string
 
-	// SourceLabelTargetField pairs a SourceGVK resource label value with a TargetGVK field value.
 	SourceLabelTargetField map[string]string
 
 	TargetFinalFieldName string
@@ -106,7 +105,8 @@ type ExternalLabelDependency struct {
 	generatedQuery string
 }
 
-// NewExternalLabelDependency pre-generates the query needed for the label and key pairs.
+// NewExternalLabelDependency pre-generates the query needed for the label and key pairs. No labels in
+// ExternalLabelDependency are user supplied, making risk of potential SQL injection minimal.
 func NewExternalLabelDependency(eld ExternalLabelDependency) (ExternalLabelDependency, error) {
 	if len(eld.SourceLabelTargetField) == 0 {
 		return ExternalLabelDependency{}, fmt.Errorf("ExternalLabelDependency must have at least 1 label and field pair")
