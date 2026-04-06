@@ -140,8 +140,8 @@ func NewExternalLabelDependency(eld ExternalLabelDependency) (ExternalLabelDepen
 
 	eld.generatedQuery = fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
 	LEFT OUTER JOIN "%s_labels" lt1 ON f.key = lt1.key
-	JOIN "%s_fields" ex2 ON %s
-	WHERE %s AND f."%s" != ex2."%s"`,
+	JOIN "%s_fields" ex2 ON (%s)
+	WHERE (%s) AND f."%s" != ex2."%s"`,
 		eld.TargetFinalFieldName,
 		eld.SourceGVK,
 		eld.SourceGVK,

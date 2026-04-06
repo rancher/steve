@@ -798,8 +798,8 @@ func TestAddWithOneUpdate(t *testing.T) {
 				}).Times(2)
 			rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
 				LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-				JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-				WHERE lt1.label = "field.cattle.io/projectId" AND f."spec.displayName" != ex2."spec.displayName"`
+				JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt1.value = ex2."metadata.name")
+				WHERE (lt1.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
 			args1 := []any{}
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
@@ -871,11 +871,11 @@ func TestAddWithExternalUpdates(t *testing.T) {
 			}).Times(2)
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
 			LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-			JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-			WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
-		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
-		args1 := []any{"field.cattle.io/projectId"}
-		c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
+			JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt1.value = ex2."metadata.name")
+			WHERE (lt1.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
+		args1 := []any{}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 		preparedStmt.EXPECT().Close()
 		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
@@ -956,11 +956,11 @@ func TestAddWithSelfUpdates(t *testing.T) {
 			}).Times(2)
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
 			LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-			JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-			WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
-		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
-		args1 := []any{"field.cattle.io/projectId"}
-		c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
+			JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt1.value = ex2."metadata.name")
+			WHERE (lt1.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
+		args1 := []any{}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 		preparedStmt.EXPECT().Close()
 		c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
@@ -1031,8 +1031,8 @@ func TestAddWithBothUpdates(t *testing.T) {
 
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-  JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-  WHERE lt1.label = "field.cattle.io/projectId" AND f."spec.displayName" != ex2."spec.displayName"`
+  JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt1.value = ex2."metadata.name")
+  WHERE (lt1.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
 		rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
   JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
   WHERE f."spec.projectName" != ex2."spec.projectName"`
