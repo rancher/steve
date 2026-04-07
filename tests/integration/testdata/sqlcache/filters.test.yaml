@@ -1,0 +1,115 @@
+schemaID: configmaps
+namespace: sqlcache-filters-test
+tests:
+- name: matches filter exact
+  query: filter=metadata.labels.somekey=somevalue
+  expectedNames:
+  - matches-filter
+- name: partial matches filter
+  query: filter=metadata.labels.somekey~somevalue
+  expectedNames:
+  - matches-filter
+  - partial-matches
+- name: special character match
+  query: filter=metadata.labels.somekey=cool-value
+  expectedNames:
+  - special-character-matches
+- name: backslash character match
+  query: filter=metadata.labels.somekey=mywindowspath
+  expectedNames:
+  - backslash-character-matches
+- name: not eq filter
+  query: filter=metadata.labels.somekey!=somevalue&filter=metadata.labels.test-label=filters
+  expectedNames:
+  - partial-matches
+  - not-matches-filter
+  - missing
+  - special-character-matches
+  - backslash-character-matches
+- name: underscore literal not wildcard
+  query: filter=metadata.labels.somekey~somevalu_
+  expectedNames: []
+- name: percent literal not wildcard
+  query: filter=metadata.labels.somekey~somevalu%
+  expectedNames: []
+- name: partial not eq filter
+  query: filter=metadata.labels.somekey!~somevalue&filter=metadata.labels.test-label=filters
+  expectedNames:
+  - not-matches-filter
+  - missing
+  - special-character-matches
+  - backslash-character-matches
+- name: multiple or filters same field
+  query: filter=metadata.labels.somekey~somevalue,metadata.labels.somekey=notequal
+  expectedNames:
+  - matches-filter
+  - partial-matches
+  - not-matches-filter
+- name: or filters different fields
+  query: filter=metadata.labels.somekey~somevalue,metadata.name=missing
+  expectedNames:
+  - matches-filter
+  - partial-matches
+  - missing
+- name: and filters both must match
+  query: filter=metadata.labels.somekey~somevalue&filter=metadata.name=matches-filter
+  expectedNames:
+  - matches-filter
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sqlcache-filters-test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: matches-filter
+  namespace: sqlcache-filters-test
+  labels:
+    somekey: somevalue
+    test-label: filters
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: partial-matches
+  namespace: sqlcache-filters-test
+  labels:
+    somekey: somevaluehere
+    test-label: filters
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: special-character-matches
+  namespace: sqlcache-filters-test
+  labels:
+    somekey: cool-value
+    test-label: filters
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backslash-character-matches
+  namespace: sqlcache-filters-test
+  labels:
+    somekey: mywindowspath
+    test-label: filters
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: not-matches-filter
+  namespace: sqlcache-filters-test
+  labels:
+    somekey: notequal
+    test-label: filters
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: missing
+  namespace: sqlcache-filters-test
+  labels:
+    test-label: filters
