@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	roleLabel  = "pod-impersonation.cattle.io/cluster-role"
-	keyLabel   = "pod-impersonation.cattle.io/key"
-	TokenLabel = "pod-impersonation.cattle.io/token"
+	roleLabel     = "pod-impersonation.cattle.io/cluster-role"
+	keyLabel      = "pod-impersonation.cattle.io/key"
+	TokenLabel    = "pod-impersonation.cattle.io/token"
+	extraCRBLabel = "pod-impersonation.cattle.io/for-role"
 )
 
 type PodImpersonation struct {
@@ -80,7 +81,7 @@ func (s *PodImpersonation) PurgeOldRoles(gvk schema.GroupVersionKind, key string
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			_ = client.RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
+			s.deleteRoleAndExtraCRBs(ctx, client, name)
 		}()
 	} else {
 		s.pendingLock.Lock()
@@ -97,7 +98,7 @@ func (s *PodImpersonation) PurgeOldRoles(gvk schema.GroupVersionKind, key string
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancel()
 
-				_ = client.RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
+				s.deleteRoleAndExtraCRBs(ctx, client, name)
 
 				s.pendingLock.Lock()
 				delete(s.pending, name)
@@ -109,13 +110,26 @@ func (s *PodImpersonation) PurgeOldRoles(gvk schema.GroupVersionKind, key string
 	return nil
 }
 
+func (s *PodImpersonation) deleteRoleAndExtraCRBs(ctx context.Context, client kubernetes.Interface, roleName string) error {
+	err := client.RbacV1().ClusterRoles().Delete(ctx, roleName, metav1.DeleteOptions{})
+	crbList, listErr := client.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{
+		LabelSelector: extraCRBLabel + "=" + roleName,
+	})
+	if listErr == nil {
+		for _, crb := range crbList.Items {
+			_ = client.RbacV1().ClusterRoleBindings().Delete(ctx, crb.Name, metav1.DeleteOptions{})
+		}
+	}
+	return err
+}
+
 func (s *PodImpersonation) DeleteRole(ctx context.Context, pod v1.Pod) error {
 	client, err := s.cg.AdminK8sInterface()
 	if err != nil {
 		return err
 	}
 	roleName := pod.Annotations[roleLabel]
-	return client.RbacV1().ClusterRoles().Delete(ctx, roleName, metav1.DeleteOptions{})
+	return s.deleteRoleAndExtraCRBs(ctx, client, roleName)
 }
 
 type PodOptions struct {
@@ -125,6 +139,9 @@ type PodOptions struct {
 	ImageOverride      string
 	Username           string // Username for kubeconfig paths (e.g. "shell", "kuberlr"). Defaults to "shell" for non-root, "root" for root
 	UserID             *int64 // UserID for chown operations on kubeconfig files. Defaults to 1000 if not specified
+	// ExtraClusterRoles is a list of existing ClusterRole names to bind
+	// the operation's impersonation SA to for the duration of the pod.
+	ExtraClusterRoles []string
 }
 
 // CreatePod will create a pod with a service account that impersonates as user. Corresponding
@@ -224,6 +241,35 @@ func (s *PodImpersonation) createRole(ctx context.Context, user user.Info, names
 		AggregationRule: nil,
 	}, metav1.CreateOptions{})
 
+}
+
+func (s *PodImpersonation) createExtraRoleBindings(ctx context.Context, role *rbacv1.ClusterRole, sa *v1.ServiceAccount, extraClusterRoles []string, client kubernetes.Interface) error {
+	for _, clusterRoleName := range extraClusterRoles {
+		_, err := client.RbacV1().ClusterRoleBindings().Create(ctx, &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "helm-op-" + sa.Name + "-",
+				Labels: map[string]string{
+					extraCRBLabel: role.Name,
+				},
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					Kind:      "ServiceAccount",
+					Name:      sa.Name,
+					Namespace: sa.Namespace,
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "ClusterRole",
+				Name:     clusterRoleName,
+			},
+		}, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *PodImpersonation) createRoleBinding(ctx context.Context, role *rbacv1.ClusterRole, serviceAccount *v1.ServiceAccount, client kubernetes.Interface) error {
@@ -334,6 +380,12 @@ func (s *PodImpersonation) createPod(ctx context.Context, user user.Info, role *
 
 	if err := s.createRoleBinding(ctx, role, sa, client); err != nil {
 		return nil, err
+	}
+
+	if len(podOptions.ExtraClusterRoles) > 0 {
+		if err := s.createExtraRoleBindings(ctx, role, sa, podOptions.ExtraClusterRoles, client); err != nil {
+			return nil, err
+		}
 	}
 
 	sc := v1.Secret{
