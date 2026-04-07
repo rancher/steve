@@ -1,4 +1,4 @@
-module github.com/rancher/rancher/gotools/setup-envtest
+module github.com/rancher/steve/gotools/setup-envtest
 
 go 1.24
 
