@@ -27,7 +27,7 @@ From repository root:
 ```sh
 TOOLNAME=<tool name>
 mkdir -p gotools/"$TOOLNAME"
-go mod init -modfile=gotools/"$TOOLNAME"/go.mod github.com/rancher/rancher/gotools/"$TOOLNAME"
+go mod init -modfile=gotools/"$TOOLNAME"/go.mod github.com/rancher/steve/gotools/"$TOOLNAME"
 go get -tool -modfile=gotools/"$TOOLNAME"/go.mod <module>@<version>
 ```
 
@@ -36,7 +36,7 @@ For example, controller-gen was added this way:
 ```
 TOOLNAME=controller-gen
 mkdir -p gotools/"$TOOLNAME"
-go mod init -modfile=gotools/"$TOOLNAME"/go.mod github.com/rancher/rancher/gotools/"$TOOLNAME"
+go mod init -modfile=gotools/"$TOOLNAME"/go.mod github.com/rancher/steve/gotools/"$TOOLNAME"
 go get -tool -modfile=gotools/"$TOOLNAME"/go.mod sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.1
 ```
 
