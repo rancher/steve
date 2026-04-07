@@ -11,7 +11,20 @@ import (
 )
 
 // TestExtRBAC verifies that the RBAC resources for ext tests can be created successfully.
-// The actual authorization logic is tested in pkg/ext unit tests.
+//
+// Note: The actual authorization behavior (verifying 403/200 status codes for different users)
+// is tested in the pkg/ext unit tests:
+// - pkg/ext/apiserver_authorization_test.go tests the AccessSetAuthorizer
+// - The unit tests verify read-only users get 403 on write operations
+// - The unit tests verify read-write users get 200 on all operations
+//
+// Note: Authentication (request-header auth with X-Remote-User/X-Remote-Group headers) is
+// tested in pkg/ext/apiserver_authentication_test.go via TestAuthenticationCustom.
+// Integration testing of request-header authentication is not feasible in k3d clusters
+// because they don't configure the extension-apiserver-authentication ConfigMap with
+// request-header client CA certificates that would allow testing this flow.
+//
+// Integration tests here focus on verifying the RBAC manifests can be applied to a real cluster.
 func (i *IntegrationSuite) TestExtRBAC() {
 	ctx := i.T().Context()
 	testFile := filepath.Join("testdata", "ext", "rbac.yaml")

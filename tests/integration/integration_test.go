@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,7 +199,45 @@ func (i *IntegrationSuite) doManifestWithHeader(ctx context.Context, manifestFil
 	i.Require().NoError(err)
 	defer file.Close()
 
-	dec := yaml.NewDecoder(file)
+	i.doManifestReaderWithHeader(ctx, file, headerFn, doFn)
+}
+
+func (i *IntegrationSuite) doManifestString(ctx context.Context, manifestYAML string, doFn DoFunc) {
+	noHeader := func(_ context.Context, _ map[string]any) error {
+		return nil
+	}
+	i.doManifestStringWithHeader(ctx, manifestYAML, noHeader, doFn)
+}
+
+func (i *IntegrationSuite) doManifestStringReversed(ctx context.Context, manifestYAML string, doFn DoFunc) {
+	noHeader := func(_ context.Context, _ map[string]any) error {
+		return nil
+	}
+	i.doManifestStringWithHeaderReversed(ctx, manifestYAML, noHeader, doFn)
+}
+
+func (i *IntegrationSuite) doManifestStringWithHeaderReversed(ctx context.Context, manifestYAML string, headerFn HeaderFunc, doFn DoFunc) {
+	var fns []func()
+	acc := func(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error {
+		fns = append(fns, func() {
+			doFn(ctx, obj, gvr)
+		})
+		return nil
+	}
+	i.doManifestStringWithHeader(ctx, manifestYAML, headerFn, acc)
+	for idx := range len(fns) {
+		index := len(fns) - idx - 1
+		fns[index]()
+	}
+}
+
+func (i *IntegrationSuite) doManifestStringWithHeader(ctx context.Context, manifestYAML string, headerFn HeaderFunc, doFn DoFunc) {
+	reader := strings.NewReader(manifestYAML)
+	i.doManifestReaderWithHeader(ctx, reader, headerFn, doFn)
+}
+
+func (i *IntegrationSuite) doManifestReaderWithHeader(ctx context.Context, reader io.Reader, headerFn HeaderFunc, doFn DoFunc) {
+	dec := yaml.NewDecoder(reader)
 	for {
 		obj := &unstructured.Unstructured{Object: map[string]any{}}
 		err := dec.Decode(obj.Object)
@@ -206,7 +245,7 @@ func (i *IntegrationSuite) doManifestWithHeader(ctx context.Context, manifestFil
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			err2 := fmt.Errorf("error loading file %s: %s\n", manifestFile, err)
+			err2 := fmt.Errorf("error loading manifest: %s\n", err)
 			i.Require().NoError(err2)
 		}
 

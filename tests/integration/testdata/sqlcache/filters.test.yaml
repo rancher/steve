@@ -26,6 +26,35 @@ tests:
   - missing
   - special-character-matches
   - backslash-character-matches
+- name: underscore literal not wildcard
+  query: filter=metadata.labels.somekey~somevalu_
+  expectedNames: []
+- name: percent literal not wildcard
+  query: filter=metadata.labels.somekey~somevalu%
+  expectedNames: []
+- name: partial not eq filter
+  query: filter=metadata.labels.somekey!~somevalue&filter=metadata.labels.test-label=filters
+  expectedNames:
+  - not-matches-filter
+  - missing
+  - special-character-matches
+  - backslash-character-matches
+- name: multiple or filters same field
+  query: filter=metadata.labels.somekey~somevalue,metadata.labels.somekey=notequal
+  expectedNames:
+  - matches-filter
+  - partial-matches
+  - not-matches-filter
+- name: or filters different fields
+  query: filter=metadata.labels.somekey~somevalue,metadata.name=missing
+  expectedNames:
+  - matches-filter
+  - partial-matches
+  - missing
+- name: and filters both must match
+  query: filter=metadata.labels.somekey~somevalue&filter=metadata.name=matches-filter
+  expectedNames:
+  - matches-filter
 ---
 apiVersion: v1
 kind: Namespace
