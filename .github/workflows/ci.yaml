@@ -7,9 +7,6 @@ on:
     - master
     - release/*
 
-env:
-  GOLANG_CI_LINT_VERSION: v1.64.5
-
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -29,8 +26,7 @@ jobs:
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
       with:
-        version: ${{ env.GOLANG_CI_LINT_VERSION }}
-        install-only: true
+        version: v1.64.8
     - name: Build
       run: make build-bin
     - name: Test
