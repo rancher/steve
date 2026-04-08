@@ -17,6 +17,11 @@ if [ "$CLIENT_GO_MINOR" != "$ENVTEST_MINOR" ]; then
     exit 1
 fi
 
+if ! command -v setup-envtest >/dev/null; then
+    echo "Installing setup-envtest..."
+    go install sigs.k8s.io/controller-runtime/tools/setup-envtest@52b17917caa97ec546423867d9637f1787830f3e
+fi
+
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 
@@ -33,10 +38,10 @@ DEST="/tmp/${TARBALL}"
 
 SEMVER=${ENVTEST_VERSION#v}
 
-if ! go tool -modfile gotools/setup-envtest/go.mod setup-envtest list -i | grep -q "v${SEMVER}"; then
+if ! setup-envtest list -i | grep -q "v${SEMVER}"; then
     curl -sL -o "$DEST" "$URL"
 
     echo "${ENVTEST_SUM}  ${DEST}" | sha512sum --check > /dev/null
 
-    cat "$DEST" | go tool -modfile gotools/setup-envtest/go.mod setup-envtest sideload "${SEMVER}" > /dev/null
+    cat "$DEST" | setup-envtest sideload "${SEMVER}" > /dev/null
 fi
