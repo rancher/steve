@@ -19,7 +19,7 @@ fi
 
 if ! command -v setup-envtest >/dev/null; then
     echo "Installing setup-envtest..."
-    go install sigs.k8s.io/controller-runtime/tools/setup-envtest@f9589b9f2b9d
+    go install sigs.k8s.io/controller-runtime/tools/setup-envtest@52b17917caa97ec546423867d9637f1787830f3e
 fi
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
