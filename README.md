@@ -830,7 +830,7 @@ Some of steve's tests make use of [envtest](https://book.kubebuilder.io/referenc
 To install the required `setup-envtest` binary, use the following command:
 
 ```bash
-go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@f9589b9f2b9d
 ```
 
 Before running the tests, you must run the following command to setup the fake server:
