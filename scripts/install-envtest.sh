@@ -9,7 +9,7 @@ ENVTEST_SUM_linux_arm64=72f5c8fd615c9db62eeb66e30edfda0f3879bffa3577c5776ec83363
 ENVTEST_SUM_darwin_amd64=d681838609a1b0856e731888e0db0a1191003e1021801b5969b7d7084130076b30b2d99e53e460f1c5202b3308354a2118bd4a330d06d97797ef009dd56e256e
 ENVTEST_SUM_darwin_arm64=e42c27e1ee90d13d56189e665d4c79b7a34f637581fc7e20b028a3c16b22b85060760eb91ca79901bc1c22dcd0d66ef41a0f760c2f1ae65265f0576e4109d87d
 
-CLIENT_GO_MINOR=$(go list -m all | grep 'k8s.io/client-go' | head -n1 | cut -d ' ' -f 2 | cut -d '.' -f 2)
+CLIENT_GO_MINOR=$(go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' k8s.io/client-go | cut -d . -f 2)
 ENVTEST_MINOR=$(echo "$ENVTEST_VERSION" | cut -d '.' -f 2)
 
 if [ "$CLIENT_GO_MINOR" != "$ENVTEST_MINOR" ]; then
