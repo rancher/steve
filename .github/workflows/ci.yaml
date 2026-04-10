@@ -7,6 +7,8 @@ on:
     - main
     - release/*
 
+permissions: {}
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -14,13 +16,14 @@ jobs:
       GOLANG_CI_LINT_VERSION: v2.7.1
     steps:
     - name : Checkout repository
-      # https://github.com/actions/checkout/releases/tag/v4.1.1
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
     - name: Install Go
-      # https://github.com/actions/setup-go/releases/tag/v5.0.0
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       with:
         go-version-file: 'go.mod'
+        cache: false
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
       with:
