@@ -5,6 +5,8 @@ on:
     tags:
       - v*
 
+permissions: {}
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -13,9 +15,11 @@ jobs:
     steps:
     - name : Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
 
     - name: Create release on Github
       run: |
-        gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
+        gh --repo "${ GITHUB_REPOSITORY }" release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
