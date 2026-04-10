@@ -1,13 +1,20 @@
 package podimpersonation
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8stesting "k8s.io/client-go/testing"
+
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestAugmentPod(t *testing.T) {
@@ -341,6 +348,165 @@ func TestAugmentPodUserId(t *testing.T) {
 				assert.Contains(t, initContainer.Command[2], fmt.Sprintf("chown %d", tc.expectUserId),
 					"expected chown command to use userId %d", tc.expectUserId)
 			}
+		})
+	}
+}
+
+// newFakeClientWithGenerateName returns a fake client that honours GenerateName
+// by appending a counter suffix, since the upstream fake does not implement this.
+func newFakeClientWithGenerateName(objects ...runtime.Object) *fake.Clientset {
+	client := fake.NewSimpleClientset(objects...)
+	counter := 0
+	client.PrependReactor("create", "*", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		createAction := action.(k8stesting.CreateAction)
+		obj := createAction.GetObject()
+		acc, ok := obj.(metav1.Object)
+		if ok && acc.GetName() == "" && acc.GetGenerateName() != "" {
+			counter++
+			acc.SetName(fmt.Sprintf("%s%d", acc.GetGenerateName(), counter))
+		}
+		return false, nil, nil // let the default reactor handle the actual create
+	})
+	return client
+}
+
+func TestCreateExtraRoleBindings(t *testing.T) {
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-role",
+			UID:  "test-role-uid",
+		},
+	}
+	sa := &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-sa",
+			Namespace: "test-ns",
+		},
+	}
+
+	testCases := []struct {
+		name              string
+		extraClusterRoles []string
+		expectCRBCount    int
+		expectErr         bool
+	}{
+		{
+			name:              "No extra cluster roles creates no bindings",
+			extraClusterRoles: []string{},
+			expectCRBCount:    0,
+		},
+		{
+			name:              "Single extra cluster role creates one binding",
+			extraClusterRoles: []string{"cluster-admin"},
+			expectCRBCount:    1,
+		},
+		{
+			name:              "Multiple extra cluster roles creates one binding each",
+			extraClusterRoles: []string{"cluster-admin", "view", "edit"},
+			expectCRBCount:    3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newFakeClientWithGenerateName()
+			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
+
+			err := impersonator.createExtraRoleBindings(context.Background(), role, sa, tc.extraClusterRoles, client)
+			require.NoError(t, err)
+
+			crbList, err := client.RbacV1().ClusterRoleBindings().List(context.Background(), metav1.ListOptions{})
+			require.NoError(t, err)
+			assert.Len(t, crbList.Items, tc.expectCRBCount)
+
+			for i, crb := range crbList.Items {
+				// Each CRB must have the label linking it to the role
+				assert.Equal(t, role.Name, crb.Labels[extraCRBLabel], "expected extraCRBLabel to point to the role")
+
+				// Each CRB must reference the expected extra cluster role
+				assert.Equal(t, tc.extraClusterRoles[i], crb.RoleRef.Name, "expected RoleRef to point to extra cluster role")
+				assert.Equal(t, "ClusterRole", crb.RoleRef.Kind)
+				assert.Equal(t, rbacv1.GroupName, crb.RoleRef.APIGroup)
+
+				// Each CRB must bind the service account
+				require.Len(t, crb.Subjects, 1)
+				assert.Equal(t, "ServiceAccount", crb.Subjects[0].Kind)
+				assert.Equal(t, sa.Name, crb.Subjects[0].Name)
+				assert.Equal(t, sa.Namespace, crb.Subjects[0].Namespace)
+			}
+		})
+	}
+}
+
+func TestDeleteRoleAndExtraCRBs(t *testing.T) {
+	roleName := "test-role"
+
+	testCases := []struct {
+		name          string
+		existingCRBs  []rbacv1.ClusterRoleBinding
+		expectRemoved int // number of extra CRBs expected to be deleted
+	}{
+		{
+			name:          "No extra CRBs deletes only the role",
+			existingCRBs:  []rbacv1.ClusterRoleBinding{},
+			expectRemoved: 0,
+		},
+		{
+			name: "Deletes CRBs labeled for the role",
+			existingCRBs: []rbacv1.ClusterRoleBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "crb-1",
+						Labels: map[string]string{extraCRBLabel: roleName},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "crb-2",
+						Labels: map[string]string{extraCRBLabel: roleName},
+					},
+				},
+			},
+			expectRemoved: 2,
+		},
+		{
+			name: "Does not delete CRBs labeled for a different role",
+			existingCRBs: []rbacv1.ClusterRoleBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "crb-other",
+						Labels: map[string]string{extraCRBLabel: "other-role"},
+					},
+				},
+			},
+			expectRemoved: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			role := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: roleName},
+			}
+			objects := []runtime.Object{role}
+			for i := range tc.existingCRBs {
+				objects = append(objects, &tc.existingCRBs[i])
+			}
+			client := fake.NewSimpleClientset(objects...)
+
+			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
+			err := impersonator.deleteRoleAndExtraCRBs(context.Background(), client, roleName)
+			require.NoError(t, err)
+
+			// The role itself should be gone
+			_, getErr := client.RbacV1().ClusterRoles().Get(context.Background(), roleName, metav1.GetOptions{})
+			assert.Error(t, getErr, "expected role to be deleted")
+
+			// Verify remaining CRBs
+			remaining, listErr := client.RbacV1().ClusterRoleBindings().List(context.Background(), metav1.ListOptions{})
+			require.NoError(t, listErr)
+			expectedRemaining := len(tc.existingCRBs) - tc.expectRemoved
+			assert.Len(t, remaining.Items, expectedRemaining, "unexpected number of remaining CRBs")
 		})
 	}
 }
