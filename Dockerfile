@@ -7,7 +7,7 @@ RUN \
     cd /src && \
     CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /steve
 
-FROM registry.suse.com/bci/bci-micro:15.6@sha256:f6561730395434ac5da9284fc73c9476ab45108a7eace445f5295fba95e75cd0
+FROM registry.suse.com/bci/bci-micro:15.7@sha256:5ca1a44ca5be8afd3e4abc721abf1efe6b0fe69b83cf01a0c204c16160913edc
 
 ARG user=steve
 
