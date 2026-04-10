@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM registry.suse.com/bci/golang:1.24@sha256:ae722bb8954485d10eb26d90c14d521d90810d8b0c84c3c72b58cbb1fc1ee284 as build
+FROM registry.suse.com/bci/golang:1.25@sha256:71eb104cb6375c29d2c552f1470fafb040d2ab2b68324c00076b0255ecdd0989 as build
 COPY go.mod go.sum main.go /src/
 COPY pkg /src/pkg/
 #RUN --mount=type=cache,target=/root/.cache/go-build \
