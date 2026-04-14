@@ -472,8 +472,8 @@ k8s.io/kube-aggregator v0.33.1/go.mod h1:16/wlU5Lj7hNJSv7JSu5FLvxyrgiJVLCHzfVoEC
 k8s.io/kube-openapi v0.0.0-20200121204235-bf4fb3bd569c/go.mod h1:GRQhZsXIAJ1xR0C9bd8UpWHZ5plfAS9fzPjJuQ6JL3E=
 k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff h1:/usPimJzUKKu+m+TE36gUyGcf03XZEP0ZIKgKj35LS4=
 k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff/go.mod h1:5jIi+8yX4RIb8wk3XwBo5Pq2ccx4FP10ohkbSKCZoK8=
-k8s.io/kubernetes v1.33.1 h1:86+VVY/f11taZdpEZrNciLw1MIQhu6BFXf/OMFn5EUg=
-k8s.io/kubernetes v1.33.1/go.mod h1:2nWuPk0seE4+6sd0x60wQ6rYEXcV7SoeMbU0YbFm/5k=
+k8s.io/kubernetes v1.33.6 h1:NOIZqkx8M4XfdyRKllzLSBiMgSilPzSvCembfzOMk6A=
+k8s.io/kubernetes v1.33.6/go.mod h1:eJiHC143tnNSvmDkCRwGNKA80yXqBvYC3U8L/i67nAY=
 k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
 k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 h1:M3sRQVHv7vB20Xc2ybTt7ODCeFj6JSWYFzOFnYeS6Ro=
 k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
