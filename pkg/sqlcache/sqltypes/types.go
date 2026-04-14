@@ -130,24 +130,26 @@ func NewExternalLabelDependency(eld ExternalLabelDependency) (ExternalLabelDepen
 		return pairs[i].sourceLabelName < pairs[j].sourceLabelName
 	})
 
-	whereClauses := make([]string, 0, len(pairs))
+	joinClauses := make([]string, 0, len(pairs))
 	onClauses := make([]string, 0, len(pairs))
+	whereClauses := make([]string, 0, len(pairs))
 
-	for _, pair := range pairs {
-		onClauses = append(onClauses, fmt.Sprintf(`lt1.value = ex2."%s"`, pair.targetFieldName))
-		whereClauses = append(whereClauses, fmt.Sprintf(`lt1.label = "%s"`, pair.sourceLabelName))
+	for i, pair := range pairs {
+		joinClauses = append(joinClauses, fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON f.key = lt%d.key`, eld.SourceGVK, i, i))
+		onClauses = append(onClauses, fmt.Sprintf(`lt%d.value = ex2."%s"`, i, pair.targetFieldName))
+		whereClauses = append(whereClauses, fmt.Sprintf(`lt%d.label = "%s"`, i, pair.sourceLabelName))
 	}
 
 	eld.generatedQuery = fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
-	LEFT OUTER JOIN "%s_labels" lt1 ON f.key = lt1.key
+	%s
 	JOIN "%s_fields" ex2 ON (%s)
 	WHERE (%s) AND f."%s" != ex2."%s"`,
 		eld.TargetFinalFieldName,
 		eld.SourceGVK,
-		eld.SourceGVK,
+		strings.Join(joinClauses, "\n\t"),
 		eld.TargetGVK,
-		strings.Join(onClauses, " OR "),
-		strings.Join(whereClauses, " OR "),
+		strings.Join(onClauses, " AND "),
+		strings.Join(whereClauses, " AND "),
 		eld.TargetFinalFieldName,
 		eld.TargetFinalFieldName,
 	)
