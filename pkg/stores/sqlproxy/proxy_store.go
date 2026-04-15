@@ -1190,11 +1190,12 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 		mcioProjectSchema := types.APISchema{
 			Schema: &schemas.Schema{
 				Attributes: map[string]interface{}{
-					"group":    "management.cattle.io",
-					"version":  "v3",
-					"kind":     "Project",
-					"resource": "projects",
-					"verbs":    []string{"get", "list", "watch"},
+					"group":      "management.cattle.io",
+					"version":    "v3",
+					"kind":       "Project",
+					"resource":   "projects",
+					"verbs":      []string{"get", "list", "watch"},
+					"namespaced": true,
 				},
 			},
 		}
