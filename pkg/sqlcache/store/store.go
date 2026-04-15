@@ -181,6 +181,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 			labelDep.TargetFinalFieldName,
 		)
 		getStmt := s.Prepare(rawGetStmt)
+		defer s.CloseStmt(getStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
 		if err != nil {
 			if !isDBError(err) {
@@ -206,6 +207,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
+			defer s.CloseStmt(preparedStmt)
 			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
 			if err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
@@ -227,6 +229,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 		// TODO: Try to fold the two blocks together
 
 		getStmt := s.Prepare(rawGetStmt)
+		defer s.CloseStmt(getStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt)
 		if err != nil {
 			if !isDBError(err) {
@@ -252,6 +255,7 @@ func (s *Store) updateExternalInfo(tx transaction.Client, key string, externalUp
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
 			preparedStmt := s.Prepare(rawStmt)
+			defer s.CloseStmt(preparedStmt)
 			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
 			if err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
@@ -273,6 +277,7 @@ func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetV
 	rawGetValueStmt := fmt.Sprintf(`SELECT f."%s" FROM  "%s_fields" f WHERE f.key = ?`,
 		finalFieldName, sourceGVK)
 	getValueStmt := s.Prepare(rawGetValueStmt)
+	defer s.CloseStmt(getValueStmt)
 	rows, err := s.QueryForRows(s.ctx, getValueStmt, sourceKey)
 	if err != nil {
 		logrus.Debugf("Checking the field, got error %s", err)
