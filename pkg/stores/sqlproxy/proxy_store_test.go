@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -361,8 +360,8 @@ func TestListByPartitions(t *testing.T) {
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), nil, "", nil)
-			list, total, summary, contToken, err := s.ListByPartitions(req, schema, partitions)
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
@@ -527,8 +526,8 @@ func TestListByPartitions(t *testing.T) {
 			cf.EXPECT().DoneWithCache(c)
 
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), []common.ColumnDefinition{{Field: "some.field"}}, false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), nil, "", nil)
-			list, total, summary, contToken, err := s.ListByPartitions(req, schema, partitions)
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(listToReturn, len(listToReturn.Items), "", nil)
+			list, total, contToken, err := s.ListByPartitions(req, schema, partitions)
 			assert.Nil(t, err)
 			assert.Equal(t, expectedItems, list.Items)
 			assert.Equal(t, len(expectedItems), total)
@@ -701,10 +700,10 @@ func TestListByPartitions(t *testing.T) {
 				attributes.Namespaced(schema),
 				true).Return(c, nil)
 			cf.EXPECT().DoneWithCache(c)
-			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(nil, 0, nil, "", fmt.Errorf("error"))
+			bloi.EXPECT().ListByOptions(gomock.Cond(isDerivedContext), &opts, partitions, req.Namespace).Return(nil, 0, "", fmt.Errorf("error"))
 			tb.EXPECT().GetTransformFunc(attributes.GVK(schema), gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
 
-			_, _, _, _, err = s.ListByPartitions(req, schema, partitions)
+			_, _, _, err = s.ListByPartitions(req, schema, partitions)
 			assert.NotNil(t, err)
 		},
 	})
@@ -836,58 +835,6 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			_, _, _, err := s.ListByPartitions(apiOp, theSchema, partitions)
 			assert.Nil(t, err)
 		})
-	}
-}
-
-func TestTableColsToCommonCols(t *testing.T) {
-	type testCase struct {
-		description string
-		test        func(t *testing.T)
-	}
-	var tests []testCase
-	tests = append(tests, testCase{
-		description: "table columns are converted to common columns",
-		test: func(t *testing.T) {
-			originalColumns := []table.Column{
-				{
-					Name:        "weight",
-					Field:       "$.metadata.fields[0]",
-					Type:        "integer",
-					Description: "how much the pod weighs",
-				},
-				{
-					Name:        "position",
-					Field:       "$.metadata.fields[1]",
-					Type:        "string",
-					Description: "number of this pod",
-				},
-				{
-					Name:        "favoriteColour",
-					Field:       "$.metadata.fields[3]",
-					Type:        "string",
-					Description: "green of course",
-				},
-			}
-			expectedColumns := []common.ColumnDefinition{
-				{
-					TableColumnDefinition: metav1.TableColumnDefinition{Name: "weight", Type: "integer", Description: "how much the pod weighs"},
-					Field:                 "$.metadata.fields[0]",
-				},
-				{
-					TableColumnDefinition: metav1.TableColumnDefinition{Name: "position", Type: "string", Description: "number of this pod"},
-					Field:                 "$.metadata.fields[1]",
-				},
-				{TableColumnDefinition: metav1.TableColumnDefinition{Name: "favoriteColour", Type: "string", Description: "green of course"},
-					Field: "$.metadata.fields[2]",
-				},
-			}
-			got := tableColsToCommonCols(originalColumns)
-			assert.Equal(t, expectedColumns, got)
-		},
-	})
-	t.Parallel()
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
 }
 
