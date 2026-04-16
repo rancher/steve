@@ -172,7 +172,14 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
 		rawGetStmt := labelDep.Query()
 
-		getStmt := s.Prepare(rawGetStmt)
+		getStmt, err := s.Prepare(rawGetStmt)
+		if err != nil {
+			if !isDBError(err) {
+				logrus.Infof("Error preparing statement for table %s, key %s: %v", labelDep.TargetGVK, key, err)
+			}
+			continue
+		}
+
 		rows, err := s.QueryForRows(s.ctx, getStmt)
 		getStmt.Close()
 		if err != nil {

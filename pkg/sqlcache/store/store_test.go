@@ -801,7 +801,7 @@ func TestAddWithOneUpdate(t *testing.T) {
 				JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
 				WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
 			args1 := []any{}
-			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
+			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 			preparedStmt.EXPECT().Close()
 			c.EXPECT().ReadStringsN(gomock.Any(), 2).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
@@ -873,7 +873,7 @@ func TestAddWithExternalUpdates(t *testing.T) {
 			LEFT OUTER JOIN "_v1_Namespace_labels" lt0 ON f.key = lt0.key
 			JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
 			WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
-		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
 		args1 := []any{}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 		preparedStmt.EXPECT().Close()
@@ -958,7 +958,7 @@ func TestAddWithSelfUpdates(t *testing.T) {
 	LEFT OUTER JOIN "_v1_Namespace_labels" lt0 ON f.key = lt0.key
 	JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
 	WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
-		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
+		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
 		args1 := []any{}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 		preparedStmt.EXPECT().Close()
@@ -1054,7 +1054,7 @@ func TestAddWithBothUpdates(t *testing.T) {
 						t.Fail()
 					}
 				})
-			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
+			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt, nil)
 			args1 := []any{}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 			preparedStmt.EXPECT().Close()
