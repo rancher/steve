@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/schema/table"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	wranglerSchema "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/stretchr/testify/assert"
@@ -168,13 +167,9 @@ func TestAddCustomResources(t *testing.T) {
 						ID: "testgroup.v1.testresource",
 						Attributes: map[string]interface{}{
 							"crd": true,
-							"columns": []table.Column{
-								{
-									Name:   "TestColumn",
-									Field:  "TestPath",
-									Type:   "TestType",
-									Format: "TestFormat",
-								},
+							"crdJSONPathParsers": map[string]string{
+								"Name":       "{.metadata.name}",
+								"TestColumn": "{TestPath}",
 							},
 						},
 						Description: "Test Resource for unit tests",
