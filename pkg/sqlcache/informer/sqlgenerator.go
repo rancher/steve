@@ -376,7 +376,7 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 					}
 					filterComponents.orderByClauses = append(filterComponents.orderByClauses, clause)
 				} else {
-					fieldEntry, err := l.getValidFieldEntry(mainFieldPrefix, fields)
+					fieldEntry, err := l.getValidFieldEntry(mainFieldPrefix, fields, true)
 					if err != nil {
 						return nil, err
 					}
@@ -897,7 +897,7 @@ SELECT key, value FROM "%s_labels"
 func (l *ListOptionIndexer) getFieldFilter(filter sqltypes.Filter, prefix string) (string, []any, error) {
 	opString := ""
 	escapeString := ""
-	fieldEntry, err := l.getValidFieldEntry(prefix, filter.Field)
+	fieldEntry, err := l.getValidFieldEntry(prefix, filter.Field, false)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1098,7 +1098,7 @@ func (l *ListOptionIndexer) getLabelFilter(index int, filter sqltypes.Filter, ma
 
 func (l *ListOptionIndexer) getProjectsOrNamespacesFieldFilter(filter sqltypes.Filter) (string, []any, error) {
 	opString := ""
-	fieldEntry, err := l.getValidFieldEntry("nsf", filter.Field)
+	fieldEntry, err := l.getValidFieldEntry("nsf", filter.Field, false)
 	if err != nil {
 		return "", nil, err
 	}
@@ -1205,11 +1205,17 @@ func (l *ListOptionIndexer) getStandardColumnNameToDisplay(fieldParts []string, 
 // position.
 // Indices are 0-based.
 
-func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string) (string, error) {
+func (l *ListOptionIndexer) getValidFieldEntry(prefix string, fields []string, inSort bool) (string, error) {
 	fieldID := smartJoin(fields)
 
 	// Try direct field lookup first
 	if field, ok := l.indexedFields[fieldID]; ok {
+		if inSort {
+			computedField, ok := field.(*ComputedField)
+			if ok && computedField.IsTimestamp {
+				return fmt.Sprintf(`adjustTimestampForSorting(%s."%s")`, prefix, computedField.Name), nil
+			}
+		}
 		return fmt.Sprintf(`%s."%s"`, prefix, field.ColumnName()), nil
 	}
 

@@ -55,6 +55,7 @@ type ComputedField struct {
 	Name         string
 	Type         string
 	GetValueFunc func(obj *unstructured.Unstructured) (any, error)
+	IsTimestamp  bool
 }
 
 func (f *ComputedField) ColumnName() string {

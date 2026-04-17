@@ -117,6 +117,7 @@ var (
 				Name:         "metadata.fields[3]_1",
 				Type:         "INTEGER",
 				GetValueFunc: informer.ExtractPodRestartTimestamp,
+				IsTimestamp:  true,
 			},
 		},
 		gvkKey("", "v1", "ReplicationController"): {
