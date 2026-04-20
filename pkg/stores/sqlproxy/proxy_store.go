@@ -186,6 +186,12 @@ var (
 		gvkKey("cluster.x-k8s.io", "v1beta1", "MachineDeployment"): {
 			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
 		},
+		gvkKey("cluster.x-k8s.io", "v1beta2", "Machine"): {
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+		},
+		gvkKey("cluster.x-k8s.io", "v1beta2", "MachineDeployment"): {
+			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
+		},
 		gvkKey("management.cattle.io", "v3", "Cluster"): {
 			"spec.internal":                &informer.JSONPathField{Path: []string{"spec", "internal"}},
 			"spec.displayName":             &informer.JSONPathField{Path: []string{"spec", "displayName"}},
