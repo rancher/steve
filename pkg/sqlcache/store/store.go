@@ -194,9 +194,12 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
-			preparedStmt := s.Prepare(rawStmt)
-			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
-			preparedStmt.Close()
+			err = func() error {
+				preparedStmt := s.Prepare(rawStmt)
+				defer preparedStmt.Close()
+				_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+				return err
+			}()
 			if err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
@@ -216,9 +219,11 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			nonLabelDep.TargetFinalFieldName)
 		// TODO: Try to fold the two blocks together
 
-		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt)
-		getStmt.Close()
+		rows, err := func() (db.Rows, error) {
+			getStmt := s.Prepare(rawGetStmt)
+			defer getStmt.Close()
+			return s.QueryForRows(s.ctx, getStmt)
+		}()
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, err)
