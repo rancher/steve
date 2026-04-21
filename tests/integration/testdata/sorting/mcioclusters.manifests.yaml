@@ -2,47 +2,72 @@ apiVersion: management.cattle.io/v3
 kind: Cluster
 metadata:
   name: pinion
+spec:
+  fleetWorkspaceName: fleet-of-foot
 status:
   conditions:
   - type: Ready
     status: "True"
   driver: Ardeth
+  info:
+    kubernetesVersion: v1.35.3+rke2r2
+    machineProvider: lothar
+    nodeCount: "2"
 ---
 apiVersion: management.cattle.io/v3
 kind: Cluster
 metadata:
   name: gearshift
+spec:
+  fleetWorkspaceName: fleet-of-foot
 status:
   conditions:
   - type: Ready
     status: "True"
   driver: Unser
+  info:
+    kubernetesVersion: v1.35.3+rke2r1
+    machineProvider: floyd
+    nodeCount: "4"
 ---
 apiVersion: management.cattle.io/v3
 kind: Cluster
 metadata:
   name: spoiler
+spec:
+  fleetWorkspaceName: foxes
 status:
   conditions:
   - type: Ready
     status: "True"
   driver: Petty
+  info:
+    kubernetesVersion: mouse
 ---
 apiVersion: management.cattle.io/v3
 kind: Cluster
 metadata:
   name: alternator
+spec:
+  fleetWorkspaceName: "not the bubble gum"
 status:
   conditions:
   - type: Ready
     status: "True"
   driver: Foyt
+  info: {}
 ---
 apiVersion: management.cattle.io/v3
 kind: Cluster
 metadata:
   name: airbag
+spec:
+  fleetWorkspaceName: fleet-of-foot
 status:
   conditions:
   - type: Ready
     status: "True"
+  info:
+    kubernetesVersion: v1.35.3+rke2r1
+    machineProvider: lothar
+    nodeCount: "5"
