@@ -1,0 +1,48 @@
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: pinion
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  driver: Ardeth
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: gearshift
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  driver: Unser
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: spoiler
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  driver: Petty
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: alternator
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  driver: Foyt
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: airbag
+status:
+  conditions:
+  - type: Ready
+    status: "True"

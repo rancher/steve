@@ -1,0 +1,13 @@
+schemaID: management.cattle.io.clusters
+tests:
+- query: sort=status.driver
+  expected:
+  - airbag # <not given>
+  - pinion # Ardeth
+  - alternator # Foyt
+  - spoiler # Petty
+  - gearshift # Unser
+- query: "filter=status.driver+IN+(Ardeth,+Foyt)&sort=-status.driver"
+  expected:
+  - alternator # Foyt
+  - pinion # Ardeth
