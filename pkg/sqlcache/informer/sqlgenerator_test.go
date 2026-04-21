@@ -3902,6 +3902,71 @@ func TestSortPodsOnArrayAccess(t *testing.T) {
 	}
 }
 
+// "
+// Tests to verify sorting pods on "metadata.fields[3][1]"
+func TestSortPodsOnTimestamp(t *testing.T) {
+	type testCase struct {
+		description           string
+		listOptions           sqltypes.ListOptions
+		partitions            []partition.Partition
+		ns                    string
+		expectedCountStmt     string
+		expectedCountStmtArgs []any
+		expectedStmt          string
+		expectedStmtArgs      []any
+		expectedErr           string
+	}
+
+	var tests []testCase
+	tests = append(tests, testCase{
+		description: "TestSortPodsOnTimestamp: sorting a timestamp requires adjusting the value",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "fields", "3][1"},
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    FALSE
+  ORDER BY adjustTimestampForSorting(f."metadata.fields[3]_1") ASC`,
+		expectedStmtArgs: []interface{}{},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			store := NewMockStore(gomock.NewController(t))
+			i := &Indexer{
+				Store: store,
+			}
+			lii := &ListOptionIndexer{
+				Indexer:       i,
+				indexedFields: toIndexedFieldsFromColumnNames("metadata.queryField1", "status.queryField2", "metadata.fields", "metadata.fields[3][1]"),
+			}
+			computedField, ok := lii.indexedFields["metadata.fields[3][1]"].(*ComputedField)
+			assert.True(t, ok)
+			computedField.Name = "metadata.fields[3]_1"
+			computedField.IsTimestamp = true
+			queryInfo, err := lii.constructQuery(&test.listOptions, test.partitions, test.ns, "something")
+			if test.expectedErr != "" {
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.Nil(t, err)
+			assert.Equal(t, test.expectedStmt, queryInfo.query)
+			assert.Equal(t, test.expectedStmtArgs, queryInfo.params)
+			assert.Equal(t, test.expectedCountStmt, queryInfo.countQuery)
+			assert.Equal(t, test.expectedCountStmtArgs, queryInfo.countParams)
+		})
+	}
+}
+
 func TestUserDefinedExtractFunction(t *testing.T) {
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	makeObj := func(name string, barSeparatedHosts string) map[string]any {

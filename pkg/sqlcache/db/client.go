@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rancher/steve/pkg/sqlcache/db/logging"
 
@@ -550,12 +551,28 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 	if err != nil {
 		return dbPath, err
 	}
+	sqlite.RegisterDeterministicScalarFunction("adjustTimestampForSorting", 1, adjustTimestampForSorting)
 	sqlite.RegisterDeterministicScalarFunction("extractBarredValue", 2, extractBarredValue)
 	sqlite.RegisterDeterministicScalarFunction("hasBarredValue", 2, hasBarredValue)
 	sqlite.RegisterDeterministicScalarFunction("inet_aton", 1, inetAtoN)
 	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
 	c.conn = &connection{sqlDB}
 	return dbPath, nil
+}
+
+func adjustTimestampForSorting(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var arg1 int64
+	switch argTyped := args[0].(type) {
+	case int64:
+		arg1 = argTyped
+	default:
+		return nil, fmt.Errorf("unsupported type for arg1: expected an integer, got :%T", args[0])
+	}
+	if arg1 == 0 {
+		return arg1, nil
+	}
+	arg1 = time.Now().Unix() - arg1
+	return arg1, nil
 }
 
 func extractBarredValue(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {

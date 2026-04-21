@@ -33,19 +33,22 @@ tests:
     expect:
       - name: restarting-pod
 
-  - description: sort-by-restart-timestamp-ascending-stable-first
+# Timestamps are reported as <number><units>
+# so a timestamp like "5m" (5 minutes ago)
+# "feels" like it's less than an older object with a time like "1h" (1 hour ago)
+  - description: sort-by-restart-timestamp-ascending-restarting-first
     namespace: test-restarts
     query: sort=metadata.fields[3][1]
     expect:
-      - name: stable-pod
       - name: restarting-pod
+      - name: stable-pod
 
-  - description: sort-by-restart-timestamp-descending-restarting-first
+  - description: sort-by-restart-timestamp-descending-stable-first
     namespace: test-restarts
     query: sort=-metadata.fields[3][1]
     expect:
-      - name: restarting-pod
       - name: stable-pod
+      - name: restarting-pod
 
   - description: list-all-pods-in-namespace
     namespace: test-restarts
