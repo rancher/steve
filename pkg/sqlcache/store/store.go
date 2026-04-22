@@ -170,6 +170,7 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 		)
 		getStmt := s.Prepare(rawGetStmt)
 		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
+		getStmt.Close()
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, err)
@@ -193,8 +194,12 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
-			preparedStmt := s.Prepare(rawStmt)
-			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+			err = func() error {
+				preparedStmt := s.Prepare(rawStmt)
+				defer preparedStmt.Close()
+				_, err := tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+				return err
+			}()
 			if err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
@@ -214,8 +219,11 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			nonLabelDep.TargetFinalFieldName)
 		// TODO: Try to fold the two blocks together
 
-		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt)
+		rows, err := func() (db.Rows, error) {
+			getStmt := s.Prepare(rawGetStmt)
+			defer getStmt.Close()
+			return s.QueryForRows(s.ctx, getStmt)
+		}()
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, err)
@@ -239,8 +247,12 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
-			preparedStmt := s.Prepare(rawStmt)
-			_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+			err = func() error {
+				preparedStmt := s.Prepare(rawStmt)
+				defer preparedStmt.Close()
+				_, err := tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+				return err
+			}()
 			if err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
@@ -260,8 +272,11 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetValue string) (bool, error) {
 	rawGetValueStmt := fmt.Sprintf(`SELECT f."%s" FROM  "%s_fields" f WHERE f.key = ?`,
 		finalFieldName, sourceGVK)
-	getValueStmt := s.Prepare(rawGetValueStmt)
-	rows, err := s.QueryForRows(s.ctx, getValueStmt, sourceKey)
+	rows, err := func() (db.Rows, error) {
+		getValueStmt := s.Prepare(rawGetValueStmt)
+		defer getValueStmt.Close()
+		return s.QueryForRows(s.ctx, getValueStmt, sourceKey)
+	}()
 	if err != nil {
 		logrus.Debugf("Checking the field, got error %s", err)
 		return false, err
