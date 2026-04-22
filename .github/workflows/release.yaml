@@ -1,21 +1,176 @@
 name: Release
 
+# Validated release workflow. Replaces the previous tag-push trigger.
+#
+# Trigger from the Actions tab: pick the branch (main or release/v0.X) and
+# enter the desired version (e.g. v0.9.5). The workflow validates the version
+# against VERSION.md, ensures CI is green on the head SHA, then creates the
+# tag, GitHub release, and notifies the automation repo so the bump cascade
+# starts within ~30s.
+#
+# Required repository secret:
+#   AUTOMATION_DISPATCH_TOKEN  PAT (or GitHub App token) with `repo` scope
+#                              on the automation repo, used to fire the
+#                              repository_dispatch event.
+
 on:
-  push:
-    tags:
-      - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. v0.9.5)'
+        required: true
+        type: string
+
+# Drop all default GITHUB_TOKEN permissions; each job re-grants what it needs.
+permissions: {}
+
+env:
+  # CI workflows that must be green on the head SHA before tagging.
+  # Names match the `name:` field in each workflow file.
+  REQUIRED_CHECKS: "CI,Integration tests"
+  AUTOMATION_REPO: "rancher/frameworks-automation"
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
     permissions:
-        contents: write
+      contents: read   # checkout, read VERSION.md, list tags
+      actions: read    # query workflow_runs for CI status
+    outputs:
+      version: ${{ inputs.version }}
+      sha: ${{ github.sha }}
     steps:
-    - name : Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-    - name: Create release on Github
-      run: |
-        gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate version format
+        run: |
+          v='${{ inputs.version }}'
+          if ! [[ "$v" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Version '$v' must match v<major>.<minor>.<patch>[-prerelease]"
+            exit 1
+          fi
+
+      - name: Resolve allowed minor from VERSION.md
+        id: minor
+        run: |
+          branch='${{ github.ref_name }}'
+          allowed=$(awk -F'|' -v b="$branch" '
+            /^\|[-: |]+\|?[[:space:]]*$/ { in_table = 1; next }
+            in_table && NF >= 4 {
+              gsub(/^ +| +$/, "", $2)
+              gsub(/^ +| +$/, "", $3)
+              if ($2 == b) { print $3; exit }
+            }
+          ' VERSION.md)
+          if [ -z "$allowed" ]; then
+            echo "::error::Branch '$branch' not found in VERSION.md"
+            exit 1
+          fi
+          echo "Branch '$branch' is allowed minor '$allowed'"
+          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
+
+      - name: Validate version matches branch's allowed minor
+        run: |
+          v='${{ inputs.version }}'
+          allowed='${{ steps.minor.outputs.allowed }}'
+          if [[ "$v" != "${allowed}."* ]]; then
+            echo "::error::Version $v does not belong to branch ${{ github.ref_name }} (allowed minor: $allowed)"
+            exit 1
+          fi
+
+      - name: Validate version is next-sequential
+        run: |
+          v='${{ inputs.version }}'
+          allowed='${{ steps.minor.outputs.allowed }}'
+          v_core="${v%%-*}"
+          # Latest finalized tag on this minor line (excludes pre-releases).
+          latest=$(git tag -l "${allowed}.*" | grep -v -- '-' | sort -V | tail -n1 || true)
+          if [ -z "$latest" ]; then
+            if [ "$v_core" != "${allowed}.0" ]; then
+              echo "::error::No prior ${allowed} tags; first version must be ${allowed}.0 (got $v_core)"
+              exit 1
+            fi
+            echo "First release on ${allowed} line: OK"
+          else
+            patch="${latest##*.}"
+            expected="${allowed}.$((patch + 1))"
+            if [ "$v_core" != "$expected" ]; then
+              echo "::error::Latest ${allowed} tag is $latest; next must be $expected (got $v_core)"
+              exit 1
+            fi
+            echo "Next sequential after $latest: OK"
+          fi
+
+      - name: Validate tag does not already exist
+        run: |
+          v='${{ inputs.version }}'
+          if git rev-parse "$v" >/dev/null 2>&1; then
+            echo "::error::Tag '$v' already exists"
+            exit 1
+          fi
+
+      - name: Validate required CI checks are green on this SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo='${{ github.repository }}'
+          sha='${{ github.sha }}'
+          IFS=',' read -ra checks <<< "$REQUIRED_CHECKS"
+          for name in "${checks[@]}"; do
+            result=$(gh api "repos/$repo/actions/runs?head_sha=$sha&per_page=100" \
+              --jq ".workflow_runs[] | select(.name == \"$name\" and .status == \"completed\") | .conclusion" \
+              | head -n1)
+            if [ -z "$result" ]; then
+              echo "::error::No completed '$name' workflow run found for $sha. If this is a merge commit, ensure ci.yaml's push trigger includes this branch (currently lists 'master' which appears stale)."
+              exit 1
+            fi
+            if [ "$result" != "success" ]; then
+              echo "::error::'$name' on $sha is '$result' (expected 'success')"
+              exit 1
+            fi
+            echo "'$name' on $sha: success"
+          done
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create + push tag, create GH release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Create and push tag
+        run: |
+          v='${{ needs.validate.outputs.version }}'
+          git tag -a "$v" -m "Release $v"
+          git push origin "$v"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh --repo '${{ github.repository }}' release create '${{ needs.validate.outputs.version }}' \
+            --verify-tag --generate-notes
+
+      - name: Notify automation repo (repository_dispatch)
+        # Uses an external PAT, not GITHUB_TOKEN, so no repo-scoped perms needed here.
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_DISPATCH_TOKEN }}
+        run: |
+          gh api "repos/${AUTOMATION_REPO}/dispatches" \
+            -f event_type=tag-emitted \
+            -f client_payload[repo]='${{ github.repository }}' \
+            -f client_payload[tag]='${{ needs.validate.outputs.version }}' \
+            -f client_payload[sha]='${{ needs.validate.outputs.sha }}'
