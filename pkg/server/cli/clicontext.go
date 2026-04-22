@@ -76,7 +76,8 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 		Next:           ui.New(c.UIPath),
 		SQLCache:       sqlCache,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
-			GCKeepCount: 1000,
+			GCKeepCount:             1000,
+			DBMetricsUpdateInterval: c.MetricsUpdateInterval,
 		},
 	})
 }

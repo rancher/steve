@@ -8,7 +8,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/steve/pkg/debug"
-	"github.com/rancher/steve/pkg/metrics"
 	stevecli "github.com/rancher/steve/pkg/server/cli"
 	"github.com/rancher/steve/pkg/version"
 	"github.com/rancher/wrangler/v3/pkg/signals"
@@ -39,9 +38,6 @@ func main() {
 func run(_ *cli.Context) error {
 	ctx := signals.SetupSignalContext()
 	debugconfig.MustSetupDebug()
-	if config.MetricsUpdateInterval > 0 {
-		metrics.SetUpdateInterval(config.MetricsUpdateInterval)
-	}
 	s, err := config.ToServer(ctx, debugconfig.SQLCache)
 	if err != nil {
 		return err

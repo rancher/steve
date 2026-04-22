@@ -94,7 +94,8 @@ type CacheFactoryOptions struct {
 	// Deprecated: events are not stored in memory using a fixed-length circular list
 	GCInterval time.Duration
 	// GCKeepCount is how many events to keep in memory
-	GCKeepCount int
+	GCKeepCount             int
+	DBMetricsUpdateInterval int
 }
 
 // NewCacheFactory returns an informer factory instance
@@ -114,7 +115,7 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 		cancel()
 		return nil, err
 	}
-	metrics.StartDatabaseMetricsLogger(ctx, dbPath)
+	metrics.StartDatabaseMetricsLogger(ctx, dbPath, opts.DBMetricsUpdateInterval)
 	return &CacheFactory{
 		ctx:    ctx,
 		cancel: cancel,

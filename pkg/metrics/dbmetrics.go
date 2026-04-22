@@ -8,10 +8,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const defaultUpdateInterval = 15 * time.Second
+const defaultUpdateInterval = 15 // seconds
 
 var (
-	updateInterval      = defaultUpdateInterval
 	SqliteDBSizeMetrics = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "sqlcache",
@@ -38,16 +37,15 @@ var (
 	)
 )
 
-func SetUpdateInterval(interval int) {
-	updateInterval = time.Duration(interval) * time.Second
-}
-
-func StartDatabaseMetricsLogger(ctx context.Context, dbPath string) {
+func StartDatabaseMetricsLogger(ctx context.Context, dbPath string, updateInterval int) {
 	if !prometheusMetrics {
 		return
 	}
+	if updateInterval == 0 {
+		updateInterval = defaultUpdateInterval
+	}
 	go func() {
-		ticker := time.NewTicker(updateInterval)
+		ticker := time.NewTicker(time.Duration(updateInterval) * time.Second)
 		for {
 			select {
 			case <-ctx.Done():
