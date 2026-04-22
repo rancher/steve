@@ -1,0 +1,39 @@
+schemaID: management.cattle.io.clusters
+tests:
+- query: sort=status.driver
+  expected:
+  - airbag # <not given>
+  - pinion # Ardeth
+  - alternator # Foyt
+  - spoiler # Petty
+  - gearshift # Unser
+- query: "filter=status.driver+IN+(Ardeth,+Foyt)&sort=-status.driver"
+  expected:
+  - alternator # Foyt
+  - pinion # Ardeth
+- query: "filter=spec.fleetWorkspaceName=fleet-of-foot"
+  expected:
+  - airbag
+  - gearshift
+  - pinion
+- query: "filter=spec.fleetWorkspaceName=foxes"
+  expected:
+  - spoiler
+- query: "filter=status.info.machineProvider=lothar"
+  expected:
+  - airbag
+  - pinion
+# The syntax here is because:
+# 1. The query processor will map a '+' to a space
+# 2. The parser will stop at the '+' for an unquoted value
+- query: 'filter=status.info.kubernetesVersion="v1.35.3%2brke2r1"'
+  expected:
+  - airbag
+  - gearshift
+- query: filter=status.info.kubernetesVersion=mouse
+  expected:
+  - spoiler
+- query: "filter=status.info.nodeCount+<+5"
+  expected:
+  - gearshift
+  - pinion
