@@ -70,6 +70,16 @@ type Store struct {
 	beforeDropAll  []func(tx db.TxClient) error
 }
 
+// LastStoreSyncResourceVersion implements [cache.Store].
+func (s *Store) LastStoreSyncResourceVersion() string {
+	panic("unimplemented")
+}
+
+// Bookmark implements the cache.Store interface.
+func (s *Store) Bookmark(resourceVersion string) {
+	// No-op: SQL store does not currently track watch bookmarks
+}
+
 // Test that Store implements cache.Indexer
 var _ cache.Store = (*Store)(nil)
 

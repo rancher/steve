@@ -382,6 +382,11 @@ type mockInformer struct {
 	indexer        cache.Indexer
 }
 
+// HasSyncedChecker implements [cache.SharedIndexInformer].
+func (m *mockInformer) HasSyncedChecker() cache.DoneChecker {
+	panic("unimplemented")
+}
+
 func (m *mockInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
 	return nil, nil
 }
