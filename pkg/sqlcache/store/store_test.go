@@ -745,17 +745,20 @@ func TestAddWithOneUpdate(t *testing.T) {
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 			args1 := []any{"field.cattle.io/projectId"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
+			c.EXPECT().CloseStmt(gomock.Any())
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
 			rawStmt2 := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), gomock.Any())
+			c.EXPECT().CloseStmt(gomock.Any())
 			c.EXPECT().ReadStrings(gomock.Any())
 
 			rawStmt2a := `UPDATE "_v1_Namespace_fields" SET "spec.displayName" = ? WHERE key = ?`
 			c.EXPECT().Prepare(rawStmt2a)
 			txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 			stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
+			c.EXPECT().CloseStmt(gomock.Any())
 
 			rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
 			JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
@@ -763,18 +766,21 @@ func TestAddWithOneUpdate(t *testing.T) {
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 			args2 := []any{}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
+			c.EXPECT().CloseStmt(gomock.Any())
 
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
 			// Override check:
 			rawStmt2 = `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), gomock.Any())
+			c.EXPECT().CloseStmt(gomock.Any())
 			c.EXPECT().ReadStrings(gomock.Any())
 
 			rawStmt4 := `UPDATE "_v1_Pods_fields" SET "spec.projectName" = ? WHERE key = ?`
 			c.EXPECT().Prepare(rawStmt4)
 			txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 			stmts.EXPECT().Exec("moose2", "lego.cattle.io/fields2")
+			c.EXPECT().CloseStmt(gomock.Any())
 
 			err := store.Add(testObject)
 			assert.Nil(t, err)
@@ -809,18 +815,21 @@ func TestAddWithExternalUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		args1 := []any{"field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
 		rawStmt1b := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt1b))
 		args1b := []any{"lego.cattle.io/fields1"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1b)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings(gomock.Any()).Return([]string{"flipper"}, nil)
 
 		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.displayName" = ? WHERE key = ?`
 		c.EXPECT().Prepare(rawStmt2)
 		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 		stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
+		c.EXPECT().CloseStmt(gomock.Any())
 
 		rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName"
          FROM "_v1_Pods_fields" f JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2
@@ -829,18 +838,21 @@ func TestAddWithExternalUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 		args2 := []any{}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
 
 		rawStmt3b := `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3b))
 		args3b := []any{"lego.cattle.io/fields2"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args3b)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings(gomock.Any()).Return([]string{"snorkel"}, nil)
 
 		rawStmt4 := `UPDATE "_v1_Pods_fields" SET "spec.projectName" = ? WHERE key = ?`
 		c.EXPECT().Prepare(rawStmt4)
 		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 		stmts.EXPECT().Exec("moose2", "lego.cattle.io/fields2")
+		c.EXPECT().CloseStmt(gomock.Any())
 
 		err := store.Add(testObject)
 		assert.Nil(t, err)
@@ -882,18 +894,21 @@ func TestAddWithSelfUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 		args1 := []any{"field.cattle.io/projectId"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
 		rawStmt1b := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt1b))
 		args1b := []any{"lego.cattle.io/fields1"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1b)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings(gomock.Any()).Return([]string{"flipper"}, nil)
 
 		rawStmt2 := `UPDATE "_v1_Namespace_fields" SET "spec.displayName" = ? WHERE key = ?`
 		c.EXPECT().Prepare(rawStmt2)
 		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 		stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
+		c.EXPECT().CloseStmt(gomock.Any())
 
 		rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName"
          FROM "_v1_Pods_fields" f JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2
@@ -902,18 +917,21 @@ func TestAddWithSelfUpdates(t *testing.T) {
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 		args2 := []any{}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"field.cattle.io/fixer", "moose1"}}, nil)
 
 		rawStmt3b := `SELECT f."spec.projectName" FROM  "_v1_Pods_fields" f WHERE f.key = ?`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3b))
 		args3b := []any{"field.cattle.io/fixer"}
 		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args3b)
+		c.EXPECT().CloseStmt(gomock.Any())
 		c.EXPECT().ReadStrings(gomock.Any()).Return([]string{"snorkel"}, nil)
 
 		rawStmt4 := `UPDATE "_v1_Pods_fields" SET "spec.projectName" = ? WHERE key = ?`
 		c.EXPECT().Prepare(rawStmt4)
 		txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 		stmts.EXPECT().Exec("moose1", "field.cattle.io/fixer")
+		c.EXPECT().CloseStmt(gomock.Any())
 
 		err := store.Add(testObject)
 		assert.Nil(t, err)
@@ -967,22 +985,26 @@ func TestAddWithBothUpdates(t *testing.T) {
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt))
 			args1 := []any{"field.cattle.io/projectId"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
+			c.EXPECT().CloseStmt(gomock.Any())
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
 			rawStmt2 := `SELECT f."spec.displayName" FROM  "_v1_Namespace_fields" f WHERE f.key = ?`
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
 			args1b := []any{"lego.cattle.io/fields1"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1b)
+			c.EXPECT().CloseStmt(gomock.Any())
 			c.EXPECT().ReadStrings(gomock.Any())
 
 			rawStmt2a := `UPDATE "_v1_Namespace_fields" SET "spec.displayName" = ? WHERE key = ?`
 			c.EXPECT().Prepare(rawStmt2a)
 			txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 			stmts.EXPECT().Exec("moose1", "lego.cattle.io/fields1")
+			c.EXPECT().CloseStmt(gomock.Any())
 
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3))
 			args2 := []any{}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args2)
+			c.EXPECT().CloseStmt(gomock.Any())
 
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"field.cattle.io/fixer", "moose1"}}, nil)
 			// Override check:
@@ -990,12 +1012,14 @@ func TestAddWithBothUpdates(t *testing.T) {
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt2))
 			args3b := []any{"field.cattle.io/fixer"}
 			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args3b)
+			c.EXPECT().CloseStmt(gomock.Any())
 			c.EXPECT().ReadStrings(gomock.Any())
 
 			rawStmt4 := `UPDATE "_v1_Pods_fields" SET "spec.projectName" = ? WHERE key = ?`
 			c.EXPECT().Prepare(rawStmt4)
 			txC.EXPECT().Stmt(gomock.Any()).Return(stmts)
 			stmts.EXPECT().Exec("moose1", "field.cattle.io/fixer")
+			c.EXPECT().CloseStmt(gomock.Any())
 			// And again for the other object
 		}
 
