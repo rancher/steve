@@ -11,7 +11,7 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     env:
-      GOLANG_CI_LINT_VERSION: v2.7.1
+      GOLANG_CI_LINT_VERSION: v2.12.1
     steps:
     - name : Checkout repository
       # https://github.com/actions/checkout/releases/tag/v4.1.1

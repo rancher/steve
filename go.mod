@@ -2,15 +2,12 @@ module github.com/rancher/steve
 
 go 1.26.0
 
+toolchain go1.26.3
+
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
-	github.com/rancher/apiserver => github.com/rancher-teja/apiserver v0.9.3-0.20260423061508-9e6e2deeeef5
-	github.com/rancher/dynamiclistener => github.com/rancher-teja/dynamiclistener v0.8.2-0.20260423063550-4685e82df586
-	github.com/rancher/lasso => github.com/rancher-teja/lasso v0.2.9-0.20260423044910-f3dbd8f8eeaa
-	github.com/rancher/norman => github.com/rancher-teja/norman v0.9.3-0.20260423064226-5e6ff046a71a
-	github.com/rancher/wrangler/v3 => github.com/rancher-teja/wrangler/v3 v3.6.0-rc.1.0.20260423053950-42de455630a4
 	github.com/stretchr/testify => github.com/stretchr/testify v1.10.0
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
 	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
@@ -31,13 +28,13 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/rancher/apiserver v0.9.1
-	github.com/rancher/dynamiclistener v0.7.4-rc.2
+	github.com/rancher/apiserver v0.9.5
+	github.com/rancher/dynamiclistener v0.9.0-rc.1
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
-	github.com/rancher/lasso v0.2.8
-	github.com/rancher/norman v0.9.0
+	github.com/rancher/lasso v0.2.9
+	github.com/rancher/norman v0.9.5
 	github.com/rancher/remotedialer v0.6.1-rc.1
-	github.com/rancher/wrangler/v3 v3.5.1
+	github.com/rancher/wrangler/v3 v3.7.0-rc.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	github.com/tinylib/msgp v1.6.4
@@ -57,9 +54,9 @@ require (
 	k8s.io/kube-aggregator v0.36.0
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
 	k8s.io/kubernetes v1.36.0
-	k8s.io/utils v0.0.0-20260108192941-914a6e750570
+	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5
 	modernc.org/sqlite v1.50.0
-	sigs.k8s.io/controller-runtime v0.23.3
+	sigs.k8s.io/controller-runtime v0.24.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -98,7 +95,6 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.26.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
@@ -164,7 +160,7 @@ require (
 	k8s.io/gengo/v2 v2.0.0-20250922181213-ec3ebc5fd46b // indirect
 	k8s.io/kms v0.36.0 // indirect
 	k8s.io/streaming v0.36.0 // indirect
-	modernc.org/libc v1.70.0 // indirect
+	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0 // indirect
