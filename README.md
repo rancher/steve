@@ -949,3 +949,11 @@ export KUBEBUILDER_ASSETS=$(go tool -modfile gotools/setup-envtest/go.mod setup-
 # Versioning
 
 See [VERSION.md](VERSION.md).
+
+# Releasing
+
+Releases are cut by triggering the [Release workflow](.github/workflows/release.yaml)
+from the GitHub Actions tab. Select the appropriate release branch (e.g. `release/v0.5`)
+and provide the version (e.g. `v0.5.1`) as input. The workflow validates the version
+against [VERSION.md](VERSION.md), creates the annotated tag, and publishes the
+GitHub release.
