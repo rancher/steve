@@ -108,6 +108,15 @@ func tableToList(obj *unstructured.UnstructuredList) {
 	}
 
 	obj.Items = tableToObjects(obj.Object)
+
+	// client-go v0.36+ reflectors reject lists whose top-level GVK is Table; rewrite to the resource's list GVK.
+	if len(obj.Items) > 0 {
+		obj.Object["kind"] = obj.Items[0].GetKind() + "List"
+		obj.Object["apiVersion"] = obj.Items[0].GetAPIVersion()
+	} else {
+		delete(obj.Object, "kind")
+		delete(obj.Object, "apiVersion")
+	}
 }
 
 func tableToObjects(obj map[string]interface{}) []unstructured.Unstructured {
