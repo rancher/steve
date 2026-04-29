@@ -8,36 +8,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const defaultUpdateInterval = 15 // seconds
+const defaultUpdateInterval = 15 * time.Second
 
 var (
 	SqliteDBSizeMetrics = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace: "sqlcache",
-			Subsystem: "db_main",
-			Name:      "bytes",
+			Namespace: "steve",
+			Subsystem: "sqlcache",
+			Name:      "db_bytes",
 			Help:      "Size of the sqlite DB file",
 		},
 	)
 	SqliteDBWalSizeMetrics = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace: "sqlcache",
-			Subsystem: "db_wal",
-			Name:      "bytes",
+			Namespace: "steve",
+			Subsystem: "sqlcache",
+			Name:      "db_wal_bytes",
 			Help:      "Size of the auxiliary sqlite DB WAL file",
 		},
 	)
 	SqliteDBShmSizeMetrics = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace: "sqlcache",
-			Subsystem: "db_shm",
-			Name:      "bytes",
+			Namespace: "steve",
+			Subsystem: "sqlcache",
+			Name:      "db_shm_bytes",
 			Help:      "Size of the auxiliary sqlite DB SHM file",
 		},
 	)
 )
 
-func StartDatabaseMetricsLogger(ctx context.Context, dbPath string, updateInterval int) {
+func StartDatabaseMetricsLogger(ctx context.Context, dbPath string, updateInterval time.Duration) {
 	if !prometheusMetrics {
 		return
 	}

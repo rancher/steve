@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"net/http"
+	"time"
 
 	steveauth "github.com/rancher/steve/pkg/auth"
 	authcli "github.com/rancher/steve/pkg/auth/cli"
@@ -77,7 +78,7 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 		SQLCache:       sqlCache,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCKeepCount:             1000,
-			DBMetricsUpdateInterval: c.MetricsUpdateInterval,
+			DBMetricsUpdateInterval: time.Duration(c.MetricsUpdateInterval) * time.Second,
 		},
 	})
 }

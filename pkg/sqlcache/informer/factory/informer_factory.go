@@ -95,7 +95,7 @@ type CacheFactoryOptions struct {
 	GCInterval time.Duration
 	// GCKeepCount is how many events to keep in memory
 	GCKeepCount             int
-	DBMetricsUpdateInterval int
+	DBMetricsUpdateInterval time.Duration
 }
 
 // NewCacheFactory returns an informer factory instance
@@ -115,7 +115,7 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 		cancel()
 		return nil, err
 	}
-	metrics.StartDatabaseMetricsLogger(ctx, dbPath, opts.DBMetricsUpdateInterval)
+	metrics.StartDatabaseMetricsLogger(ctx, dbPath, opts.DBMetricsUpdateInterval*time.Second)
 	return &CacheFactory{
 		ctx:    ctx,
 		cancel: cancel,
