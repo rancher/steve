@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM registry.suse.com/bci/golang:1.25@sha256:feeb8b4f66de0a8ba333ee6a3f0e97b4cefbaf638b2873b29fb270ab5ca8722b as build
+FROM registry.suse.com/bci/golang:1.26@sha256:79ab11123495ceeeeee1155bd164772f9bfca3050763338beaeeb645643b661c as build
 COPY go.mod go.sum main.go /src/
 COPY pkg /src/pkg/
 #RUN --mount=type=cache,target=/root/.cache/go-build \
@@ -7,7 +7,7 @@ RUN \
     cd /src && \
     CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o /steve
 
-FROM registry.suse.com/bci/bci-micro:16.1@sha256:4174e994d0458cb799591713348d3d96ec20aeabb33f230a14bf53f2767d5854
+FROM registry.suse.com/bci/bci-micro:16.1@sha256:c1088d71b9e6aaf08ba379e72fb7750996411cc599aee5754a4e083217ebff83
 
 ARG user=steve
 
