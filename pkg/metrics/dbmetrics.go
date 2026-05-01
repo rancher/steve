@@ -45,7 +45,7 @@ func StartDatabaseMetricsLogger(ctx context.Context, dbPath string, updateInterv
 		updateInterval = defaultUpdateInterval
 	}
 	go func() {
-		ticker := time.NewTicker(time.Duration(updateInterval) * time.Second)
+		ticker := time.NewTicker(updateInterval)
 		for {
 			select {
 			case <-ctx.Done():
