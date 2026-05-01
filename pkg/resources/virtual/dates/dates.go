@@ -87,6 +87,10 @@ func (d *Converter) Transform(obj *unstructured.Unstructured) (*unstructured.Uns
 			}
 		}
 
+		if isUnixMilli(value) {
+			continue
+		}
+
 		// Handle duration strings (e.g. "5m", "1d") by converting to absolute timestamp
 		duration, err := rescommon.ParseTimestampOrHumanReadableDuration(value)
 		if err != nil {
@@ -128,4 +132,16 @@ func getValueFromJSONPath(obj map[string]any, jp *jsonpath.JSONPath) (string, bo
 		}
 	}
 	return "", false
+}
+
+func isUnixMilli(s string) bool {
+	if len(s) != 13 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
