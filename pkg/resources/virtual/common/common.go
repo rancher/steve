@@ -67,7 +67,7 @@ func addIDField(raw *unstructured.Unstructured) *unstructured.Unstructured {
 		objectID = fmt.Sprintf("%s/%s", namespace, objectID)
 	}
 	currentIDValue, ok := raw.Object["id"]
-	if ok {
+	if ok && raw.Object["_id"] == nil {
 		raw.Object["_id"] = currentIDValue
 	}
 	raw.Object["id"] = objectID

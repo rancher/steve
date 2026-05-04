@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
@@ -84,7 +85,7 @@ func TestSyntheticWatcher(t *testing.T) {
 	dynamicClient.EXPECT().List(gomock.Any(), gomock.Any()).AnyTimes().Return(list2, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sw := newSyntheticWatcher(ctx, cancel)
+	sw := newSyntheticWatcher(ctx, cancel, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ComponentStatus"})
 	pollingInterval := 10 * time.Millisecond
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
 		return sw.watch(dynamicClient, options, pollingInterval)
@@ -108,20 +109,21 @@ func TestSyntheticWatcher(t *testing.T) {
 	}()
 	wg.Wait()
 	// Verify we get what we expected to see
-	assert.Len(t, results, 8)
+	assert.Len(t, results, 9)
 	for i, _ := range list.Items {
 		assert.Equal(t, "added-result", results[i].eventName)
 	}
-	assert.Equal(t, "modified-result", results[len(list.Items)].eventName)
+	assert.Equal(t, "bookmark-result", results[len(list.Items)].eventName)
 	assert.Equal(t, "modified-result", results[len(list.Items)+1].eventName)
-	assert.Equal(t, "deleted-result", results[len(list.Items)+2].eventName)
-	assert.Equal(t, "stop", results[7].eventName)
+	assert.Equal(t, "modified-result", results[len(list.Items)+2].eventName)
+	assert.Equal(t, "deleted-result", results[len(list.Items)+3].eventName)
+	assert.Equal(t, "stop", results[8].eventName)
 	// We can't really assert that the events get the correct timestamps on them
 	// because they can be held up in the channel for unexpected durations. I did have
 	// assert.Greater(t, float64(timeDelta), 0.9*float64(pollingInterval))
 	// but saw a failure -- the interval was actually 0.75 * pollingInterval.
 	// So there's no point testing that.
-	assert.Greater(t, results[4].createdAt, results[0].createdAt)
+	assert.Greater(t, results[5].createdAt, results[0].createdAt)
 }
 
 func TestIsUpdateObjectScenarios(t *testing.T) {
