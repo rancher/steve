@@ -112,13 +112,27 @@ func NewStore(ctx context.Context, example any, keyFunc cache.KeyFunc, c db.Clie
 		return nil, err
 	}
 
-	s.upsertStmt = s.Prepare(fmt.Sprintf(upsertStmtFmt, dbName))
-	s.deleteStmt = s.Prepare(fmt.Sprintf(deleteStmtFmt, dbName))
-	s.deleteAllStmt = s.Prepare(fmt.Sprintf(deleteAllStmtFmt, dbName))
-	s.dropBaseStmt = s.Prepare(fmt.Sprintf(dropBaseStmtFmt, dbName))
-	s.getStmt = s.Prepare(fmt.Sprintf(getStmtFmt, dbName))
-	s.listStmt = s.Prepare(fmt.Sprintf(listStmtFmt, dbName))
-	s.listKeysStmt = s.Prepare(fmt.Sprintf(listKeysStmtFmt, dbName))
+	if s.upsertStmt, err = s.Prepare(fmt.Sprintf(upsertStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if s.deleteStmt, err = s.Prepare(fmt.Sprintf(deleteStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if s.deleteAllStmt, err = s.Prepare(fmt.Sprintf(deleteAllStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if s.dropBaseStmt, err = s.Prepare(fmt.Sprintf(dropBaseStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if s.getStmt, err = s.Prepare(fmt.Sprintf(getStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if s.listStmt, err = s.Prepare(fmt.Sprintf(listStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
+	if s.listKeysStmt, err = s.Prepare(fmt.Sprintf(listKeysStmtFmt, dbName)); err != nil {
+		return nil, err
+	}
 
 	return s, nil
 }
@@ -158,7 +172,13 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
 		rawGetStmt := labelDep.Query()
 
-		getStmt := s.Prepare(rawGetStmt)
+		getStmt, err := s.Prepare(rawGetStmt)
+		if err != nil {
+			if !isDBError(err) {
+				logrus.Infof("Error preparing statement for table %s, key %s: %v", labelDep.TargetGVK, key, err)
+			}
+			continue
+		}
 		rows, err := s.QueryForRows(s.ctx, getStmt)
 		getStmt.Close()
 		if err != nil {
@@ -185,9 +205,12 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
 			err = func() error {
-				preparedStmt := s.Prepare(rawStmt)
+				preparedStmt, err := s.Prepare(rawStmt)
+				if err != nil {
+					return err
+				}
 				defer preparedStmt.Close()
-				_, err := tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+				_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
 				return err
 			}()
 			if err != nil {
@@ -210,7 +233,10 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 		// TODO: Try to fold the two blocks together
 
 		rows, err := func() (db.Rows, error) {
-			getStmt := s.Prepare(rawGetStmt)
+			getStmt, err := s.Prepare(rawGetStmt)
+			if err != nil {
+				return nil, err
+			}
 			defer getStmt.Close()
 			return s.QueryForRows(s.ctx, getStmt)
 		}()
@@ -238,9 +264,12 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
 			err = func() error {
-				preparedStmt := s.Prepare(rawStmt)
+				preparedStmt, err := s.Prepare(rawStmt)
+				if err != nil {
+					return err
+				}
 				defer preparedStmt.Close()
-				_, err := tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
+				_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
 				return err
 			}()
 			if err != nil {
@@ -263,7 +292,10 @@ func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetV
 	rawGetValueStmt := fmt.Sprintf(`SELECT f."%s" FROM  "%s_fields" f WHERE f.key = ?`,
 		finalFieldName, sourceGVK)
 	rows, err := func() (db.Rows, error) {
-		getValueStmt := s.Prepare(rawGetValueStmt)
+		getValueStmt, err := s.Prepare(rawGetValueStmt)
+		if err != nil {
+			return nil, err
+		}
 		defer getValueStmt.Close()
 		return s.QueryForRows(s.ctx, getValueStmt, sourceKey)
 	}()
