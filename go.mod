@@ -55,7 +55,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20251125145642-4e65d59e963e
 	k8s.io/kubernetes v1.35.4
 	k8s.io/utils v0.0.0-20260108192941-914a6e750570
-	modernc.org/sqlite v1.49.1
+	modernc.org/sqlite v1.50.0
 	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/yaml v1.6.0
 )
