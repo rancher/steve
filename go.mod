@@ -56,7 +56,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20251125145642-4e65d59e963e
 	k8s.io/kubernetes v1.35.0
 	k8s.io/utils v0.0.0-20260108192941-914a6e750570
-	modernc.org/sqlite v1.48.1
+	modernc.org/sqlite v1.50.0
 	sigs.k8s.io/controller-runtime v0.23.0
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -160,7 +160,7 @@ require (
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511 // indirect
 	k8s.io/gengo/v2 v2.0.0-20250922181213-ec3ebc5fd46b // indirect
 	k8s.io/kms v0.35.0 // indirect
-	modernc.org/libc v1.70.0 // indirect
+	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
