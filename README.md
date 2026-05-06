@@ -813,3 +813,12 @@ Before running the tests, you must run the following command to setup the fake s
 # current client-go version, as seen in scripts/test.sh
 export KUBEBUILDER_ASSETS=$(setup-envtest use -p path)
 ```
+
+# Releasing
+
+Releases are cut by triggering the [Cut release workflow](.github/workflows/cut-release.yaml)
+from the GitHub Actions tab. Select this release branch and provide the version
+(e.g. `v0.4.1`) as input. The workflow validates the version against `VERSION.md`
+on the default branch, creates the annotated tag, and dispatches the
+[On release workflow](.github/workflows/release.yaml) on the new tag, which creates
+the GitHub release.
