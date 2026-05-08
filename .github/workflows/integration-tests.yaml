@@ -21,9 +21,6 @@ jobs:
       with:
         go-version-file: 'go.mod'
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
     - name: Install k3d
       run: |
         ./scripts/install-k3d.sh
