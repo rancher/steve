@@ -825,6 +825,11 @@ func (l *ListOptionIndexer) ListByOptions(ctx context.Context, lo *sqltypes.List
 	logrus.Tracef("ListOptionIndexer prepared count-statement: %v", queryInfo.countQuery)
 	logrus.Tracef("Params: %v", queryInfo.countParams)
 	list, total, continueToken, err = l.executeQuery(ctx, queryInfo)
+	if lo.SummaryOnly {
+		// Do this because we still want to return the actual total # of items, but not the actual items
+		// If we null out the sql to get the items, we won't have a total.
+		list.Items = []unstructured.Unstructured{}
+	}
 	return
 }
 
