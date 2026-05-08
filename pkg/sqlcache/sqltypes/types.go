@@ -39,6 +39,7 @@ type ListOptions struct {
 	ProjectsOrNamespaces  OrFilter
 	SortList              SortList
 	SummaryFieldList      SummaryFieldList
+	SummaryOnly           bool
 	SummaryNamespaced     bool
 	Pagination            Pagination
 	IncludeAssociatedData bool

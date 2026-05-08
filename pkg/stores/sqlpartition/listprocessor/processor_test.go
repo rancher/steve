@@ -1026,6 +1026,61 @@ func TestParseQuery(t *testing.T) {
 		},
 	})
 	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when getting summaryonly but no summary parameter",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summaryonly=true"},
+			},
+		},
+		errExpected: true,
+		errorText:   "got a summaryonly parameter but no summary fields",
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should complain when summaryonly is not boolean",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=metadata.state.name&summaryonly=marblehead"},
+			},
+		},
+		errExpected: true,
+		errorText:   `unexpected value for summaryonly parameter: "marblehead", expected true, false, or empty string`,
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should process a valid summaryonly parameter",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=metadata.state.name&summaryonly=true"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "state", "name"},
+			},
+			SummaryOnly: true,
+			Filters:     make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "ParseQuery() should ignore a summaryonly parameter=false",
+		req: &types.APIRequest{
+			Request: &http.Request{
+				URL: &url.URL{RawQuery: "summary=metadata.state.name&summaryonly=false"},
+			},
+		},
+		expectedLO: sqltypes.ListOptions{
+			SummaryFieldList: sqltypes.SummaryFieldList{
+				[]string{"metadata", "state", "name"},
+			},
+			Filters: make([]sqltypes.OrFilter, 0),
+			Pagination: sqltypes.Pagination{
+				Page: 1,
+			},
+		},
+	})
+	tests = append(tests, testCase{
 		description: "ParseQuery() should complain when more than one summary is given",
 		req: &types.APIRequest{
 			Request: &http.Request{

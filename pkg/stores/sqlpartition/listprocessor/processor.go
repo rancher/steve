@@ -32,6 +32,7 @@ const (
 	pageParam                  = "page"
 	revisionParam              = "revision"
 	summaryParam               = "summary"
+	summaryOnlyParam           = "summaryonly"
 	summaryNamespacedParam     = "summarynamespaced"
 	projectsOrNamespacesVar    = "projectsornamespaces"
 	projectIDFieldLabel        = "field.cattle.io/projectId"
@@ -212,6 +213,24 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 		opts.SummaryFieldList = fieldLists
 	} else if q.Has(summaryParam) {
 		return opts, errors.New("unable to parse requirement: summary parameter given with no fields to summarize")
+	}
+	summaryonlyParams := q[summaryOnlyParam]
+	// go with the last
+	if len(summaryonlyParams) > 0 {
+		if len(summaryParams) == 0 {
+			return opts, errors.New("got a summaryonly parameter but no summary fields")
+		}
+		finalValue := summaryonlyParams[len(summaryonlyParams)-1]
+		switch finalValue {
+		case "true":
+			opts.SummaryOnly = true
+		case "false":
+			opts.SummaryOnly = false
+		case "":
+			opts.SummaryOnly = true
+		default:
+			return opts, fmt.Errorf("unexpected value for summaryonly parameter: %q, expected true, false, or empty string", finalValue)
+		}
 	}
 
 	err = handleBooleanParam(q, summaryNamespacedParam, &opts.SummaryNamespaced)
