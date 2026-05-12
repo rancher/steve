@@ -1192,13 +1192,13 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 		expectedTotal: len(allObjects),
 		expectedSummary: &types.APISummary{
 			SummaryItems: []types.SummaryEntry{
-				{
+				types.SummaryEntry{
 					Property: "metadata.somefield",
-					Counts: map[string]int{
-						"bar":  3,
-						"baz":  2,
-						"foo":  1,
-						"toto": 1,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"bar":  types.SummaryWithBreakdown{Total: 3},
+						"baz":  types.SummaryWithBreakdown{Total: 2},
+						"foo":  types.SummaryWithBreakdown{Total: 1},
+						"toto": types.SummaryWithBreakdown{Total: 1},
 					},
 				},
 			},
@@ -1225,11 +1225,11 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 		expectedTotal: len(allObjects),
 		expectedSummary: &types.APISummary{
 			SummaryItems: []types.SummaryEntry{
-				{
+				types.SummaryEntry{
 					Property: "metadata.labels.horses",
-					Counts: map[string]int{
-						"saddles": 3,
-						"shoes":   2,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"saddles": types.SummaryWithBreakdown{Total: 3},
+						"shoes":   types.SummaryWithBreakdown{Total: 2},
 					},
 				},
 			},
@@ -1258,24 +1258,24 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 			SummaryItems: []types.SummaryEntry{
 				types.SummaryEntry{
 					Property: "metadata.labels.horses",
-					Counts: map[string]int{
-						"saddles": 3,
-						"shoes":   2,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"saddles": types.SummaryWithBreakdown{Total: 3},
+						"shoes":   types.SummaryWithBreakdown{Total: 2},
 					},
 				},
 				types.SummaryEntry{
 					Property: "metadata.somefield",
-					Counts: map[string]int{
-						"bar":  3,
-						"baz":  2,
-						"foo":  1,
-						"toto": 1,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"bar":  types.SummaryWithBreakdown{Total: 3},
+						"baz":  types.SummaryWithBreakdown{Total: 2},
+						"foo":  types.SummaryWithBreakdown{Total: 1},
+						"toto": types.SummaryWithBreakdown{Total: 1},
 					},
 				},
 				types.SummaryEntry{
 					Property: "status.someotherfield",
-					Counts: map[string]int{
-						"helloworld": 2,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"helloworld": types.SummaryWithBreakdown{Total: 2},
 					},
 				},
 			},
@@ -1312,23 +1312,23 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 		expectedTotal: 4,
 		expectedSummary: &types.APISummary{
 			SummaryItems: []types.SummaryEntry{
-				{
+				types.SummaryEntry{
 					Property: "metadata.labels.horses",
-					Counts: map[string]int{
-						"saddles": 2,
-						"shoes":   1,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"saddles": types.SummaryWithBreakdown{Total: 2},
+						"shoes":   types.SummaryWithBreakdown{Total: 1},
 					},
 				},
-				{
+				types.SummaryEntry{
 					Property: "metadata.somefield",
-					Counts: map[string]int{
-						"bar":  3,
-						"toto": 1,
+					Counts: map[string]types.SummaryWithBreakdown{
+						"bar":   types.SummaryWithBreakdown{Total: 3},
+						"shoes": types.SummaryWithBreakdown{Total: 1},
 					},
 				},
-				{
+				types.SummaryEntry{
 					Property: "status.someotherfield",
-					Counts:   map[string]int{},
+					Counts:   map[string]types.SummaryWithBreakdown{},
 				},
 			},
 		},

@@ -1299,10 +1299,10 @@ func convertMapToAPISummary(countsByProperty map[string]any) *types.APISummary {
 	total := len(countsByProperty)
 	blocksToSort := make([]types.SummaryEntry, 0, total)
 	for property, v := range countsByProperty {
-		fixedCounts := make(map[string]int)
+		fixedCounts := make(map[string]types.SummaryWithBreakdown)
 		counts := v.(map[string]any)["counts"].(map[string]int)
 		for k1, v1 := range counts {
-			fixedCounts[k1] = v1
+			fixedCounts[k1] = types.SummaryWithBreakdown{Total: v1}
 		}
 		blocksToSort = append(blocksToSort, types.SummaryEntry{Property: property, Counts: fixedCounts})
 	}
