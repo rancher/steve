@@ -13,7 +13,6 @@
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
-    "dockerfile",
     "github-actions",
     "custom.regex",
     "gomod"
@@ -80,12 +79,5 @@
       ],
       "groupName": "golang.org/x packages"
     },
-    {
-      "description": "Group SUSE BCI base image updates into a single PR per branch",
-      "matchPackageNames": [
-        "/^registry\\.suse\\.com\\/bci\\//"
-      ],
-      "groupName": "BCI base images"
-    }
   ]
 }
