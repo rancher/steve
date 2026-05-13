@@ -186,8 +186,8 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
 			err = func() error {
 				preparedStmt := s.Prepare(rawStmt)
+				defer preparedStmt.Close()
 				_, err := tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
-				preparedStmt.Close()
 				return err
 			}()
 			if err != nil {
@@ -239,8 +239,8 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
 			err = func() error {
 				preparedStmt := s.Prepare(rawStmt)
+				defer preparedStmt.Close()
 				_, err := tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
-				preparedStmt.Close()
 				return err
 			}()
 			if err != nil {
