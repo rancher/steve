@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/rancher/steve/pkg/stores/sqlproxy"
 	"github.com/rancher/steve/pkg/summarycache"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -49,9 +51,27 @@ import (
 )
 
 const testNamespace = "sql-test"
+const defaultTestNamespace = "sql-test"
+const testLabel = "capitals.cattle.io/test"
+const mdTestLabel = "metadata.labels[" + testLabel + "]"
+const testFilter = "filter=" + mdTestLabel
 
 var defaultPartition = partition.Partition{
 	All: true,
+}
+
+// Always use a filter-test instead of a namespace test because some of the resources we care about
+// in this test don't have namespaces, but all resources have labels.
+func getFilteredQuery(query string, labelTest string) string {
+	if strings.Contains(query, mdTestLabel+"=") {
+		return query
+	}
+	continuationToken := "&"
+	if len(query) == 0 {
+		continuationToken = ""
+	}
+	return fmt.Sprintf("%s%s%s=%s", query, continuationToken, testFilter, labelTest)
+
 }
 
 type IntegrationSuite struct {
@@ -121,6 +141,34 @@ func createMCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	return client.Update(ctx, newObj, metav1.UpdateOptions{})
 }
 
+func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, thisTestLabel, name, clusterName, displayName string, otherLabels map[string]string) error {
+	labels := map[string]interface{}{
+		testLabel: thisTestLabel,
+	}
+	if otherLabels != nil {
+		for k, v := range otherLabels {
+			labels[k] = v
+		}
+	}
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": gvr.Group + "/" + gvr.Version,
+			"kind":       "Project",
+			"metadata": map[string]interface{}{
+				"name":      name,
+				"namespace": defaultTestNamespace,
+				"labels":    labels,
+			},
+			"spec": map[string]interface{}{
+				"clusterName": clusterName,
+				"displayName": displayName,
+			},
+		},
+	}
+	_, err := client.Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
 func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, clusterName string) (*unstructured.Unstructured, error) {
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -144,6 +192,37 @@ func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8ssc
 	// This call is needed to get the above status fields stored in the object
 	// PCIO CRDs have subresources, so we call `client.UpdateStatus` instead of `client.Update`
 	return client.UpdateStatus(ctx, newObj, metav1.UpdateOptions{})
+}
+
+func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
+	obj := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"field.cattle.io/projectId": projectLabel,
+				testLabel:                   thisTestLabel,
+			},
+		},
+	}
+	_, err := i.clientset.CoreV1().Namespaces().Create(ctx, obj, metav1.CreateOptions{})
+	return err
+}
+
+func (i *IntegrationSuite) createSecret(ctx context.Context, thisTestLabel string, name string, projectLabel string, clusterName string, secretType string) error {
+	obj := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: defaultTestNamespace,
+			Labels: map[string]string{
+				"management.cattle.io/project-scoped-secret":         projectLabel,
+				"management.cattle.io/project-scoped-secret-cluster": clusterName,
+				testLabel: thisTestLabel,
+			},
+		},
+		Type: v1.SecretType(secretType),
+	}
+	_, err := i.clientset.CoreV1().Secrets(defaultTestNamespace).Create(ctx, obj, metav1.CreateOptions{})
+	return err
 }
 
 func (i *IntegrationSuite) TestSQLCacheFilters() {
@@ -447,6 +526,32 @@ func (i *IntegrationSuite) waitForCacheReady(readyResourceNames []string, namesp
 			gotNames.Insert(name)
 		}
 		return wantNames.Equal(gotNames), nil
+	})
+}
+
+func waitForObjectsBySchema(ctx context.Context, proxyStore *sqlproxy.Store, schema *types.APISchema, labelTest string, expectedNum int) error {
+	q := getFilteredQuery("", labelTest)
+	t1 := time.Now()
+	return wait.PollUntilContextCancel(ctx, time.Millisecond*100, true, func(ctx context.Context) (done bool, err error) {
+		req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+		if err != nil {
+			return false, err
+		}
+		apiOp := &types.APIRequest{
+			Request: req,
+		}
+		partitions := []partition.Partition{defaultPartition}
+		_, total, _, err := proxyStore.ListByPartitions(apiOp, schema, partitions)
+		if err != nil {
+			logrus.Errorf("waitForObjectsBySchema: error getting list of objects for schema %s, labelTest %s at time %v: %v", schema.ID, labelTest, time.Since(t1), err)
+			// note that we don't return the error since that would stop the polling
+			return false, nil
+		}
+		if total != expectedNum {
+			logrus.Errorf("waitForObjectsBySchema: schema %s, labelTest %s at time %v: want %d objects, got %d", schema.ID, labelTest, time.Since(t1), expectedNum, total)
+			return false, nil
+		}
+		return true, nil
 	})
 }
 
@@ -965,6 +1070,345 @@ func (i *IntegrationSuite) TestProvisioningManagementClusterDependencies() {
 	}
 }
 
+func (i *IntegrationSuite) TestNamespaceProjectDependencies() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+	labelTest := "NamespaceProjectDependencies"
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	namespaceInfo := [][2]string{
+		{"namibia", "windhoek"},
+		{"togo", "lome"},
+		{"nigeria", "abuja"},
+		{"principe", "saotome"},
+	}
+	for _, info := range namespaceInfo {
+		err = i.createNamespace(ctx, info[0], labelTest, info[1])
+		requireT.NoError(err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	mcioProjectInfo := [][2]string{
+		{"windhoek", "afrikaans"},
+		{"lome", "french"},
+		{"abuja", "english"},
+		{"saotome", "portuguese"},
+	}
+	for _, info := range mcioProjectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], "", info[1], nil)
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	nsSchema := sf.Schema("namespace")
+
+	tests := []struct {
+		name      string
+		query     string
+		wantNames []string
+	}{
+		{
+			name:  "sorts by name",
+			query: "sort=metadata.name",
+			wantNames: []string{
+				"namibia",
+				"nigeria",
+				"principe",
+				"togo",
+			},
+		},
+		{
+			name:  "sorts by field.cattle.io/projectId",
+			query: "sort=metadata.labels[field.cattle.io/projectId],metadata.name",
+			wantNames: []string{
+				"nigeria",  // abuja
+				"togo",     // lome
+				"principe", // sao tome
+				"namibia",  // windhoek
+			},
+		},
+		{
+			name:  "sorts by spec.displayName",
+			query: "sort=spec.displayName,metadata.name",
+			wantNames: []string{
+				"namibia",  // afrikaans
+				"nigeria",  // english
+				"togo",     // french
+				"principe", // portuguese
+			},
+		},
+		{
+			name:  "filter on spec.displayName",
+			query: "filter=spec.displayName~en",
+			wantNames: []string{
+				"nigeria", // english
+				"togo",    // french
+			},
+		},
+	}
+
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(mcioProjectInfo))
+	requireT.NoError(err)
+	err = waitForObjectsBySchema(ctx, proxyStore, nsSchema, labelTest, len(namespaceInfo))
+	requireT.NoError(err)
+
+	partitions := []partition.Partition{defaultPartition}
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+			requireT.NoError(err)
+			apiOp := &types.APIRequest{
+				Request: req,
+			}
+
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, nsSchema, partitions)
+			if err != nil {
+				i.Assert().NoError(err)
+				return
+			}
+			i.Assert().Equal(len(test.wantNames), total)
+			i.Assert().Equal("", continueToken)
+			i.Assert().Len(got.Items, len(test.wantNames))
+			gotNames := stringsFromULIst(got)
+			i.Assert().Equal(test.wantNames, gotNames)
+		})
+	}
+}
+
+func (i *IntegrationSuite) TestSecretProjectDependencies() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+	labelTest := "SecretProjectDependencies"
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+
+	resetMCIOCh := make(chan struct{}, 10)
+
+	mcioGVK := k8sschema.GroupVersionKind{
+		Group:   "management.cattle.io",
+		Version: "v3",
+		Kind:    "Project",
+	}
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		if gvk == mcioGVK {
+			resetMCIOCh <- struct{}{}
+		}
+		return nil
+	}))
+
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
+
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+	secretInfo := [][4]string{
+		// name | project name | cluster name | secret type
+		{"morocco", "rabat", "arabic", "france"},
+		{"eritrea", "asmara", "tigrinya", "italy"},
+		{"kenya", "nairobi", "english", "england"},
+		{"benin", "portonovo", "french", "france"},
+	}
+	projectInfo := [][3]string{
+		// name | clusterName | displayName
+		{"rabat", "arabic", "casablanca"},
+		{"asmara", "tigrinya", "keren"},
+		{"nairobi", "english", "mombasa"},
+		{"portonovo", "french", "cotonou"},
+	}
+	for _, info := range secretInfo {
+		err = i.createSecret(ctx, labelTest, info[0], info[1], info[2], info[3])
+		requireT.NoError(err)
+	}
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	for _, info := range projectInfo {
+		err = createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, info[0], info[1], info[2], nil)
+		requireT.NoError(err)
+	}
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	secretSchema := sf.Schema("secret")
+
+	tests := []struct {
+		name      string
+		query     string
+		wantNames []string
+	}{
+		{
+			name:  "sorts by name",
+			query: "sort=metadata.name",
+			wantNames: []string{
+				"benin",
+				"eritrea",
+				"kenya",
+				"morocco",
+			},
+		},
+		{
+			name:  "sorts by foreign-key label",
+			query: "sort=metadata.labels[management.cattle.io/project-scoped-secret],metadata.name",
+			wantNames: []string{
+				"eritrea", // asmara
+				"kenya",   // nairobi
+				"benin",   // portonovo
+				"morocco", // rabat
+			},
+		},
+		{
+			name:  "sorts by spec.displayName (other city)",
+			query: "sort=spec.displayName,metadata.name",
+			wantNames: []string{
+				"morocco", // casablanca
+				"benin",   // cotonou
+				"eritrea", // keren
+				"kenya",   // mombasa
+			},
+		},
+		{
+			name:  "sorts by spec.clusterName (language)",
+			query: "sort=spec.clusterName,metadata.name",
+			wantNames: []string{
+				"morocco", // arabic
+				"kenya",   // english
+				"benin",   // french
+				"eritrea", // tigrinya
+			},
+		},
+		{
+			name:  "filter on spec.clusterName (language)",
+			query: "filter=spec.clusterName~en",
+			wantNames: []string{
+				"benin", // french
+				"kenya", // english
+			},
+		},
+		{
+			name:  "filter on spec.displayName (other city)",
+			query: "filter=spec.displayName~as",
+			wantNames: []string{
+				"kenya",   // mombasa
+				"morocco", // casablanca
+			},
+		},
+	}
+
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, len(projectInfo))
+	requireT.NoError(err)
+	err = waitForObjectsBySchema(ctx, proxyStore, secretSchema, labelTest, len(secretInfo))
+	requireT.NoError(err)
+
+	partitions := []partition.Partition{defaultPartition}
+	for _, test := range tests {
+		test := test
+		i.Run(test.name, func() {
+			q := getFilteredQuery(test.query, labelTest)
+			req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+			requireT.NoError(err)
+			apiOp := &types.APIRequest{
+				Request: req,
+			}
+
+			got, total, continueToken, err := proxyStore.ListByPartitions(apiOp, secretSchema, partitions)
+			if err != nil {
+				i.Assert().NoError(err)
+				return
+			}
+			i.Assert().Equal(len(test.wantNames), total)
+			i.Assert().Equal("", continueToken)
+			i.Assert().Len(got.Items, len(test.wantNames))
+			gotNames := stringsFromULIst(got)
+			i.Assert().Equal(test.wantNames, gotNames)
+		})
+	}
+}
+
 func stringsFromULIst(ulist *unstructured.UnstructuredList) []string {
 	names := make([]string, len(ulist.Items))
 	for i, item := range ulist.Items {
@@ -996,4 +1440,44 @@ func TestIntegrationSuite(t *testing.T) {
 	// For testing we'll just ignore the logs since they won't be useful
 	ctrl.SetLogger(logr.New(ctrllog.NullLogSink{}))
 	suite.Run(t, new(IntegrationSuite))
+}
+
+func (i *IntegrationSuite) setupTest(ctx context.Context) (cols *common.DynamicColumns, ccache clustercache.ClusterCache, svrController *server.Controllers, sf *schema.Collection, proxyStore *sqlproxy.Store, err error) {
+	var cf *client.Factory
+	var cacheFactory *factory.CacheFactory
+
+	if cols, err = common.NewDynamicColumns(i.restCfg); err != nil {
+		return
+	}
+	if cf, err = client.NewFactory(i.restCfg, false); err != nil {
+		return
+	}
+
+	baseSchemas := types.EmptyAPISchemas()
+
+	ccache = clustercache.NewClusterCache(ctx, cf.AdminDynamicClient())
+
+	if svrController, err = server.NewController(i.restCfg, nil); err != nil {
+		return
+	}
+
+	asl := accesscontrol.NewAccessStore(ctx, true, svrController.RBAC)
+	sf = schema.NewCollection(ctx, baseSchemas, asl)
+
+	if err = resources.DefaultSchemas(ctx, baseSchemas, ccache, cf, sf, ""); err != nil {
+		return
+	}
+
+	definitions.Register(ctx, baseSchemas, svrController.K8s.Discovery(),
+		svrController.CRD.CustomResourceDefinition(), svrController.API.APIService())
+
+	summaryCache := summarycache.New(sf, ccache)
+	summaryCache.Start(ctx)
+
+	if cacheFactory, err = factory.NewCacheFactoryWithContext(ctx, factory.CacheFactoryOptions{}); err != nil {
+		return
+	}
+
+	proxyStore, err = sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, cacheFactory, true)
+	return
 }

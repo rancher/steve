@@ -156,20 +156,10 @@ func (s *Store) checkUpdateExternalInfo(key string) {
 
 func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInfo *sqltypes.ExternalGVKUpdates) error {
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
-		rawGetStmt := fmt.Sprintf(`SELECT DISTINCT f.key, ex2."%s" FROM "%s_fields" f
-  LEFT OUTER JOIN "%s_labels" lt1 ON f.key = lt1.key
-  JOIN "%s_fields" ex2 ON lt1.value = ex2."%s"
- WHERE lt1.label = ? AND f."%s" != ex2."%s"`,
-			labelDep.TargetFinalFieldName,
-			labelDep.SourceGVK,
-			labelDep.SourceGVK,
-			labelDep.TargetGVK,
-			labelDep.TargetKeyFieldName,
-			labelDep.TargetFinalFieldName,
-			labelDep.TargetFinalFieldName,
-		)
+		rawGetStmt := labelDep.Query()
+
 		getStmt := s.Prepare(rawGetStmt)
-		rows, err := s.QueryForRows(s.ctx, getStmt, labelDep.SourceLabelName)
+		rows, err := s.QueryForRows(s.ctx, getStmt)
 		getStmt.Close()
 		if err != nil {
 			if !isDBError(err) {
@@ -264,8 +254,8 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 				finalTargetValue)
 		}
 	}
-	return nil
 
+	return nil
 }
 
 // If the new value will change a non-empty current value, return [true, error:nil]

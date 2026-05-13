@@ -797,12 +797,12 @@ func TestAddWithOneUpdate(t *testing.T) {
 					}
 				}).Times(2)
 			rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
-			LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-			JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-			WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
+				LEFT OUTER JOIN "_v1_Namespace_labels" lt0 ON f.key = lt0.key
+				JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
+				WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
+			args1 := []any{}
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
-			args1 := []any{"field.cattle.io/projectId"}
-			c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
+			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 			preparedStmt.EXPECT().Close()
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
@@ -870,13 +870,13 @@ func TestAddWithExternalUpdates(t *testing.T) {
 				}
 			}).Times(2)
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
-			LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-			JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-			WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
+			LEFT OUTER JOIN "_v1_Namespace_labels" lt0 ON f.key = lt0.key
+			JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
+			WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
-		args1 := []any{"field.cattle.io/projectId"}
-		c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
-		preparedStmt.EXPECT().Close()
+		args1 := []any{}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
+		preparedStmt.EXPECT().Close().Times(2)
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
 		// Override check:
@@ -899,9 +899,8 @@ func TestAddWithExternalUpdates(t *testing.T) {
          WHERE f."spec.projectName" != ex2."spec.projectName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt3)).Return(preparedStmt)
 		args2 := []any{}
-		c.EXPECT().QueryForRows(gomock.Any(), 
-preparedStmt, args2)
-		preparedStmt.EXPECT().Close()
+		c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args2)
+		// preparedStmt.EXPECT().Close()
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields2", "moose2"}}, nil)
 
 		// Override check:
@@ -955,12 +954,12 @@ func TestAddWithSelfUpdates(t *testing.T) {
 				}
 			}).Times(2)
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
-			LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-			JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-			WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
+	LEFT OUTER JOIN "_v1_Namespace_labels" lt0 ON f.key = lt0.key
+	JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
+	WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
 		c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
-		args1 := []any{"field.cattle.io/projectId"}
-		c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
+		args1 := []any{}
+		c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 		preparedStmt.EXPECT().Close()
 		c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 
@@ -1030,12 +1029,12 @@ func TestAddWithBothUpdates(t *testing.T) {
 		store := SetupStoreWithExternalDependencies(t, c, true, true)
 
 		rawStmt := `SELECT DISTINCT f.key, ex2."spec.displayName" FROM "_v1_Namespace_fields" f
-  LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON f.key = lt1.key
-  JOIN "management.cattle.io_v3_Project_fields" ex2 ON lt1.value = ex2."metadata.name"
-  WHERE lt1.label = ? AND f."spec.displayName" != ex2."spec.displayName"`
+			LEFT OUTER JOIN "_v1_Namespace_labels" lt0 ON f.key = lt0.key
+			JOIN "management.cattle.io_v3_Project_fields" ex2 ON (lt0.value = ex2."metadata.name")
+			WHERE (lt0.label = "field.cattle.io/projectId") AND f."spec.displayName" != ex2."spec.displayName"`
 		rawStmt3 := `SELECT DISTINCT f.key, ex2."spec.projectName" FROM "_v1_Pods_fields" f
-  JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
-  WHERE f."spec.projectName" != ex2."spec.projectName"`
+			JOIN "provisioner.cattle.io_v3_Cluster_fields" ex2 ON f."field.cattle.io/fixer" = ex2."metadata.name"
+			WHERE f."spec.projectName" != ex2."spec.projectName"`
 
 		c.EXPECT().Serialize(testObject, false).Return(testObjectSerialized, nil)
 		c.EXPECT().Upsert(txC, store.upsertStmt, "testStoreObject", testObjectSerialized).Return(nil)
@@ -1055,8 +1054,8 @@ func TestAddWithBothUpdates(t *testing.T) {
 					}
 				})
 			c.EXPECT().Prepare(WSIgnoringMatcher(rawStmt)).Return(preparedStmt)
-			args1 := []any{"field.cattle.io/projectId"}
-			c.EXPECT().QueryForRows(gomock.Any(), preparedStmt, args1)
+			args1 := []any{}
+			c.EXPECT().QueryForRows(gomock.Any(), gomock.Any(), args1)
 			preparedStmt.EXPECT().Close()
 			c.EXPECT().ReadStrings2(gomock.Any()).Return([][]string{{"lego.cattle.io/fields1", "moose1"}}, nil)
 			// Override check:
@@ -1134,6 +1133,7 @@ func SetupMockDB(t *testing.T) (*MockClient, *MockTxClient) {
 
 	return dbC, txC
 }
+
 func SetupStore(t *testing.T, client *MockClient, shouldEncrypt bool) *Store {
 	name := "testStoreObject"
 	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
@@ -1151,13 +1151,14 @@ func gvkKey(group, version, kind string) string {
 func SetupStoreWithExternalDependencies(t *testing.T, client *MockClient, updateExternal bool, updateSelf bool) *Store {
 	name := "testStoreObject"
 	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
-	namespaceProjectLabelDep := sqltypes.ExternalLabelDependency{
-		SourceGVK:            gvkKey("", "v1", "Namespace"),
-		SourceLabelName:      "field.cattle.io/projectId",
-		TargetGVK:            gvkKey("management.cattle.io", "v3", "Project"),
-		TargetKeyFieldName:   "metadata.name",
+	namespaceProjectLabelDep := sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
+		SourceGVK: gvkKey("", "v1", "Namespace"),
+		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
+		SourceLabelTargetField: map[string]string{
+			"field.cattle.io/projectId": "metadata.name",
+		},
 		TargetFinalFieldName: "spec.displayName",
-	}
+	})
 	namespaceNonLabelDep := sqltypes.ExternalDependency{
 		SourceGVK:            gvkKey("", "v1", "Pods"),
 		SourceFieldName:      "field.cattle.io/fixer",
