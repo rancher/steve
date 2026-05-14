@@ -42,3 +42,42 @@ tests:
         total: 9
       owl:
         total: 7
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary],metadata.namespace"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary],metadata.namespace"
+  expect:
+  - property: "metadata.labels[test.cattle.io/summary]"
+    counts:
+      axolotl:
+        total: 4
+      giraffe:
+        total: 4
+      grouper:
+        total: 1
+      hamster:
+        total: 3
+      "harbour-seal":
+        total: 5
+      moose:
+        total: 9
+      owl:
+        total: 7
+  - property: metadata.namespace
+    counts:
+      summary-test-ns-1:
+        total: 5
+      summary-test-ns-2:
+        total: 5
+      summary-test-ns-3:
+        total: 5
+      summary-test-ns-4:
+        total: 5
+      summary-test-ns-5:
+        total: 5
+      summary-test-ns-6:
+        total: 2
+      summary-test-ns-7:
+        total: 2
+      summary-test-ns-8:
+        total: 2
+      summary-test-ns-9:
+        total: 2
