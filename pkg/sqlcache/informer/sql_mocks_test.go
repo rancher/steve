@@ -305,19 +305,19 @@ func (mr *MockStoreMockRecorder) ReadObjects(rows, typ any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadObjects", reflect.TypeOf((*MockStore)(nil).ReadObjects), rows, typ)
 }
 
-// ReadStringIntString mocks base method.
-func (m *MockStore) ReadStringIntString(rows db.Rows) ([][]string, error) {
+// ReadStringIntString1or2 mocks base method.
+func (m *MockStore) ReadStringIntString1or2(rows db.Rows, readThirdString bool) ([][]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadStringIntString", rows)
+	ret := m.ctrl.Call(m, "ReadStringIntString1or2", rows, readThirdString)
 	ret0, _ := ret[0].([][]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ReadStringIntString indicates an expected call of ReadStringIntString.
-func (mr *MockStoreMockRecorder) ReadStringIntString(rows any) *gomock.Call {
+// ReadStringIntString1or2 indicates an expected call of ReadStringIntString1or2.
+func (mr *MockStoreMockRecorder) ReadStringIntString1or2(rows, readThirdString any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStringIntString", reflect.TypeOf((*MockStore)(nil).ReadStringIntString), rows)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStringIntString1or2", reflect.TypeOf((*MockStore)(nil).ReadStringIntString1or2), rows, readThirdString)
 }
 
 // ReadStrings mocks base method.

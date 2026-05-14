@@ -39,6 +39,11 @@ type summaryExpectType struct {
 	Property string `yaml:"property"`
 }
 
+type expectedDataAndSummaryType struct {
+	Data    []int `yaml:"data"` // do *not* omit
+	Summary []summaryExpectType `yaml:"summary"`
+}
+
 // SummaryTestConfig defines the structure for summary test YAML files
 type SummaryTestConfig struct {
 	SchemaID string `yaml:"schemaID"`
@@ -47,7 +52,7 @@ type SummaryTestConfig struct {
 		User           string              `yaml:"user"`
 		Namespace      string              `yaml:"namespace"`
 		Query          string              `yaml:"query"`
-		Expect         []summaryExpectType           `yaml:"expect"`
+		Expect         expectedDataAndSummaryType    `yaml:"expect"`
 	} `yaml:"tests"`
 }
 
@@ -238,7 +243,9 @@ func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config Summa
 					_ = writeJSONResponse(csvWriter, test.User, url, jsonFilePath, jsonResp)
 				}
 			}
-			i.assertSummaryIsEqual(test.Expect, parsed.Summary)
+			// We don't care about matching the data in summary-testing, just verify the array size
+			assert.Equal(i.T(), len(test.Expect.Data), len(parsed.Data))
+			i.assertSummaryIsEqual(test.Expect.Summary, parsed.Summary)
 		})
 	}
 }
