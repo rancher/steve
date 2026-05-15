@@ -767,6 +767,42 @@ func TestPopulateSummaryObject(t *testing.T) {
 			},
 		},
 	})
+	tests = append(tests, testCase{
+		description: "TestPopulateSummaryObject: multiple summary fields, namespaced",
+		itemLists: [][]string{
+			{"language", "2", "english", "ns1"},
+			{"language", "3", "english", "ns2"},
+			{"language", "4", "english", "ns3"},
+			{"language", "5", "french", "ns1"},
+			{"language", "6", "french", "ns2"},
+			{"language", "11", "latverian", "ns1"},
+			{"language", "12", "latverian", "ns2"},
+			{"language", "13", "latverian", "ns3"},
+			{"language", "14", "latverian", "ns4"},
+		},
+		summaryNamespaced: true,
+		expectedAPISummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				types.SummaryEntry{
+					Property: "language",
+					Counts: map[string]types.SummaryWithBreakdown{
+						"english": types.SummaryWithBreakdown{
+							Total:     9,
+							Namespace: map[string]int{"ns1": 2, "ns2": 3, "ns3": 4},
+						},
+						"french": types.SummaryWithBreakdown{
+							Total:     11,
+							Namespace: map[string]int{"ns1": 5, "ns2": 6},
+						},
+						"latverian": types.SummaryWithBreakdown{
+							Total:     50,
+							Namespace: map[string]int{"ns1": 11, "ns2": 12, "ns3": 13, "ns4": 14},
+						},
+					},
+				},
+			},
+		},
+	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {

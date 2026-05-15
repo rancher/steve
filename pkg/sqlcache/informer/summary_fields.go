@@ -168,8 +168,9 @@ func populateSummaryObject(items [][]string, summaryNamespaced bool, p_unsortedS
 		propertyValue := item[2]
 		summaryEntry, ok = entries[propertyName]
 		if !ok {
-			summaryEntry = types.SummaryEntry{Property: propertyName,
-				Counts: make(map[string]types.SummaryWithBreakdown),
+			summaryEntry = types.SummaryEntry{
+				Property: propertyName,
+				Counts:   make(map[string]types.SummaryWithBreakdown),
 			}
 			entries[propertyName] = summaryEntry
 		}
@@ -180,6 +181,37 @@ func populateSummaryObject(items [][]string, summaryNamespaced bool, p_unsortedS
 }
 
 func populateNamespacedSummaryObject(items [][]string, p_unsortedSummary *types.APISummary) error {
-	//TODO: Return an actual namespaced construct
-	return populateSummaryObject(items, false, p_unsortedSummary)
+	entries := make(map[string]types.SummaryEntry)
+	for _, item := range items {
+		var summaryEntry types.SummaryEntry
+		var ok bool
+
+		propertyName := item[0]
+		val, err := strconv.Atoi(item[1])
+		if err != nil {
+			return err
+		}
+		propertyValue := item[2]
+		namespace := item[3]
+
+		summaryEntry, ok = entries[propertyName]
+		if !ok {
+			summaryEntry = types.SummaryEntry{
+				Property: propertyName,
+				Counts:   make(map[string]types.SummaryWithBreakdown),
+			}
+			entries[propertyName] = summaryEntry
+		}
+
+		swb := summaryEntry.Counts[propertyValue]
+		if swb.Namespace == nil {
+			swb.Namespace = make(map[string]int)
+		}
+		swb.Total += val
+		swb.Namespace[namespace] += val
+		summaryEntry.Counts[propertyValue] = swb
+	}
+
+	p_unsortedSummary.SummaryItems = append(p_unsortedSummary.SummaryItems, slices.Collect(maps.Values(entries))...)
+	return nil
 }
