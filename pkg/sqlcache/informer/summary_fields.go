@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,7 +29,7 @@ func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.
 		return nil, err
 	}
 	summaryNamespaced := lo.SummaryNamespaced
-	countsByProperty := make(map[string]any)
+	unsortedSummary := types.APISummary{SummaryItems: make([]types.SummaryEntry, 0)}
 	// We have to copy the current data-structures because processing other label summary-fields
 	// could modify them, but we don't want to see those changes on subsequent fields
 	for fieldNum, field := range lo.SummaryFieldList {
@@ -37,25 +39,33 @@ func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.
 			copyOfJoinTableIndexByLabelName[k] = v
 		}
 		copyOfFilterComponents := filterComponents.copy()
-		data, err := l.ListSummaryForField(ctx, field, fieldNum, dbName, &copyOfFilterComponents, mainFieldPrefix, copyOfJoinTableIndexByLabelName, summaryNamespaced)
+		err := l.ListSummaryForField(ctx, field, fieldNum, dbName, &copyOfFilterComponents, mainFieldPrefix, copyOfJoinTableIndexByLabelName, summaryNamespaced, &unsortedSummary)
 		if err != nil {
 			return nil, err
 		}
-		for k, v := range data {
-			countsByProperty[k] = v
-		}
 	}
-	return convertMapToAPISummary(countsByProperty, summaryNamespaced), nil
+	return sortSummaries(&unsortedSummary), nil
 }
 
-func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int, summaryNamespaced bool) (map[string]any, error) {
+func sortSummaries(p_unsortedSummary *types.APISummary) *types.APISummary {
+	sortedItems := slices.SortedFunc(slices.Values(p_unsortedSummary.SummaryItems), func(a, b types.SummaryEntry) int {
+		return strings.Compare(strings.ToLower(a.Property), strings.ToLower(b.Property))
+	})
+	return &types.APISummary{SummaryItems: sortedItems}
+}
+
+func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int, summaryNamespaced bool, p_unsortedSummary *types.APISummary) error {
 	queryInfo, err := l.constructSummaryQueryForField(field, fieldNum, dbName, filterComponents, mainFieldPrefix, joinTableIndexByLabelName, summaryNamespaced)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	logrus.Debugf("Summary ListOptionIndexer prepared statement: %v", queryInfo.query)
 	logrus.Debugf("Params: %v", queryInfo.params)
-	return l.executeSummaryQueryForField(ctx, queryInfo, field, summaryNamespaced)
+	items, err := l.executeSummaryQueryForField(ctx, queryInfo, field, summaryNamespaced)
+	if err != nil {
+		return err
+	}
+	return populateSummaryObject(items, summaryNamespaced, p_unsortedSummary)
 }
 
 func (l *ListOptionIndexer) constructSummaryQueryForField(fieldParts []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int, summaryNamespaced bool) (*QueryInfo, error) {
@@ -112,29 +122,7 @@ func (l *ListOptionIndexer) constructSimpleSummaryQueryForStandardField(fieldPar
 	return &QueryInfo{query: query}, nil
 }
 
-func convertMapToAPISummary(countsByProperty map[string]any, summaryNamespaced bool) *types.APISummary {
-	total := len(countsByProperty)
-	blocksToSort := make([]types.SummaryEntry, 0, total)
-	for property, v := range countsByProperty {
-		fixedCounts := make(map[string]types.SummaryWithBreakdown)
-		counts := v.(map[string]any)["counts"].(map[string]int)
-		for k1, v1 := range counts {
-			summary := types.SummaryWithBreakdown{Total: v1}
-			if summaryNamespaced {
-				summary.Namespace = map[string]int{"*": v1}
-			}
-			fixedCounts[k1] = summary
-		}
-		blocksToSort = append(blocksToSort, types.SummaryEntry{Property: property, Counts: fixedCounts})
-	}
-
-	sortedBlocks := slices.SortedFunc(slices.Values(blocksToSort), func(a, b types.SummaryEntry) int {
-		return strings.Compare(a.Property, b.Property)
-	})
-	return &types.APISummary{SummaryItems: sortedBlocks}
-}
-
-func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, queryInfo *QueryInfo, field []string, summaryNamespaced bool) (map[string]any, error) {
+func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, queryInfo *QueryInfo, field []string, summaryNamespaced bool) ([][]string, error) {
 	stmt, err := l.Prepare(queryInfo.query)
 	if err != nil {
 		return nil, err
@@ -161,95 +149,38 @@ func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, que
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	propertyBlock := make(map[string]any)
-	var countsBlock map[string]int
-	for _, item := range items {
-		propertyName := item[0]
-		thisPBlock, ok := propertyBlock[propertyName]
-		if !ok {
-			propertyBlock[propertyName] = make(map[string]any)
-			thisPBlock = propertyBlock[propertyName]
-			thisPBlock.(map[string]any)["counts"] = make(map[string]int)
-		}
-		countsBlock = thisPBlock.(map[string]any)["counts"].(map[string]int)
-		val, err := strconv.Atoi(item[1])
-		if err != nil {
-			return nil, err
-		}
-		countsBlock[item[2]] = val
-	}
-
-	return propertyBlock, nil
+	return items, err
 }
 
-func (l *ListOptionIndexer) executeSummaryQuery(ctx context.Context, queryInfo *QueryInfo) (*types.APISummary, error) {
-	stmt, err := l.Prepare(queryInfo.query)
-	if err != nil {
-		return nil, err
+func populateSummaryObject(items [][]string, summaryNamespaced bool, p_unsortedSummary *types.APISummary) error {
+	if summaryNamespaced {
+		return populateNamespacedSummaryObject(items, p_unsortedSummary)
 	}
-	params := queryInfo.params
-	defer func() {
-		if cerr := stmt.Close(); cerr != nil && err == nil {
-			err = errors.Join(err, cerr)
-		}
-	}()
+	entries := make(map[string]types.SummaryEntry)
+	for _, item := range items {
+		var summaryEntry types.SummaryEntry
+		var ok bool
 
-	var items [][]string
-	err = l.WithTransaction(ctx, false, func(tx db.TxClient) error {
-		now := time.Now()
-		rows, err := tx.Stmt(stmt).QueryContext(ctx, params...)
+		propertyName := item[0]
+		val, err := strconv.Atoi(item[1])
 		if err != nil {
 			return err
 		}
-		elapsed := time.Since(now)
-		logLongQuery(elapsed, queryInfo.query, params)
-		items, err = l.ReadStringIntString1or2(rows, false)
-		if err != nil {
-			return fmt.Errorf("executeSummaryQuery: read objects: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	countsByProperty := make(map[string]map[string]any)
-
-	for _, item := range items {
-		propertyName := item[0]
-		propertyBlock, ok := countsByProperty[propertyName]
+		propertyValue := item[2]
+		summaryEntry, ok = entries[propertyName]
 		if !ok {
-			propertyBlock = make(map[string]any)
-			countsByProperty[propertyName] = propertyBlock
-			propertyBlock["property"] = propertyName
-			propertyBlock["counts"] = make(map[string]any)
+			summaryEntry = types.SummaryEntry{Property: propertyName,
+				Counts: make(map[string]types.SummaryWithBreakdown),
+			}
+			entries[propertyName] = summaryEntry
 		}
-		val, err := strconv.Atoi(item[1])
-		if err != nil {
-			return nil, err
-		}
-		propertyBlock["counts"].(map[string]any)[item[2]] = val
+		entries[propertyName].Counts[propertyValue] = types.SummaryWithBreakdown{Total: val}
 	}
+	p_unsortedSummary.SummaryItems = append(p_unsortedSummary.SummaryItems, slices.Collect(maps.Values(entries))...)
+	return nil
+}
 
-	total := len(countsByProperty)
-	blocksToSort := make([]types.SummaryEntry, 0, total)
-	for _, v := range countsByProperty {
-		property := v["property"].(string)
-		fixedCounts := make(map[string]types.SummaryWithBreakdown)
-		countMap := v["counts"].(map[string]any)
-		for k1, v1 := range countMap {
-			fmt.Printf("QQQ: value is %v\n", v1)
-			fixedCounts[k1] = types.SummaryWithBreakdown{Total: 42} //.Total
-		}
-		blocksToSort = append(blocksToSort, types.SummaryEntry{Property: property, Counts: fixedCounts})
-	}
-	sortedBlocks := slices.SortedFunc(slices.Values(blocksToSort), func(a, b types.SummaryEntry) int {
-		return strings.Compare(a.Property, b.Property)
-	})
-	summary := types.APISummary{SummaryItems: sortedBlocks}
-	return &summary, nil
+func populateNamespacedSummaryObject(items [][]string, p_unsortedSummary *types.APISummary) error {
+	//TODO: Return an actual namespaced construct
+	return populateSummaryObject(items, false, p_unsortedSummary)
 }
