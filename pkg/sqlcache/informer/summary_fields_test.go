@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
-
 
 func TestConstructSummaryQueryForField(t *testing.T) {
 	type testCase struct {
@@ -692,6 +692,94 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 			}
 			assert.Equal(t, test.expectedFilters, filterComponents)
 			assert.Equal(t, test.expectedJoinTable, joinTableIndexByLabelName)
+		})
+	}
+}
+
+func TestPopulateSummaryObject(t *testing.T) {
+	type testCase struct {
+		description        string
+		itemLists          [][]string
+		summaryNamespaced  bool
+		expectedAPISummary *types.APISummary
+		expectedErr        string
+	}
+
+	var tests []testCase
+	// summary=metadata.labels.status&summarynamespaced
+	// summary=metadata.queryField1&filter=metadata.namespace=cars
+	// As soon as we have a non-empty body build a with-statement
+	tests = append(tests, testCase{
+		description: "TestPopulateSummaryObject: one summary field, not namespaced",
+		itemLists: [][]string{
+			{"language", "2", "english"},
+			{"language", "5", "french"},
+			{"language", "1", "latverian"},
+		},
+		expectedAPISummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				types.SummaryEntry{
+					Property: "language",
+					Counts: map[string]types.SummaryWithBreakdown{
+						"english":   types.SummaryWithBreakdown{Total: 2},
+						"french":    types.SummaryWithBreakdown{Total: 5},
+						"latverian": types.SummaryWithBreakdown{Total: 1},
+					},
+				},
+			},
+		},
+	})
+	tests = append(tests, testCase{
+		description: "TestPopulateSummaryObject: three summary fields sort correctly, not namespaced",
+		itemLists: [][]string{
+			{"language", "2", "english"},
+			{"animal", "7", "zebra"},
+			{"language", "5", "french"},
+			{"boat", "6", "ferry"},
+			{"language", "1", "latverian"},
+			{"boat", "2", "catamaran"},
+			{"animal", "5", "aardvark"},
+		},
+		expectedAPISummary: &types.APISummary{
+			SummaryItems: []types.SummaryEntry{
+				types.SummaryEntry{
+					Property: "animal",
+					Counts: map[string]types.SummaryWithBreakdown{
+						"aardvark": types.SummaryWithBreakdown{Total: 5},
+						"zebra":    types.SummaryWithBreakdown{Total: 7},
+					},
+				},
+				types.SummaryEntry{
+					Property: "boat",
+					Counts: map[string]types.SummaryWithBreakdown{
+						"ferry":     types.SummaryWithBreakdown{Total: 6},
+						"catamaran": types.SummaryWithBreakdown{Total: 2},
+					},
+				},
+				types.SummaryEntry{
+					Property: "language",
+					Counts: map[string]types.SummaryWithBreakdown{
+						"english":   types.SummaryWithBreakdown{Total: 2},
+						"french":    types.SummaryWithBreakdown{Total: 5},
+						"latverian": types.SummaryWithBreakdown{Total: 1},
+					},
+				},
+			},
+		},
+	})
+	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			summary := types.APISummary{}
+			err := populateSummaryObject(test.itemLists, test.summaryNamespaced, &summary)
+			if test.expectedErr != "" {
+				assert.Error(t, err)
+				assert.Equal(t, test.expectedErr, err.Error())
+				return
+			}
+			require.NoError(t, err)
+			sortedSummary := sortSummaries(&summary)
+			assert.Equal(t, *test.expectedAPISummary, *sortedSummary)
 		})
 	}
 }
