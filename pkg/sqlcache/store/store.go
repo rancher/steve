@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 
@@ -68,16 +70,44 @@ type Store struct {
 	afterDelete    []func(key string, obj any, tx db.TxClient) error
 	afterDeleteAll []func(tx db.TxClient) error
 	beforeDropAll  []func(tx db.TxClient) error
+
+	lastSyncRV   string
+	lastSyncRVMu sync.RWMutex
 }
 
 // LastStoreSyncResourceVersion implements [cache.Store].
 func (s *Store) LastStoreSyncResourceVersion() string {
-	panic("unimplemented")
+	s.lastSyncRVMu.RLock()
+	defer s.lastSyncRVMu.RUnlock()
+	return s.lastSyncRV
 }
 
 // Bookmark implements the cache.Store interface.
 func (s *Store) Bookmark(resourceVersion string) {
-	// No-op: SQL store does not currently track watch bookmarks
+	s.setLastSyncRV(resourceVersion)
+}
+
+func (s *Store) setLastSyncRV(rv string) {
+	if rv == "" {
+		return
+	}
+	s.lastSyncRVMu.Lock()
+	defer s.lastSyncRVMu.Unlock()
+	s.lastSyncRV = rv
+}
+
+func (s *Store) setLastSyncRVFromObject(obj any) {
+	if obj == nil {
+		return
+	}
+	if _, isTombstone := obj.(cache.DeletedFinalStateUnknown); isTombstone {
+		return
+	}
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return
+	}
+	s.setLastSyncRV(accessor.GetResourceVersion())
 }
 
 // Test that Store implements cache.Indexer
@@ -384,6 +414,7 @@ func (s *Store) Add(obj any) error {
 		log.Errorf("Error in Store.Add for type %v: %v", s.name, err)
 		return err
 	}
+	s.setLastSyncRVFromObject(obj)
 	s.checkUpdateExternalInfo(key)
 	return nil
 }
@@ -409,6 +440,7 @@ func (s *Store) Update(obj any) error {
 		log.Errorf("Error in Store.Update for type %v: %v", s.name, err)
 		return err
 	}
+	s.setLastSyncRVFromObject(obj)
 	s.checkUpdateExternalInfo(key)
 	return nil
 }
@@ -424,6 +456,7 @@ func (s *Store) Delete(obj any) error {
 		log.Errorf("Error in Store.Delete for type %v: %v", s.name, err)
 		return err
 	}
+	s.setLastSyncRVFromObject(obj)
 	return nil
 }
 
@@ -469,7 +502,7 @@ func (s *Store) Get(obj any) (item any, exists bool, err error) {
 }
 
 // Replace will delete the contents of the Store, using instead the given list
-func (s *Store) Replace(objects []any, _ string) error {
+func (s *Store) Replace(objects []any, resourceVersion string) error {
 	objectMap := map[string]any{}
 
 	for _, object := range objects {
@@ -484,6 +517,7 @@ func (s *Store) Replace(objects []any, _ string) error {
 		log.Errorf("Error in Store.Replace for type %v: %v", s.name, err)
 		return err
 	}
+	s.setLastSyncRV(resourceVersion)
 	for key := range objectMap {
 		s.checkUpdateExternalInfo(key)
 	}
