@@ -3,11 +3,11 @@ set -e
 
 # The envtest version and SHAs can be found here: https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/HEAD/envtest-releases.yaml
 
-ENVTEST_VERSION=v1.35.0
-ENVTEST_SUM_linux_amd64=130369c16f076e724d089189afaede960316f5f5dea6cf57be7a4fc6f09c77342893192509790e4056e116e232dff832ed863f5bd55dcb55d38f3ab834828a11
-ENVTEST_SUM_linux_arm64=e53e2b88398f5b9503e3f074d82a2dcb090c708b34940848607ce658138a5d4a25962e042ab683ccc026a8a6c90c0be7f658e42dde0887369d73c3b68e2fc86c
-ENVTEST_SUM_darwin_amd64=fccc583ba6d322c88a8c56f7876090a7ad63460046a4bcae414093b23ce68a75f172ca7484b7c7475b707657eca5108a8ad3fd85e1b4f70a6c99ca2f22dbd6b2
-ENVTEST_SUM_darwin_arm64=bb5d0bb3975956331b0aa0c039955b4c4dc6c5c288e5af369364c7d2fbeac11a025227dabb127569080b259dd29b697cc77fa77abd27ae26721ddb23e8ee0613
+ENVTEST_VERSION=v1.36.0
+ENVTEST_SUM_linux_amd64=302d6a4c3b7d79b8a6168cd9fd5f18e718048211d25012d969d320e06b39672d17338bcd008c29adf98b41048a6f7d80c90ab0165b4b861497ef74c7bc6c1531
+ENVTEST_SUM_linux_arm64=16b416776b6f5e6a13be33b7e9f248cbffb71b40bc286436c93b83239b965d07b902ce0da75b721aea9356a764ca896154bc420618bc7fb9d1dc4a6b2fa49405
+ENVTEST_SUM_darwin_amd64=2f73d7c2c1408c3334f978c2c7f8a64bc691277d1b482930ae516b425882464f8970b0e47010520cdd29f1e756adfab2721a53857a976a462c16edcef9604644
+ENVTEST_SUM_darwin_arm64=4b3542f707ffaa4bc0d5a07d25290323ff0ad1efd90560571705daf958db772fd8e78b5d6ae878df1840d8d39c1250ebfaf8518bfd02b10757ae445ec0cafe9e
 
 CLIENT_GO_MINOR=$(go mod graph | grep ' k8s.io/client-go@' | head -n1 | cut -d@ -f2 | cut -d '.' -f 2)
 ENVTEST_MINOR=$(echo "$ENVTEST_VERSION" | cut -d '.' -f 2)
@@ -36,7 +36,19 @@ SEMVER=${ENVTEST_VERSION#v}
 if ! go tool -modfile gotools/setup-envtest/go.mod setup-envtest list -i | grep -q "v${SEMVER}"; then
     curl -sL -o "$DEST" "$URL"
 
-    echo "${ENVTEST_SUM}  ${DEST}" | sha512sum --check > /dev/null
+    if command -v sha512sum >/dev/null 2>&1; then
+        ACTUAL_SUM=$(sha512sum "$DEST" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        ACTUAL_SUM=$(shasum -a 512 "$DEST" | awk '{print $1}')
+    else
+        echo "No SHA-512 checksum tool found (need sha512sum or shasum)" >&2
+        exit 1
+    fi
+
+    if [ "$ACTUAL_SUM" != "$ENVTEST_SUM" ]; then
+        echo "Checksum verification failed for ${DEST}" >&2
+        exit 1
+    fi
 
     cat "$DEST" | go tool -modfile gotools/setup-envtest/go.mod setup-envtest sideload "${SEMVER}" > /dev/null
 fi

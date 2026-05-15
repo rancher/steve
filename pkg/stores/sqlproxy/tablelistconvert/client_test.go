@@ -196,8 +196,8 @@ func TestList(t *testing.T) {
 			}
 			expectedList := &unstructured.UnstructuredList{
 				Object: map[string]interface{}{
-					"kind":       "Table",
-					"apiVersion": "meta.k8s.io/v1",
+					"kind":       "List",
+					"apiVersion": "",
 					"rows": []interface{}{
 						map[string]interface{}{
 							"cells": []interface{}{"cell1", "cell2"},
@@ -249,6 +249,36 @@ func TestList(t *testing.T) {
 			receivedList, err := client.List(context.TODO(), opts)
 			assert.Nil(t, err)
 			assert.Equal(t, initialList, receivedList)
+		},
+	})
+	tests = append(tests, testCase{
+		description: "client List() on a Table response with no rows should drop the Table envelope's " +
+			"kind and apiVersion so client-go reflectors do not reject the result.",
+		test: func(t *testing.T) {
+			ri := NewMockResourceInterface(gomock.NewController(t))
+			opts := metav1.ListOptions{}
+			initialList := &unstructured.UnstructuredList{
+				Object: map[string]interface{}{
+					"kind":       "Table",
+					"apiVersion": "meta.k8s.io/v1",
+					"rows":       []interface{}{},
+				},
+			}
+			expectedList := &unstructured.UnstructuredList{
+				Object: map[string]interface{}{
+					"rows": []interface{}{},
+				},
+				Items: nil,
+			}
+			ri.EXPECT().List(context.TODO(), opts).Return(initialList, nil)
+			client := &Client{ResourceInterface: ri}
+			receivedList, err := client.List(context.TODO(), opts)
+			assert.Nil(t, err)
+			assert.Equal(t, expectedList, receivedList)
+			_, hasKind := receivedList.Object["kind"]
+			_, hasAPIVersion := receivedList.Object["apiVersion"]
+			assert.False(t, hasKind, "kind key should be absent")
+			assert.False(t, hasAPIVersion, "apiVersion key should be absent")
 		},
 	})
 	tests = append(tests, testCase{

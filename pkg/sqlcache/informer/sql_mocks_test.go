@@ -55,6 +55,18 @@ func (mr *MockStoreMockRecorder) Add(obj any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockStore)(nil).Add), obj)
 }
 
+// Bookmark mocks base method.
+func (m *MockStore) Bookmark(rv string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Bookmark", rv)
+}
+
+// Bookmark indicates an expected call of Bookmark.
+func (mr *MockStoreMockRecorder) Bookmark(rv any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bookmark", reflect.TypeOf((*MockStore)(nil).Bookmark), rv)
+}
+
 // Delete mocks base method.
 func (m *MockStore) Delete(obj any) error {
 	m.ctrl.T.Helper()
@@ -169,6 +181,20 @@ func (m *MockStore) GetType() reflect.Type {
 func (mr *MockStoreMockRecorder) GetType() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetType", reflect.TypeOf((*MockStore)(nil).GetType))
+}
+
+// LastStoreSyncResourceVersion mocks base method.
+func (m *MockStore) LastStoreSyncResourceVersion() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastStoreSyncResourceVersion")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// LastStoreSyncResourceVersion indicates an expected call of LastStoreSyncResourceVersion.
+func (mr *MockStoreMockRecorder) LastStoreSyncResourceVersion() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastStoreSyncResourceVersion", reflect.TypeOf((*MockStore)(nil).LastStoreSyncResourceVersion))
 }
 
 // List mocks base method.
