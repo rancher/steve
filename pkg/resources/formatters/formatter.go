@@ -74,8 +74,7 @@ var ReadOnlySettings = []string{
 	"cacerts",
 }
 
-// Setting is the default formatter for management.cattle.io.setting resources.
-// It intentionally performs no mutation and serves as an explicit extension point for setting-specific formatting.
+// Setting is the default formatter for management.cattle.io.setting resources. This formatter removes the update link from resources which are read-only or cannot be updated by the user.
 func Setting(request *types.APIRequest, resource *types.RawResource) {
 	data := resource.APIObject.Data()
 	if data.String("value") == "" {
