@@ -58,11 +58,11 @@ func TestSchemas(t *testing.T) {
 			},
 		},
 		{
-			name: "namespaces with no explicit access still allows list",
+			name: "namespaces with no explicit access returns no methods",
 			config: schemaTestConfig{
 				permissionVerbs:        []string{}, // intentionally empty
 				desiredResourceVerbs:   []string{},
-				desiredCollectionVerbs: []string{"GET"}, // special-case should add this
+				desiredCollectionVerbs: []string{}, // no bypass - no methods
 				errDesired:             false,
 				resourceID:             "namespaces",
 			},
@@ -198,6 +198,13 @@ func runSchemaTest(t *testing.T, config schemaTestConfig, lookup *mockAccessSetL
 			testSchema = userSchema
 		}
 	}
+
+	// If no methods expected, schema should be nil (not included)
+	if len(config.desiredResourceVerbs) == 0 && len(config.desiredCollectionVerbs) == 0 {
+		assert.Nil(t, testSchema, "expected schema to be nil when no methods are expected")
+		return
+	}
+
 	assert.NotNil(t, testSchema, "expected a test schema, but was nil")
 	assert.Len(t, testSchema.ResourceMethods, len(config.desiredResourceVerbs), "did not get as many verbs as expected for resource methods")
 	assert.Len(t, testSchema.CollectionMethods, len(config.desiredCollectionVerbs), "did not get as many verbs as expected for collection methods")
@@ -233,17 +240,15 @@ func TestTaintedCacheDoesNotCauseDuplicates(t *testing.T) {
 	collection := NewCollection(context.TODO(), types.EmptyAPISchemas(), mockLookup)
 	collection.schemas = map[string]*types.APISchema{"namespaces": makeNamespaceSchema()}
 
-	// User A: No permissions. Prior to our refactoring, this would add GET to the base schema
+	// User A: No permissions on namespaces.
 	userA := &user.DefaultInfo{Name: "user-a"}
 	mockLookup.AddAccessForUser(userA, "get", k8sSchema.GroupResource{Group: "test.k8s.io", Resource: "dummy"}, "*", "*")
 
 	schemasA, err := collection.Schemas(userA)
 	assert.NoError(t, err)
 	nsSchemaA := schemasA.Schemas["namespaces"]
-	assert.NotNil(t, nsSchemaA)
-	// With no perms, should get a GET for list.
-	assert.Len(t, nsSchemaA.CollectionMethods, 1)
-	assert.Equal(t, "GET", nsSchemaA.CollectionMethods[0])
+	// With no perms, namespace schema should not be included (no methods = not added)
+	assert.Nil(t, nsSchemaA)
 
 	// User B: Has 'get' permission on namespaces.
 	userB := &user.DefaultInfo{Name: "user-b"}
