@@ -47,6 +47,11 @@ const (
 
 	debugQueryLogPathEnvVar           = "CATTLE_DEBUG_QUERY_LOG"
 	debugQueryIncludeParamsPathEnvVar = "CATTLE_DEBUG_QUERY_INCLUDE_PARAMS"
+
+	// walCheckpointInterval is how often to run WAL checkpoint to prevent unbounded WAL growth.
+	// SQLite's default PASSIVE auto-checkpoint fails silently under continuous reader load,
+	// so we run explicit TRUNCATE checkpoints on a timer.
+	walCheckpointInterval = 1 * time.Minute
 )
 
 // Client defines a database client that provides encrypting, decrypting, and database resetting
@@ -167,6 +172,10 @@ type client struct {
 	encoding  encoding
 
 	queryLogger logging.QueryLogger
+
+	// WAL checkpoint management
+	stopCheckpoint chan struct{}
+	checkpointWg   sync.WaitGroup
 }
 
 // Connection represents a connection pool.
@@ -174,6 +183,7 @@ type Connection interface {
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error)
 	Exec(query string, args ...any) (sql.Result, error)
 	Prepare(query string) (*sql.Stmt, error)
+	Query(query string, args ...any) (*sql.Rows, error)
 	Close() error
 }
 
@@ -218,9 +228,10 @@ type ClientOption func(*client)
 // NewClient returns a client and the path to the database. If the given connection is nil then a default one will be created.
 func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool, opts ...ClientOption) (Client, string, error) {
 	client := &client{
-		encryptor: encryptor,
-		decryptor: decryptor,
-		encoding:  defaultEncoding,
+		encryptor:      encryptor,
+		decryptor:      decryptor,
+		encoding:       defaultEncoding,
+		stopCheckpoint: make(chan struct{}),
 	}
 	for _, o := range opts {
 		o(client)
@@ -240,7 +251,82 @@ func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor
 	}
 	client.queryLogger = logger
 
+	// Start background WAL checkpointer to prevent unbounded WAL growth
+	client.startCheckpointer()
+
 	return client, dbPath, nil
+}
+
+// startCheckpointer starts a background goroutine that periodically runs WAL checkpoint
+// to prevent unbounded WAL file growth. SQLite's default PASSIVE auto-checkpoint fails
+// silently when readers are active, so we run explicit TRUNCATE checkpoints.
+func (c *client) startCheckpointer() {
+	c.checkpointWg.Add(1)
+	go func() {
+		defer c.checkpointWg.Done()
+		ticker := time.NewTicker(walCheckpointInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				c.runCheckpoint()
+			case <-c.stopCheckpoint:
+				return
+			}
+		}
+	}()
+}
+
+// runCheckpoint executes a WAL checkpoint. It uses TRUNCATE mode which:
+// 1. Waits for writers to finish
+// 2. Moves all WAL content to the main database
+// 3. Resets the WAL file
+// 4. Truncates the WAL file to zero bytes
+func (c *client) runCheckpoint() {
+	c.connLock.RLock()
+	defer c.connLock.RUnlock()
+
+	if c.conn == nil {
+		return
+	}
+
+	// TRUNCATE mode guarantees the WAL file is reset and truncated to 0 bytes.
+	// Returns: busy (pages that couldn't be checkpointed), log (total WAL pages), checkpointed (pages moved to DB)
+	rows, err := c.conn.Query("PRAGMA wal_checkpoint(TRUNCATE)")
+	if err != nil {
+		logrus.Warnf("WAL checkpoint failed: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var busy, log, checkpointed int
+	if rows.Next() {
+		if err := rows.Scan(&busy, &log, &checkpointed); err != nil {
+			logrus.Warnf("WAL checkpoint: failed to read result: %v", err)
+			return
+		}
+	}
+
+	if busy > 0 || log > 0 {
+		logrus.Debugf("WAL checkpoint: busy=%d log=%d checkpointed=%d", busy, log, checkpointed)
+	}
+}
+
+// Close stops the WAL checkpointer and closes the database connection.
+func (c *client) Close() error {
+	if c.stopCheckpoint != nil {
+		close(c.stopCheckpoint)
+		c.checkpointWg.Wait()
+	}
+
+	c.connLock.Lock()
+	defer c.connLock.Unlock()
+
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
 }
 
 // Prepare prepares the given string into a sql statement on the client's connection.
