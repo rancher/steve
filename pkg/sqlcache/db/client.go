@@ -52,6 +52,10 @@ const (
 	// SQLite's default PASSIVE auto-checkpoint fails silently under continuous reader load,
 	// so we run explicit TRUNCATE checkpoints on a timer.
 	walCheckpointInterval = 1 * time.Minute
+
+	// walCheckpointTimeout is the maximum time to wait for a checkpoint to complete.
+	// If exceeded, it likely indicates a stuck writer.
+	walCheckpointTimeout = 30 * time.Second
 )
 
 // Client defines a database client that provides encrypting, decrypting, and database resetting
@@ -184,6 +188,7 @@ type Connection interface {
 	Exec(query string, args ...any) (sql.Result, error)
 	Prepare(query string) (*sql.Stmt, error)
 	Query(query string, args ...any) (*sql.Rows, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	Close() error
 }
 
@@ -228,10 +233,9 @@ type ClientOption func(*client)
 // NewClient returns a client and the path to the database. If the given connection is nil then a default one will be created.
 func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor Decryptor, useTempDir bool, opts ...ClientOption) (Client, string, error) {
 	client := &client{
-		encryptor:      encryptor,
-		decryptor:      decryptor,
-		encoding:       defaultEncoding,
-		stopCheckpoint: make(chan struct{}),
+		encryptor: encryptor,
+		decryptor: decryptor,
+		encoding:  defaultEncoding,
 	}
 	for _, o := range opts {
 		o(client)
@@ -252,6 +256,7 @@ func NewClient(ctx context.Context, c Connection, encryptor Encryptor, decryptor
 	client.queryLogger = logger
 
 	// Start background WAL checkpointer to prevent unbounded WAL growth
+	client.stopCheckpoint = make(chan struct{})
 	client.startCheckpointer()
 
 	return client, dbPath, nil
@@ -291,11 +296,18 @@ func (c *client) runCheckpoint() {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), walCheckpointTimeout)
+	defer cancel()
+
 	// TRUNCATE mode guarantees the WAL file is reset and truncated to 0 bytes.
 	// Returns: busy (pages that couldn't be checkpointed), log (total WAL pages), checkpointed (pages moved to DB)
-	rows, err := c.conn.Query("PRAGMA wal_checkpoint(TRUNCATE)")
+	rows, err := c.conn.QueryContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
 	if err != nil {
-		logrus.Warnf("WAL checkpoint failed: %v", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			logrus.Error("WAL checkpoint timed out - possible stuck writer")
+		} else {
+			logrus.Warnf("WAL checkpoint failed: %v", err)
+		}
 		return
 	}
 	defer rows.Close()

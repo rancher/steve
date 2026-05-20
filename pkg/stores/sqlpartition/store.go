@@ -138,6 +138,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 		return nil, err
 	}
 
+	ctx := apiOp.Context()
 	store := s.Partitioner.Store()
 
 	response := make(chan types.APIEvent)
@@ -150,7 +151,11 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 		defer close(response)
 
 		for i := range c {
-			response <- partition.ToAPIEvent(nil, schema, i)
+			select {
+			case response <- partition.ToAPIEvent(nil, schema, i):
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
