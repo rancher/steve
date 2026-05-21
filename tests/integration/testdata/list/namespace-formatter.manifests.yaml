@@ -1,0 +1,58 @@
+# Namespace for testing the formatter
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-formatter-test
+  labels:
+    env: production
+    fleet.cattle.io/managed: "true"
+  annotations:
+    description: sensitive-info
+    management.cattle.io/system-namespace: "true"
+    field.cattle.io/projectId: local:p-test
+---
+# User with full namespace GET access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ns-formatter-get-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ns-formatter-get-binding
+subjects:
+  - kind: User
+    name: user-ns-get
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: ns-formatter-get-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# User with namespace LIST but not GET (can list namespaces but not get details)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ns-formatter-list-only-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ns-formatter-list-only-binding
+subjects:
+  - kind: User
+    name: user-ns-no-get
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: ns-formatter-list-only-role
+  apiGroup: rbac.authorization.k8s.io
