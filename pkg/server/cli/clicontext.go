@@ -25,6 +25,9 @@ type Config struct {
 	PprofEnabled    bool
 	PprofListenAddr string
 
+	MetricsEnabled    bool
+	MetricsListenAddr string
+
 	WebhookConfig authcli.WebhookConfig
 
 	EnableHeaderAuthentication bool
@@ -102,6 +105,16 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       9080,
 			Destination: &config.HTTPListenPort,
+		},
+		&cli.BoolFlag{
+			Name:        "enable-metrics",
+			Value:       false,
+			Destination: &config.MetricsEnabled,
+		},
+		&cli.StringFlag{
+			Name:        "metrics-listen-addr",
+			Value:       "localhost:6080",
+			Destination: &config.MetricsListenAddr,
 		},
 		&cli.BoolFlag{
 			Name:        "enable-pprof",
