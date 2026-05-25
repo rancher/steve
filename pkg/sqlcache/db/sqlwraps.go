@@ -44,6 +44,20 @@ type rows struct {
 
 // Err wraps the original *sql.Rows's Err() with a QueryError
 func (r rows) Err() error {
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		// Workaround for database/sql deadlock behavior after context cancellation:
+		// Context cancellation can cause deadlock, while calling Next() or Close() releases
+		// https://github.com/golang/go/issues/64498
+		select {
+		case <-done:
+		case <-time.After(100 * time.Millisecond):
+			// Force deadlock release if Err() is not immediate
+			_ = r.Close()
+		}
+	}()
+
 	if err := r.Rows.Err(); err != nil {
 		return &QueryError{QueryString: r.queryString, Err: err}
 	}
