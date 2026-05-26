@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"net/http"
+	"time"
 
 	steveauth "github.com/rancher/steve/pkg/auth"
 	authcli "github.com/rancher/steve/pkg/auth/cli"
@@ -24,6 +25,10 @@ type Config struct {
 
 	PprofEnabled    bool
 	PprofListenAddr string
+
+	MetricsEnabled        bool
+	MetricsListenAddr     string
+	MetricsUpdateInterval int
 
 	WebhookConfig authcli.WebhookConfig
 
@@ -72,7 +77,8 @@ func (c *Config) ToServer(ctx context.Context, sqlCache bool) (*server.Server, e
 		Next:           ui.New(c.UIPath),
 		SQLCache:       sqlCache,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
-			GCKeepCount: 1000,
+			GCKeepCount:             1000,
+			DBMetricsUpdateInterval: time.Duration(c.MetricsUpdateInterval) * time.Second,
 		},
 	})
 }
@@ -102,6 +108,20 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "http-listen-port",
 			Value:       9080,
 			Destination: &config.HTTPListenPort,
+		},
+		&cli.BoolFlag{
+			Name:        "enable-metrics",
+			Value:       false,
+			Destination: &config.MetricsEnabled,
+		},
+		&cli.StringFlag{
+			Name:        "metrics-listen-addr",
+			Value:       "localhost:6080",
+			Destination: &config.MetricsListenAddr,
+		},
+		&cli.IntFlag{
+			Name:        "metrics-update-interval",
+			Destination: &config.MetricsUpdateInterval,
 		},
 		&cli.BoolFlag{
 			Name:        "enable-pprof",

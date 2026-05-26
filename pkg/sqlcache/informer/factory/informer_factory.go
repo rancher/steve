@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rancher/lasso/pkg/log"
+	"github.com/rancher/steve/pkg/metrics"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
@@ -93,7 +94,8 @@ type CacheFactoryOptions struct {
 	// Deprecated: events are not stored in memory using a fixed-length circular list
 	GCInterval time.Duration
 	// GCKeepCount is how many events to keep in memory
-	GCKeepCount int
+	GCKeepCount             int
+	DBMetricsUpdateInterval time.Duration
 }
 
 // NewCacheFactory returns an informer factory instance
@@ -108,11 +110,12 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	dbClient, _, err := db.NewClient(ctx, nil, m, m, false)
+	dbClient, dbPath, err := db.NewClient(ctx, nil, m, m, false)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
+	metrics.StartDatabaseMetricsLogger(ctx, dbPath, opts.DBMetricsUpdateInterval*time.Second)
 	return &CacheFactory{
 		ctx:    ctx,
 		cancel: cancel,
