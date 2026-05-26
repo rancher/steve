@@ -120,7 +120,7 @@ func Flags(config *Config) []cli.Flag {
 			Destination: &config.MetricsListenAddr,
 		},
 		&cli.IntFlag{
-			Name:        "metrics-update-interval",
+			Name:        "metrics-update-interval-seconds",
 			Destination: &config.MetricsUpdateInterval,
 		},
 		&cli.BoolFlag{
