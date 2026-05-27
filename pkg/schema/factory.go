@@ -116,6 +116,29 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 			}
 		}
 
+		// Grant synthetic namespace access for UI dropdown functionality.
+		// Users with access to resources in a namespace need to see the namespace
+		// in the UI even without direct K8s namespace GET permission.
+		// The namespace formatter strips sensitive metadata from these responses.
+		mustAllowList := false
+		if len(verbAccess) == 0 {
+			if gr.Group == "" && gr.Resource == "namespaces" {
+				var accessList accesscontrol.AccessList
+				for _, ns := range access.Namespaces() {
+					accessList = append(accessList, accesscontrol.Access{
+						Namespace:    accesscontrol.All,
+						ResourceName: ns,
+					})
+				}
+				verbAccess["get"] = accessList
+				verbAccess["watch"] = accessList
+				if len(accessList) == 0 {
+					// make sure we add GET to collection later
+					mustAllowList = true
+				}
+			}
+		}
+
 		s = s.DeepCopy()
 		attributes.SetAccess(s, verbAccess)
 		sm := newSchemaMethodsFromSchema(s)
@@ -125,6 +148,10 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 				return "blocked-" + method
 			}
 			return method
+		}
+
+		if mustAllowList {
+			sm.addCollection(http.MethodGet)
 		}
 
 		if verbAccess.AnyVerb("list", "get") {

@@ -77,8 +77,10 @@ func (i *IntegrationSuite) TestNamespaceFormatter() {
 		assert.Equal(i.T(), "local:p-test", annotations["field.cattle.io/projectId"])
 	})
 
-	i.Run("user without namespace GET sees stripped metadata", func() {
-		ns := i.getNamespaceByUser(ctx, baseURL, "ns-formatter-test", "user-ns-no-get")
+	// This is the real issue scenario: user has pod access in namespace but NO namespace permissions
+	// Steve grants synthetic namespace access for UI dropdown, but should strip sensitive metadata
+	i.Run("user with pod access but no namespace GET sees stripped metadata", func() {
+		ns := i.getNamespaceByUser(ctx, baseURL, "ns-formatter-test", "user-pod-only")
 
 		metadata := ns["metadata"].(map[string]interface{})
 		labels := metadata["labels"].(map[string]interface{})
