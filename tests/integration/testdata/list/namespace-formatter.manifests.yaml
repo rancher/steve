@@ -11,7 +11,7 @@ metadata:
     management.cattle.io/system-namespace: "true"
     field.cattle.io/projectId: local:p-test
 ---
-# User with full namespace GET access
+# User with full namespace GET access (should see all metadata)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -34,25 +34,29 @@ roleRef:
   name: ns-formatter-get-role
   apiGroup: rbac.authorization.k8s.io
 ---
-# User with namespace LIST but not GET (can list namespaces but not get details)
+# User with POD access in the namespace but NO namespace permissions
+# This is the real issue scenario: user can see pods in ns-formatter-test
+# but should NOT see sensitive namespace metadata
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: ns-formatter-list-only-role
+  name: ns-formatter-pod-role
+  namespace: ns-formatter-test
 rules:
   - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["list"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: ns-formatter-list-only-binding
+  name: ns-formatter-pod-binding
+  namespace: ns-formatter-test
 subjects:
   - kind: User
-    name: user-ns-no-get
+    name: user-pod-only
     apiGroup: rbac.authorization.k8s.io
 roleRef:
-  kind: ClusterRole
-  name: ns-formatter-list-only-role
+  kind: Role
+  name: ns-formatter-pod-role
   apiGroup: rbac.authorization.k8s.io

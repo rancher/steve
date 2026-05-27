@@ -65,6 +65,10 @@ func DefaultSchemaTemplates(cf *client.Factory,
 			Formatter: formatters.Pod,
 		},
 		{
+			ID:        "namespace",
+			Formatter: formatters.Namespace,
+		},
+		{
 			ID: "management.cattle.io.cluster",
 			Customize: func(apiSchema *types.APISchema) {
 				cluster.AddApply(baseSchemas, apiSchema)
@@ -95,6 +99,10 @@ func DefaultSchemaTemplatesForStore(store types.Store,
 		{
 			ID:        "pod",
 			Formatter: formatters.Pod,
+		},
+		{
+			ID:        "namespace",
+			Formatter: formatters.Namespace,
 		},
 		{
 			ID: "management.cattle.io.cluster",
