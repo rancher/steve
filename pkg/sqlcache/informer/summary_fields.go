@@ -46,14 +46,14 @@ func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.
 	return sortSummaries(&unsortedSummary), nil
 }
 
-func sortSummaries(p_unsortedSummary *types.APISummary) *types.APISummary {
-	sortedItems := slices.SortedFunc(slices.Values(p_unsortedSummary.SummaryItems), func(a, b types.SummaryEntry) int {
+func sortSummaries(pUnsortedSummary *types.APISummary) *types.APISummary {
+	sortedItems := slices.SortedFunc(slices.Values(pUnsortedSummary.SummaryItems), func(a, b types.SummaryEntry) int {
 		return strings.Compare(strings.ToLower(a.Property), strings.ToLower(b.Property))
 	})
 	return &types.APISummary{SummaryItems: sortedItems}
 }
 
-func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int, summaryNamespaced bool, p_unsortedSummary *types.APISummary) error {
+func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int, summaryNamespaced bool, pUnsortedSummary *types.APISummary) error {
 	queryInfo, err := l.constructSummaryQueryForField(field, fieldNum, dbName, filterComponents, mainFieldPrefix, joinTableIndexByLabelName, summaryNamespaced)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []str
 	if err != nil {
 		return err
 	}
-	return populateSummaryObject(items, summaryNamespaced, p_unsortedSummary)
+	return populateSummaryObject(items, summaryNamespaced, pUnsortedSummary)
 }
 
 func (l *ListOptionIndexer) constructSummaryQueryForField(fieldParts []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int, summaryNamespaced bool) (*QueryInfo, error) {
@@ -151,9 +151,9 @@ func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, que
 	return items, err
 }
 
-func populateSummaryObject(items [][]string, summaryNamespaced bool, p_unsortedSummary *types.APISummary) error {
+func populateSummaryObject(items [][]string, summaryNamespaced bool, pUnsortedSummary *types.APISummary) error {
 	if summaryNamespaced {
-		return populateNamespacedSummaryObject(items, p_unsortedSummary)
+		return populateNamespacedSummaryObject(items, pUnsortedSummary)
 	}
 	entries := make(map[string]types.SummaryEntry)
 	for _, item := range items {
@@ -176,11 +176,11 @@ func populateSummaryObject(items [][]string, summaryNamespaced bool, p_unsortedS
 		}
 		entries[propertyName].Counts[propertyValue] = types.SummaryWithBreakdown{Total: val}
 	}
-	p_unsortedSummary.SummaryItems = append(p_unsortedSummary.SummaryItems, slices.Collect(maps.Values(entries))...)
+	pUnsortedSummary.SummaryItems = append(pUnsortedSummary.SummaryItems, slices.Collect(maps.Values(entries))...)
 	return nil
 }
 
-func populateNamespacedSummaryObject(items [][]string, p_unsortedSummary *types.APISummary) error {
+func populateNamespacedSummaryObject(items [][]string, pUnsortedSummary *types.APISummary) error {
 	entries := make(map[string]types.SummaryEntry)
 	for _, item := range items {
 		var summaryEntry types.SummaryEntry
@@ -212,6 +212,6 @@ func populateNamespacedSummaryObject(items [][]string, p_unsortedSummary *types.
 		summaryEntry.Counts[propertyValue] = swb
 	}
 
-	p_unsortedSummary.SummaryItems = append(p_unsortedSummary.SummaryItems, slices.Collect(maps.Values(entries))...)
+	pUnsortedSummary.SummaryItems = append(pUnsortedSummary.SummaryItems, slices.Collect(maps.Values(entries))...)
 	return nil
 }
