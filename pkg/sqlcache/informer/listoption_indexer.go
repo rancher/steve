@@ -361,16 +361,8 @@ func (l *ListOptionIndexer) notifyEventModified(key string, obj any, _ db.TxClie
 	return l.notifyEvent(watch.Modified, oldObj, obj)
 }
 
-func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, _ db.TxClient) error {
-	oldObj, exists, err := l.GetByKey(key)
-	if err != nil {
-		return fmt.Errorf("error getting old object: %w", err)
-	}
-
-	if !exists {
-		return fmt.Errorf("old object %q should be in store but was not", key)
-	}
-	return l.notifyEvent(watch.Deleted, oldObj, obj)
+func (l *ListOptionIndexer) notifyEventDeleted(_ string, obj any, _ db.TxClient) error {
+	return l.notifyEvent(watch.Deleted, obj, obj)
 }
 
 func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, old any, current any) error {
