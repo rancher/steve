@@ -22,8 +22,10 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/cache"
 )
 
 func testStoreKeyFunc(obj interface{}) (string, error) {
@@ -383,6 +385,77 @@ func TestDelete(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) { test.test(t, false) })
 		t.Run(fmt.Sprintf("%s with encryption", test.description), func(t *testing.T) { test.test(t, true) })
 	}
+}
+
+// TestDeleteTombstone verifies that Store.Delete honors the cache.Store
+// contract for cache.DeletedFinalStateUnknown wrappers, which the reflector
+// hands to Delete on missed-delete relists. See rancher/rancher#55228:
+// before the fix the wrapper reached the after-delete hook's meta.Accessor
+// call, the hook errored, and the whole DELETE transaction rolled back —
+// so the row survived in the SQLite cache as stale data.
+func TestDeleteTombstone(t *testing.T) {
+	testObject := testStoreObject{Id: "something", Val: "a"}
+
+	t.Run("tombstone with payload — unwraps and deletes", func(t *testing.T) {
+		c, txC := SetupMockDB(t)
+		store := setupTombstoneStore(t, c)
+
+		var hookSawKey string
+		var hookSawObj any
+		store.RegisterAfterDelete(func(key string, obj any, _ db.TxClient) error {
+			hookSawKey = key
+			hookSawObj = obj
+			return nil
+		})
+
+		stmt := NewMockStmt(gomock.NewController(t))
+		txC.EXPECT().Stmt(store.deleteStmt).Return(stmt)
+		stmt.EXPECT().Exec(testObject.Id).Return(nil, nil)
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(_ context.Context, _ bool, f db.WithTransactionFunction) {
+				require.NoError(t, f(txC))
+			})
+
+		tombstone := cache.DeletedFinalStateUnknown{Key: testObject.Id, Obj: testObject}
+		require.NoError(t, store.Delete(tombstone))
+		require.Equal(t, testObject.Id, hookSawKey)
+		require.Equal(t, testObject, hookSawObj,
+			"after-delete hook must see the unwrapped object, not the tombstone wrapper")
+	})
+
+	t.Run("tombstone with nil payload — short-circuits", func(t *testing.T) {
+		c, _ := SetupMockDB(t)
+		store := setupTombstoneStore(t, c)
+
+		hookCalled := false
+		store.RegisterAfterDelete(func(string, any, db.TxClient) error {
+			hookCalled = true
+			return nil
+		})
+		// No EXPECT on WithTransaction — gomock will fail the test if Delete
+		// reaches the SQL path at all.
+
+		tombstone := cache.DeletedFinalStateUnknown{Key: "ghost", Obj: nil}
+		require.NoError(t, store.Delete(tombstone))
+		require.False(t, hookCalled, "after-delete hook must not run for a nil-payload tombstone")
+	})
+}
+
+// setupTombstoneStore is a SetupStore variant whose keyFunc handles
+// cache.DeletedFinalStateUnknown (matching the real DeletionHandling
+// MetaNamespaceKeyFunc that production callers use).
+func setupTombstoneStore(t *testing.T, client *MockClient) *Store {
+	name := "testStoreObject"
+	gvk := schema.GroupVersionKind{Group: "", Version: "v1", Kind: name}
+	keyFunc := func(obj any) (string, error) {
+		if t, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+			return t.Key, nil
+		}
+		return obj.(testStoreObject).Id, nil
+	}
+	s, err := NewStore(context.Background(), testStoreObject{}, keyFunc, client, false, gvk, name, nil, nil)
+	require.NoError(t, err)
+	return s
 }
 
 // List returns a list of all the currently non-empty accumulators
