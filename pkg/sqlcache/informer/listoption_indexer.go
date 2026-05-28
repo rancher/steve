@@ -400,7 +400,11 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 				return ctx.Err()
 			}
 		}
-		return rows.Err()
+		// Close returns both the iteration error and the close error; it
+		// must be called before reading any iteration error to release the
+		// closemu RLock that decryptScanEvent's Scan(*sql.RawBytes) kept
+		// open across return (see db.Rows interface doc).
+		return rows.Close()
 	}); err != nil {
 		return err
 	}
