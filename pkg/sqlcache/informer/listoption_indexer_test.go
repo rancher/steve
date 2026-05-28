@@ -1166,8 +1166,10 @@ func TestSummaryOnly(t *testing.T) {
 	summaryEntry := summaryItems[0]
 	assert.Equal(t, "metadata.name", summaryEntry.Property)
 	counts := summaryEntry.Counts
-	assert.Equal(t, counts["bar"], 1)
-	assert.Equal(t, counts["foo"], 1)
+	require.NotNil(t, counts["bar"])
+	require.NotNil(t, counts["foo"])
+	assert.Equal(t, 1, counts["bar"].Total)
+	assert.Equal(t, 1, counts["foo"].Total)
 }
 
 // Test that we don't panic in case the transaction fails but stil manages to add a watcher
