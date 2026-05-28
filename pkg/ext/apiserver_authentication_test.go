@@ -345,10 +345,10 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 				// Eventually because the cache for auth might not be synced yet
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
 					resp, err := httpClient.Do(req)
-					require.NoError(t, err)
+					require.NoError(c, err)
 					defer resp.Body.Close()
 
-					require.Equal(t, test.expectedStatusCode, resp.StatusCode)
+					require.Equal(c, test.expectedStatusCode, resp.StatusCode)
 				}, 5*time.Second, 110*time.Millisecond)
 
 				if test.expectedUser != nil {
@@ -429,10 +429,10 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 	req.Header.Add("X-Remote-Group", userInfo.GetGroups()[0])
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		resp, err := httpClient.Do(req)
-		require.NoError(t, err)
+		require.NoError(c, err)
 		defer resp.Body.Close()
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(c, http.StatusOK, resp.StatusCode)
 	}, 5*time.Second, 110*time.Millisecond)
 
 	req = httptest.NewRequest(http.MethodGet, "/openapi/v2", nil)
