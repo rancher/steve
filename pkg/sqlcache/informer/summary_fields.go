@@ -19,7 +19,6 @@ import (
 
 func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, dbName string, namespace string) (*types.APISummary, error) {
 	joinTableIndexByLabelName := make(map[string]int)
-	const mainObjectPrefix = "o"
 	const mainFieldPrefix = "f1"
 	const isSummaryFilter = true
 	includeSort := lo.SummaryFieldList != nil

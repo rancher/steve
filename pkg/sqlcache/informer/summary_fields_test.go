@@ -353,11 +353,8 @@ func TestConstructNamespacedSummaryQuery(t *testing.T) {
 	}
 
 	var tests []testCase
-	// summary=metadata.labels.status&summarynamespaced
-	// summary=metadata.queryField1&filter=metadata.namespace=cars
-	// As soon as we have a non-empty body build a with-statement
 	tests = append(tests, testCase{
-		description:     "TestConstructSummaryQuery: builds a query for a summary on a standard field with a standard filter: summary=metadata.queryField1&filter=metadata.namespace=cars",
+		description:     "TestConstructSummaryQuery: builds a query for a summary on a standard field with a standard filter: summary=metadata.queryField1&filter=metadata.namespace~cars",
 		summaryField:    []string{"metadata", "queryField1"},
 		fieldNum:        1,
 		mainFieldPrefix: "f1",

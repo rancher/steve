@@ -949,8 +949,6 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 
 	t.Parallel()
 
-	// First curl the namespaces to load up the namespace database tables.
-
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			baseFields := [][]string{
@@ -1313,6 +1311,13 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 		expectedSummary: &types.APISummary{
 			SummaryItems: []types.SummaryEntry{
 				types.SummaryEntry{
+					Property: "metadata.labels.cows",
+					Counts: map[string]types.SummaryWithBreakdown{
+						"milk": types.SummaryWithBreakdown{Total: 3},
+						"beef":   types.SummaryWithBreakdown{Total: 1},
+					},
+				},
+				types.SummaryEntry{
 					Property: "metadata.labels.horses",
 					Counts: map[string]types.SummaryWithBreakdown{
 						"saddles": types.SummaryWithBreakdown{Total: 2},
@@ -1323,12 +1328,8 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 					Property: "metadata.somefield",
 					Counts: map[string]types.SummaryWithBreakdown{
 						"bar":   types.SummaryWithBreakdown{Total: 3},
-						"shoes": types.SummaryWithBreakdown{Total: 1},
+						"toto": types.SummaryWithBreakdown{Total: 1},
 					},
-				},
-				types.SummaryEntry{
-					Property: "status.someotherfield",
-					Counts:   map[string]types.SummaryWithBreakdown{},
 				},
 			},
 		},
@@ -1339,9 +1340,48 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 	t.Parallel()
 	assert.True(t, len(deferredTests) > 0)
 
-	// First curl the namespaces to load up the namespace database tables.
-
 	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			fields := [][]string{
+				{"metadata", "somefield"},
+				{"status", "someotherfield"},
+				{"status", "podIP"},
+				{"metadata", "unknown"},
+				{"metadata", "sortfield"},
+			}
+			fields = append(fields, test.extraIndexedFields...)
+
+			opts := ListOptionIndexerOptions{
+				Fields:       toIndexedFieldsGen(fields),
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, namespaceList)
+			defer cleanTempFiles(dbPath)
+
+			for _, item := range itemList.Items {
+				err = loi.Add(&item)
+				assert.NoError(t, err)
+			}
+
+			loi.latestRV = test.latestRV
+			list, total, summary, contToken, err := loi.ListByOptions(ctx, &test.listOptions, test.partitions, test.ns)
+			if test.expectedErr != nil {
+				assert.Error(t, err)
+				return
+			}
+			require.Nil(t, err)
+			assert.Equal(t, test.expectedTotal, total)
+			wantNames := stringsFromULIst(test.expectedList)
+			gotNames := stringsFromULIst(list)
+			assert.Equal(t, wantNames, gotNames)
+			if slices.Equal(wantNames, gotNames) {
+				assert.Equal(t, test.expectedList, list)
+			}
+			assert.Equal(t, test.expectedSummary, summary)
+			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+	for _, test := range deferredTests {
 		t.Run(test.description, func(t *testing.T) {
 			fields := [][]string{
 				{"metadata", "somefield"},

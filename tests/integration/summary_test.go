@@ -25,22 +25,22 @@ import (
 )
 
 var (
-	testdataSummaryDir = filepath.Join("testdata", "summary")
-	jsonSummaryOutputDir   = filepath.Join(testdataSummaryDir, "json")
-// not "testdata", "summary"
+	testdataSummaryDir   = filepath.Join("testdata", "summary")
+	jsonSummaryOutputDir = filepath.Join(testdataSummaryDir, "json")
 )
 
 type summaryTotalType struct {
-	Total int `yaml:"total"`
+	Total     int            `yaml:"total"`
+	Namespace map[string]int `json:"namespace,omitempty" yaml:"namespace,omitempty"`
 }
 
 type summaryExpectType struct {
-	Counts map[string]summaryTotalType `yaml:"counts"`
-	Property string `yaml:"property"`
+	Counts   map[string]summaryTotalType `yaml:"counts"`
+	Property string                      `yaml:"property"`
 }
 
 type expectedDataAndSummaryType struct {
-	Data    []int `yaml:"data"` // do *not* omit
+	Data    []int               `yaml:"data"` // do *not* omit
 	Summary []summaryExpectType `yaml:"summary"`
 }
 
@@ -48,11 +48,11 @@ type expectedDataAndSummaryType struct {
 type SummaryTestConfig struct {
 	SchemaID string `yaml:"schemaID"`
 	Tests    []struct {
-		Description    string              `yaml:"description"`
-		User           string              `yaml:"user"`
-		Namespace      string              `yaml:"namespace"`
-		Query          string              `yaml:"query"`
-		Expect         expectedDataAndSummaryType    `yaml:"expect"`
+		Description string                     `yaml:"description"`
+		User        string                     `yaml:"user"`
+		Namespace   string                     `yaml:"namespace"`
+		Query       string                     `yaml:"query"`
+		Expect      expectedDataAndSummaryType `yaml:"expect"`
 	} `yaml:"tests"`
 }
 
@@ -172,13 +172,11 @@ func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config Summa
 	// Track continue token and revision across tests in this scenario
 	var lastContinueToken string
 	var lastRevision string
+	if !sqlCache {
+		i.T().Skip("Skipping non-sql tests")
+	}
 
 	for _, test := range config.Tests {
-		// Can't run on non-sql
-		if !sqlCache {
-			continue
-		}
-
 		i.Run(test.Description, func() {
 			query := test.Query
 
@@ -214,13 +212,14 @@ func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config Summa
 			// Read full response body for JSON saving
 			bodyBytes, err := io.ReadAll(resp.Body)
 			i.Require().NoError(err)
-			fmt.Fprintf(os.Stderr, "body:\n[\n%s\n]\n", string(bodyBytes))
+			//TODO: Delete this:
+			//fmt.Fprintf(os.Stderr, "body:\n[\n%s\n]\n", string(bodyBytes))
 
 			type Response struct {
-				Data     []responseItem `json:"data"`
-				Summary  []summaryExpectType   `json:"summary"`
-				Continue string         `json:"continue"`
-				Revision string         `json:"revision"`
+				Data     []responseItem      `json:"data"`
+				Summary  []summaryExpectType `json:"summary"`
+				Continue string              `json:"continue"`
+				Revision string              `json:"revision"`
 			}
 			var parsed Response
 			err = json.Unmarshal(bodyBytes, &parsed)
@@ -251,42 +250,10 @@ func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config Summa
 }
 
 func (i *IntegrationSuite) assertSummaryIsEqual(expected []summaryExpectType, received []summaryExpectType) {
-	
-	fmt.Fprintf(os.Stderr, "expected: %v\n\n, received: %v\n\n", expected, received)
+
+	//fmt.Fprintf(os.Stderr, "expected: %v\n\n, received: %v\n\n", expected, received)
 	assert.Equal(i.T(), expected, received)
 	// assert.Equal(i.T(), len(expected) + 100, len(received), "summary length mismatch")
-}
-
-func (i *IntegrationSuite) blah(expected []summaryExpectType, received []responseItem) {
-	assert.Equal(i.T(), len(expected), len(received), "summary length mismatch")
-	/*
-
-	includeNamespace := false
-	if len(expected.Counts) > 0 {
-		_, includeNamespace = expected.Counts["namespace"]
-	}
-
-	receivedSubset := make([]map[string]string, len(received))
-	for idx, r := range received {
-		vals := map[string]string{"name": r.getName()}
-		if includeNamespace {
-			vals["namespace"] = r.getNamespace()
-		}
-		receivedSubset[idx] = vals
-	}
-
-	// Build expected subset matching received format
-	expectedSubset := make([]map[string]string, len(expected.Counts))
-	for idx, e := range expected.Counts {
-		vals := map[string]string{"name": e["name"]}
-		if includeNamespace {
-			vals["namespace"] = e["namespace"]
-		}
-		expectedSubset[idx] = vals
-	}
-
-	assert.Equal(i.T(), expectedSubset, receivedSubset, "summary contents do not match")
-*/
 }
 
 // JSON output helper functions
