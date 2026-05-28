@@ -339,6 +339,7 @@ SELECT 'metadata.labels.pacific' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
 		})
 	}
 }
+
 func TestConstructNamespacedSummaryQuery(t *testing.T) {
 	type testCase struct {
 		description      string
@@ -354,7 +355,7 @@ func TestConstructNamespacedSummaryQuery(t *testing.T) {
 
 	var tests []testCase
 	tests = append(tests, testCase{
-		description:     "TestConstructSummaryQuery: builds a query for a summary on a standard field with a standard filter: summary=metadata.queryField1&filter=metadata.namespace~cars",
+		description:     "TestConstructNamespacedSummaryQuery: builds a query for a summary on a standard field with a standard filter: summary=metadata.queryField1&filter=metadata.namespace~cars",
 		summaryField:    []string{"metadata", "queryField1"},
 		fieldNum:        1,
 		mainFieldPrefix: "f1",
@@ -371,6 +372,277 @@ SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namesp
 	WHERE k != ""
 	GROUP BY k, ns`,
 		expectedStmtArgs: []any{"%cars%"},
+		expectedErr:      "",
+	})
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: refused to build a summary on an unrecognized field",
+		summaryField: []string{"metadata", "snorkel"},
+		expectedErr:  fmt.Sprintf("column is invalid [%s]: supplied column is invalid", "metadata.snorkel"),
+	})
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: refused to build a summary on a sql injection",
+		summaryField: []string{"spec", "blip; system('rm -fr /home/hardware/wars);"},
+		// The parser mangles the field name in the error message, but not a big issue
+		expectedErr: fmt.Sprintf("column is invalid [%s]: supplied column is invalid", "spec[blip; system('rm -fr /home/hardware/wars);]"),
+	})
+	// summary=metadata.labels.status
+	tests = append(tests, testCase{
+		description:      "TestConstructNamespacedSummaryQuery: builds a query for a label summary with no filter-components: summary=metadata.labels.status",
+		summaryField:     []string{"metadata", "labels", "status"},
+		fieldNum:         1,
+		filterComponents: &filterComponentsT{isEmpty: true},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt1.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE lt1.label = ?
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.queryField1
+	tests = append(tests, testCase{
+		description:      "TestConstructNamespacedSummaryQuery: builds a query for a field summary with no filter-components",
+		summaryField:     []string{"metadata", "queryField1"},
+		fieldNum:         1,
+		filterComponents: &filterComponentsT{isEmpty: true},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT f1.key, f1."metadata.queryField1", f1."metadata.namespace" FROM "something_fields" f1
+)
+SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	// summary=spec.containers.image[3]
+	tests = append(tests, testCase{
+		description:      "TestConstructNamespacedSummaryQuery: builds a query for a field summary on an indexed implicit array: summary=spec.containers.image[3]",
+		summaryField:     []string{"spec", "containers", "image", "3"},
+		fieldNum:         1,
+		mainFieldPrefix:  "f1",
+		filterComponents: &filterComponentsT{isEmpty: true},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT f1.key, extractBarredValue(f1."spec.containers.image", 3), f1."metadata.namespace" FROM "something_fields" f1
+)
+SELECT 'spec.containers.image[3]' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{},
+		expectedErr:      "",
+	})
+	// summary=metadata.queryField1&filter=metadata.namespace=cars
+	// As soon as we have a non-empty body build a with-statement
+	tests = append(tests, testCase{
+		description:     "TestConstructNamespacedSummaryQuery: builds a query for a summary on a standard field with a standard filter: summary=metadata.queryField1&filter=metadata.namespace=cars",
+		summaryField:    []string{"metadata", "queryField1"},
+		fieldNum:        1,
+		mainFieldPrefix: "f1",
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.namespace" = ?)`},
+			params:       []any{"cars"},
+			isEmpty:      false,
+		},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT f1.key, f1."metadata.queryField1", f1."metadata.namespace" FROM "something_fields" f1
+	WHERE (f1."metadata.namespace" = ?)
+)
+SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"cars"},
+		expectedErr:      "",
+	})
+	// summary=metadata.queryField1&filter=metadata.labels.status=cars
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: builds a query for a summary on a standard field with a labels filter: summary=metadata.queryField1&filter=metadata.labels.status=cars",
+		summaryField: []string{"metadata", "queryField1"},
+		fieldNum:     1,
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{"(lt1.label = ? AND lt1.value = ?)"},
+			joinParts:    standardJoinParts,
+			params:       []any{"status", "cars"},
+		},
+		joinTableIndex: map[string]int{"status": 1},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, f1."metadata.queryField1", f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE (lt1.label = ? AND lt1.value = ?)
+)
+SELECT 'metadata.queryField1' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"status", "cars"},
+		expectedErr:      "",
+	})
+	// summary=spec.containers.image[3]&filter=metadata.namespace=cars&spec.containers.image[2]>0
+	tests = append(tests, testCase{
+		description:     "TestConstructNamespacedSummaryQuery: builds a query for a field summary on an indexed implicit array with complex filters: summary=spec.containers.image[3]&filter=metadata.namespace=cars&spec.containers.image[2]>0",
+		summaryField:    []string{"spec", "containers", "image", "4"},
+		fieldNum:        1,
+		mainFieldPrefix: "f1",
+		joinTableIndex:  map[string]int{},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.queryField1" = ?) OR (extractBarredValue(f1."spec.containers.image", "5") = ?)`},
+			params:       []any{"boxes", "sticks"},
+		},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT f1.key, extractBarredValue(f1."spec.containers.image", 4), f1."metadata.namespace" FROM "something_fields" f1
+	WHERE (f1."metadata.queryField1" = ?) OR (extractBarredValue(f1."spec.containers.image", "5") = ?)
+)
+SELECT 'spec.containers.image[4]' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"boxes", "sticks"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=metadata.namespace=trains
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: builds a query for a summary on a label field with a std filter: summary=metadata.labels.status&filter=metadata.namespace=trains",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1."metadata.namespace" = ?)`},
+			params:       []any{"trains"},
+		},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt1.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE ((f1."metadata.namespace" = ?))
+		AND (lt1.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"trains", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=spec.containers.image[3]=planes
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: builds a query for a label summary with a std filter on an implicit array: summary=metadata.labels.status&filter=spec.containers.image[7]=planes",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(extractBarredValue(f1."spec.containers.image", "7") = ?)`},
+			params:       []any{"planes"},
+		},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt1.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+	WHERE ((extractBarredValue(f1."spec.containers.image", "7") = ?))
+		AND (lt1.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"planes", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=metadata.labels.transportation=boats
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: builds a query for a label summary with a label filter: summary=metadata.labels.status&filter=metadata.labels.transportation=boats",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{"(lt1.label = ? AND lt1.value = ?)"},
+			params:       []any{"transportation", "boats"},
+			joinParts:    standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"transportation": 1},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt2.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((lt1.label = ? AND lt1.value = ?))
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"transportation", "boats", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.status&filter=metadata.labels.transportation!=jets
+	tests = append(tests, testCase{
+		description:  "TestConstructNamespacedSummaryQuery: builds a query for a label summary with a negative label filter: summary=metadata.labels.status&filter=metadata.labels.transportation!=jets",
+		summaryField: []string{"metadata", "labels", "status"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`},
+			params:    []any{"transportation", "transportation", "jets"},
+			joinParts: standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"transportation": 1},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt2.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.status' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"transportation", "transportation", "jets", "status"},
+		expectedErr:      "",
+	})
+	// summary=metadata.labels.atlantic&filter=metadata.labels[kubernetes.io/metadata.name]~kube
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryTestFilters: handles complex label summary/label filter: summary=metadata.labels.atlantic&filter=metadata.labels[kubernetes.io/metadata.name]~kube",
+		summaryField: []string{"metadata", "labels", "atlantic"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`},
+			params:    []any{"kubernetes.io/metadata.name", "kubernetes.io/metadata.name", "kube"},
+			joinParts: standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"kubernetes.io/metadata.name": 1},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt2.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+				LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+				WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.atlantic' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`,
+		expectedStmtArgs: []any{"kubernetes.io/metadata.name", "kubernetes.io/metadata.name", "kube", "atlantic"},
+		expectedErr:      "",
+	})
+
+	// summary=metadata.labels.pacific&filter=metadata.labels.knot!=hitch&filter=metadata.queryField1~g
+	tests = append(tests, testCase{
+		description:  "TestConstructSummaryTestFilters: handles complex label summary/label filter: summary=metadata.labels.pacific&filter=metadata.labels.knot!=hitch&filter=metadata.queryField1~g",
+		summaryField: []string{"metadata", "labels", "pacific"},
+		filterComponents: &filterComponentsT{
+			whereClauses: []string{`(f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)`,
+				`f1."metadata.queryField1" LIKE ? ESCAPE '\'`}, //'
+			params:    []any{"knot", "knot", "hitch", "%g%"},
+			joinParts: standardJoinParts,
+		},
+		joinTableIndex: map[string]int{"knot": 1},
+		expectedStmt: `WITH w1(key, finalField, namespace) AS (
+	SELECT DISTINCT f1.key, lt2.value, f1."metadata.namespace" FROM "something_fields" f1
+  LEFT OUTER JOIN "something_labels" lt1 ON f1.key = lt1.key
+  LEFT OUTER JOIN "something_labels" lt2 ON f1.key = lt2.key
+	WHERE ((f1.key NOT IN (SELECT f11.key FROM "something_fields" f11
+		LEFT OUTER JOIN "something_labels" lt1i1 ON f11.key = lt1i1.key
+		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?))
+		AND (f1."metadata.queryField1" LIKE ? ESCAPE '\')
+		AND (lt2.label = ?)
+)
+SELECT 'metadata.labels.pacific' AS p, COUNT(*) AS c, w1.finalField AS k, w1.namespace AS ns FROM w1
+	WHERE k != ""
+	GROUP BY k, ns`, //'
+		expectedStmtArgs: []any{"knot", "knot", "hitch", "%g%", "pacific"},
 		expectedErr:      "",
 	})
 
