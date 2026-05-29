@@ -44,13 +44,13 @@ func (m *mockFieldRegistry) IsInteger(fieldID string) bool {
 func newTestRegistry() *mockFieldRegistry {
 	return &mockFieldRegistry{
 		fields: map[string]fieldEntry{
-			"metadata.name":             {col: "metadata.name"},
-			"metadata.namespace":        {col: "metadata.namespace"},
+			"metadata.name":              {col: "metadata.name"},
+			"metadata.namespace":         {col: "metadata.namespace"},
 			"metadata.creationTimestamp": {col: "metadata.creationTimestamp"},
-			"spec.containers.image":     {col: "spec.containers.image"},
-			"status.phase":              {col: "status.phase"},
-			"status.podIP":              {col: "status.podIP", isIP: true},
-			"id":                        {col: "id"},
+			"spec.containers.image":      {col: "spec.containers.image"},
+			"status.phase":               {col: "status.phase"},
+			"status.podIP":               {col: "status.podIP", isIP: true},
+			"id":                         {col: "id"},
 		},
 	}
 }
