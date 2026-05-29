@@ -17,8 +17,8 @@ type timestampFieldAdapter struct {
 	inner *ComputedField
 }
 
-func (a *timestampFieldAdapter) ColumnName() string    { return a.inner.ColumnName() }
-func (a *timestampFieldAdapter) ColumnType() string    { return a.inner.ColumnType() }
+func (a *timestampFieldAdapter) ColumnName() string     { return a.inner.ColumnName() }
+func (a *timestampFieldAdapter) ColumnType() string     { return a.inner.ColumnType() }
 func (a *timestampFieldAdapter) IsTimestampField() bool { return a.inner.IsTimestamp }
 
 // buildFieldRegistry creates a sqlgen.FieldRegistry from the indexer's indexedFields.
