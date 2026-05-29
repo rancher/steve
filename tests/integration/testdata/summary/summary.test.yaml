@@ -1,0 +1,305 @@
+schemaID: secret
+tests:
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.namespace"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.namespace"
+  expect:
+    data: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    summary:
+    - property: metadata.namespace
+      counts:
+        summary-test-ns-1:
+          total: 5
+        summary-test-ns-2:
+          total: 5
+        summary-test-ns-3:
+          total: 5
+        summary-test-ns-4:
+          total: 5
+        summary-test-ns-5:
+          total: 5
+        summary-test-ns-6:
+          total: 2
+        summary-test-ns-7:
+          total: 2
+        summary-test-ns-8:
+          total: 2
+        summary-test-ns-9:
+          total: 2
+
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary]"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary]"
+  expect:
+    data: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    summary:
+    - property: "metadata.labels[test.cattle.io/summary]"
+      counts:
+        axolotl:
+          total: 4
+        giraffe:
+          total: 4
+        grouper:
+          total: 1
+        hamster:
+          total: 3
+        "harbour-seal":
+          total: 5
+        moose:
+          total: 9
+        owl:
+          total: 7
+
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary],metadata.namespace"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary],metadata.namespace"
+  expect:
+    data: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    summary:
+    - property: "metadata.labels[test.cattle.io/summary]"
+      counts:
+        axolotl:
+          total: 4
+        giraffe:
+          total: 4
+        grouper:
+          total: 1
+        hamster:
+          total: 3
+        "harbour-seal":
+          total: 5
+        moose:
+          total: 9
+        owl:
+          total: 7
+    - property: metadata.namespace
+      counts:
+        summary-test-ns-1:
+          total: 5
+        summary-test-ns-2:
+          total: 5
+        summary-test-ns-3:
+          total: 5
+        summary-test-ns-4:
+          total: 5
+        summary-test-ns-5:
+          total: 5
+        summary-test-ns-6:
+          total: 2
+        summary-test-ns-7:
+          total: 2
+        summary-test-ns-8:
+          total: 2
+        summary-test-ns-9:
+          total: 2
+
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.namespace&summarynamespaced"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.namespace&summarynamespaced"
+  expect:
+    data: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    summary:
+    - property: metadata.namespace
+      counts:
+        summary-test-ns-1:
+          total: 5
+          namespace:
+            "summary-test-ns-1": 5
+        summary-test-ns-2:
+          total: 5
+          namespace:
+            "summary-test-ns-2": 5
+        summary-test-ns-3:
+          total: 5
+          namespace:
+            "summary-test-ns-3": 5
+        summary-test-ns-4:
+          total: 5
+          namespace:
+            "summary-test-ns-4": 5
+        summary-test-ns-5:
+          total: 5
+          namespace:
+            "summary-test-ns-5": 5
+        summary-test-ns-6:
+          total: 2
+          namespace:
+            "summary-test-ns-6": 2
+        summary-test-ns-7:
+          total: 2
+          namespace:
+            "summary-test-ns-7": 2
+        summary-test-ns-8:
+          total: 2
+          namespace:
+            "summary-test-ns-8": 2
+        summary-test-ns-9:
+          total: 2
+          namespace:
+            "summary-test-ns-9": 2
+
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary]&summarynamespaced=true"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary]&summarynamespaced=true"
+  expect:
+    data: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    summary:
+    - property: "metadata.labels[test.cattle.io/summary]"
+      counts:
+        axolotl:
+          total: 4
+          namespace:
+            "summary-test-ns-1": 2
+            "summary-test-ns-3": 1
+            "summary-test-ns-6": 1
+        giraffe:
+          total: 4
+          namespace:
+            "summary-test-ns-1": 1
+            "summary-test-ns-2": 1
+            "summary-test-ns-3": 1
+            "summary-test-ns-8": 1
+        grouper:
+          total: 1
+          namespace:
+            "summary-test-ns-4": 1
+        hamster:
+          total: 3
+          namespace:
+            "summary-test-ns-4": 1
+            "summary-test-ns-5": 2
+        "harbour-seal":
+          total: 5
+          namespace:
+            "summary-test-ns-1": 1
+            "summary-test-ns-2": 1
+            "summary-test-ns-3": 1
+            "summary-test-ns-6": 1
+            "summary-test-ns-9": 1
+        moose:
+          total: 9
+          namespace:
+            "summary-test-ns-4": 3
+            "summary-test-ns-5": 3
+            "summary-test-ns-7": 1
+            "summary-test-ns-8": 1
+            "summary-test-ns-9": 1
+        owl:
+          total: 7
+          namespace:
+            "summary-test-ns-1": 1
+            "summary-test-ns-2": 3
+            "summary-test-ns-3": 2
+            "summary-test-ns-7": 1
+- description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary],metadata.namespace&summarynamespaced"
+  query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.labels[test.cattle.io/summary],metadata.namespace&summarynamespaced"
+  expect:
+    data: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    summary:
+    - property: "metadata.labels[test.cattle.io/summary]"
+      counts:
+        axolotl:
+          total: 4
+          namespace:
+            "summary-test-ns-1": 2
+            "summary-test-ns-3": 1
+            "summary-test-ns-6": 1
+        giraffe:
+          total: 4
+          namespace:
+            "summary-test-ns-1": 1
+            "summary-test-ns-2": 1
+            "summary-test-ns-3": 1
+            "summary-test-ns-8": 1
+        grouper:
+          total: 1
+          namespace:
+            "summary-test-ns-4": 1
+        hamster:
+          total: 3
+          namespace:
+            "summary-test-ns-4": 1
+            "summary-test-ns-5": 2
+        "harbour-seal":
+          total: 5
+          namespace:
+            "summary-test-ns-1": 1
+            "summary-test-ns-2": 1
+            "summary-test-ns-3": 1
+            "summary-test-ns-6": 1
+            "summary-test-ns-9": 1
+        moose:
+          total: 9
+          namespace:
+            "summary-test-ns-4": 3
+            "summary-test-ns-5": 3
+            "summary-test-ns-7": 1
+            "summary-test-ns-8": 1
+            "summary-test-ns-9": 1
+        owl:
+          total: 7
+          namespace:
+            "summary-test-ns-1": 1
+            "summary-test-ns-2": 3
+            "summary-test-ns-3": 2
+            "summary-test-ns-7": 1
+    - property: metadata.namespace
+      counts:
+        summary-test-ns-1:
+          total: 5
+          namespace:
+            "summary-test-ns-1": 5
+        summary-test-ns-2:
+          total: 5
+          namespace:
+            "summary-test-ns-2": 5
+        summary-test-ns-3:
+          total: 5
+          namespace:
+            "summary-test-ns-3": 5
+        summary-test-ns-4:
+          total: 5
+          namespace:
+            "summary-test-ns-4": 5
+        summary-test-ns-5:
+          total: 5
+          namespace:
+            "summary-test-ns-5": 5
+        summary-test-ns-6:
+          total: 2
+          namespace:
+            "summary-test-ns-6": 2
+        summary-test-ns-7:
+          total: 2
+          namespace:
+            "summary-test-ns-7": 2
+        summary-test-ns-8:
+          total: 2
+          namespace:
+            "summary-test-ns-8": 2
+        summary-test-ns-9:
+          total: 2
+          namespace:
+            "summary-test-ns-9": 2
+
+# TODO: Uncomment this once summaryonly is in
+#  - description: "query:filter=metadata.labels[test.cattle.io/summary]&summary=metadata.namespace&summaryonly"
+#   query: "filter=metadata.labels[test.cattle.io/summary]&summary=metadata.namespace&summaryonly"
+#   expect:
+#     data: []
+#     summary:
+#     - property: metadata.namespace
+#       counts:
+#         summary-test-ns-1:
+#           total: 5
+#         summary-test-ns-2:
+#           total: 5
+#         summary-test-ns-3:
+#           total: 5
+#         summary-test-ns-4:
+#           total: 5
+#         summary-test-ns-5:
+#           total: 5
+#         summary-test-ns-6:
+#           total: 2
+#         summary-test-ns-7:
+#           total: 2
+#         summary-test-ns-8:
+#           total: 2
+#         summary-test-ns-9:
+#           total: 2

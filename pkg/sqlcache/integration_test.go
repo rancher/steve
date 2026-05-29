@@ -1511,10 +1511,10 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "spec.displayName",
-						Counts: map[string]int{
-							"high": 4,
-							"meh":  2,
-							"low":  5,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"high": types.SummaryWithBreakdown{Total: 4},
+							"meh":  types.SummaryWithBreakdown{Total: 2},
+							"low":  types.SummaryWithBreakdown{Total: 5},
 						},
 					},
 				},
@@ -1527,10 +1527,10 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "spec.displayName",
-						Counts: map[string]int{
-							"high": 2,
-							"meh":  2,
-							"low":  2,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"high": types.SummaryWithBreakdown{Total: 2},
+							"meh":  types.SummaryWithBreakdown{Total: 2},
+							"low":  types.SummaryWithBreakdown{Total: 2},
 						},
 					},
 				},
@@ -1543,9 +1543,9 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "spec.displayName",
-						Counts: map[string]int{
-							"high": 2,
-							"low":  4,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"high": types.SummaryWithBreakdown{Total: 2},
+							"low":  types.SummaryWithBreakdown{Total: 4},
 						},
 					},
 				},
@@ -1558,9 +1558,9 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "spec.displayName",
-						Counts: map[string]int{
-							"high": 1,
-							"meh":  2,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"high": types.SummaryWithBreakdown{Total: 1},
+							"meh":  types.SummaryWithBreakdown{Total: 2},
 						},
 					},
 				},
@@ -1573,9 +1573,9 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "spec.displayName",
-						Counts: map[string]int{
-							"high": 1,
-							"low":  2,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"high": types.SummaryWithBreakdown{Total: 1},
+							"low":  types.SummaryWithBreakdown{Total: 2},
 						},
 					},
 				},
@@ -1588,10 +1588,10 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "metadata.labels.knot",
-						Counts: map[string]int{
-							"hitch":   3,
-							"bowline": 6,
-							"granny":  1,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"hitch":   types.SummaryWithBreakdown{Total: 3},
+							"bowline": types.SummaryWithBreakdown{Total: 6},
+							"granny":  types.SummaryWithBreakdown{Total: 1},
 						},
 					},
 				},
@@ -1604,12 +1604,12 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "metadata.labels.apple",
-						Counts: map[string]int{
-							"envy":     1,
-							"ambrosia": 3,
-							"nicola":   2,
-							"salish":   2,
-							"grapple":  1,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"envy":     types.SummaryWithBreakdown{Total: 1},
+							"ambrosia": types.SummaryWithBreakdown{Total: 3},
+							"nicola":   types.SummaryWithBreakdown{Total: 2},
+							"salish":   types.SummaryWithBreakdown{Total: 2},
+							"grapple":  types.SummaryWithBreakdown{Total: 1},
 						},
 					},
 				},
@@ -1622,23 +1622,23 @@ func (i *IntegrationSuite) TestSummaryFieldsOnMCIOProjects() {
 				SummaryItems: []types.SummaryEntry{
 					types.SummaryEntry{
 						Property: "metadata.labels.apple",
-						Counts: map[string]int{
-							"ambrosia": 3,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"ambrosia": types.SummaryWithBreakdown{Total: 3},
 						},
 					},
 					types.SummaryEntry{
 						Property: "metadata.labels.knot",
-						Counts: map[string]int{
-							"hitch":   2,
-							"bowline": 1,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"hitch":   types.SummaryWithBreakdown{Total: 2},
+							"bowline": types.SummaryWithBreakdown{Total: 1},
 						},
 					},
 					types.SummaryEntry{
 						Property: "spec.displayName",
-						Counts: map[string]int{
-							"high": 1,
-							"meh":  1,
-							"low":  1,
+						Counts: map[string]types.SummaryWithBreakdown{
+							"high": types.SummaryWithBreakdown{Total: 1},
+							"meh":  types.SummaryWithBreakdown{Total: 1},
+							"low":  types.SummaryWithBreakdown{Total: 1},
 						},
 					},
 				},

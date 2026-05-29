@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ const (
 	pageParam                  = "page"
 	revisionParam              = "revision"
 	summaryParam               = "summary"
+	summaryNamespacedParam     = "summarynamespaced"
 	projectsOrNamespacesVar    = "projectsornamespaces"
 	projectIDFieldLabel        = "field.cattle.io/projectId"
 
@@ -212,13 +214,40 @@ func ParseQuery(apiOp *types.APIRequest, gvKind string) (sqltypes.ListOptions, e
 		return opts, errors.New("unable to parse requirement: summary parameter given with no fields to summarize")
 	}
 
+	err = handleBooleanParam(q, summaryNamespacedParam, &opts.SummaryNamespaced)
+	if err != nil {
+		return opts, err
+	}
+	if opts.SummaryNamespaced && len(opts.SummaryFieldList) == 0 {
+		return opts, fmt.Errorf("got a %s parameter but no summary fields", summaryNamespacedParam)
+	}
+
 	assocDataParams := q[includeAssociatedDataParam]
 	if len(assocDataParams) > 0 {
 		lastParam := assocDataParams[len(assocDataParams)-1]
 		opts.IncludeAssociatedData = strings.ToLower(lastParam) == "true"
 	}
-
 	return opts, nil
+}
+
+func handleBooleanParam(q url.Values, param string, value *bool) error {
+	values := q[param]
+	if len(values) > 0 {
+		finalValue := values[len(values)-1]
+		switch finalValue {
+		case "true":
+			*value = true
+		case "false":
+			*value = false
+		case "":
+			*value = true
+		default:
+			return fmt.Errorf("unexpected value for parameter %q: expected true, false, or empty string; got %q", param, finalValue)
+		}
+	} else if q.Has(param) {
+		*value = true
+	}
+	return nil
 }
 
 // splitQuery takes a single-string k8s object accessor and returns its separate fields in a slice.

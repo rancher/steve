@@ -58,7 +58,7 @@ type Client interface {
 	ReadStrings(rows Rows) ([]string, error)
 	ReadStringsN(rows Rows, numColumns int) ([][]string, error)
 	ReadInt(rows Rows) (int, error)
-	ReadStringIntString(rows Rows) ([][]string, error)
+	ReadStringIntString1or2(rows Rows, readThirdString bool) ([][]string, error)
 	Upsert(tx TxClient, stmt Stmt, key string, obj SerializedObject) error
 	NewConnection(isTemp bool) (string, error)
 	Serialize(obj any, encrypt bool) (SerializedObject, error)
@@ -313,8 +313,9 @@ func (c *client) ReadStrings(rows Rows) ([]string, error) {
 	return result, nil
 }
 
-// ReadStringIntString scans the given rows into (string, int, string) tuples, and then returns a slice of them.
-func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
+// ReadStringIntString1or2 scans rows into (string, int, string) tuples, and when readThirdString
+// is true, into (string, int, string, string) tuples.
+func (c *client) ReadStringIntString1or2(rows Rows, readThirdString bool) ([][]string, error) {
 	c.connLock.RLock()
 	defer c.connLock.RUnlock()
 
@@ -323,11 +324,20 @@ func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
 		var val1 string
 		var val2 int
 		var val3 string
+		if readThirdString {
+			var val4 string
+			err := rows.Scan(&val1, &val2, &val3, &val4)
+			if err != nil {
+				return nil, closeRowsOnError(rows, err)
+			}
+			result = append(result, []string{val1, strconv.Itoa(val2), val3, val4})
+			continue
+		}
+
 		err := rows.Scan(&val1, &val2, &val3)
 		if err != nil {
 			return nil, closeRowsOnError(rows, err)
 		}
-
 		result = append(result, []string{val1, strconv.Itoa(val2), val3})
 	}
 	if err := rows.Close(); err != nil {
