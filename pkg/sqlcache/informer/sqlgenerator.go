@@ -80,26 +80,38 @@ var (
 // Exported sql-generation methods on ListOptionIndexer
 
 func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.ListOptions, partitions []partition.Partition, dbName string, namespace string) (*types.APISummary, error) {
-	joinTableIndexByLabelName := make(map[string]int)
-	const mainObjectPrefix = "o"
-	const mainFieldPrefix = "f1"
-	const isSummaryFilter = true
+	if err := l.checkRevision(lo); err != nil {
+		return nil, err
+	}
+
+	registry := l.buildFieldRegistry()
 	includeSort := lo.SummaryFieldList != nil
-	filterComponents, err := l.compileQuery(lo, partitions, namespace, dbName, mainFieldPrefix, joinTableIndexByLabelName, includeSort, isSummaryFilter)
+	sc, err := sqlgen.CompileSummaryListQuery(lo, partitions, namespace, dbName, registry, includeSort)
 	if err != nil {
 		return nil, err
 	}
-	countsByProperty := make(map[string]any)
-	// We have to copy the current data-structures because processing other label summary-fields
-	// could modify them, but we don't want to see those changes on subsequent fields
-	for fieldNum, field := range lo.SummaryFieldList {
-		//TODO: Don't make copies on the last run
-		copyOfJoinTableIndexByLabelName := make(map[string]int)
-		for k, v := range joinTableIndexByLabelName {
-			copyOfJoinTableIndexByLabelName[k] = v
+
+	// Build adapted fields map for DisplayColumn
+	adaptedFields := make(map[string]sqlgen.IndexedField, len(l.indexedFields))
+	for k, v := range l.indexedFields {
+		if cf, ok := v.(*ComputedField); ok && cf.IsTimestamp {
+			adaptedFields[k] = &timestampFieldAdapter{inner: cf}
+		} else {
+			adaptedFields[k] = &indexedFieldAdapter{inner: v}
 		}
-		copyOfFilterComponents := filterComponents.copy()
-		data, err := l.ListSummaryForField(ctx, field, fieldNum, dbName, &copyOfFilterComponents, mainFieldPrefix, copyOfJoinTableIndexByLabelName)
+	}
+
+	countsByProperty := make(map[string]any)
+	for fieldNum, field := range lo.SummaryFieldList {
+		sfq, err := sqlgen.CompileSummaryFieldQuery(field, fieldNum, dbName, sc, adaptedFields)
+		if err != nil {
+			return nil, err
+		}
+		logrus.Debugf("Summary ListOptionIndexer prepared statement: %v", sfq.Query)
+		logrus.Debugf("Params: %v", sfq.Params)
+
+		queryInfo := &QueryInfo{query: sfq.Query, params: sfq.Params}
+		data, err := l.executeSummaryQueryForField(ctx, queryInfo, field)
 		if err != nil {
 			return nil, err
 		}
@@ -108,16 +120,6 @@ func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.
 		}
 	}
 	return convertMapToAPISummary(countsByProperty), nil
-}
-
-func (l *ListOptionIndexer) ListSummaryForField(ctx context.Context, field []string, fieldNum int, dbName string, filterComponents *filterComponentsT, mainFieldPrefix string, joinTableIndexByLabelName map[string]int) (map[string]any, error) {
-	queryInfo, err := l.constructSummaryQueryForField(field, fieldNum, dbName, filterComponents, mainFieldPrefix, joinTableIndexByLabelName)
-	if err != nil {
-		return nil, err
-	}
-	logrus.Debugf("Summary ListOptionIndexer prepared statement: %v", queryInfo.query)
-	logrus.Debugf("Params: %v", queryInfo.params)
-	return l.executeSummaryQueryForField(ctx, queryInfo, field)
 }
 
 // Internal sql-generation methods on ListOptionIndexer in alphabetical order
@@ -737,174 +739,6 @@ func (l *ListOptionIndexer) executeSummaryQueryForField(ctx context.Context, que
 	return propertyBlock, nil
 }
 
-func (l *ListOptionIndexer) executeSummaryQuery(ctx context.Context, queryInfo *QueryInfo) (*types.APISummary, error) {
-	stmt, err := l.Prepare(queryInfo.query)
-	if err != nil {
-		return nil, err
-	}
-	params := queryInfo.params
-	defer func() {
-		if cerr := stmt.Close(); cerr != nil && err == nil {
-			err = errors.Join(err, cerr)
-		}
-	}()
-
-	var items [][]string
-	err = l.WithTransaction(ctx, false, func(tx db.TxClient) error {
-		now := time.Now()
-		rows, err := tx.Stmt(stmt).QueryContext(ctx, params...)
-		if err != nil {
-			return err
-		}
-		elapsed := time.Since(now)
-		logLongQuery(elapsed, queryInfo.query, params)
-		items, err = l.ReadStringIntString(rows)
-		if err != nil {
-			return fmt.Errorf("executeSummaryQuery: read objects: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	countsByProperty := make(map[string]map[string]any)
-
-	for _, item := range items {
-		propertyName := item[0]
-		propertyBlock, ok := countsByProperty[propertyName]
-		if !ok {
-			propertyBlock = make(map[string]any)
-			countsByProperty[propertyName] = propertyBlock
-			propertyBlock["property"] = propertyName
-			propertyBlock["counts"] = make(map[string]any)
-		}
-		val, err := strconv.Atoi(item[1])
-		if err != nil {
-			return nil, err
-		}
-		propertyBlock["counts"].(map[string]any)[item[2]] = val
-	}
-
-	total := len(countsByProperty)
-	blocksToSort := make([]types.SummaryEntry, 0, total)
-	for _, v := range countsByProperty {
-		property := v["property"].(string)
-		fixedCounts := make(map[string]int)
-		counts := v["counts"].(map[string]any)
-		for k1, v1 := range counts {
-			fixedV1, ok := v1.(int)
-			if !ok {
-				logrus.Errorf("Error converting value %v to int", v1)
-				continue
-			}
-			fixedCounts[k1] = fixedV1
-		}
-		blocksToSort = append(blocksToSort, types.SummaryEntry{Property: property, Counts: fixedCounts})
-	}
-	sortedBlocks := slices.SortedFunc(slices.Values(blocksToSort), func(a, b types.SummaryEntry) int {
-		return strings.Compare(a.Property, b.Property)
-	})
-	summary := types.APISummary{SummaryItems: sortedBlocks}
-	return &summary, nil
-}
-
-func (l *ListOptionIndexer) generateSQL(filterComponents *filterComponentsT, dbName string, mainObjectPrefix string, mainFieldPrefix string) (*QueryInfo, error) {
-	query := ""
-	params := []any{}
-	const nl = "\n"
-	comma := ","
-	if len(filterComponents.withParts) > 0 {
-		// These are for any labels that are being sorted on but don't appear in filters
-		query = "WITH "
-		for i, wp := range filterComponents.withParts {
-			if i == len(filterComponents.withParts)-1 {
-				comma = ""
-			}
-			query += fmt.Sprintf(`%s(key, value) AS (
-SELECT key, value FROM "%s_labels"
-  WHERE label = ?
-)%s
-`,
-				wp.labelPrefix, dbName, comma)
-			params = append(params, wp.labelName)
-		}
-	}
-	params = append(params, filterComponents.params...)
-
-	query += "SELECT "
-	if filterComponents.queryUsesLabels {
-		query += "DISTINCT "
-	}
-	query += fmt.Sprintf(`%s.object, %s.objectnonce, %s.dekid FROM "%s" %s%s`,
-		mainObjectPrefix,
-		mainObjectPrefix,
-		mainObjectPrefix,
-		dbName,
-		mainObjectPrefix,
-		nl)
-	query += fmt.Sprintf(`  JOIN "%s_fields" %s ON %s.key = %s.key`,
-		dbName,
-		mainFieldPrefix,
-		mainObjectPrefix,
-		mainFieldPrefix)
-	if len(filterComponents.joinParts) > 0 {
-		for _, joinPart := range filterComponents.joinParts {
-			tablePart := ""
-			// If the join is for a view, it means we're joining on a table defined in an above WITH entry,
-			// so there's no actual database table that we're joining on.
-			if !joinPart.isView {
-				tablePart = fmt.Sprintf(" %q", joinPart.tableName)
-			}
-			query += fmt.Sprintf(`%s  %s%s %s ON %s.%s = %s.%s`,
-				nl,
-				joinPart.joinCommand,
-				tablePart,
-				joinPart.tableNameAlias,
-				joinPart.onPrefix,
-				joinPart.onField,
-				joinPart.otherPrefix,
-				joinPart.otherField,
-			)
-		}
-	}
-	switch len(filterComponents.whereClauses) {
-	case 0: // do nothing
-	case 1:
-		query += fmt.Sprintf("\n  WHERE\n    %s", filterComponents.whereClauses[0])
-	default:
-		query += fmt.Sprintf("\n  WHERE\n    (%s)", strings.Join(filterComponents.whereClauses, ") AND\n    ("))
-	}
-
-	// before proceeding, save a copy of the query without LIMIT/OFFSET/ORDER info
-	// for COUNTing all results later
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s)", query)
-	// There's no need for a separate countParams because the arg is always an integer
-	// that's vetted by the parser
-
-	if len(filterComponents.orderByClauses) > 0 {
-		query += "\n  ORDER BY "
-		query += strings.Join(filterComponents.orderByClauses, ", ")
-	}
-
-	if filterComponents.limitClause != "" {
-		query += "\t" + filterComponents.limitClause + "\n"
-	}
-	if filterComponents.offsetClause != "" {
-		query += "\t" + filterComponents.offsetClause + "\n"
-	}
-	queryInfo := QueryInfo{query: query, params: params}
-	if filterComponents.limitClause != "" || filterComponents.offsetClause != "" {
-		queryInfo.countQuery = countQuery
-		queryInfo.countParams = params
-		queryInfo.limit = filterComponents.limitParam
-		queryInfo.offset = filterComponents.offsetParam
-	}
-	// Otherwise leave these as default values and the executor won't do pagination work
-
-	return &queryInfo, nil
-}
-
 // Possible ops from the k8s parser:
 // KEY = and == (same) VALUE
 // KEY != VALUE
@@ -1471,30 +1305,6 @@ func getUnboundSortLabels(lo *sqltypes.ListOptions) []string {
 		}
 	}
 	return slices.Collect(maps.Keys(unboundSortLabels))
-}
-
-func getWithParts(unboundSortLabels []string, joinTableIndexByLabelName map[string]int, dbName string, mainFieldPrefix string) ([]string, []any, []string, []string, error) {
-	numLabels := len(unboundSortLabels)
-	parts := make([]string, numLabels)
-	params := make([]any, numLabels)
-	withNames := make([]string, numLabels)
-	joinParts := make([]string, numLabels)
-	for i, label := range unboundSortLabels {
-		i1 := i + 1
-		idx, err := internLabel(label, joinTableIndexByLabelName, i1)
-		if err != nil {
-			return parts, params, withNames, joinParts, err
-		}
-		parts[i] = fmt.Sprintf(`lt%d(key, value) AS (
-SELECT key, value FROM "%s_labels"
-  WHERE label = ?
-)`, idx, dbName)
-		params[i] = label
-		withNames[i] = fmt.Sprintf("lt%d", idx)
-		joinParts[i] = fmt.Sprintf(`LEFT OUTER JOIN "%s_labels" lt%d ON %s.key = lt%d.key`, dbName, idx, mainFieldPrefix, idx)
-	}
-
-	return parts, params, withNames, joinParts, nil
 }
 
 func getWithPartsForCompiling(unboundSortLabels []string, joinTableIndexByLabelName map[string]int, mainFieldPrefix string) ([]withPart, error) {
