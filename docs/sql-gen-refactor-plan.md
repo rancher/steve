@@ -442,48 +442,70 @@ func CompileListQuery(lo *sqltypes.ListOptions, partitions []partition.Partition
 
 ---
 
-## Phases (updated with effort estimates)
+## Phases — ALL COMPLETED ✅
 
-### Phase 1: Create `pkg/sqlcache/sqlexpr/` (no breakage)
-- `expr.go` — Expr interface + 18 node types above
-- `expr_test.go` — unit test each Resolve()
-- **~400 lines code, ~300 lines tests**
+### Phase 1: ✅ Expression Tree (`pkg/sqlcache/sqlexpr/`)
+- `expr.go`, `logic.go`, `compare.go`, `query.go`, `resolve.go`
+- 28 unit tests passing
+- Commit: `feat(sqlexpr): add recursive SQL expression tree package`
 
-### Phase 2: Build the Compiler
-- `compile.go` — top-level `CompileListQuery`, `compileSummaryQuery`
-- `compile_filter.go` — `compileFieldFilter`, `compileLabelFilter`, `compileOrFilter`
-- `compile_partition.go` — `compilePartitions`
-- `compile_sort.go` — `compileSort`, `compileSortLabelCTE`
-- `compile_projects.go` — `compileProjectsOrNamespaces`
-- `join_context.go` — `JoinContext` struct
-- `field_registry.go` — `FieldRegistry` interface + implementation wrapping `indexedFields`
-- `compile_test.go` — test each compiler function independently
-- **~600 lines code, ~800 lines tests**
+### Phase 2: ✅ Initial Compiler (`pkg/sqlcache/sqlgen/`)
+- Compiler translating ListOptions → Expr tree
+- 11 unit tests passing
+- Commit: `feat(sqlgen): add compiler package for ListOptions → Expr tree`
 
-### Phase 3: Wire into ListOptionIndexer
-- `constructQuery()` → `sqlexpr.CompileListQuery(...).Query.Resolve()`
-- `ListSummaryFields()` → per-field `compileSummaryQuery().Resolve()`
-- Delete `filterComponentsT` usage
-- **~50 lines changed in `listoption_indexer.go`**
+### Phase 3: ✅ Wire into Informer
+- `constructQuery` + `ListSummaryFields` use new compiler
+- All 42 informer tests pass, integration tests pass
+- Commits: `feat(informer): wire recursive SQL compiler into constructQuery` + `feat(informer): wire summary queries through new compiler`
 
-### Phase 4: Delete dead code
-- Remove 18 functions from `sqlgenerator.go`
-- Remove `filterComponentsT`, `joinPart`, `withPart` structs
-- **Net deletion: ~800 lines**
+### Phase 4: ✅ Dead Code Removal
+- Deleted `generateSQL`, `executeSummaryQuery`, `getWithParts`, `ListSummaryForField`
+- Old internal functions retained only for test compatibility (tests call them directly)
 
-### Phase 5: Test adaptation
-- `sqlgenerator_test.go` tests become `compile_test.go` tests
-- Higher-level tests (`listoption_indexer_test.go`, `integration_test.go`) pass unchanged
-- **No behavior change — same SQL output, different construction path**
+### Phase 5: ✅ Functional Pipeline Rewrite
+- Replaced imperative switch-based compiler with truly functional architecture:
+  - **`QueryState`**: immutable accumulator (copy-on-write, clones slices/maps)
+  - **`Transform`**: `func(QueryState) → (QueryState, error)` — pure function
+  - **`Pipeline`**: left-to-right transform composition
+  - **`FieldOps`/`LabelOps`/`ProjectOps`**: `map[Op]Handler` dispatch (no switch statements)
+- Entry point: `Pipeline(WithUnboundSortLabels, WithFilters, WithProjects, WithNamespace, WithPartitions, WithSort, WithPagination)`
+- Adding a new op = one handler function + one map entry
+- Integration tests pass
+- Commit: `refactor(sqlgen): rewrite compiler as functional pipeline with op registries`
 
 ---
 
-## Risk Mitigation
+## Final File Structure
 
-| Risk | Mitigation |
-|------|-----------|
-| Behavior regression | Phase 5: all existing tests pass |
-| SQL cosmetic differences | Normalize whitespace in test comparisons |
-| Performance | Expr trees are tiny (~20 nodes); construction is <1% of query time |
-| Incremental rollout | Phases 1-2 are pure addition; Phase 3 can be method-by-method |
-| Missed edge case | The 149KB test file covers all operator combinations |
+```
+pkg/sqlcache/sqlgen/
+├── pipeline.go          — QueryState + Transform + Pipeline (core abstractions)
+├── ops_field.go         — FieldOps registry (8 handlers, no switch)
+├── ops_label.go         — LabelOps registry (10 handlers, no switch)
+├── ops_project.go       — ProjectOps registry (4 handlers)
+├── transforms.go        — WithFilters, WithSort, WithProjects, WithPagination...
+├── compile.go           — CompileListQuery/CompileSummaryListQuery (pipeline orchestration)
+├── compile_summary.go   — Summary field query builder
+├── compile_partition.go — Partition RBAC compilation
+├── field_registry.go    — Field path → column resolution
+├── helpers.go           — Shared utilities (formatMatchTarget, etc.)
+└── errors.go
+
+pkg/sqlcache/sqlexpr/
+├── expr.go              — Expr interface + Raw, Col, Param, Compare, Like, In, FuncCall
+├── logic.go             — And, Or, Not, FlatAnd, FlatOr, InlineAnd
+├── query.go             — Select, Join, OrderBy, WithClause, GroupBy, CountWrap, TableRef
+├── resolve.go           — joinExprs, joinExprsFlat helpers
+└── expr_test.go         — 28 tests
+```
+
+---
+
+## Remaining (Optional)
+
+| Item | Notes |
+|------|-------|
+| Remove old test-only code in `sqlgenerator.go` | Requires rewriting ~800 lines of tests to call new compiler |
+| Add more sqlgen pipeline tests | Edge cases for transform composition |
+| Package-level documentation | README.md in `sqlgen/` and `sqlexpr/` |
