@@ -24,27 +24,25 @@ func CompileProjectsOrNamespaces(orFilter sqltypes.OrFilter, registry FieldRegis
 		{
 			Kind:  sqlexpr.LeftOuterJoin,
 			Table: sqlexpr.TableRef{Name: namespacesDbName + "_fields", Alias: "nsf"},
-			On: sqlexpr.Compare{
-				Left:  sqlexpr.Col{Table: jc.prefix, Name: "metadata.namespace"},
-				Op:    "=",
-				Right: sqlexpr.Col{Table: "nsf", Name: "metadata.name"},
+			On: sqlexpr.Raw{
+				SQL: fmt.Sprintf(`%s."metadata.namespace" = nsf."metadata.name"`, jc.prefix),
 			},
 		},
 	}
 
-	// Get or create the projectID label alias
-	ltAlias := jc.EnsureLabelJoin(projectIDFieldLabel)
+	// Get or create the projectID label alias (without auto-creating a standard join)
+	ltAlias, exists := jc.AliasFor(projectIDFieldLabel)
+	if !exists {
+		ltAlias = jc.NextAlias()
+		jc.RegisterAlias(projectIDFieldLabel, ltAlias)
+	}
 
-	// Override: the project ID label JOIN needs to be on nsf.key, not jc.prefix.key
-	// Remove the auto-generated one and add the correct one
-	// Actually, let's just add a specific JOIN for the namespace labels
+	// The project ID label JOIN uses nsf.key, not jc.prefix.key
 	nsProjJoin := sqlexpr.Join{
 		Kind:  sqlexpr.LeftOuterJoin,
 		Table: sqlexpr.TableRef{Name: namespacesDbName + "_labels", Alias: ltAlias},
-		On: sqlexpr.Compare{
-			Left:  sqlexpr.Col{Table: "nsf", Name: "key"},
-			Op:    "=",
-			Right: sqlexpr.Col{Table: ltAlias, Name: "key"},
+		On: sqlexpr.Raw{
+			SQL: fmt.Sprintf("nsf.key = %s.key", ltAlias),
 		},
 	}
 	extraJoins = append(extraJoins, nsProjJoin)
@@ -82,7 +80,7 @@ func CompileProjectsOrNamespaces(orFilter sqltypes.OrFilter, registry FieldRegis
 		if len(exprs) == 1 {
 			result = exprs[0]
 		} else {
-			result = sqlexpr.And(exprs)
+			result = sqlexpr.InlineAnd(exprs)
 		}
 	} else {
 		return nil, nil, fmt.Errorf("project or namespaces supports only 'IN' or 'NOT IN' operation. op: %s is not valid", orFilter.Filters[0].Op)
@@ -123,7 +121,7 @@ func compileProjectsOrNamespacesLabelFilter(filter sqltypes.Filter, ltAlias stri
 			Left: sqlexpr.Col{Table: ltAlias, Name: "label"}, Op: "=", Right: sqlexpr.Param{Value: labelName},
 		}
 		valueIn := sqlexpr.In{Expr: sqlexpr.Col{Table: ltAlias, Name: "value"}, Values: params}
-		return sqlexpr.And{labelIs, valueIn}, nil
+		return sqlexpr.FlatAnd{labelIs, valueIn}, nil
 
 	case sqltypes.NotIn:
 		// (label=? AND value NOT IN (?...)) OR (key NOT IN subquery)
@@ -131,7 +129,7 @@ func compileProjectsOrNamespacesLabelFilter(filter sqltypes.Filter, ltAlias stri
 			Left: sqlexpr.Col{Table: ltAlias, Name: "label"}, Op: "=", Right: sqlexpr.Param{Value: labelName},
 		}
 		valueNotIn := sqlexpr.In{Expr: sqlexpr.Col{Table: ltAlias, Name: "value"}, Values: params, Negate: true}
-		clause1 := sqlexpr.And{labelIs, valueNotIn}
+		clause1 := sqlexpr.FlatAnd{labelIs, valueNotIn}
 
 		// Subquery for NOT IN
 		var index int
@@ -142,7 +140,7 @@ func compileProjectsOrNamespacesLabelFilter(filter sqltypes.Filter, ltAlias stri
 			`		WHERE lt%di1.label = ?)`, dbName, index, index, index)
 		clause2 := sqlexpr.Raw{SQL: subquery, Params: []any{labelName}}
 
-		return sqlexpr.Or{clause1, clause2}, nil
+		return sqlexpr.FlatOr{clause1, clause2}, nil
 	}
 
 	return nil, fmt.Errorf("unrecognized operator: %s", filter.Op)

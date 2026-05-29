@@ -93,12 +93,12 @@ func CompileLabelFilter(filter sqltypes.Filter, ltAlias string, mainFieldPrefix 
 			valueLike := sqlexpr.Like{
 				Col: sqlexpr.Col{Table: ltAlias, Name: "value"}, Pattern: sqlexpr.Param{Value: param},
 			}
-			return sqlexpr.And{labelIs, valueLike}, nil
+			return sqlexpr.FlatAnd{labelIs, valueLike}, nil
 		}
 		valueEq := sqlexpr.Compare{
 			Left: sqlexpr.Col{Table: ltAlias, Name: "value"}, Op: "=", Right: sqlexpr.Param{Value: param},
 		}
-		return sqlexpr.And{labelIs, valueEq}, nil
+		return sqlexpr.FlatAnd{labelIs, valueEq}, nil
 
 	case sqltypes.NotEq:
 		param := formatMatchTargetForLabel(filter)
@@ -114,12 +114,12 @@ func CompileLabelFilter(filter sqltypes.Filter, ltAlias string, mainFieldPrefix 
 			valueNotLike := sqlexpr.Like{
 				Col: sqlexpr.Col{Table: ltAlias, Name: "value"}, Pattern: sqlexpr.Param{Value: param}, Negate: true,
 			}
-			return sqlexpr.Or{notExistsExpr, sqlexpr.And{labelIs, valueNotLike}}, nil
+			return sqlexpr.FlatOr{notExistsExpr, sqlexpr.FlatAnd{labelIs, valueNotLike}}, nil
 		}
 		valueNe := sqlexpr.Compare{
 			Left: sqlexpr.Col{Table: ltAlias, Name: "value"}, Op: "!=", Right: sqlexpr.Param{Value: param},
 		}
-		return sqlexpr.Or{notExistsExpr, sqlexpr.And{labelIs, valueNe}}, nil
+		return sqlexpr.FlatOr{notExistsExpr, sqlexpr.FlatAnd{labelIs, valueNe}}, nil
 
 	case sqltypes.Lt, sqltypes.Gt:
 		sym, target, err := prepareComparisonParameters(filter.Op, filter.Matches[0])
@@ -132,7 +132,7 @@ func CompileLabelFilter(filter sqltypes.Filter, ltAlias string, mainFieldPrefix 
 		valueCmp := sqlexpr.Compare{
 			Left: sqlexpr.Col{Table: ltAlias, Name: "value"}, Op: sym, Right: sqlexpr.Param{Value: target},
 		}
-		return sqlexpr.And{labelIs, valueCmp}, nil
+		return sqlexpr.FlatAnd{labelIs, valueCmp}, nil
 
 	case sqltypes.Exists:
 		return sqlexpr.Compare{
@@ -151,7 +151,7 @@ func CompileLabelFilter(filter sqltypes.Filter, ltAlias string, mainFieldPrefix 
 			params[i] = sqlexpr.Param{Value: m}
 		}
 		valueIn := sqlexpr.In{Expr: sqlexpr.Col{Table: ltAlias, Name: "value"}, Values: params}
-		return sqlexpr.And{labelIs, valueIn}, nil
+		return sqlexpr.FlatAnd{labelIs, valueIn}, nil
 
 	case sqltypes.NotIn:
 		// (NOT EXISTS) OR (label=? AND value NOT IN (?...))
@@ -167,7 +167,7 @@ func CompileLabelFilter(filter sqltypes.Filter, ltAlias string, mainFieldPrefix 
 			params[i] = sqlexpr.Param{Value: m}
 		}
 		valueNotIn := sqlexpr.In{Expr: sqlexpr.Col{Table: ltAlias, Name: "value"}, Values: params, Negate: true}
-		return sqlexpr.Or{notExistsExpr, sqlexpr.And{labelIs, valueNotIn}}, nil
+		return sqlexpr.FlatOr{notExistsExpr, sqlexpr.FlatAnd{labelIs, valueNotIn}}, nil
 
 	case sqltypes.Contains:
 		if len(filter.Matches) != 1 {

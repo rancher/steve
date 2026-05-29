@@ -21,18 +21,46 @@ type Raw struct {
 
 func (r Raw) Resolve() (string, []any) { return r.SQL, r.Params }
 
-// Col references a qualified column: prefix."name".
-// If Table is empty, resolves to just "name".
+// Col references a qualified column: prefix."name" or prefix.name.
+// Names containing dots or special characters are quoted; simple identifiers are not.
+// If Table is empty, always quotes the name.
 type Col struct {
 	Table string
 	Name  string
 }
 
 func (c Col) Resolve() (string, []any) {
+	quoted := needsQuoting(c.Name)
 	if c.Table == "" {
-		return `"` + c.Name + `"`, nil
+		if quoted {
+			return `"` + c.Name + `"`, nil
+		}
+		return c.Name, nil
 	}
-	return c.Table + `."` + c.Name + `"`, nil
+	if quoted {
+		return c.Table + `."` + c.Name + `"`, nil
+	}
+	return c.Table + "." + c.Name, nil
+}
+
+// needsQuoting returns true if the identifier needs double-quote wrapping.
+// Simple identifiers (alphanumeric + underscore, starting with letter/underscore) don't need quoting.
+func needsQuoting(name string) bool {
+	if name == "" {
+		return true
+	}
+	for i, c := range name {
+		if i == 0 {
+			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+				return true
+			}
+		} else {
+			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Param is a single bound parameter placeholder (?).

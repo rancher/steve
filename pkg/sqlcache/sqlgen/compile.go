@@ -59,7 +59,7 @@ func CompileListQuery(lo *sqltypes.ListOptions, partitions []partition.Partition
 				Name:    alias,
 				Columns: []string{"key", "value"},
 				Body: sqlexpr.Raw{
-					SQL:    fmt.Sprintf(`SELECT key, value FROM "%s_labels" WHERE label = ?`, dbName),
+					SQL:    fmt.Sprintf("SELECT key, value FROM \"%s_labels\"\n  WHERE label = ?", dbName),
 					Params: []any{label},
 				},
 			})
@@ -68,10 +68,8 @@ func CompileListQuery(lo *sqltypes.ListOptions, partitions []partition.Partition
 			jc.joins = append(jc.joins, sqlexpr.Join{
 				Kind:  sqlexpr.LeftOuterJoin,
 				Table: sqlexpr.TableRef{Alias: alias},
-				On: sqlexpr.Compare{
-					Left:  sqlexpr.Col{Table: mainFieldPrefix, Name: "key"},
-					Op:    "=",
-					Right: sqlexpr.Col{Table: alias, Name: "key"},
+				On: sqlexpr.Raw{
+					SQL: fmt.Sprintf("%s.key = %s.key", mainFieldPrefix, alias),
 				},
 			})
 			jc.UsesLabels = true
@@ -174,10 +172,8 @@ func CompileListQuery(lo *sqltypes.ListOptions, partitions []partition.Partition
 	baseJoin := sqlexpr.Join{
 		Kind:  sqlexpr.InnerJoin,
 		Table: sqlexpr.TableRef{Name: fmt.Sprintf("%s_fields", dbName), Alias: mainFieldPrefix},
-		On: sqlexpr.Compare{
-			Left:  sqlexpr.Col{Table: mainObjectPrefix, Name: "key"},
-			Op:    "=",
-			Right: sqlexpr.Col{Table: mainFieldPrefix, Name: "key"},
+		On: sqlexpr.Raw{
+			SQL: fmt.Sprintf("%s.key = %s.key", mainObjectPrefix, mainFieldPrefix),
 		},
 	}
 
@@ -231,17 +227,15 @@ func CompileSummaryListQuery(lo *sqltypes.ListOptions, partitions []partition.Pa
 				Name:    alias,
 				Columns: []string{"key", "value"},
 				Body: sqlexpr.Raw{
-					SQL:    fmt.Sprintf(`SELECT key, value FROM "%s_labels" WHERE label = ?`, dbName),
+					SQL:    fmt.Sprintf("SELECT key, value FROM \"%s_labels\"\n  WHERE label = ?", dbName),
 					Params: []any{label},
 				},
 			})
 			jc.joins = append(jc.joins, sqlexpr.Join{
 				Kind:  sqlexpr.LeftOuterJoin,
 				Table: sqlexpr.TableRef{Alias: alias},
-				On: sqlexpr.Compare{
-					Left:  sqlexpr.Col{Table: mainFieldPrefix, Name: "key"},
-					Op:    "=",
-					Right: sqlexpr.Col{Table: alias, Name: "key"},
+				On: sqlexpr.Raw{
+					SQL: fmt.Sprintf("%s.key = %s.key", mainFieldPrefix, alias),
 				},
 			})
 			jc.UsesLabels = true

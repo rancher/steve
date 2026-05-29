@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/sqlcache/db"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
+	"github.com/rancher/steve/pkg/sqlcache/sqlgen"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -595,19 +596,39 @@ func (l *ListOptionIndexer) constructComplexSummaryQueryForField(fieldParts []st
 }
 
 func (l *ListOptionIndexer) constructQuery(lo *sqltypes.ListOptions, partitions []partition.Partition, namespace string, dbName string) (*QueryInfo, error) {
-	joinTableIndexByLabelName := make(map[string]int)
-	const mainObjectPrefix = "o"
-	const mainFieldPrefix = "f"
-	const includeSort = true
-	const isSummaryFilter = false
-	filterComponents, err := l.compileQuery(lo, partitions, namespace, dbName, mainFieldPrefix, joinTableIndexByLabelName, includeSort, isSummaryFilter)
+	if err := l.checkRevision(lo); err != nil {
+		return nil, err
+	}
+
+	registry := l.buildFieldRegistry()
+	cq, err := sqlgen.CompileListQuery(lo, partitions, namespace, dbName, registry, l.namespaced)
 	if err != nil {
 		return nil, err
 	}
-	if err = l.checkRevision(lo); err != nil {
-		return nil, err
+
+	query, params, countQuery, countParams := cq.Resolve()
+	if params == nil {
+		params = []any{}
 	}
-	return l.generateSQL(filterComponents, dbName, mainObjectPrefix, mainFieldPrefix)
+	if countParams == nil {
+		countParams = []any{}
+	}
+
+	qi := &QueryInfo{
+		query:  query,
+		params: params,
+	}
+	if cq.HasPagination {
+		qi.countQuery = countQuery
+		qi.countParams = countParams
+		if lo.Pagination.PageSize > 0 {
+			qi.limit = lo.Pagination.PageSize
+		}
+		if lo.Pagination.Page >= 1 {
+			qi.offset = lo.Pagination.PageSize * (lo.Pagination.Page - 1)
+		}
+	}
+	return qi, nil
 }
 
 func (l *ListOptionIndexer) constructSimpleSummaryQueryForField(fieldParts []string, dbName, columnName, columnNameToDisplay string) (*QueryInfo, error) {

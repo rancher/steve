@@ -38,10 +38,8 @@ func (jc *JoinContext) EnsureLabelJoin(labelName string) string {
 	jc.joins = append(jc.joins, sqlexpr.Join{
 		Kind:  sqlexpr.LeftOuterJoin,
 		Table: sqlexpr.TableRef{Name: fmt.Sprintf("%s_labels", jc.dbName), Alias: alias},
-		On: sqlexpr.Compare{
-			Left:  sqlexpr.Col{Table: jc.prefix, Name: "key"},
-			Op:    "=",
-			Right: sqlexpr.Col{Table: alias, Name: "key"},
+		On: sqlexpr.Raw{
+			SQL: fmt.Sprintf("%s.key = %s.key", jc.prefix, alias),
 		},
 	})
 	jc.UsesLabels = true
@@ -55,10 +53,8 @@ func (jc *JoinContext) EnsureLabelJoinForView(labelName string, viewAlias string
 	jc.joins = append(jc.joins, sqlexpr.Join{
 		Kind:  sqlexpr.LeftOuterJoin,
 		Table: sqlexpr.TableRef{Alias: viewAlias}, // No Name means it references a CTE
-		On: sqlexpr.Compare{
-			Left:  sqlexpr.Col{Table: jc.prefix, Name: "key"},
-			Op:    "=",
-			Right: sqlexpr.Col{Table: viewAlias, Name: "key"},
+		On: sqlexpr.Raw{
+			SQL: fmt.Sprintf("%s.key = %s.key", jc.prefix, viewAlias),
 		},
 	})
 	jc.UsesLabels = true
@@ -68,6 +64,19 @@ func (jc *JoinContext) EnsureLabelJoinForView(labelName string, viewAlias string
 func (jc *JoinContext) AliasFor(labelName string) (string, bool) {
 	alias, ok := jc.labelIndex[labelName]
 	return alias, ok
+}
+
+// RegisterAlias registers a label name with a given alias without creating a JOIN.
+// Used when the JOIN is managed externally (e.g., projects/namespaces joins).
+func (jc *JoinContext) RegisterAlias(labelName, alias string) {
+	jc.labelIndex[labelName] = alias
+	jc.UsesLabels = true
+}
+
+// NextAlias allocates the next alias number and returns it (e.g., "lt3").
+func (jc *JoinContext) NextAlias() string {
+	jc.counter++
+	return fmt.Sprintf("lt%d", jc.counter)
 }
 
 // Index returns the numeric index for a given label (1-based), as used by the old code.

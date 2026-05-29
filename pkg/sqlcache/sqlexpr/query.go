@@ -12,6 +12,10 @@ type TableRef struct {
 }
 
 func (t TableRef) Resolve() (string, []any) {
+	if t.Name == "" {
+		// View/CTE reference — just the alias
+		return t.Alias, nil
+	}
 	if t.Alias == "" {
 		return `"` + t.Name + `"`, nil
 	}
@@ -149,9 +153,9 @@ func (s Select) Resolve() (string, []any) {
 		params = append(params, cp...)
 	}
 
-	// FROM
+	// FROM (on same line as SELECT)
 	fs, _ := s.From.Resolve()
-	b.WriteString("\nFROM ")
+	b.WriteString(" FROM ")
 	b.WriteString(fs)
 
 	// JOINs
@@ -166,7 +170,7 @@ func (s Select) Resolve() (string, []any) {
 	if s.Where != nil {
 		ws, wp := s.Where.Resolve()
 		if ws != "" {
-			b.WriteString("\nWHERE ")
+			b.WriteString("\n  WHERE\n    ")
 			b.WriteString(ws)
 			params = append(params, wp...)
 		}
@@ -182,7 +186,7 @@ func (s Select) Resolve() (string, []any) {
 
 	// ORDER BY
 	if len(s.OrderBy) > 0 {
-		b.WriteString("\nORDER BY ")
+		b.WriteString("\n  ORDER BY ")
 		for i, ob := range s.OrderBy {
 			if i > 0 {
 				b.WriteString(", ")
@@ -195,12 +199,12 @@ func (s Select) Resolve() (string, []any) {
 
 	// LIMIT
 	if s.Limit != nil {
-		b.WriteString(fmt.Sprintf("\nLIMIT %d", *s.Limit))
+		b.WriteString(fmt.Sprintf("\n  LIMIT %d", *s.Limit))
 	}
 
 	// OFFSET
 	if s.Offset != nil && *s.Offset > 0 {
-		b.WriteString(fmt.Sprintf("\nOFFSET %d", *s.Offset))
+		b.WriteString(fmt.Sprintf("\n  OFFSET %d", *s.Offset))
 	}
 
 	return b.String(), params
