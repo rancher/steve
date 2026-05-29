@@ -28,15 +28,23 @@ func (l *ListOptionIndexer) ListSummaryFields(ctx context.Context, lo *sqltypes.
 	}
 	summaryNamespaced := lo.SummaryNamespaced
 	unsortedSummary := types.APISummary{SummaryItems: make([]types.SummaryEntry, 0)}
+	var copyOfJoinTableIndexByLabelName map[string]int
+	var copyOfFilterComponents filterComponentsT
 	// We have to copy the current data-structures because processing other label summary-fields
 	// could modify them, but we don't want to see those changes on subsequent fields
 	for fieldNum, field := range lo.SummaryFieldList {
-		//TODO: Don't make copies on the last run
-		copyOfJoinTableIndexByLabelName := make(map[string]int)
-		for k, v := range joinTableIndexByLabelName {
-			copyOfJoinTableIndexByLabelName[k] = v
+		// Don't make copies on the last run
+		if fieldNum == len(lo.SummaryFieldList)-1 {
+			copyOfJoinTableIndexByLabelName = joinTableIndexByLabelName
+			// This does a shallow copy, which is fine.  filterComponents.copy() does a deep copy
+			copyOfFilterComponents = *filterComponents
+		} else {
+			copyOfJoinTableIndexByLabelName = make(map[string]int)
+			for k, v := range joinTableIndexByLabelName {
+				copyOfJoinTableIndexByLabelName[k] = v
+			}
+			copyOfFilterComponents = filterComponents.copy()
 		}
-		copyOfFilterComponents := filterComponents.copy()
 		err := l.ListSummaryForField(ctx, field, fieldNum, dbName, &copyOfFilterComponents, mainFieldPrefix, copyOfJoinTableIndexByLabelName, summaryNamespaced, &unsortedSummary)
 		if err != nil {
 			return nil, err
