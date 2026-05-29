@@ -116,6 +116,10 @@ func (c *Collection) schemasForSubject(access *accesscontrol.AccessSet) (*types.
 			}
 		}
 
+		// Grant synthetic namespace access for UI dropdown functionality.
+		// Users with access to resources in a namespace need to see the namespace
+		// in the UI even without direct K8s namespace GET permission.
+		// The namespace formatter strips sensitive metadata from these responses.
 		mustAllowList := false
 		if len(verbAccess) == 0 {
 			if gr.Group == "" && gr.Resource == "namespaces" {
