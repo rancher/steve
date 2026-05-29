@@ -131,7 +131,6 @@ func TestQueryObjects(t *testing.T) {
 			*a[2].(*uint32) = keyId
 		})
 		d.EXPECT().Decrypt(testObjectSerialized, testObjectSerialized, keyId).Return(testObjectSerialized, nil)
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
@@ -183,7 +182,6 @@ func TestQueryObjects(t *testing.T) {
 			*a[2].(*uint32) = keyId
 		})
 		d.EXPECT().Decrypt(testObjectSerialized, testObjectSerialized, keyId).Return(testObjectSerialized, nil)
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(fmt.Errorf("error"))
 		client := SetupClient(t, c, e, d)
@@ -197,7 +195,6 @@ func TestQueryObjects(t *testing.T) {
 		d := SetupMockDecryptor(t)
 		r := SetupMockRows(t)
 		r.EXPECT().Next().Return(false)
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
 		items, err := client.ReadObjects(r, reflect.TypeOf(testObject))
@@ -233,7 +230,6 @@ func TestQueryStrings(t *testing.T) {
 				*vk = testObject.Id
 			}
 		})
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
@@ -255,26 +251,6 @@ func TestQueryStrings(t *testing.T) {
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "ReadStrings(), with one row, and Err() error", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-		r := SetupMockRows(t)
-		r.EXPECT().Next().Return(true)
-		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
-			for _, v := range a {
-				vk := v.(*string)
-				*vk = testObject.Id
-			}
-		})
-		r.EXPECT().Next().Return(false)
-		r.EXPECT().Err().Return(fmt.Errorf("error"))
-		r.EXPECT().Close().Return(nil)
-		client := SetupClient(t, c, e, d)
-		_, err := client.ReadStrings(r)
-		assert.NotNil(t, err)
-	},
-	})
 	tests = append(tests, testCase{description: "ReadStrings(), with one row, and Close() error", test: func(t *testing.T) {
 		c := SetupMockConnection(t)
 		e := SetupMockEncryptor(t)
@@ -287,7 +263,6 @@ func TestQueryStrings(t *testing.T) {
 				*vk = testObject.Id
 			}
 		})
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Next().Return(false)
 		r.EXPECT().Close().Return(fmt.Errorf("error"))
 		client := SetupClient(t, c, e, d)
@@ -301,7 +276,6 @@ func TestQueryStrings(t *testing.T) {
 		d := SetupMockDecryptor(t)
 		r := SetupMockRows(t)
 		r.EXPECT().Next().Return(false)
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
 		items, err := client.ReadStrings(r)
@@ -334,7 +308,6 @@ func TestReadInt(t *testing.T) {
 			p := a[0].(*int)
 			*p = testResult
 		})
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Close().Return(nil)
 		client := SetupClient(t, c, e, d)
 		result, err := client.ReadInt(r)
@@ -355,22 +328,6 @@ func TestReadInt(t *testing.T) {
 		assert.NotNil(t, err)
 	},
 	})
-	tests = append(tests, testCase{description: "One row, Err() error", test: func(t *testing.T) {
-		c := SetupMockConnection(t)
-		e := SetupMockEncryptor(t)
-		d := SetupMockDecryptor(t)
-		r := SetupMockRows(t)
-		r.EXPECT().Next().Return(true)
-		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
-			a[0] = testResult
-		})
-		r.EXPECT().Err().Return(fmt.Errorf("error"))
-		r.EXPECT().Close().Return(nil)
-		client := SetupClient(t, c, e, d)
-		_, err := client.ReadInt(r)
-		assert.NotNil(t, err)
-	},
-	})
 	tests = append(tests, testCase{description: "One row, Close() error", test: func(t *testing.T) {
 		c := SetupMockConnection(t)
 		e := SetupMockEncryptor(t)
@@ -380,7 +337,6 @@ func TestReadInt(t *testing.T) {
 		r.EXPECT().Scan(gomock.Any()).Do(func(a ...any) {
 			a[0] = testResult
 		})
-		r.EXPECT().Err().Return(nil)
 		r.EXPECT().Close().Return(fmt.Errorf("error"))
 		client := SetupClient(t, c, e, d)
 		_, err := client.ReadInt(r)

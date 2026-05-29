@@ -283,13 +283,7 @@ func (c *client) ReadObjects(rows Rows, typ reflect.Type) ([]any, error) {
 		}
 		result = append(result, dest)
 	}
-	err := rows.Err()
-	if err != nil {
-		return nil, closeRowsOnError(rows, err)
-	}
-
-	err = rows.Close()
-	if err != nil {
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 
@@ -311,13 +305,7 @@ func (c *client) ReadStrings(rows Rows) ([]string, error) {
 
 		result = append(result, key)
 	}
-	err := rows.Err()
-	if err != nil {
-		return nil, closeRowsOnError(rows, err)
-	}
-
-	err = rows.Close()
-	if err != nil {
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 
@@ -341,13 +329,7 @@ func (c *client) ReadStringIntString(rows Rows) ([][]string, error) {
 
 		result = append(result, []string{val1, strconv.Itoa(val2), val3})
 	}
-	err := rows.Err()
-	if err != nil {
-		return nil, closeRowsOnError(rows, err)
-	}
-
-	err = rows.Close()
-	if err != nil {
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 
@@ -374,13 +356,7 @@ func (c *client) ReadStringsN(rows Rows, numColumns int) ([][]string, error) {
 		}
 		result = append(result, stringList)
 	}
-	err := rows.Err()
-	if err != nil {
-		return nil, closeRowsOnError(rows, err)
-	}
-
-	err = rows.Close()
-	if err != nil {
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 
@@ -402,13 +378,7 @@ func (c *client) ReadInt(rows Rows) (int, error) {
 		return 0, closeRowsOnError(rows, err)
 	}
 
-	err = rows.Err()
-	if err != nil {
-		return 0, closeRowsOnError(rows, err)
-	}
-
-	err = rows.Close()
-	if err != nil {
+	if err := rows.Close(); err != nil {
 		return 0, err
 	}
 

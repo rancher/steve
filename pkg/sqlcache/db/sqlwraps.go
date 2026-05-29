@@ -14,12 +14,25 @@ type Row interface {
 	Scan(dest ...any) error
 }
 
-// Rows represents sql rows. It exposes method to navigate the rows, read their outputs, and close them.
+// Rows represents sql rows. It exposes methods to navigate the rows, read
+// their outputs, and close them.
+//
+// Note: Err is intentionally not part of this interface. Iteration errors
+// must be retrieved via Close, which closes the rows and returns the first
+// iteration error (or any close error). Combining them eliminates a footgun
+// with sql.RawBytes targets in Scan: the database/sql Rows.closemu RLock
+// kept open across Scan(*RawBytes) returns is released by Close but not by
+// Err, so calling Err before Close can deadlock against a concurrent
+// Rows.awaitDone writer queued behind the scan-held RLock. See Go issue
+// 60304 and rancher/steve#1206 for the full story.
 type Rows interface {
 	Next() bool
-	Err() error
-	Close() error
 	Scan(dest ...any) error
+	// Close releases any resources held by the rows and returns the first
+	// error encountered during iteration. If iteration succeeded, returns
+	// any error from closing. Close must be called exactly once after the
+	// caller is done iterating.
+	Close() error
 }
 
 // Stmt is an interface over a subset of sql.Stmt methods
@@ -42,12 +55,20 @@ type rows struct {
 	queryString string
 }
 
-// Err wraps the original *sql.Rows's Err() with a QueryError
-func (r rows) Err() error {
+// Close closes the underlying *sql.Rows and returns the first error
+// encountered during iteration (wrapped in QueryError). If iteration
+// succeeded, returns any error from closing.
+//
+// Close is called before reading Err so that any closemu RLock held open
+// across a prior Scan(*sql.RawBytes) call is released first - calling Err
+// while that RLock is outstanding can deadlock if a concurrent
+// Rows.awaitDone has queued a writer Lock on the same mutex.
+func (r rows) Close() error {
+	closeErr := r.Rows.Close()
 	if err := r.Rows.Err(); err != nil {
 		return &QueryError{QueryString: r.queryString, Err: err}
 	}
-	return nil
+	return closeErr
 }
 
 // stmt implements the Stmt interface, wrapping a sql.Stmt and keeping track of the original query string
