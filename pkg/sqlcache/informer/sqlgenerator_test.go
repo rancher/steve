@@ -1331,10 +1331,6 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 						"toto": types.SummaryWithBreakdown{Total: 1},
 					},
 				},
-				types.SummaryEntry{
-					Property: "status.someotherfield",
-					Counts:   map[string]types.SummaryWithBreakdown{},
-				},
 			},
 		},
 		expectedContToken: "",
