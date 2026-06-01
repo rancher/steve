@@ -1108,6 +1108,69 @@ func TestNonNumberResourceVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedList.Items, list.Items)
 }
+func TestSummaryOnly(t *testing.T) {
+	ctx := context.Background()
+	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
+
+	field := &JSONPathField{Path: []string{"metadata", "somefield"}}
+	opts := ListOptionIndexerOptions{
+		Fields:       map[string]IndexedField{field.ColumnName(): field},
+		IsNamespaced: true,
+	}
+	loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
+	defer cleanTempFiles(dbPath)
+	assert.NoError(t, err)
+
+	foo := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "foo",
+			},
+			"id": "/foo",
+		},
+	}
+	foo.SetGroupVersionKind(gvk)
+	foo.SetResourceVersion("a")
+	foo2 := foo.DeepCopy()
+	foo2.SetResourceVersion("b")
+	foo2.SetLabels(map[string]string{
+		"hello": "world",
+	})
+	bar := &unstructured.Unstructured{
+		Object: map[string]any{
+			"metadata": map[string]any{
+				"name": "bar",
+			},
+			"id": "/bar",
+		},
+	}
+	bar.SetGroupVersionKind(gvk)
+	bar.SetResourceVersion("c")
+	err = loi.Add(foo)
+	assert.NoError(t, err)
+	err = loi.Update(foo2)
+	assert.NoError(t, err)
+	err = loi.Add(bar)
+	require.NoError(t, err)
+
+	listOptions := &sqltypes.ListOptions{
+		SummaryFieldList: [][]string{{"metadata", "name"}},
+		SummaryOnly:      true,
+	}
+	list, total, summary, _, err := loi.ListByOptions(ctx, listOptions, []partition.Partition{{All: true}}, "")
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+	assert.Len(t, list.Items, 0)
+	summaryItems := summary.SummaryItems
+	assert.Len(t, summaryItems, 1)
+	summaryEntry := summaryItems[0]
+	assert.Equal(t, "metadata.name", summaryEntry.Property)
+	counts := summaryEntry.Counts
+	require.NotNil(t, counts["bar"])
+	require.NotNil(t, counts["foo"])
+	assert.Equal(t, 1, counts["bar"].Total)
+	assert.Equal(t, 1, counts["foo"].Total)
+}
 
 // Test that we don't panic in case the transaction fails but stil manages to add a watcher
 func TestWatchCancel(t *testing.T) {

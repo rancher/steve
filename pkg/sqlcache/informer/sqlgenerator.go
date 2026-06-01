@@ -73,6 +73,8 @@ var (
 	ErrUnknownRevision = errors.New("unknown revision")
 )
 
+// Internal sql-generation methods on ListOptionIndexer in alphabetical order
+
 // buildORClause creates an SQLite compatible query that ORs conditions built from passed filters
 func (l *ListOptionIndexer) buildORClauseFromFilters(orFilters sqltypes.OrFilter, dbName string, mainFieldPrefix string, isSummaryFilter bool, joinTableIndexByLabelName map[string]int) (string, []any, error) {
 	var params []any
@@ -351,6 +353,13 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	}
 
 	// 4- Pagination: LIMIT clause (from lo.Pagination)
+
+	if !isSummaryFilter && len(lo.SummaryFieldList) > 0 && lo.SummaryOnly {
+		filterComponents.limitClause = fmt.Sprintf("\n  LIMIT 0")
+		filterComponents.limitParam = 0
+		filterComponents.isEmpty = false
+		return &filterComponents, nil
+	}
 	limit := lo.Pagination.PageSize
 	if limit > 0 {
 		filterComponents.limitClause = fmt.Sprintf("\n  LIMIT %d", limit)
