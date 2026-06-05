@@ -33,7 +33,7 @@ require (
 	github.com/rancher/dynamiclistener v0.8.2
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
 	github.com/rancher/lasso v0.2.7
-	github.com/rancher/norman v0.8.7
+	github.com/rancher/norman v0.8.8
 	github.com/rancher/remotedialer v0.6.1
 	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/sirupsen/logrus v1.9.4
@@ -145,7 +145,7 @@ require (
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
