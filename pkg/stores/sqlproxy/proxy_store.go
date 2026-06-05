@@ -1203,26 +1203,31 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 			s.cacheFactory.DoneWithCache(mgmtClusterInf)
 		})
 	} else if gvk == secretGVK {
-		mcioProjectSchema := types.APISchema{
-			Schema: &schemas.Schema{
-				Attributes: map[string]interface{}{
-					"group":      "management.cattle.io",
-					"version":    "v3",
-					"kind":       "Project",
-					"resource":   "projects",
-					"verbs":      []string{"get", "list", "watch"},
-					"namespaced": true,
+		// v1.secrets depend on management.cattle.io.projects.
+		// On clusters without the projects CRD — every downstream cluster —
+		// the reflector LIST returns 404 forever, WaitForCacheSync never
+		// returns, and every /v1/secrets request hangs.
+		if id := s.schemas.ByGVK(mcioProjectGvk); id != "" {
+			mcioProjectSchema := types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"group":      "management.cattle.io",
+						"version":    "v3",
+						"kind":       "Project",
+						"resource":   "projects",
+						"verbs":      []string{"get", "list", "watch"},
+						"namespaced": true,
+					},
 				},
-			},
+			}
+			mcioProjectInf, err := s.cacheFor(ctx, nil, &mcioProjectSchema)
+			if err != nil {
+				return nil, nil, err
+			}
+			doneCacheFns = append(doneCacheFns, func() {
+				s.cacheFactory.DoneWithCache(mcioProjectInf)
+			})
 		}
-		// v1.secrets depend on management.cattle.io.projects
-		mcioProjectInf, err := s.cacheFor(ctx, nil, &mcioProjectSchema)
-		if err != nil {
-			return nil, nil, err
-		}
-		doneCacheFns = append(doneCacheFns, func() {
-			s.cacheFactory.DoneWithCache(mcioProjectInf)
-		})
 	}
 
 	inf, err := s.cacheFor(ctx, apiOp, apiSchema)
