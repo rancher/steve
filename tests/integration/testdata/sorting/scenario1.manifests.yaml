@@ -2,6 +2,8 @@ apiVersion: fruits.cattle.io/v1
 kind: Banana
 metadata:
   name: yellow
+  labels:
+    animal: zebras
 color: "yellow"
 number: 11
 numberString: "11"
@@ -10,7 +12,9 @@ apiVersion: fruits.cattle.io/v1
 kind: Banana
 metadata:
   name: green
-color: "green"
+  labels:
+    animal: Fish
+color: "Green"
 number: 1
 numberString: "1"
 ---
@@ -18,6 +22,8 @@ apiVersion: fruits.cattle.io/v1
 kind: Banana
 metadata:
   name: black
+  labels:
+    animal: horses
 color: "black"
 number: 5
 numberString: "5"
