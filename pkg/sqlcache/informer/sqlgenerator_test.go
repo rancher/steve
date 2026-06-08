@@ -575,6 +575,10 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 						Fields: []string{"metadata", "somefield"},
 						Order:  sqltypes.DESC,
 					},
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.DESC,
+					},
 				},
 			},
 		},
@@ -592,6 +596,10 @@ func TestNewListOptionIndexerEasy(t *testing.T) {
 				SortDirectives: []sqltypes.Sort{
 					{
 						Fields: []string{"metadata", "unknown"},
+						Order:  sqltypes.DESC,
+					},
+					{
+						Fields: []string{"metadata", "name"},
 						Order:  sqltypes.DESC,
 					},
 				},
@@ -1314,7 +1322,7 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 					Property: "metadata.labels.cows",
 					Counts: map[string]types.SummaryWithBreakdown{
 						"milk": types.SummaryWithBreakdown{Total: 3},
-						"beef":   types.SummaryWithBreakdown{Total: 1},
+						"beef": types.SummaryWithBreakdown{Total: 1},
 					},
 				},
 				types.SummaryEntry{
@@ -1327,7 +1335,7 @@ func TestNewListOptionIndexerSummaryInfo(t *testing.T) {
 				types.SummaryEntry{
 					Property: "metadata.somefield",
 					Counts: map[string]types.SummaryWithBreakdown{
-						"bar":   types.SummaryWithBreakdown{Total: 3},
+						"bar":  types.SummaryWithBreakdown{Total: 3},
 						"toto": types.SummaryWithBreakdown{Total: 1},
 					},
 				},
@@ -1655,14 +1663,14 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		labelName:                 "testBSL1",
 		joinTableIndexByLabelName: map[string]int{"testBSL1": 3},
 		direction:                 true,
-		expectedStmt:              `lt3.value ASC NULLS LAST`,
+		expectedStmt:              `lt3.value COLLATE NOCASE ASC NULLS LAST`,
 	})
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit descending",
 		labelName:                 "testBSL2",
 		joinTableIndexByLabelName: map[string]int{"testBSL2": 4},
 		direction:                 false,
-		expectedStmt:              `lt4.value DESC NULLS FIRST`,
+		expectedStmt:              `lt4.value COLLATE NOCASE DESC NULLS FIRST`,
 	})
 	tests = append(tests, testCase{
 		description:               "TestBuildSortClause: hit descending",
@@ -1670,7 +1678,7 @@ func TestBuildSortLabelsClause(t *testing.T) {
 		joinTableIndexByLabelName: map[string]int{"testBSL3": 5},
 		direction:                 false,
 		sortAsIP:                  true,
-		expectedStmt:              `inet_aton(lt5.value) DESC NULLS FIRST`,
+		expectedStmt:              `inet_aton(lt5.value) COLLATE NOCASE DESC NULLS FIRST`,
 	})
 	t.Parallel()
 	for _, test := range tests {
@@ -1721,7 +1729,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (f."metadata.queryField1" IN (?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"somevalue"},
 		expectedErr:      nil,
 	})
@@ -1746,7 +1754,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (f."metadata.queryField1" NOT IN (?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"somevalue"},
 		expectedErr:      nil,
 	})
@@ -1781,7 +1789,7 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
     (nsf."metadata.name" IN (?)) OR (lt1.label = ? AND lt1.value IN (?))
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace"},
 		expectedErr:      nil,
 	})
@@ -1816,7 +1824,7 @@ func TestConstructQuery(t *testing.T) {
   LEFT OUTER JOIN "_v1_Namespace_labels" lt1 ON nsf.key = lt1.key
   WHERE
     (nsf."metadata.name" IN (?, ?)) OR (lt1.label = ? AND lt1.value IN (?, ?))
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example"},
 		expectedErr:      nil,
 	})
@@ -1850,7 +1858,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?)))
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"some_namespace", "field.cattle.io/projectId", "some_namespace", "field.cattle.io/projectId"},
 		expectedErr:      nil,
 	})
@@ -1884,7 +1892,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "_v1_Namespace_fields" nsf1 ON f1."metadata.namespace" = nsf1."metadata.name"
 		LEFT OUTER JOIN "_v1_Namespace_labels" lt1i1 ON nsf1.key = lt1i1.key
 		WHERE lt1i1.label = ?)))
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"some_namespace", "p-example", "field.cattle.io/projectId", "some_namespace", "p-example", "field.cattle.io/projectId"},
 		expectedErr:      nil,
 	})
@@ -1945,7 +1953,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelEqualFull", "somevalue"},
 		expectedErr:      nil,
 	})
@@ -1972,7 +1980,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -2001,7 +2009,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelNotEqualFull", "labelNotEqualFull", "somevalue"},
 		expectedErr:      nil,
 	})
@@ -2031,7 +2039,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelNotEqualPartial", "labelNotEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -2075,7 +2083,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt2i1 ON f1.key = lt2i1.key
 		WHERE lt2i1.label = ?)) OR (lt2.label = ? AND lt2.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"notEqual1", "notEqual1", "value1", "notEqual2", "notEqual2", "value2"},
 		expectedErr:      nil,
 	})
@@ -2101,7 +2109,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value IN (?, ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelIN", "somevalue1", "someValue2"},
 		expectedErr:      nil,
 	})
@@ -2130,7 +2138,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value NOT IN (?, ?))) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelNOTIN", "labelNOTIN", "somevalue1", "someValue2"},
 		expectedErr:      nil,
 	})
@@ -2157,7 +2165,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelEXISTS"},
 		expectedErr:      nil,
 	})
@@ -2186,7 +2194,7 @@ func TestConstructQuery(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelNOTEXISTS"},
 		expectedErr:      nil,
 	})
@@ -2212,7 +2220,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value < ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"numericThing", float64(5)},
 		expectedErr:      nil,
 	})
@@ -2238,7 +2246,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value > ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"numericThing", float64(35)},
 		expectedErr:      nil,
 	})
@@ -2263,7 +2271,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"nginx-happy"},
 		expectedErr:      nil,
 	})
@@ -2285,7 +2293,7 @@ func TestConstructQuery(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     FALSE
-  ORDER BY extractBarredValue(f."spec.containers.image", "16") ASC`,
+  ORDER BY extractBarredValue(f."spec.containers.image", "16") COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{},
 		expectedErr:      nil,
 	})
@@ -2319,7 +2327,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (extractBarredValue(f."spec.containers.image", "3") = ?) AND
     (FALSE)
-  ORDER BY extractBarredValue(f."spec.containers.image", "16") ASC`,
+  ORDER BY extractBarredValue(f."spec.containers.image", "16") COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"nginx-happy"},
 		expectedErr:      nil,
 	})
@@ -2352,7 +2360,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     ((lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') OR (f."metadata.queryField1" NOT LIKE ? ESCAPE '\')) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"junta", "%esther%", "%golgi%"},
 		expectedErr:      nil,
 	})
@@ -2401,7 +2409,7 @@ func TestConstructQuery(t *testing.T) {
     ((lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') OR (f."metadata.queryField1" != ?)) AND
     ((lt2.label = ? AND lt2.value IN (?, ?)) OR (f."metadata.queryField1" > ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"nectar", "%stash%", "landlady", "lawn", "reba", "coil", float64(2)},
 		expectedErr:      nil,
 	})
@@ -2438,7 +2446,7 @@ func TestConstructQuery(t *testing.T) {
   WHERE
     (lt1.label = ? AND lt1.value LIKE ? ESCAPE '\') AND
     (FALSE)
-  ORDER BY f."metadata.queryField1" ASC`,
+  ORDER BY f."metadata.queryField1" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"labelEqualPartial", "%somevalue%"},
 		expectedErr:      nil,
 	})
@@ -2466,7 +2474,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   LEFT OUTER JOIN lt1 ON f.key = lt1.key
   WHERE
     FALSE
-  ORDER BY lt1.value ASC NULLS LAST`,
+  ORDER BY lt1.value COLLATE NOCASE ASC NULLS LAST`,
 		expectedStmtArgs: []any{"unbound"},
 		expectedErr:      nil,
 	})
@@ -2516,7 +2524,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   WHERE
     ((f."metadata.queryField1" = ?) OR (lt2.label = ? AND lt2.value = ?)) AND
     (FALSE)
-  ORDER BY lt1.value ASC NULLS LAST, f."status.queryField2" DESC`,
+  ORDER BY lt1.value COLLATE NOCASE ASC NULLS LAST, f."status.queryField2" COLLATE NOCASE DESC`,
 		expectedStmtArgs: []any{"this", "toys", "jamb", "juice"},
 		expectedErr:      nil,
 	})
@@ -2544,7 +2552,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     FALSE
-  ORDER BY f."metadata.queryField1" ASC, inet_aton(f."status.podIP") ASC`,
+  ORDER BY f."metadata.queryField1" COLLATE NOCASE ASC, inet_aton(f."status.podIP") COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{},
 		expectedErr:      nil,
 	})
@@ -2576,7 +2584,7 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
   LEFT OUTER JOIN lt1 ON f.key = lt1.key
   WHERE
     FALSE
-  ORDER BY lt1.value ASC NULLS LAST, f."status.queryField2" DESC`,
+  ORDER BY lt1.value COLLATE NOCASE ASC NULLS LAST, f."status.queryField2" COLLATE NOCASE DESC`,
 		expectedStmtArgs: []any{"this"},
 		expectedErr:      nil,
 	})
@@ -2641,7 +2649,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
   WHERE
     (hasBarredValue(f."metadata.fields", ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"needle01"},
 	})
 	tests = append(tests, testCase{
@@ -2665,7 +2673,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
   WHERE
     (hasBarredValue(f."metadata.queryField1", ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"needle02"},
 	})
 	tests = append(tests, testCase{
@@ -2739,7 +2747,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
   WHERE
     (NOT hasBarredValue(f."metadata.fields", ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"needle01"},
 	})
 	tests = append(tests, testCase{
@@ -2763,7 +2771,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
   WHERE
     (NOT hasBarredValue(f."metadata.queryField1", ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"needle02"},
 	})
 	tests = append(tests, testCase{
@@ -2840,7 +2848,7 @@ func TestConstructQueryWithContainsOp(t *testing.T) {
 		LEFT OUTER JOIN "something_labels" lt1i1 ON f1.key = lt1i1.key
 		WHERE lt1i1.label = ?)) OR (lt1.label = ? AND lt1.value != ?)) AND
     (FALSE)
-  ORDER BY f."metadata.name" ASC`,
+  ORDER BY f."metadata.name" COLLATE NOCASE ASC`,
 		expectedStmtArgs: []any{"sewingSupplies", "sewingSupplies", "needle03"},
 	})
 	t.Parallel()
@@ -3378,7 +3386,7 @@ func TestSortPodsOnTimestamp(t *testing.T) {
   JOIN "something_fields" f ON o.key = f.key
   WHERE
     FALSE
-  ORDER BY adjustTimestampForSorting(f."metadata.fields[3]_1") ASC`,
+  ORDER BY adjustTimestampForSorting(f."metadata.fields[3]_1") COLLATE NOCASE ASC`,
 		expectedStmtArgs: []interface{}{},
 	})
 	t.Parallel()

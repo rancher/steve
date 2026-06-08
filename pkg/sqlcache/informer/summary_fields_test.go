@@ -289,7 +289,7 @@ SELECT 'metadata.labels.atlantic' AS p, COUNT(*) AS c, w1.finalField AS k FROM w
 )
 SELECT 'metadata.labels.pacific' AS p, COUNT(*) AS c, w1.finalField AS k FROM w1
 	WHERE k != ""
-	GROUP BY k`,//'
+	GROUP BY k`, //'
 		expectedStmtArgs: []any{"knot", "knot", "hitch", "%g%", "pacific"},
 		expectedErr:      "",
 	})
@@ -914,7 +914,7 @@ func TestConstructSummaryTestFilters(t *testing.T) {
 		expectedFilters: &filterComponentsT{
 			joinParts:       standardJoinParts,
 			whereClauses:    []string{"lt1.label = ? AND lt1.value = ?"},
-			orderByClauses:  []string{`f1."metadata.name" ASC`},
+			orderByClauses:  []string{`f1."metadata.name" COLLATE NOCASE ASC`},
 			params:          []any{"knot", "granny"},
 			limitClause:     "\n  LIMIT 8",
 			limitParam:      8,

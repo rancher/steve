@@ -341,13 +341,13 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 					if sortDirective.Order == sqltypes.DESC {
 						direction = "DESC"
 					}
-					filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("%s %s", fieldEntry, direction))
+					filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("%s COLLATE NOCASE %s", fieldEntry, direction))
 				}
 			}
 		} else if l.namespaced {
-			filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("%s.id ASC", mainFieldPrefix))
+			filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("%s.id COLLATE NOCASE ASC", mainFieldPrefix))
 		} else {
-			filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf(`%s."metadata.name" ASC`, mainFieldPrefix))
+			filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf(`%s."metadata.name" COLLATE NOCASE ASC`, mainFieldPrefix))
 		}
 		filterComponents.isEmpty = false
 	}
@@ -1088,7 +1088,7 @@ func buildSortLabelsClause(labelName string, joinTableIndexByLabelName map[strin
 		dir = "DESC"
 		nullsPosition = "FIRST"
 	}
-	return fmt.Sprintf("%s %s NULLS %s", fieldEntry, dir, nullsPosition), nil
+	return fmt.Sprintf("%s COLLATE NOCASE %s NULLS %s", fieldEntry, dir, nullsPosition), nil
 }
 
 func extractSubFields(fields string) []string {
