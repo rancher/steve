@@ -2247,3 +2247,39 @@ func TestPatch(t *testing.T) {
 		})
 	}
 }
+
+// TestPatchFallsBackToAPIOpNamespace verifies that PATCH against a namespaced
+// resource uses apiOp.Namespace when the body has none.
+func TestPatchFallsBackToAPIOpNamespace(t *testing.T) {
+	testClientFactory, err := client.NewFactory(&rest.Config{}, false)
+	assert.NoError(t, err)
+
+	fakeClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	var gotNamespace string
+	fakeClient.PrependReactor("patch", "*", func(action clientgotesting.Action) (bool, runtime.Object, error) {
+		gotNamespace = action.(clientgotesting.PatchAction).GetNamespace()
+		return true, &unstructured.Unstructured{}, nil
+	})
+
+	s := Store{clientGetter: &testFactory{Factory: testClientFactory, fakeClient: fakeClient}}
+
+	apiOp := &types.APIRequest{
+		Schema: &types.APISchema{Schema: &schemas.Schema{ID: "testing"}},
+		Request: &http.Request{
+			URL:    &url.URL{},
+			Method: http.MethodPatch,
+			Body:   io.NopCloser(strings.NewReader(`{}`)),
+			Header: http.Header{},
+		},
+		Method:    http.MethodPatch,
+		Namespace: "testing-ns",
+	}
+	schema := &types.APISchema{Schema: &schemas.Schema{
+		ID:         "testing",
+		Attributes: map[string]interface{}{"version": "v1", "kind": "Secret", "namespaced": true},
+	}}
+
+	_, _, err = s.Update(apiOp, schema, types.APIObject{}, "testing-secret")
+	assert.NoError(t, err)
+	assert.Equal(t, "testing-ns", gotNamespace)
+}

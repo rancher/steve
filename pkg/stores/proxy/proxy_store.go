@@ -468,9 +468,22 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, params 
 		input = params.Data()
 	)
 
-	ns := types.Namespace(input)
+	if input == nil {
+		input = data.Object{}
+	}
+
+	namespace := types.Namespace(input)
+	if attributes.Namespaced(schema) && namespace == "" {
+		if apiOp.Namespace == "" {
+			return nil, nil, apierror.NewAPIError(validation.InvalidBodyContent, errNamespaceRequired)
+		}
+
+		namespace = apiOp.Namespace
+		input.SetNested(namespace, "metadata", "namespace")
+	}
+
 	buffer := WarningBuffer{}
-	k8sClient, err := metricsStore.Wrap(s.clientGetter.Client(apiOp, schema, ns, &buffer))
+	k8sClient, err := metricsStore.Wrap(s.clientGetter.Client(apiOp, schema, namespace, &buffer))
 	if err != nil {
 		return nil, nil, err
 	}
