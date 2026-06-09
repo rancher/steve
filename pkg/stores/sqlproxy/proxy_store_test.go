@@ -277,6 +277,91 @@ func TestNewProxyStore(t *testing.T) {
 	}
 }
 
+func TestCacheForWithDepsSecretGatesProjectsByPresence(t *testing.T) {
+	secretSchema := &types.APISchema{
+		Schema: &schemas.Schema{
+			ID: "secret",
+			Attributes: map[string]interface{}{
+				"group":      "",
+				"version":    "v1",
+				"kind":       "Secret",
+				"resource":   "secrets",
+				"verbs":      []string{"get", "list", "watch"},
+				"namespaced": true,
+			},
+		},
+	}
+	apiOp := &types.APIRequest{}
+	identityTransform := func(o interface{}) (interface{}, error) { return o, nil }
+
+	newStore := func(t *testing.T) (*Store, *MockCacheFactory, *MockSchemaCollection, *MockClientGetter, *MockTransformBuilder, *MockResourceInterface) {
+		ctrl := gomock.NewController(t)
+		cf := NewMockCacheFactory(ctrl)
+		sc := NewMockSchemaCollection(ctrl)
+		cg := NewMockClientGetter(ctrl)
+		tb := NewMockTransformBuilder(ctrl)
+		ri := NewMockResourceInterface(ctrl)
+		s := &Store{
+			ctx:              context.Background(),
+			clientGetter:     cg,
+			cacheFactory:     cf,
+			transformBuilder: tb,
+			schemas:          sc,
+		}
+		return s, cf, sc, cg, tb, ri
+	}
+
+	t.Run("builds projects dep cache when project schema is registered (upstream cluster)", func(t *testing.T) {
+		s, cf, sc, cg, tb, ri := newStore(t)
+
+		secretCache := &factory.Cache{ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t))}
+		projectCache := &factory.Cache{ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t))}
+
+		sc.EXPECT().ByGVK(mcioProjectGvk).Return("management.cattle.io.project")
+
+		// project dep cache built first
+		cg.EXPECT().TableAdminClient(nil, gomock.Any(), "", gomock.Any()).Return(ri, nil)
+		tb.EXPECT().GetTransformFunc(mcioProjectGvk, gomock.Any(), false, nil).Return(identityTransform)
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), mcioProjectGvk, gomock.Any(), gomock.Any()).Return(projectCache, nil)
+
+		// main secret cache built second
+		cg.EXPECT().TableAdminClient(apiOp, secretSchema, "", gomock.Any()).Return(ri, nil)
+		tb.EXPECT().GetTransformFunc(secretGVK, gomock.Any(), false, nil).Return(identityTransform)
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), secretGVK, gomock.Any(), gomock.Any()).Return(secretCache, nil)
+
+		// both released on cleanup, in reverse order
+		cf.EXPECT().DoneWithCache(secretCache)
+		cf.EXPECT().DoneWithCache(projectCache)
+
+		inf, done, err := s.cacheForWithDeps(context.Background(), apiOp, secretSchema)
+		assert.NoError(t, err)
+		assert.Equal(t, secretCache, inf)
+		assert.NotNil(t, done)
+		done()
+	})
+
+	t.Run("skips projects dep cache when project schema is absent (downstream cluster)", func(t *testing.T) {
+		s, cf, sc, cg, tb, ri := newStore(t)
+
+		secretCache := &factory.Cache{ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t))}
+
+		sc.EXPECT().ByGVK(mcioProjectGvk).Return("")
+
+		// only the secret cache is built — gomock fails the test if any
+		// project-related cache call sneaks through.
+		cg.EXPECT().TableAdminClient(apiOp, secretSchema, "", gomock.Any()).Return(ri, nil)
+		tb.EXPECT().GetTransformFunc(secretGVK, gomock.Any(), false, nil).Return(identityTransform)
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), secretGVK, gomock.Any(), gomock.Any()).Return(secretCache, nil)
+		cf.EXPECT().DoneWithCache(secretCache)
+
+		inf, done, err := s.cacheForWithDeps(context.Background(), apiOp, secretSchema)
+		assert.NoError(t, err)
+		assert.Equal(t, secretCache, inf)
+		assert.NotNil(t, done)
+		done()
+	})
+}
+
 type testContextKey struct{}
 
 func setupContext(req *types.APIRequest) {
