@@ -12,3 +12,11 @@ tests:
   expected: [green, yellow, black]
 - query: sort=-numberString
   expected: [black, yellow, green]
+- query: sort=color
+  expected: [black, green, yellow]
+- query: sort=-color
+  expected: [yellow, green, black]
+- query: sort=metadata.labels.animal
+  expected: [green, black, yellow]
+- query: sort=-metadata.labels.animal
+  expected: [yellow, black, green]
