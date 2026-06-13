@@ -319,6 +319,16 @@ var (
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{secretProjectLabelDisplayDep, secretProjectLabelClusterDep},
 	}
 
+	mcioProjectExternalUpdates = sqltypes.ExternalGVKUpdates{
+		AffectedGVK:          mcioProjectGvk,
+		ExternalDependencies: nil,
+		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{
+			namespaceProjectLabelDep,
+			secretProjectLabelDisplayDep,
+			secretProjectLabelClusterDep,
+		},
+	}
+
 	// Now sort provisioned.cattle.io.clusters based on their associated mgmt.cattle.io spec values
 	// We might need to pull in the `memoryRaw` fields as well
 	// Remember to index these fields in the database.
@@ -354,7 +364,7 @@ var (
 	}
 
 	externalGVKDependencies = sqltypes.ExternalGVKDependency{
-		mcioProjectGvk: &namespaceUpdates,
+		mcioProjectGvk: &mcioProjectExternalUpdates,
 		pcioClusterGvk: &pcioClusterUpdates,
 		secretGVK:      &secretUpdates,
 	}
