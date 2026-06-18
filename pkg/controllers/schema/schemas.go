@@ -19,6 +19,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/discovery"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	apiv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
@@ -40,14 +41,15 @@ func (s SchemasHandlerFunc) OnSchemas(schemas *schema2.Collection) error {
 type handler struct {
 	sync.Mutex
 
-	ctx       context.Context
-	toSync    int32
-	schemas   *schema2.Collection
-	client    discovery.DiscoveryInterface
-	cols      *common.DynamicColumns
-	crdClient apiextcontrollerv1.CustomResourceDefinitionClient
-	ssar      authorizationv1client.SelfSubjectAccessReviewInterface
-	handler   SchemasHandlerFunc
+	ctx             context.Context
+	toSync          int32
+	schemas         *schema2.Collection
+	client          discovery.DiscoveryInterface
+	cols            *common.DynamicColumns
+	crdClient       apiextcontrollerv1.CustomResourceDefinitionClient
+	apiServiceCache v1.APIServiceCache
+	ssar            authorizationv1client.SelfSubjectAccessReviewInterface
+	handler         SchemasHandlerFunc
 }
 
 func Register(ctx context.Context,
@@ -60,13 +62,14 @@ func Register(ctx context.Context,
 	schemas *schema2.Collection) {
 
 	h := &handler{
-		ctx:       ctx,
-		cols:      cols,
-		client:    discovery,
-		schemas:   schemas,
-		handler:   schemasHandler,
-		crdClient: crd,
-		ssar:      ssar,
+		ctx:             ctx,
+		cols:            cols,
+		client:          discovery,
+		schemas:         schemas,
+		handler:         schemasHandler,
+		crdClient:       crd,
+		apiServiceCache: apiService.Cache(),
+		ssar:            ssar,
 	}
 
 	apiService.OnChange(ctx, "schema", h.OnChangeAPIService)
@@ -159,6 +162,12 @@ func (h *handler) refreshAll(ctx context.Context) error {
 	schemas, err := converter.ToSchemas(h.crdClient, h.client)
 	if err != nil {
 		return err
+	}
+
+	if apiServices, err := h.apiServiceCache.List(labels.Everything()); err != nil {
+		logrus.Warnf("failed to list APIServices for aggregation detection: %v", err)
+	} else {
+		converter.AddAPIServiceAggregation(apiServices, schemas)
 	}
 
 	filteredSchemas := map[string]*types.APISchema{}
