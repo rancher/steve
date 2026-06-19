@@ -76,10 +76,54 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0)
+		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, false, 0)
 		assert.Nil(t, err)
 		assert.NotNil(t, informer.ByOptionsLister)
 		assert.NotNil(t, informer.SharedIndexInformer)
+	}})
+	tests = append(tests, testCase{description: "NewInformer() with disableWatchList wraps the lister-watcher to disable watch-list", test: func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		dbClient := NewMockClient(ctrl)
+		txClient := NewMockTxClient(ctrl)
+		dynamicClient := NewMockResourceInterface(ctrl)
+		stmt := NewMockStmt(ctrl)
+		mockInformer := mockInformer{}
+		var capturedLW cache.ListerWatcher
+		newInformer = func(lw cache.ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+			capturedLW = lw
+			return &mockInformer
+		}
+		defer func() { newInformer = cache.NewSharedIndexInformer }()
+
+		field := &JSONPathField{Path: []string{"something"}}
+		fields := map[string]IndexedField{field.ColumnName(): field}
+		gvk := schema.GroupVersionKind{}
+
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(2)
+		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				assert.Nil(t, f(txClient))
+			})
+		dbClient.EXPECT().Prepare(gomock.Any()).Return(stmt, nil).AnyTimes()
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(3)
+		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				assert.Nil(t, f(txClient))
+			})
+		txClient.EXPECT().Exec(gomock.Any()).Return(nil, nil).Times(9)
+		dbClient.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				assert.Nil(t, f(txClient))
+			})
+
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, true, 0)
+		assert.Nil(t, err)
+
+		wrapped, ok := capturedLW.(*noWatchListListWatcher)
+		assert.True(t, ok, "expected lister-watcher to be wrapped in noWatchListListWatcher when disableWatchList is true")
+		if ok {
+			assert.True(t, wrapped.IsWatchListSemanticsUnSupported())
+		}
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewStore(), should return an error", test: func(t *testing.T) {
 		dbClient := NewMockClient(gomock.NewController(t))
@@ -101,7 +145,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, false, 0)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewIndexer(), should return an error", test: func(t *testing.T) {
@@ -138,7 +182,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, false, 0)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with errors returned from NewListOptionIndexer(), should return an error", test: func(t *testing.T) {
@@ -186,7 +230,7 @@ func TestNewInformer(t *testing.T) {
 				}
 			})
 
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, nil, gvk, dbClient, false, true, true, false, 0)
 		assert.NotNil(t, err)
 	}})
 	tests = append(tests, testCase{description: "NewInformer() with transform func", test: func(t *testing.T) {
@@ -245,7 +289,7 @@ func TestNewInformer(t *testing.T) {
 		transformFunc := func(input interface{}) (interface{}, error) {
 			return "someoutput", nil
 		}
-		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true, 0)
+		informer, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true, false, 0)
 		assert.Nil(t, err)
 		assert.NotNil(t, informer.ByOptionsLister)
 		assert.NotNil(t, informer.SharedIndexInformer)
@@ -282,7 +326,7 @@ func TestNewInformer(t *testing.T) {
 		transformFunc := func(input interface{}) (interface{}, error) {
 			return "someoutput", nil
 		}
-		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true, 0)
+		_, err := NewInformer(context.Background(), dynamicClient, fields, nil, nil, transformFunc, gvk, dbClient, false, true, true, false, 0)
 		assert.Error(t, err)
 		newInformer = cache.NewSharedIndexInformer
 	}})

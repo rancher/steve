@@ -501,7 +501,7 @@ func (i *IntegrationSuite) createCacheAndFactory(fields [][]string, transformFun
 		indexedFields[field.ColumnName()] = field
 	}
 
-	cache, err := cacheFactory.CacheFor(context.Background(), indexedFields, nil, nil, transformFunc, dynamicResource, configMapGVK, true, true)
+	cache, err := cacheFactory.CacheFor(context.Background(), indexedFields, nil, nil, transformFunc, dynamicResource, configMapGVK, true, true, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to make cache: %w", err)
 	}

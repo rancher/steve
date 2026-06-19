@@ -80,7 +80,7 @@ var newInformer = cache.NewSharedIndexInformer
 // NewInformer returns a new SQLite-backed Informer for the type specified by schema in unstructured.Unstructured form
 // using the specified client
 func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields map[string]IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool,
-	namespaced bool, watchable bool, gcKeepCount int) (*Informer, error) {
+	namespaced bool, watchable bool, disableWatchList bool, gcKeepCount int) (*Informer, error) {
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
 		return client.Watch(ctx, options)
 	}
@@ -128,9 +128,15 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields m
 	// We therefore just disable it right away.
 	resyncPeriod := time.Duration(0)
 
+	// When requested (non-whitelisted aggregated API), disable watch-list so the reflector falls back to LIST+WATCH.
+	var lw cache.ListerWatcher = listWatcher
+	if disableWatchList {
+		lw = &noWatchListListWatcher{ListWatch: listWatcher}
+	}
+
 	// In non-test mode `newInformer` is cache.NewSharedIndexInformer
 	// defined in k8s.io/client-go/tools/cache/shared_informer.go : func NewSharedIndexInformer(lw ...
-	sii := newInformer(listWatcher, example, resyncPeriod, cache.Indexers{})
+	sii := newInformer(lw, example, resyncPeriod, cache.Indexers{})
 	if transform != nil {
 		if err := sii.SetTransform(transform); err != nil {
 			return nil, err
@@ -199,4 +205,13 @@ func SetSyntheticWatchableInterval(interval time.Duration) {
 
 func informerNameFromGVK(gvk schema.GroupVersionKind) string {
 	return gvk.Group + "_" + gvk.Version + "_" + gvk.Kind
+}
+
+// noWatchListListWatcher wraps a ListWatch so its reflector disables watch-list (via IsWatchListSemanticsUnSupported) and falls back to LIST+WATCH.
+type noWatchListListWatcher struct {
+	*cache.ListWatch
+}
+
+func (n *noWatchListListWatcher) IsWatchListSemanticsUnSupported() bool {
+	return true
 }

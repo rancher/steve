@@ -227,3 +227,15 @@ func CRDJSONPathParsers(s *types.APISchema) map[string]*jsonpath.JSONPath {
 
 	return result
 }
+
+// Aggregated reports whether the schema's resource is served by an aggregated (extension) API server rather than by kube-apiserver.
+func Aggregated(s *types.APISchema) bool {
+	if s == nil {
+		return false
+	}
+	return convert.ToBool(s.Attributes["aggregated"])
+}
+
+func SetAggregated(s *types.APISchema, value bool) {
+	setVal(s, "aggregated", value)
+}

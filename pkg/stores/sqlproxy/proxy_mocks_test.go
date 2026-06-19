@@ -285,18 +285,18 @@ func (m *MockCacheFactory) EXPECT() *MockCacheFactoryMockRecorder {
 }
 
 // CacheFor mocks base method.
-func (m *MockCacheFactory) CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced, watchable bool) (*factory.Cache, error) {
+func (m *MockCacheFactory) CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced, watchable, disableWatchList bool) (*factory.Cache, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CacheFor", ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
+	ret := m.ctrl.Call(m, "CacheFor", ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable, disableWatchList)
 	ret0, _ := ret[0].(*factory.Cache)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CacheFor indicates an expected call of CacheFor.
-func (mr *MockCacheFactoryMockRecorder) CacheFor(ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable any) *gomock.Call {
+func (mr *MockCacheFactoryMockRecorder) CacheFor(ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable, disableWatchList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheFor", reflect.TypeOf((*MockCacheFactory)(nil).CacheFor), ctx, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable, disableWatchList)
 }
 
 // DoneWithCache mocks base method.
