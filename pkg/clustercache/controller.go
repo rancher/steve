@@ -126,7 +126,6 @@ func (h *clusterCache) addResourceEventHandler(gvk schema2.GroupVersionKind, inf
 
 func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 	h.Lock()
-	defer h.Unlock()
 
 	var (
 		gvks   = map[schema2.GroupVersionKind]bool{}
@@ -175,6 +174,7 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 			delete(h.watchers, gvk)
 		}
 	}
+	h.Unlock()
 
 	for _, w := range toWait {
 		ctx, cancel := context.WithTimeout(w.ctx, 15*time.Minute)
@@ -182,7 +182,11 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 			logrus.Errorf("failed to sync cache for %v", w.gvk)
 			cancel()
 			w.cancel()
-			delete(h.watchers, w.gvk)
+			h.Lock()
+			if h.watchers[w.gvk] == w {
+				delete(h.watchers, w.gvk)
+			}
+			h.Unlock()
 		}
 		cancel()
 	}
