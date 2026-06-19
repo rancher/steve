@@ -8,7 +8,10 @@ import (
 )
 
 // Whitelist holds aggregated (external) GVKs known to implement watch-list correctly, which may therefore keep watch-list enabled.
-var Whitelist = map[schema.GroupVersionKind]bool{}
+var Whitelist = map[schema.GroupVersionKind]bool{
+	{Group: "ext.cattle.io", Version: "v1", Kind: "Token"}:      true,
+	{Group: "ext.cattle.io", Version: "v1", Kind: "Kubeconfig"}: true,
+}
 
 // Disabled reports whether watch-list should be disabled for the schema's informer: true only for aggregated, non-whitelisted APIs (nil and built-in stay enabled, failing safe).
 func Disabled(s *types.APISchema) bool {
