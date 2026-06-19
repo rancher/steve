@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/watchlist"
 	"github.com/rancher/wrangler/v3/pkg/merr"
 	"github.com/rancher/wrangler/v3/pkg/summary/client"
 	"github.com/rancher/wrangler/v3/pkg/summary/informer"
@@ -150,7 +151,12 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 		opts := &client.Options{
 			Schema: schema.Schema,
 		}
-		summaryInformer := informer.NewFilteredSummaryInformerWithOptions(h.summaryClient, gvr, opts, metav1.NamespaceAll, 2*time.Hour,
+		summaryClient := h.summaryClient
+		if watchlist.Disabled(schema) {
+			// Non-whitelisted aggregated API: disable watch-list (fall back to LIST+WATCH).
+			summaryClient = &noWatchListClient{ExtendedInterface: h.summaryClient}
+		}
+		summaryInformer := informer.NewFilteredSummaryInformerWithOptions(summaryClient, gvr, opts, metav1.NamespaceAll, 2*time.Hour,
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, nil)
 		ctx, cancel := context.WithCancel(h.ctx)
 		w := &watcher{
@@ -299,4 +305,13 @@ func callAll(handlers []interface{}, gvr schema2.GroupVersionKind, key string, o
 	}
 
 	return obj, merr.NewErrors(errs...)
+}
+
+// noWatchListClient wraps a summary client so its informer disables watch-list (via IsWatchListSemanticsUnSupported) and falls back to LIST+WATCH.
+type noWatchListClient struct {
+	client.ExtendedInterface
+}
+
+func (n *noWatchListClient) IsWatchListSemanticsUnSupported() bool {
+	return true
 }
