@@ -12,7 +12,7 @@ import (
 type Config struct {
 	Debug              bool
 	DebugLevel         int
-	SqlCacheDeprecated bool
+	SQLCacheDeprecated bool
 }
 
 func (c *Config) MustSetupDebug() {
@@ -56,7 +56,7 @@ func Flags(config *Config) []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:        "sql-cache",
-			Destination: &config.SqlCacheDeprecated,
+			Destination: &config.SQLCacheDeprecated,
 		},
 	}
 }
