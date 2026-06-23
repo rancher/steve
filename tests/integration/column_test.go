@@ -25,7 +25,6 @@ var (
 func (i *IntegrationSuite) TestListColumns() {
 	ctx := i.T().Context()
 	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,

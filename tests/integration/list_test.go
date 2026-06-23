@@ -56,18 +56,10 @@ func (i *IntegrationSuite) TestList() {
 	})
 	// Cleanup common manifests after all tests complete
 	defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
-
-	// Run SQL mode first, then non-SQL mode sequentially
-	i.Run("SQL", func() {
-		i.runListTest(ctx, true, gvrs)
-	})
-	i.Run("NonSQL", func() {
-		i.runListTest(ctx, false, gvrs)
-	})
+	i.runListTest(ctx, gvrs)
 }
 
-func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
-
+func (i *IntegrationSuite) runListTest(ctx context.Context, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 	// Custom authenticator: use impersonation if header present, otherwise admin
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
 		info, ok, err := auth.Impersonation(req)
@@ -79,23 +71,13 @@ func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs 
 	}
 	authMiddleware := auth.ToMiddleware(auth.AuthenticatorFunc(impersonateOrAdmin))
 
-	var steveHandler http.Handler
-	var err error
-	if sqlCache {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache: true,
-			SQLCacheFactoryOptions: factory.CacheFactoryOptions{
-				GCInterval:  15 * time.Minute,
-				GCKeepCount: 1000,
-			},
-			AuthMiddleware: authMiddleware,
-		})
-	} else {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache:       false,
-			AuthMiddleware: authMiddleware,
-		})
-	}
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+		},
+		AuthMiddleware: authMiddleware,
+	})
 	i.Require().NoError(err)
 
 	httpServer := httptest.NewServer(steveHandler)
@@ -140,7 +122,7 @@ func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs 
 				defer i.doManifestReversed(ctx, scenarioManifestsFile, i.doDelete)
 			}
 
-			i.testListScenario(ctx, config, baseURL, sqlCache, csvWriter)
+			i.testListScenario(ctx, config, baseURL, csvWriter)
 		})
 	}
 }
@@ -156,36 +138,10 @@ func (i *IntegrationSuite) readListTestConfig(testFile string) ListTestConfig {
 	return config
 }
 
-func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTestConfig, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
-	// Track continue token and revision across tests in this scenario
-	var lastContinueToken string
-	var lastRevision string
-
+func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTestConfig, baseURL string, csvWriter *csv.Writer) {
 	for _, test := range config.Tests {
-		// Skip tests restricted to specific cache modes
-		currentMode := "sql"
-		if !sqlCache {
-			currentMode = "nonsql"
-		}
-		if test.RunOn != "" && test.RunOn != currentMode {
-			continue
-		}
-
 		i.Run(test.Description, func() {
 			query := test.Query
-
-			// Replace nondeterministic placeholders with actual values from previous responses
-			if strings.Contains(query, "nondeterministictoken") {
-				query = strings.Replace(query, "nondeterministictoken", lastContinueToken, 1)
-			}
-			if strings.Contains(query, "nondeterministicint") {
-				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
-			}
-
-			// Convert labelSelector/fieldSelector to filter format for SQL mode
-			if sqlCache {
-				query = convertQueryForSQLCache(query)
-			}
 			url := buildURLRaw(baseURL, config.SchemaID, test.Namespace, query)
 			fmt.Println(url)
 
@@ -215,14 +171,6 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTest
 			var parsed Response
 			err = json.Unmarshal(bodyBytes, &parsed)
 			i.Require().NoError(err)
-
-			// Store continue token and revision for subsequent tests
-			if parsed.Continue != "" {
-				lastContinueToken = parsed.Continue
-			}
-			if parsed.Revision != "" {
-				lastRevision = parsed.Revision
-			}
 
 			// Save JSON response if csvWriter is provided
 			if csvWriter != nil {
@@ -256,43 +204,6 @@ func buildURLRaw(baseURL, schemaID, namespace, query string) string {
 		url += "?" + query
 	}
 	return url
-}
-
-// convertQueryForSQLCache converts labelSelector and fieldSelector params to filter format
-// This mirrors the logic in steve_api_test.go#L2661-L2681
-func convertQueryForSQLCache(query string) string {
-	parts := strings.Split(query, "&")
-	changed := false
-
-	for j, part := range parts {
-		if strings.HasPrefix(part, "labelSelector=") {
-			// labelSelector=test-label=2 -> filter=metadata.labels[test-label]=2
-			rest := strings.TrimPrefix(part, "labelSelector=")
-			eqIdx := strings.Index(rest, "=")
-			if eqIdx > 0 {
-				labelName := rest[:eqIdx]
-				labelValue := rest[eqIdx+1:]
-				parts[j] = fmt.Sprintf("filter=metadata.labels[%s]=%s", labelName, labelValue)
-				changed = true
-			}
-		} else if strings.HasPrefix(part, "fieldSelector=") {
-			// fieldSelector=metadata.namespace=test-ns-1 -> filter=metadata.namespace=test-ns-1
-			// fieldSelector=metadata.name=test1 -> filter=metadata.name=test1
-			rest := strings.TrimPrefix(part, "fieldSelector=")
-			eqIdx := strings.Index(rest, "=")
-			if eqIdx > 0 {
-				field := rest[:eqIdx]
-				value := rest[eqIdx+1:]
-				parts[j] = fmt.Sprintf("filter=%s=%s", field, value)
-				changed = true
-			}
-		}
-	}
-
-	if changed {
-		return strings.Join(parts, "&")
-	}
-	return query
 }
 
 type responseItem struct {

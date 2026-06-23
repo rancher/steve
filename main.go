@@ -38,7 +38,10 @@ func main() {
 func run(_ *cli.Context) error {
 	ctx := signals.SetupSignalContext()
 	debugconfig.MustSetupDebug()
-	s, err := config.ToServer(ctx, debugconfig.SQLCache)
+	if debugconfig.SqlCacheDeprecated {
+		logrus.Warn("--sql-cache is no longer needed and is always on")
+	}
+	s, err := config.ToServer(ctx)
 	if err != nil {
 		return err
 	}

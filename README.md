@@ -54,12 +54,7 @@ POST /v1/catalog.cattle.io.clusterrepos/rancher-partner-charts?action=install
 ### List-specific query parameters
 
 List requests (`/v1/{type}` and `/v1/{type}/{namespace}`) have additional
-parameters for filtering, sorting and pagination.
-
-Note that the exact meaning and behavior of those parameters may vary if
-Steve is used with SQLite caching of resources, which is configured when
-calling `server.New` via the `server.Options.SQLCache` boolean option.
-Meaning and behavior are the same unless otherwise specified.
+parameters for filtering, sorting, and pagination.
 
 Note that, if SQLite caching of resources is enabled, some of the data
 can be stored in disk, in either encrypted or plain text forms based on:
@@ -69,41 +64,19 @@ all resources are encrypted
  - regardless of the setting's value, any filterable/sortable columns are stored
 in plain text (see `filter` below for the exact list)
 
-#### `limit`
+#### `page`
 
-**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
-set the maximum number of results to retrieve from Kubernetes. The limit is
-passed on as a parameter to the Kubernetes request. The purpose of setting this
-limit is to prevent a huge response from overwhelming Steve and Rancher. For
-more information about setting limits, review the Kubernetes documentation on
-[retrieving results in
-chunks](https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks).
+Sets the "page" of results to return where there are more than can be returned in a single request.
+The first page is `1`, not `0`.
 
-The limit controls the size of the set coming from Kubernetes, and then
-filtering, sorting, and pagination are applied on that set. Because of this, if
-the result set is partial, there is no guarantee that the result returned to
-the client is fully sorted across the entire list, only across the returned
-chunk.
+#### `pagesize`
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-set the maximum number of results to return from the SQLite cache.
+Sets the maximum number of results to return from the SQLite cache.
 
-If both this parameter and `pagesize` are set, the smallest is taken.
-
-**In both cases**,
-the returned response will include a `continue` token, which indicates that the
-result is partial and must be used in the subsequent request to retrieve the
-next chunk.
-
-The default limit is 100000. To override the default, set `limit=-1`.
-
-#### `continue`
-
-Continue retrieving the next chunk of a partial list. The continue token is
-included in the response of a limited list and indicates that the result is
-partial. This token can then be used as a query parameter to retrieve the next
-chunk. All chunks have been retrieved when the continue field in the response
-is empty.
+If the returned response includes a `continue` token, this indicates that more results are available.
+Clients will need to determine the `page` field of the subsequent
+request to get the next page of data, but this will usually be the increment of
+the current `page` field, or `1` if no `page` field is given.
 
 #### `filter`
 
@@ -221,20 +194,11 @@ Filters can be negated to exclude results:
 /v1/{type}?filter=metadata.name!=foo
 ```
 
-**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
-arrays are searched for matching items. If any item in the array matches, the
-item is included in the list.
-
-```
-/v1/{type}?filter=spec.containers.image=alpine
-```
-
-When SQLite caching is enabled, multiple values are stored separated by "or-bars" (`|`),
+Multiple values are stored separated by "or-bars" (`|`),
 like `abc|def|ghi`. You'll need to use the partial-match operator `~` to match one member,
 like `/v1/{type}?filter=spec.containers.image ~ ghi`.
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-filtering is only supported for a subset of attributes:
+**Filtering is only supported for a subset of attributes:
 - `id`, `metadata.name`, `metadata.namespace`, `metadata.state.name`, and `metadata.timestamp` for any resource kind
 - a short list of hardcoded attributes for a selection of specific types listed
 in [typeSpecificIndexFields](https://github.com/rancher/steve/blob/main/pkg/stores/sqlproxy/proxy_store.go#L52-L58)
@@ -313,8 +277,7 @@ Normal sort by namespace, then by name, reverse sort by creation time:
 /v1/{type}?sort=metadata.namespace,metadata.name,-metadata.creationTimestamp
 ```
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-sorting is only supported for the set of attributes supported by
+**Sorting is only supported for the set of attributes supported by
 filtering (see above).
 
 Sorting by labels (also requires SQLite caching) can use complex label names.
@@ -342,23 +305,11 @@ Pages are one-indexed, so this is equivalent to
 /v1/{type}?pagesize=10&page=1
 ```
 
-**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
-to retrieve subsequent pages, the page number and the list revision number must
-be included in the request. This ensures the page will be retrieved from the
-cache, rather than making a new request to Kubernetes. If the revision number
-is omitted, a new fetch is performed in order to get the latest revision. The
-revision is included in the list response.
-
-```
-/v1/{type}?pagesize=10&page=2&revision=107440
-```
-
 `page` and `pagesize` can be used alongside the `limit` and `continue`
 parameters supported by Kubernetes. `limit` and `continue` are typically used
 for server-side chunking and do not guarantee results in any order.
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-to retrieve subsequent pages, only the page number is necessary, and it
+**To retrieve subsequent pages, only the page number is necessary, and it
 will always return the latest version.
 ```
 /v1/{type}?pagesize=10&page=2
@@ -369,7 +320,7 @@ If both `pagesize` and `limit` are set, the smallest is taken.
 If both `page` and `continue` are set, the result is the `page`-th page
 after the last result specified by `continue`.
 
-**If SQLCache is enabled and `revision` is passed:**
+**If `revision` is passed:**
 `revision` sets a minimum numerical value for resourceVersion in a LIST request. If the server's cached resourceVersion for that GVK is older than the revision provided, an "unknown revision" error is returned. 
 
 **In both cases**,
