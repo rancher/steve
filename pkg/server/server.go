@@ -199,24 +199,10 @@ func setup(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, server.cacheFactory, false)
+	sqlStore, store, err := NewWrappedProxyStore(ctx, server.cacheFactory, cols, cf, summaryCache, sf, asl, false)
 	if err != nil {
 		return err
 	}
-
-	errStore := proxy.NewErrorStore(
-		proxy.NewUnformatterStore(
-			proxy.NewWatchRefresh(
-				sqlpartition.NewStore(
-					sqlStore,
-					asl,
-				),
-				asl,
-			),
-		),
-	)
-	store := metricsStore.NewMetricsStore(errStore)
-	// end store setup code
 
 	for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
 		sf.AddTemplate(template)
@@ -271,6 +257,27 @@ func setup(ctx context.Context, server *Server) error {
 	server.SchemaFactory = sf
 
 	return nil
+}
+
+func NewWrappedProxyStore(ctx context.Context, cacheFactory *factory.CacheFactory, cols *common.DynamicColumns, cf *client.Factory, summaryCache *summarycache.SummaryCache, sf *schema.Collection, asl accesscontrol.AccessSetLookup, needToInitNamespaceCache bool) (*sqlproxy.Store, *metricsStore.Store, error) {
+	sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, cacheFactory, needToInitNamespaceCache)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	errStore := proxy.NewErrorStore(
+		proxy.NewUnformatterStore(
+			proxy.NewWatchRefresh(
+				sqlpartition.NewStore(
+					sqlStore,
+					asl,
+				),
+				asl,
+			),
+		),
+	)
+	store := metricsStore.NewMetricsStore(errStore)
+	return sqlStore, store, nil
 }
 
 func (c *Server) start(ctx context.Context) error {

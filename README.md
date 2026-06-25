@@ -56,8 +56,8 @@ POST /v1/catalog.cattle.io.clusterrepos/rancher-partner-charts?action=install
 List requests (`/v1/{type}` and `/v1/{type}/{namespace}`) have additional
 parameters for filtering, sorting, and pagination.
 
-Note that, if SQLite caching of resources is enabled, some of the data
-can be stored in disk, in either encrypted or plain text forms based on:
+Note that the SQLite database caches Kubernetes resources. The data
+is stored in disk, in either encrypted or plain text forms based on:
  - by default, Secrets and Rancher Tokens (`management.cattle.io/v3, Kind=Token`) are always encrypted
  - if the environment variable `CATTLE_ENCRYPT_CACHE_ALL` is set to "true",
 all resources are encrypted
@@ -90,25 +90,11 @@ Example, filtering by object name:
 /v1/{type}?filter=metadata.name=foo
 ```
 
-When SQLite caching is not enabled, matching works this way:
-
-If a target value is surrounded by single-quotes, it succeeds only on an exact match:
-
 Example, filtering by object name:
 
 ```
 /v1/{type}?filter=metadata.name='match-this-exactly'
 ```
-
-A target value can be delimited by double-quotes, but this will succeed on a partial match:
-
-Example, filtering by object name:
-
-```
-/v1/{type}?filter=metadata.name="can-be-a-substri"
-```
-
-When SQLite caching is enabled, equality is slightly different from non-sql-supported matching.
 Equality can be specified with either one or two '=' signs.
 
 The following matches objects called either 'cat' or 'cows':
@@ -175,7 +161,7 @@ filter=metadata.name="oxford,metadata.labels.comma"
 Without the quotes, the expression would be finding either objects called `oxford`,
 or that have the label "comma", which is very different from objects called `oxford,metadata.labels.comma`.
 
-One filter can list multiple possible fields to match, these are ORed together:
+One filter can list multiple possible fields to match; these are ORed together:
 
 ```
 /v1/{type}?filter=metadata.name=foo,metadata.namespace=foo
@@ -227,7 +213,7 @@ Filtering by a single project or a single namespace:
 /v1/{type}?projectsornamespaces=p1
 ```
 
-Filtering by multiple projects or namespaces is done with a comma separated
+Filtering by multiple projects or namespaces is done with a comma-separated
 list. A resource matching any project or namespace in the list is included in
 the result:
 
@@ -245,13 +231,13 @@ The list can be negated to exclude results:
 
 Results can be sorted lexicographically by any number of columns given in descending order of importance.
 
-Sorting by only a single column, for example name:
+Sorting by only a single column, for example by `name`:
 
 ```
 /v1/{type}?sort=metadata.name
 ```
 
-Reverse sorting by name:
+Reverse sorting by `name`:
 
 ```
 /v1/{type}?sort=-metadata.name
@@ -280,7 +266,7 @@ Normal sort by namespace, then by name, reverse sort by creation time:
 **Sorting is only supported for the set of attributes supported by
 filtering (see above).
 
-Sorting by labels (also requires SQLite caching) can use complex label names.
+Sorting by labels can use complex label names.
 This query sorts by app name within their architectures, with the architectures
 listed in reverse lexicographic order. Note that complex label names need to be
 surrounded by square brackets (which themselves need to be percent-escaped for some web queries)
@@ -434,7 +420,7 @@ use Kubernetes as its data store.
 Steve uses apiserver Stores to transform and store data, mainly in Kubernetes.
 The main mechanism it uses is the proxy store, which is actually a series of
 four nested stores and a "partitioner". It can be instantiated by calling
-[NewProxyStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#NewProxyStore).
+[NewWrappedProxyStore](https://pkg.go.dev/github.com/rancher/steve/pkg/server#NewWrappedProxyStore).
 This gives you:
 
 * [`proxy.errorStore`](https://github.com/rancher/steve/blob/master/pkg/stores/proxy/error_wrapper.go) -
@@ -442,16 +428,15 @@ This gives you:
 * [`proxy.WatchRefresh`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#WatchRefresh) -
   wraps the nested store's Watch method, canceling the watch if access to the
   watched resource changes
-* [`partition.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#Store) -
+* [`partition.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition#Store) -
   wraps the nested store's List method and parallelizes the request according
   to the given partitioner, and additionally implements filtering, sorting, and
   pagination on the unstructured data from the nested store
 * [`proxy.rbacPartitioner`](https://github.com/rancher/steve/blob/master/pkg/stores/proxy/rbac_store.go) -
   the partitioner fed to the `partition.Store` which allows it to parallelize
   requests based on the user's access to certain namespaces or resources
-* [`proxy.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#Store) -
-  the Kubernetes proxy store which performs the actual connection to Kubernetes
-  for all operations
+* [`proxy.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlproxy#Store) -
+  the SQLite cache that stores the underlying Kubernetes data for all operations
 
 The default schema additionally wraps this proxy store in
 [`metrics.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/metrics#Store),
@@ -800,18 +785,18 @@ friendly way.
 
 This feature relies on the concept of [stores](#stores) and the RBAC
 partitioner. The [proxy
-store](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#Store)
-provides raw access to Kubernetes and returns data as an
+store](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlproxy#Store)
+provides cached access to Kubernetes and returns data as an
 [unstructured.UnstructuredList](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#UnstructuredList).
 The
-[partitioner](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#Partitioner)
+[partitioner](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition#Partitioner)
 calls the
 proxy store in parallel for each segment of resources the user has access to,
 such as for each namespace. The partitioner feeds the results of each parallelized
 request into a stream of
 [unstructured.Unstructured](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured).
 From here, the list is passed to the
-[listprocessor](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition/listprocessor)
+[listprocessor](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor)
 to filter, sort, and paginate the list. The partition store formats the list as
 a
 [types.APIObjectList](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types#APIObjectList)
@@ -822,7 +807,7 @@ Most stores in steve are implementations of the apiserver
 interface, which returns apiserver
 [types](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types). The
 partitioner implements its own store type called
-[UnstructuredStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#UnstructuredStore)
+[UnstructuredStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition#UnstructuredStore)
 which returns
 [unstructured.Unstructured](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured)
 objects. The reason for this is that the filtering and sorting functions in the
@@ -842,14 +827,14 @@ The unit tests for these API features are located in two places:
 
 ##### listprocessor unit tests
 
-[pkg/stores/partition/listprocessor/processor_test.go](./pkg/stores/partition/listprocessor/processor_test.go)
+[pkg/stores/sqlpartition/listprocessor/processor_test.go](./pkg/stores/sqlpartition/listprocessor/processor_test.go)
 contains tests for each individual query handler. All changes to
-[listprocessor](./pkg/stores/partition/listprocessor/) should include a unit
+[listprocessor](./pkg/stores/sqlpartition/listprocessor/) should include a unit
 test in this file.
 
 ##### partition store unit tests
 
-[pkg/stores/partition/store_test.go](./pkg/stores/partition/store_test.go)
+[pkg/stores/sqlpartition/store_test.go](./pkg/stores/sqlpartition/store_test.go)
 contains tests for the `List` operation of the partition store. This is
 especially important for testing the functionality for multiple partitions. It
 also tests all supported query parameters, not limited to the
@@ -858,7 +843,7 @@ should be added here when:
 
   - the change is related to partitioning
   - the change is related to parsing the query parameters
-  - the change is related to the `limit` or `continue` parameters
+  - the change is related to the `page` or `continue` parameters
   - the listprocessor change should be tested with other query parameters
 
 It doesn't hurt to add a test here for any other listprocessor change.
