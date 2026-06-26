@@ -90,6 +90,9 @@ type Store struct {
 }
 
 // NewProxyStore returns a wrapped types.Store.
+// This is called from
+// rancher/rancher/pkg/api/steve/projects/projects.go:newSchemas()
+// Not sure the project-specific server in r/r can use the sqlite cache
 func NewProxyStore(clientGetter ClientGetter, notifier RelationshipNotifier, lookup accesscontrol.AccessSetLookup, namespaceCache corecontrollers.NamespaceCache) types.Store {
 	return &ErrorStore{
 		Store: &unformatterStore{
