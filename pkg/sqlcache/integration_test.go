@@ -1378,6 +1378,96 @@ func (i *IntegrationSuite) TestSecretProjectDependencies() {
 	}
 }
 
+// TestSecretProjectDependencyPropagation verifies that creating a Project after
+// the secret cache already exists propagates the project's fields into the
+// project-scoped secret rows that reference it.
+func (i *IntegrationSuite) TestSecretProjectDependencyPropagation() {
+	ctx, cancel := context.WithCancel(i.T().Context())
+	defer cancel()
+	requireT := i.Require()
+	labelTest := "SecretProjectDependencyPropagation"
+
+	cols, ccache, ctrl, sf, proxyStore, err := i.setupTest(ctx)
+	requireT.NoError(err)
+	requireT.NotNil(proxyStore)
+
+	mcioGVR := k8sschema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "projects",
+	}
+
+	sqlSchemaTracker := schematracker.NewSchemaTracker(ResetFunc(func(gvk k8sschema.GroupVersionKind) error {
+		proxyStore.Reset(gvk)
+		return nil
+	}))
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
+		retErr = errors.Join(retErr, ccache.OnSchemas(schemas))
+		retErr = errors.Join(retErr, sqlSchemaTracker.OnSchemas(schemas))
+		return retErr
+	}
+	schemacontroller.Register(ctx,
+		cols,
+		ctrl.K8s.Discovery(),
+		ctrl.CRD.CustomResourceDefinition(),
+		ctrl.API.APIService(),
+		ctrl.K8s.AuthorizationV1().SelfSubjectAccessReviews(),
+		onSchemasHandler,
+		sf)
+
+	err = ctrl.Start(ctx)
+	requireT.NoError(err)
+
+	// A single project-scoped secret "iceland" referencing project "reykjavik"
+	// in cluster "norse". No project exists yet.
+	requireT.NoError(i.createSecret(ctx, labelTest, "iceland", "reykjavik", "norse", "france"))
+
+	var secretSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		secretSchema = sf.Schema("secret")
+		require.NotNil(c, secretSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	partitions := []partition.Partition{defaultPartition}
+
+	// secretsWithDisplayName returns the names of this test's project-scoped
+	// secrets whose joined-in spec.displayName equals the given value.
+	secretsWithDisplayName := func(displayName string) []string {
+		q := getFilteredQuery("filter=spec.displayName="+displayName, labelTest)
+		req, err := http.NewRequest("GET", "http://localhost:8080?"+q, nil)
+		requireT.NoError(err)
+		got, _, _, _, err := proxyStore.ListByPartitions(&types.APIRequest{Request: req}, secretSchema, partitions)
+		requireT.NoError(err)
+		return stringsFromULIst(got)
+	}
+
+	// The secret cache is built here, before the project object exists, so the
+	// row has no joined displayName yet.
+	err = waitForObjectsBySchema(ctx, proxyStore, secretSchema, labelTest, 1)
+	requireT.NoError(err)
+	requireT.Empty(secretsWithDisplayName("thingvellir"))
+
+	// Create the project, then build the projects cache so the project is
+	// upserted. That upsert must back-fill the already-cached secret row via
+	// mcioProjectExternalUpdates.
+	dynamicClient, err := dynamic.NewForConfig(i.restCfg)
+	requireT.NoError(err)
+	mcioClient := dynamicClient.Resource(mcioGVR).Namespace(defaultTestNamespace)
+	requireT.NoError(createMCIOProject(ctx, mcioClient, mcioGVR, labelTest, "reykjavik", "norse", "thingvellir", nil))
+
+	var mcioSchema *types.APISchema
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		mcioSchema = sf.Schema("management.cattle.io.project")
+		require.NotNil(c, mcioSchema)
+	}, 15*time.Second, 500*time.Millisecond)
+	err = waitForObjectsBySchema(ctx, proxyStore, mcioSchema, labelTest, 1)
+	requireT.NoError(err)
+
+	requireT.EventuallyWithT(func(c *assert.CollectT) {
+		assert.Equal(c, []string{"iceland"}, secretsWithDisplayName("thingvellir"))
+	}, 30*time.Second, 500*time.Millisecond)
+}
+
 type summaryBlockT struct {
 	Property string         `json:"property"`
 	Counts   map[string]int `json:"counts"`
