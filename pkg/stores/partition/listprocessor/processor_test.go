@@ -2665,6 +2665,61 @@ func TestSortList(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "sort by boolean field metadata.state.error",
+			objects: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "pod",
+						"metadata": map[string]interface{}{
+							"name": "alpha",
+							"state": map[string]interface{}{
+								"error": true,
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "pod",
+						"metadata": map[string]interface{}{
+							"name": "bravo",
+							"state": map[string]interface{}{
+								"error": false,
+							},
+						},
+					},
+				},
+			},
+			sort: Sort{
+				Fields: [][]string{{"metadata", "state", "error"}},
+				Orders: []SortOrder{ASC},
+			},
+			want: []unstructured.Unstructured{
+				{
+					Object: map[string]interface{}{
+						"kind": "pod",
+						"metadata": map[string]interface{}{
+							"name": "bravo",
+							"state": map[string]interface{}{
+								"error": false,
+							},
+						},
+					},
+				},
+				{
+					Object: map[string]interface{}{
+						"kind": "pod",
+						"metadata": map[string]interface{}{
+							"name": "alpha",
+							"state": map[string]interface{}{
+								"error": true,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

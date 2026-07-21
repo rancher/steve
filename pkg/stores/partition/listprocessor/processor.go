@@ -380,7 +380,7 @@ func SortList(list []unstructured.Unstructured, s Sort) []unstructured.Unstructu
 		for j, fields := range s.Fields {
 			val, ok := data.GetValueFromAny(list[i].Object, fields...)
 			if ok {
-				td.stringValues[j] = val.(string)
+				td.stringValues[j] = convert.ToString(val)
 			} else {
 				logrus.Debugf("Failed to walk list item %d with fields %s", i, fields)
 				td.stringValues[j] = ""
