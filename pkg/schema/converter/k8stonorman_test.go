@@ -508,6 +508,46 @@ func TestGVKToSchemaID(t *testing.T) {
 	}
 }
 
+func TestGenerateNamePrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		kind string
+		want string
+	}{
+		{
+			name: "single word kind",
+			kind: "User",
+			want: "u-",
+		},
+		{
+			name: "camel case kind uses initials",
+			kind: "GlobalRole",
+			want: "gr-",
+		},
+		{
+			name: "multiple capitals",
+			kind: "ClusterRoleTemplateBinding",
+			want: "crtb-",
+		},
+		{
+			name: "single letter kind",
+			kind: "T",
+			want: "t-",
+		},
+		{
+			name: "empty kind",
+			kind: "",
+			want: "",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.want, GenerateNamePrefix(test.kind))
+		})
+	}
+}
+
 func TestGVRToPluralName(t *testing.T) {
 	tests := []struct {
 		name string

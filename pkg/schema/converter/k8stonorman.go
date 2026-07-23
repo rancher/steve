@@ -4,6 +4,7 @@ package converter
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rancher/apiserver/pkg/types"
@@ -22,6 +23,17 @@ const (
 	gvkExtensionVersion = "version"
 	gvkExtensionKind    = "kind"
 )
+
+var lowerChars = regexp.MustCompile("[a-z]+")
+
+// GenerateNamePrefix derives a metadata.generateName prefix from a kind, mirroring norman's convention (e.g. "User" -> "u-", "GlobalRole" -> "gr-").
+func GenerateNamePrefix(kind string) string {
+	if kind == "" {
+		return ""
+	}
+	base := kind[0:1] + lowerChars.ReplaceAllString(kind[1:], "")
+	return strings.ToLower(base) + "-"
+}
 
 func GVKToVersionedSchemaID(gvk schema.GroupVersionKind) string {
 	if gvk.Group == "" {
