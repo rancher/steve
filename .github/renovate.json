@@ -8,8 +8,7 @@
     "release/v0.8",
     "release/v0.7",
     "release/v0.6",
-    "release/v0.5",
-    "release/v0.4"
+    "release/v0.5"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
@@ -41,10 +40,6 @@
     {
       "matchBaseBranches": ["release/v0.5"],
       "extends": ["github>rancher/renovate-config:rancher-2.11#main"]
-    },
-    {
-      "matchBaseBranches": ["release/v0.4"],
-      "extends": ["github>rancher/renovate-config:rancher-2.10#main"]
     },
     {
       "enabled": false,
