@@ -1119,6 +1119,7 @@ func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersio
 	dependentChildInfoFromParentGVK := map[schema.GroupVersionKind]GVKWithSchemaName{
 		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}:  {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"}:   {podGVK, "pod", true},
+		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "ReplicaSet"}:  {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}: {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}:        {podGVK, "pod", true},
 		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}:    {jobGVK, "batch.job", false},

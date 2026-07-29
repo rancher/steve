@@ -928,6 +928,101 @@ func TestAugmentRelationships(t *testing.T) {
 			assert.Nil(t, err)
 		},
 	})
+	tests = append(tests, testCase{
+		description: "Replica sets get augmented.",
+		test: func(t *testing.T) {
+			nsi := &factory.Cache{
+				ByOptionsLister: NewMockByOptionsLister(gomock.NewController(t)),
+			}
+			cg := NewMockClientGetter(gomock.NewController(t))
+			cf := NewMockCacheFactory(gomock.NewController(t))
+			bloi := NewMockByOptionsLister(gomock.NewController(t))
+			tb := NewMockTransformBuilder(gomock.NewController(t))
+			inf := &informer.Informer{
+				ByOptionsLister: bloi,
+			}
+			c := &factory.Cache{
+				ByOptionsLister: inf,
+			}
+			s := &Store{
+				ctx:              context.Background(),
+				namespaceCache:   nsi,
+				clientGetter:     cg,
+				cacheFactory:     cf,
+				transformBuilder: tb,
+			}
+			podSchema := &types.APISchema{
+				Schema: &schemas.Schema{
+					Attributes: map[string]interface{}{
+						"version":    "v1",
+						"kind":       "Pod",
+						"group":      "",
+						"namespaced": true,
+						"verbs":      []string{"list", "watch"},
+					},
+					ResourceMethods: []string{"GET"},
+				},
+			}
+			apiSchemas := &types.APISchemas{
+				Schemas: map[string]*types.APISchema{
+					"pod": podSchema,
+				},
+			}
+			apiOp := &types.APIRequest{
+				Request: &http.Request{
+					URL: &url.URL{},
+				},
+				Schemas: apiSchemas,
+			}
+			originalItems := []unstructured.Unstructured{
+				unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"kind": "ReplicaSet",
+						"metadata": map[string]interface{}{
+							"name": "fuji",
+						},
+						"data": map[string]interface{}{
+							"color": "pink",
+						},
+					},
+				},
+			}
+			originalList := unstructured.UnstructuredList{
+				Items: originalItems,
+			}
+			augmentedList := unstructured.UnstructuredList{
+				Items: make([]unstructured.Unstructured, len(originalItems), len(originalItems)),
+			}
+			gvk := schema2.GroupVersionKind{
+				Group:   "apps",
+				Version: "v1",
+				Kind:    "ReplicaSet",
+			}
+			podGVK := schema2.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Pod",
+			}
+			ctx := context.Background()
+
+			copy(augmentedList.Items, originalItems)
+			cg.EXPECT().TableAdminClient(apiOp, podSchema, "", &WarningBuffer{}).Return(nil, nil)
+			cf.EXPECT().CacheFor(ctx,
+				gomock.Any(), // map[string]informer.IndexedField{}
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(),
+				gomock.Any(), // can't do (*tablelistconvert.Client)(nil),
+				attributes.GVK(podSchema),
+				attributes.Namespaced(podSchema),
+				true, gomock.Any()).Return(c, nil)
+			tb.EXPECT().GetTransformFunc(podGVK, gomock.Any(), false, nil).Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+			cf.EXPECT().DoneWithCache(c)
+			bloi.EXPECT().AugmentList(ctx, &originalList, gomock.Any(), gomock.Any(), true, gomock.Any()).Return(nil)
+			err := s.AugmentRelationships(ctx, gvk, &originalList, apiOp)
+			assert.Nil(t, err)
+		},
+	})
 	t.Parallel()
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
