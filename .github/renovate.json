@@ -61,6 +61,13 @@
       "enabled": false
     },
     {
+      "description": "Do not bump the Go minor/major version on release branches",
+      "matchDepNames": ["go"],
+      "matchUpdateTypes": ["major", "minor"],
+      "matchBaseBranches": ["/^release\\//"],
+      "enabled": false
+    },
+    {
       "description": "Group all GitHub Actions updates into a single PR per branch",
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
