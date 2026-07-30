@@ -1296,7 +1296,19 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
 	ns := attributes.Namespaced(apiSchema)
-	inf, err := s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema), watchlist.Disabled(apiSchema))
+
+	// A concurrent schema/column definition change can reset gvk's cache (see
+	// factory.ErrCacheReset) right as we're waiting for it to become ready, canceling our
+	// wait. That's a transient race, not a real failure, and the cache is immediately usable
+	// again once Stop() returns - so retry a few times instead of failing the request.
+	const maxCacheResetRetries = 3
+	var inf *factory.Cache
+	for attempt := 0; attempt <= maxCacheResetRetries; attempt++ {
+		inf, err = s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema), watchlist.Disabled(apiSchema))
+		if err == nil || !errors.Is(err, factory.ErrCacheReset) {
+			break
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cachefor %v: %w", gvk, err)
 	}

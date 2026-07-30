@@ -5,6 +5,7 @@ package factory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -16,11 +17,17 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/encryption"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
 )
+
+// ErrCacheReset is returned (wrapped) by CacheFor when a concurrent Stop(gvk) (eg: triggered
+// by a schema/column definition change) canceled the cache's context while we were waiting
+// for it to sync. Unlike other CacheFor errors, this one is safe for a caller to retry:
+// Stop() always leaves the informer ready for a fresh initialization by the time it returns.
+var ErrCacheReset = errors.New("cache was reset by a concurrent Stop")
 
 // EncryptAllEnvVar is set to "true" if users want all types' data blobs to be encrypted in SQLite
 // otherwise only variables in defaultEncryptedResourceTypes will have their blobs encrypted
@@ -240,7 +247,7 @@ func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields map[
 	}
 
 	if err := i.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
-		if !watchable && errors.IsMethodNotSupported(err) {
+		if !watchable && k8serrors.IsMethodNotSupported(err) {
 			// expected, continue without logging
 			return
 		}
@@ -274,7 +281,7 @@ func (f *CacheFactory) waitForCacheReady(ctx context.Context, gvk schema.GroupVe
 
 	if !cache.WaitForCacheSync(ctx.Done(), gi.informer.HasSynced) {
 		if gi.ctx.Err() != nil {
-			return nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w", gvk, gi.ctx.Err())
+			return nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w: %w", gvk, ErrCacheReset, gi.ctx.Err())
 		}
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("request context canceled while waiting for SQL cache sync for %v: %w", gvk, ctx.Err())
