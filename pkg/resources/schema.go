@@ -7,7 +7,6 @@ import (
 	"github.com/rancher/apiserver/pkg/subscribe"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
-	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/steve/pkg/resources/apigroups"
 	"github.com/rancher/steve/pkg/resources/cluster"
@@ -18,7 +17,6 @@ import (
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
-	corecontrollers "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/discovery"
 )
@@ -42,55 +40,15 @@ func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache cl
 	return nil
 }
 
-func DefaultSchemaTemplates(cf *client.Factory,
-	baseSchemas *types.APISchemas,
-	summaryCache *summarycache.SummaryCache,
-	lookup accesscontrol.AccessSetLookup,
-	discovery discovery.DiscoveryInterface,
-	namespaceCache corecontrollers.NamespaceCache,
-	options common.TemplateOptions) []schema.Template {
-	return []schema.Template{
-		common.DefaultTemplate(cf, summaryCache, lookup, namespaceCache, options),
-		apigroups.Template(discovery),
-		{
-			ID:        "configmap",
-			Formatter: formatters.HandleHelmData,
-		},
-		{
-			ID:        "secret",
-			Formatter: formatters.HandleHelmData,
-		},
-		{
-			ID:        "pod",
-			Formatter: formatters.Pod,
-		},
-		{
-			ID:        "management.cattle.io.setting",
-			Formatter: formatters.Setting,
-		},
-		{
-			ID:        "namespace",
-			Formatter: formatters.Namespace,
-		},
-		{
-			ID: "management.cattle.io.cluster",
-			Customize: func(apiSchema *types.APISchema) {
-				cluster.AddApply(baseSchemas, apiSchema)
-			},
-		},
-	}
-}
-
-// DefaultSchemaTemplatesForStore returns the same default templates as DefaultSchemaTemplates, only using DefaultSchemaTemplateFoStore internally to construct the templates.
+// DefaultSchemaTemplatesForStore returns the default schema templates, all backed by the given pre-initialized store.
 func DefaultSchemaTemplatesForStore(store types.Store,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
 	lookup accesscontrol.AccessSetLookup,
-	discovery discovery.DiscoveryInterface,
-	options common.TemplateOptions) []schema.Template {
+	discovery discovery.DiscoveryInterface) []schema.Template {
 
 	return []schema.Template{
-		common.DefaultTemplateForStore(store, summaryCache, lookup, options),
+		common.DefaultTemplateForStore(store, summaryCache, lookup),
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",

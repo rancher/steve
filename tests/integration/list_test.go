@@ -40,14 +40,12 @@ type ListTestConfig struct {
 		Expect         []map[string]string `yaml:"expect"`
 		ExpectExcludes bool                `yaml:"expectExcludes"`
 		ExpectContains bool                `yaml:"expectContains"`
-		RunOn          string              `yaml:"runOn"` // Restrict test execution: "sql" (SQL cache only), "nonsql" (non-SQL cache only), or "" (run on both)
 	} `yaml:"tests"`
 }
 
 func (i *IntegrationSuite) TestList() {
 	ctx := i.T().Context()
 
-	// Apply common manifests once for both test modes
 	commonManifestsFile := filepath.Join(testdataListDir, "common.manifests.yaml")
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
 	i.doManifest(ctx, commonManifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
@@ -57,16 +55,10 @@ func (i *IntegrationSuite) TestList() {
 	// Cleanup common manifests after all tests complete
 	defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
 
-	// Run SQL mode first, then non-SQL mode sequentially
-	i.Run("SQL", func() {
-		i.runListTest(ctx, true, gvrs)
-	})
-	i.Run("NonSQL", func() {
-		i.runListTest(ctx, false, gvrs)
-	})
+	i.runListTest(ctx, gvrs)
 }
 
-func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
+func (i *IntegrationSuite) runListTest(ctx context.Context, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 
 	// Custom authenticator: use impersonation if header present, otherwise admin
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
@@ -79,23 +71,13 @@ func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs 
 	}
 	authMiddleware := auth.ToMiddleware(auth.AuthenticatorFunc(impersonateOrAdmin))
 
-	var steveHandler http.Handler
-	var err error
-	if sqlCache {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache: true,
-			SQLCacheFactoryOptions: factory.CacheFactoryOptions{
-				GCInterval:  15 * time.Minute,
-				GCKeepCount: 1000,
-			},
-			AuthMiddleware: authMiddleware,
-		})
-	} else {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache:       false,
-			AuthMiddleware: authMiddleware,
-		})
-	}
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+		},
+		AuthMiddleware: authMiddleware,
+	})
 	i.Require().NoError(err)
 
 	httpServer := httptest.NewServer(steveHandler)
@@ -140,7 +122,7 @@ func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs 
 				defer i.doManifestReversed(ctx, scenarioManifestsFile, i.doDelete)
 			}
 
-			i.testListScenario(ctx, config, baseURL, sqlCache, csvWriter)
+			i.testListScenario(ctx, config, baseURL, csvWriter)
 		})
 	}
 }
@@ -156,21 +138,12 @@ func (i *IntegrationSuite) readListTestConfig(testFile string) ListTestConfig {
 	return config
 }
 
-func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTestConfig, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
+func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTestConfig, baseURL string, csvWriter *csv.Writer) {
 	// Track continue token and revision across tests in this scenario
 	var lastContinueToken string
 	var lastRevision string
 
 	for _, test := range config.Tests {
-		// Skip tests restricted to specific cache modes
-		currentMode := "sql"
-		if !sqlCache {
-			currentMode = "nonsql"
-		}
-		if test.RunOn != "" && test.RunOn != currentMode {
-			continue
-		}
-
 		i.Run(test.Description, func() {
 			query := test.Query
 
@@ -182,10 +155,8 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTest
 				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
 			}
 
-			// Convert labelSelector/fieldSelector to filter format for SQL mode
-			if sqlCache {
-				query = convertQueryForSQLCache(query)
-			}
+			// Convert labelSelector/fieldSelector to filter format for the SQL cache
+			query = convertQueryForSQLCache(query)
 			url := buildURLRaw(baseURL, config.SchemaID, test.Namespace, query)
 			fmt.Println(url)
 

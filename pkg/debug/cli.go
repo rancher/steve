@@ -12,7 +12,6 @@ import (
 type Config struct {
 	Debug      bool
 	DebugLevel int
-	SQLCache   bool
 }
 
 func (c *Config) MustSetupDebug() {
@@ -53,10 +52,6 @@ func Flags(config *Config) []cli.Flag {
 			Name:        "debug-level",
 			Value:       1,
 			Destination: &config.DebugLevel,
-		},
-		&cli.BoolFlag{
-			Name:        "sql-cache",
-			Destination: &config.SQLCache,
 		},
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	cachepartition "github.com/rancher/steve/pkg/sqlcache/partition"
-	"github.com/rancher/steve/pkg/stores/partition"
 )
 
 // Partitioner is an interface for interacting with partitions.
@@ -57,7 +56,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return partition.ToAPI(schema, obj, warnings, types.ReservedFields), nil
+	return ToAPI(schema, obj, warnings, types.ReservedFields), nil
 }
 
 // ByID looks up a single object by its ID.
@@ -68,7 +67,7 @@ func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return partition.ToAPI(schema, obj, warnings, types.ReservedFields), nil
+	return ToAPI(schema, obj, warnings, types.ReservedFields), nil
 }
 
 // List returns a list of objects across all applicable partitions.
@@ -95,7 +94,7 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 	for _, item := range list.Items {
 		item := item.DeepCopy()
 		// the sql cache automatically adds the ID through a transformFunc. Because of this, we have a different set of reserved fields for the SQL cache
-		result.Objects = append(result.Objects, partition.ToAPI(schema, item, nil, s.sqlReservedFields))
+		result.Objects = append(result.Objects, ToAPI(schema, item, nil, s.sqlReservedFields))
 	}
 
 	if summary == nil {
@@ -117,7 +116,7 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, data ty
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return partition.ToAPI(schema, obj, warnings, types.ReservedFields), nil
+	return ToAPI(schema, obj, warnings, types.ReservedFields), nil
 }
 
 // Update updates a single object in the store.
@@ -128,7 +127,7 @@ func (s *Store) Update(apiOp *types.APIRequest, schema *types.APISchema, data ty
 	if err != nil {
 		return types.APIObject{}, err
 	}
-	return partition.ToAPI(schema, obj, warnings, types.ReservedFields), nil
+	return ToAPI(schema, obj, warnings, types.ReservedFields), nil
 }
 
 // Watch returns a channel of events for a list or resource.
@@ -150,7 +149,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, wr types
 		defer close(response)
 
 		for i := range c {
-			response <- partition.ToAPIEvent(nil, schema, i)
+			response <- ToAPIEvent(nil, schema, i)
 		}
 	}()
 

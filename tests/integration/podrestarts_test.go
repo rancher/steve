@@ -37,11 +37,10 @@ func (i *IntegrationSuite) TestPodRestarts() {
 	i.T().Log("Waiting for pods to stabilize (8 seconds)...")
 	time.Sleep(8 * time.Second)
 
-	// Run SQL mode only - these tests are specifically for SQL cache with multi-value field support
-	i.runPodRestartsTest(ctx, true, gvrs)
+	i.runPodRestartsTest(ctx, gvrs)
 }
 
-func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
+func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
 		info, ok, err := auth.Impersonation(req)
 		if ok || err != nil {
@@ -51,10 +50,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 	}
 	authMiddleware := auth.ToMiddleware(auth.AuthenticatorFunc(impersonateOrAdmin))
 
-	var steveHandler http.Handler
-	var err error
-	steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,
@@ -67,9 +63,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 	defer steveServer.Close()
 
 	// Wait for cache to be populated
-	if sqlCache {
-		time.Sleep(2 * time.Second)
-	}
+	time.Sleep(2 * time.Second)
 
 	matches, err := filepath.Glob(filepath.Join(testdataPodRestartsDir, "*.test.yaml"))
 	i.Require().NoError(err)

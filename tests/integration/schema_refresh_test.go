@@ -52,7 +52,6 @@ func (i *IntegrationSuite) TestSchemaRefresh() {
 	ctx := i.T().Context()
 
 	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,
@@ -72,7 +71,7 @@ func (i *IntegrationSuite) TestSchemaRefresh() {
 	for _, match := range matches {
 		scenarioFile := filepath.Base(match)
 		scenarioFile = strings.TrimSuffix(scenarioFile, ".test.yaml")
-		
+
 		// Load test configuration
 		configFile, err := os.Open(match)
 		i.Require().NoError(err)

@@ -18,7 +18,6 @@ func (i *IntegrationSuite) TestIssue51930() {
 	ctx := i.T().Context()
 	// Start steve with SQL Cache enabled
 	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,
