@@ -29,6 +29,7 @@ const EncryptAllEnvVar = "CATTLE_ENCRYPT_CACHE_ALL"
 // CacheFactory builds Informer instances and keeps a cache of instances it created
 type CacheFactory struct {
 	dbClient db.Client
+	dbPath   string
 
 	// ctx determines when informers need to stop
 	ctx    context.Context
@@ -96,6 +97,11 @@ type CacheFactoryOptions struct {
 	// GCKeepCount is how many events to keep in memory
 	GCKeepCount             int
 	DBMetricsUpdateInterval time.Duration
+	// UseTempDir stores the SQLite cache database in a unique temp file instead of the
+	// fixed InformerObjectCacheDBPath. Each CacheFactory otherwise deletes and recreates
+	// that shared file on startup, which races with other CacheFactory instances (e.g.
+	// concurrent/sequential test runs) still using it. Tests should set this to true.
+	UseTempDir bool
 }
 
 // NewCacheFactory returns an informer factory instance
@@ -110,7 +116,7 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	dbClient, dbPath, err := db.NewClient(ctx, nil, m, m, false)
+	dbClient, dbPath, err := db.NewClient(ctx, nil, m, m, opts.UseTempDir)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -122,6 +128,7 @@ func NewCacheFactoryWithContext(ctx context.Context, opts CacheFactoryOptions) (
 
 		encryptAll: os.Getenv(EncryptAllEnvVar) == "true",
 		dbClient:   dbClient,
+		dbPath:     dbPath,
 
 		gcKeepCount: opts.GCKeepCount,
 
@@ -296,6 +303,11 @@ func (f *CacheFactory) DoneWithCache(cache *Cache) {
 	}
 
 	cache.gi.wg.Done()
+}
+
+// DBPath returns the path to the SQLite database file backing this cache factory.
+func (f *CacheFactory) DBPath() string {
+	return f.dbPath
 }
 
 // Stop cancels ctx which stops any running informers, assigns a new ctx, resets the GVK-informer cache, and resets

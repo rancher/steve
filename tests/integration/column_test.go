@@ -29,6 +29,7 @@ func (i *IntegrationSuite) TestListColumns() {
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,
+			UseTempDir:  true,
 		},
 	})
 	i.Require().NoError(err)

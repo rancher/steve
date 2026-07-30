@@ -78,6 +78,15 @@ type Server struct {
 	SQLCache                   bool
 }
 
+// SQLCacheDBPath returns the path to the SQLite database file backing the SQL cache,
+// or "" if SQLCache is disabled.
+func (s *Server) SQLCacheDBPath() string {
+	if s.cacheFactory == nil {
+		return ""
+	}
+	return s.cacheFactory.DBPath()
+}
+
 type Options struct {
 	// Controllers If the controllers are passed in the caller must also start the controllers
 	Controllers                *Controllers

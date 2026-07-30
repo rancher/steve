@@ -17,16 +17,17 @@ import (
 func (i *IntegrationSuite) TestIssue51930() {
 	ctx := i.T().Context()
 	// Start steve with SQL Cache enabled
-	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
+	steveServer, err := server.New(ctx, i.restCfg, &server.Options{
 		SQLCache: true,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,
+			UseTempDir:  true,
 		},
 	})
 	i.Require().NoError(err)
 
-	httpServer := httptest.NewServer(steveHandler)
+	httpServer := httptest.NewServer(steveServer)
 	defer httpServer.Close()
 
 	baseURL := httpServer.URL
@@ -58,9 +59,7 @@ func (i *IntegrationSuite) TestIssue51930() {
 	fmt.Printf("TokenReview list response: %d\n", resp.StatusCode)
 
 	// Check if the table was created in the SQLite database.
-	// The DB path is in i.sqliteDatabaseFile
-
-	db, err := sql.Open("sqlite", i.sqliteDatabaseFile)
+	db, err := sql.Open("sqlite", steveServer.SQLCacheDBPath())
 	i.Require().NoError(err)
 	defer db.Close()
 
