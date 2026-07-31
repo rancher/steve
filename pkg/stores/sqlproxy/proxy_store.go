@@ -1165,7 +1165,11 @@ func (s *Store) WatchByPartitions(apiOp *types.APIRequest, schema *types.APISche
 				return err
 			}
 			for i := range c {
-				result <- i
+				select {
+				case result <- i:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 			return nil
 		})
