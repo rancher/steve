@@ -8,7 +8,7 @@ replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14
 	github.com/knative/pkg => github.com/rancher/pkg v0.0.0-20181214184433-b04c0947ad2f
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
-	github.com/stretchr/testify => github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify => github.com/stretchr/testify v1.11.1
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
 	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
