@@ -13,6 +13,7 @@ import (
 
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -85,26 +86,37 @@ func (i *IntegrationSuite) testSortScenario(ctx context.Context, scenario string
 		i.Run(test.Query, func() {
 			url := fmt.Sprintf("%s/v1/%s?%s", baseURL, sortTestConfig.SchemaID, test.Query)
 			fmt.Println(url)
-			resp, err := http.Get(url)
-			i.Require().NoError(err)
-			defer resp.Body.Close()
 
-			i.Require().Equal(http.StatusOK, resp.StatusCode)
+			// The SQL cache indexer processes newly-applied objects
+			// asynchronously, so the freshly-applied fixtures may not be
+			// fully indexed yet. Retry until the expected data shows up.
+			i.Require().EventuallyWithT(func(c *assert.CollectT) {
+				resp, err := http.Get(url)
+				if !assert.NoError(c, err) {
+					return
+				}
+				defer resp.Body.Close()
 
-			type Response struct {
-				Data []struct {
-					ID string `json:"id"`
-				} `json:"data"`
-			}
-			var parsed Response
-			err = json.NewDecoder(resp.Body).Decode(&parsed)
-			i.Require().NoError(err)
+				if !assert.Equal(c, http.StatusOK, resp.StatusCode) {
+					return
+				}
 
-			var ids []string
-			for _, data := range parsed.Data {
-				ids = append(ids, data.ID)
-			}
-			i.Require().Equal(test.Expected, ids)
+				type Response struct {
+					Data []struct {
+						ID string `json:"id"`
+					} `json:"data"`
+				}
+				var parsed Response
+				if !assert.NoError(c, json.NewDecoder(resp.Body).Decode(&parsed)) {
+					return
+				}
+
+				var ids []string
+				for _, data := range parsed.Data {
+					ids = append(ids, data.ID)
+				}
+				assert.Equal(c, test.Expected, ids)
+			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
 }
