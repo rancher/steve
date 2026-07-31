@@ -3,7 +3,6 @@ tests:
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14.2"&sort=metadata.name
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14.2"&sort=metadata.name
-    runOn: sql
     expect:
       - name: drums
         namespace: bandpractice
@@ -15,7 +14,6 @@ tests:
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/shakira:v2.13.2"&sort=metadata.name
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/shakira:v2.13.2"&sort=metadata.name
-    runOn: sql
     expect:
       - name: bass
         namespace: bandpractice
@@ -24,7 +22,6 @@ tests:
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/santana:v7.1"&sort=metadata.name
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/santana:v7.1"&sort=metadata.name
-    runOn: sql
     expect:
       - name: bass
         namespace: bandpractice
@@ -33,20 +30,17 @@ tests:
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/santana:v7.1.2"&sort=metadata.name
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/santana:v7.1.2"&sort=metadata.name
-    runOn: sql
     expect:
       - name: piano
         namespace: bandpractice
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14"&sort=metadata.name
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/fleetwoodmac:v0.14"&sort=metadata.name
-    runOn: sql
     expect:
       - name: piano
         namespace: bandpractice
   - description: namespace:bandpractice,query:filter=spec.containers.image+CONTAINS+"band/phish:v4.0.1"
     namespace: bandpractice
     query: filter=spec.containers.image+CONTAINS+"band/phish:v4.0.1"
-    runOn: sql
     expect: []
 

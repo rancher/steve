@@ -54,56 +54,29 @@ POST /v1/catalog.cattle.io.clusterrepos/rancher-partner-charts?action=install
 ### List-specific query parameters
 
 List requests (`/v1/{type}` and `/v1/{type}/{namespace}`) have additional
-parameters for filtering, sorting and pagination.
+parameters for filtering, sorting, and pagination.
 
-Note that the exact meaning and behavior of those parameters may vary if
-Steve is used with SQLite caching of resources, which is configured when
-calling `server.New` via the `server.Options.SQLCache` boolean option.
-Meaning and behavior are the same unless otherwise specified.
-
-Note that, if SQLite caching of resources is enabled, some of the data
-can be stored in disk, in either encrypted or plain text forms based on:
+Note that the SQLite database caches Kubernetes resources. The data
+is stored in disk, in either encrypted or plain text forms based on:
  - by default, Secrets and Rancher Tokens (`management.cattle.io/v3, Kind=Token`) are always encrypted
  - if the environment variable `CATTLE_ENCRYPT_CACHE_ALL` is set to "true",
 all resources are encrypted
  - regardless of the setting's value, any filterable/sortable columns are stored
 in plain text (see `filter` below for the exact list)
 
-#### `limit`
+#### `page`
 
-**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
-set the maximum number of results to retrieve from Kubernetes. The limit is
-passed on as a parameter to the Kubernetes request. The purpose of setting this
-limit is to prevent a huge response from overwhelming Steve and Rancher. For
-more information about setting limits, review the Kubernetes documentation on
-[retrieving results in
-chunks](https://kubernetes.io/docs/reference/using-api/api-concepts/#retrieving-large-results-sets-in-chunks).
+Sets the "page" of results to return where there are more than can be returned in a single request.
+The first page is `1`, not `0`.
 
-The limit controls the size of the set coming from Kubernetes, and then
-filtering, sorting, and pagination are applied on that set. Because of this, if
-the result set is partial, there is no guarantee that the result returned to
-the client is fully sorted across the entire list, only across the returned
-chunk.
+#### `pagesize`
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-set the maximum number of results to return from the SQLite cache.
+Sets the maximum number of results to return from the SQLite cache.
 
-If both this parameter and `pagesize` are set, the smallest is taken.
-
-**In both cases**,
-the returned response will include a `continue` token, which indicates that the
-result is partial and must be used in the subsequent request to retrieve the
-next chunk.
-
-The default limit is 100000. To override the default, set `limit=-1`.
-
-#### `continue`
-
-Continue retrieving the next chunk of a partial list. The continue token is
-included in the response of a limited list and indicates that the result is
-partial. This token can then be used as a query parameter to retrieve the next
-chunk. All chunks have been retrieved when the continue field in the response
-is empty.
+If the returned response includes a `continue` token, this indicates that more results are available.
+Clients will need to determine the `page` field of the subsequent
+request to get the next page of data, but this will usually be the increment of
+the current `page` field, or `1` if no `page` field is given.
 
 #### `filter`
 
@@ -117,25 +90,11 @@ Example, filtering by object name:
 /v1/{type}?filter=metadata.name=foo
 ```
 
-When SQLite caching is not enabled, matching works this way:
-
-If a target value is surrounded by single-quotes, it succeeds only on an exact match:
-
 Example, filtering by object name:
 
 ```
 /v1/{type}?filter=metadata.name='match-this-exactly'
 ```
-
-A target value can be delimited by double-quotes, but this will succeed on a partial match:
-
-Example, filtering by object name:
-
-```
-/v1/{type}?filter=metadata.name="can-be-a-substri"
-```
-
-When SQLite caching is enabled, equality is slightly different from non-sql-supported matching.
 Equality can be specified with either one or two '=' signs.
 
 The following matches objects called either 'cat' or 'cows':
@@ -202,7 +161,7 @@ filter=metadata.name="oxford,metadata.labels.comma"
 Without the quotes, the expression would be finding either objects called `oxford`,
 or that have the label "comma", which is very different from objects called `oxford,metadata.labels.comma`.
 
-One filter can list multiple possible fields to match, these are ORed together:
+One filter can list multiple possible fields to match; these are ORed together:
 
 ```
 /v1/{type}?filter=metadata.name=foo,metadata.namespace=foo
@@ -221,20 +180,11 @@ Filters can be negated to exclude results:
 /v1/{type}?filter=metadata.name!=foo
 ```
 
-**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
-arrays are searched for matching items. If any item in the array matches, the
-item is included in the list.
-
-```
-/v1/{type}?filter=spec.containers.image=alpine
-```
-
-When SQLite caching is enabled, multiple values are stored separated by "or-bars" (`|`),
+Multiple values are stored separated by "or-bars" (`|`),
 like `abc|def|ghi`. You'll need to use the partial-match operator `~` to match one member,
 like `/v1/{type}?filter=spec.containers.image ~ ghi`.
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-filtering is only supported for a subset of attributes:
+**Filtering is only supported for a subset of attributes:
 - `id`, `metadata.name`, `metadata.namespace`, `metadata.state.name`, and `metadata.timestamp` for any resource kind
 - a short list of hardcoded attributes for a selection of specific types listed
 in [typeSpecificIndexFields](https://github.com/rancher/steve/blob/main/pkg/stores/sqlproxy/proxy_store.go#L52-L58)
@@ -263,7 +213,7 @@ Filtering by a single project or a single namespace:
 /v1/{type}?projectsornamespaces=p1
 ```
 
-Filtering by multiple projects or namespaces is done with a comma separated
+Filtering by multiple projects or namespaces is done with a comma-separated
 list. A resource matching any project or namespace in the list is included in
 the result:
 
@@ -281,13 +231,13 @@ The list can be negated to exclude results:
 
 Results can be sorted lexicographically by any number of columns given in descending order of importance.
 
-Sorting by only a single column, for example name:
+Sorting by only a single column, for example by `name`:
 
 ```
 /v1/{type}?sort=metadata.name
 ```
 
-Reverse sorting by name:
+Reverse sorting by `name`:
 
 ```
 /v1/{type}?sort=-metadata.name
@@ -313,11 +263,10 @@ Normal sort by namespace, then by name, reverse sort by creation time:
 /v1/{type}?sort=metadata.namespace,metadata.name,-metadata.creationTimestamp
 ```
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-sorting is only supported for the set of attributes supported by
+**Sorting is only supported for the set of attributes supported by
 filtering (see above).
 
-Sorting by labels (also requires SQLite caching) can use complex label names.
+Sorting by labels can use complex label names.
 This query sorts by app name within their architectures, with the architectures
 listed in reverse lexicographic order. Note that complex label names need to be
 surrounded by square brackets (which themselves need to be percent-escaped for some web queries)
@@ -342,23 +291,11 @@ Pages are one-indexed, so this is equivalent to
 /v1/{type}?pagesize=10&page=1
 ```
 
-**If SQLite caching is disabled** (`server.Options.SQLCache=false`),
-to retrieve subsequent pages, the page number and the list revision number must
-be included in the request. This ensures the page will be retrieved from the
-cache, rather than making a new request to Kubernetes. If the revision number
-is omitted, a new fetch is performed in order to get the latest revision. The
-revision is included in the list response.
-
-```
-/v1/{type}?pagesize=10&page=2&revision=107440
-```
-
 `page` and `pagesize` can be used alongside the `limit` and `continue`
 parameters supported by Kubernetes. `limit` and `continue` are typically used
 for server-side chunking and do not guarantee results in any order.
 
-**If SQLite caching is enabled** (`server.Options.SQLCache=true`),
-to retrieve subsequent pages, only the page number is necessary, and it
+**To retrieve subsequent pages, only the page number is necessary, and it
 will always return the latest version.
 ```
 /v1/{type}?pagesize=10&page=2
@@ -369,7 +306,7 @@ If both `pagesize` and `limit` are set, the smallest is taken.
 If both `page` and `continue` are set, the result is the `page`-th page
 after the last result specified by `continue`.
 
-**If SQLCache is enabled and `revision` is passed:**
+**If `revision` is passed:**
 `revision` sets a minimum numerical value for resourceVersion in a LIST request. If the server's cached resourceVersion for that GVK is older than the revision provided, an "unknown revision" error is returned. 
 
 **In both cases**,
@@ -483,7 +420,7 @@ use Kubernetes as its data store.
 Steve uses apiserver Stores to transform and store data, mainly in Kubernetes.
 The main mechanism it uses is the proxy store, which is actually a series of
 four nested stores and a "partitioner". It can be instantiated by calling
-[NewProxyStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#NewProxyStore).
+[NewWrappedProxyStore](https://pkg.go.dev/github.com/rancher/steve/pkg/server#NewWrappedProxyStore).
 This gives you:
 
 * [`proxy.errorStore`](https://github.com/rancher/steve/blob/master/pkg/stores/proxy/error_wrapper.go) -
@@ -491,16 +428,15 @@ This gives you:
 * [`proxy.WatchRefresh`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#WatchRefresh) -
   wraps the nested store's Watch method, canceling the watch if access to the
   watched resource changes
-* [`partition.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#Store) -
+* [`partition.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition#Store) -
   wraps the nested store's List method and parallelizes the request according
   to the given partitioner, and additionally implements filtering, sorting, and
   pagination on the unstructured data from the nested store
 * [`proxy.rbacPartitioner`](https://github.com/rancher/steve/blob/master/pkg/stores/proxy/rbac_store.go) -
   the partitioner fed to the `partition.Store` which allows it to parallelize
   requests based on the user's access to certain namespaces or resources
-* [`proxy.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#Store) -
-  the Kubernetes proxy store which performs the actual connection to Kubernetes
-  for all operations
+* [`proxy.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlproxy#Store) -
+  the SQLite cache that stores the underlying Kubernetes data for all operations
 
 The default schema additionally wraps this proxy store in
 [`metrics.Store`](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/metrics#Store),
@@ -849,18 +785,18 @@ friendly way.
 
 This feature relies on the concept of [stores](#stores) and the RBAC
 partitioner. The [proxy
-store](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/proxy#Store)
-provides raw access to Kubernetes and returns data as an
+store](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlproxy#Store)
+provides cached access to Kubernetes and returns data as an
 [unstructured.UnstructuredList](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#UnstructuredList).
 The
-[partitioner](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#Partitioner)
+[partitioner](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition#Partitioner)
 calls the
 proxy store in parallel for each segment of resources the user has access to,
 such as for each namespace. The partitioner feeds the results of each parallelized
 request into a stream of
 [unstructured.Unstructured](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured).
 From here, the list is passed to the
-[listprocessor](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition/listprocessor)
+[listprocessor](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition/listprocessor)
 to filter, sort, and paginate the list. The partition store formats the list as
 a
 [types.APIObjectList](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types#APIObjectList)
@@ -871,7 +807,7 @@ Most stores in steve are implementations of the apiserver
 interface, which returns apiserver
 [types](https://pkg.go.dev/github.com/rancher/apiserver/pkg/types). The
 partitioner implements its own store type called
-[UnstructuredStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/partition#UnstructuredStore)
+[UnstructuredStore](https://pkg.go.dev/github.com/rancher/steve/pkg/stores/sqlpartition#UnstructuredStore)
 which returns
 [unstructured.Unstructured](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured#Unstructured)
 objects. The reason for this is that the filtering and sorting functions in the
@@ -891,14 +827,14 @@ The unit tests for these API features are located in two places:
 
 ##### listprocessor unit tests
 
-[pkg/stores/partition/listprocessor/processor_test.go](./pkg/stores/partition/listprocessor/processor_test.go)
+[pkg/stores/sqlpartition/listprocessor/processor_test.go](./pkg/stores/sqlpartition/listprocessor/processor_test.go)
 contains tests for each individual query handler. All changes to
-[listprocessor](./pkg/stores/partition/listprocessor/) should include a unit
+[listprocessor](./pkg/stores/sqlpartition/listprocessor/) should include a unit
 test in this file.
 
 ##### partition store unit tests
 
-[pkg/stores/partition/store_test.go](./pkg/stores/partition/store_test.go)
+[pkg/stores/sqlpartition/store_test.go](./pkg/stores/sqlpartition/store_test.go)
 contains tests for the `List` operation of the partition store. This is
 especially important for testing the functionality for multiple partitions. It
 also tests all supported query parameters, not limited to the
@@ -907,7 +843,7 @@ should be added here when:
 
   - the change is related to partitioning
   - the change is related to parsing the query parameters
-  - the change is related to the `limit` or `continue` parameters
+  - the change is related to the `page` or `continue` parameters
   - the listprocessor change should be tested with other query parameters
 
 It doesn't hurt to add a test here for any other listprocessor change.
