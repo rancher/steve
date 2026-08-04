@@ -386,6 +386,30 @@ func (mr *MockStoreMockRecorder) RegisterAfterDeleteAll(f any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterDeleteAll", reflect.TypeOf((*MockStore)(nil).RegisterAfterDeleteAll), f)
 }
 
+// RegisterAfterUpdatePrevious mocks base method.
+func (m *MockStore) RegisterAfterUpdatePrevious(f func(string, any, any, db.TxClient) error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterAfterUpdatePrevious", f)
+}
+
+// RegisterAfterUpdatePrevious indicates an expected call of RegisterAfterUpdatePrevious.
+func (mr *MockStoreMockRecorder) RegisterAfterUpdatePrevious(f any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterUpdatePrevious", reflect.TypeOf((*MockStore)(nil).RegisterAfterUpdatePrevious), f)
+}
+
+// RegisterAfterDeletePrevious mocks base method.
+func (m *MockStore) RegisterAfterDeletePrevious(f func(string, any, any, db.TxClient) error) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RegisterAfterDeletePrevious", f)
+}
+
+// RegisterAfterDeletePrevious indicates an expected call of RegisterAfterDeletePrevious.
+func (mr *MockStoreMockRecorder) RegisterAfterDeletePrevious(f any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterAfterDeletePrevious", reflect.TypeOf((*MockStore)(nil).RegisterAfterDeletePrevious), f)
+}
+
 // RegisterAfterUpdate mocks base method.
 func (m *MockStore) RegisterAfterUpdate(f func(string, any, db.TxClient) error) {
 	m.ctrl.T.Helper()

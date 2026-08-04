@@ -174,8 +174,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterAfterAdd(l.notifyEventAdded)
 	l.RegisterAfterUpdate(l.addIndexFields)
 	l.RegisterAfterUpdate(l.addLabels)
-	l.RegisterAfterUpdate(l.notifyEventModified)
-	l.RegisterAfterDelete(l.notifyEventDeleted)
+	l.RegisterAfterUpdatePrevious(l.notifyEventModified)
+	l.RegisterAfterDeletePrevious(l.notifyEventDeleted)
 	l.RegisterAfterDeleteAll(l.deleteFields)
 	l.RegisterAfterDeleteAll(l.deleteLabels)
 	l.RegisterBeforeDropAll(l.closeEventLog)
@@ -348,29 +348,19 @@ func (l *ListOptionIndexer) notifyEventAdded(key string, obj any, _ db.TxClient)
 	return l.notifyEvent(watch.Added, nil, obj)
 }
 
-func (l *ListOptionIndexer) notifyEventModified(key string, obj any, _ db.TxClient) error {
-	oldObj, exists, err := l.GetByKey(key)
-	if err != nil {
-		return fmt.Errorf("error getting old object: %w", err)
-	}
-
-	if !exists {
+func (l *ListOptionIndexer) notifyEventModified(key string, obj any, prev any, _ db.TxClient) error {
+	if prev == nil {
 		return fmt.Errorf("old object %q should be in store but was not", key)
 	}
 
-	return l.notifyEvent(watch.Modified, oldObj, obj)
+	return l.notifyEvent(watch.Modified, prev, obj)
 }
 
-func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, _ db.TxClient) error {
-	oldObj, exists, err := l.GetByKey(key)
-	if err != nil {
-		return fmt.Errorf("error getting old object: %w", err)
-	}
-
-	if !exists {
+func (l *ListOptionIndexer) notifyEventDeleted(key string, obj any, prev any, _ db.TxClient) error {
+	if prev == nil {
 		return fmt.Errorf("old object %q should be in store but was not", key)
 	}
-	return l.notifyEvent(watch.Deleted, oldObj, obj)
+	return l.notifyEvent(watch.Deleted, prev, obj)
 }
 
 func (l *ListOptionIndexer) notifyEvent(eventType watch.EventType, old any, current any) error {

@@ -69,7 +69,13 @@ type Store struct {
 	afterUpdate    []func(key string, obj any, tx db.TxClient) error
 	afterDelete    []func(key string, obj any, tx db.TxClient) error
 	afterDeleteAll []func(tx db.TxClient) error
-	beforeDropAll  []func(tx db.TxClient) error
+
+	// afterUpdatePrevious and afterDeletePrevious hold hooks that additionally
+	// need the revision the object had before this change. Registering one makes
+	// the store look that revision up before it opens the write transaction.
+	afterUpdatePrevious []func(key string, obj any, prev any, tx db.TxClient) error
+	afterDeletePrevious []func(key string, obj any, prev any, tx db.TxClient) error
+	beforeDropAll       []func(tx db.TxClient) error
 
 	lastSyncRV   string
 	lastSyncRVMu sync.RWMutex
@@ -363,12 +369,41 @@ func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetV
 
 // deleteByKey deletes the object associated with key, if it exists in this Store
 func (s *Store) deleteByKey(key string, obj any) error {
+	prev, err := s.previousFor(s.afterDeletePrevious, key)
+	if err != nil {
+		return err
+	}
 	return s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
 		if _, err := tx.Stmt(s.deleteStmt).Exec(key); err != nil {
 			return err
 		}
-		return s.runAfterDelete(key, obj, tx)
+		if err := s.runAfterDelete(key, obj, tx); err != nil {
+			return err
+		}
+		return s.runAfterDeletePrevious(key, obj, prev, tx)
 	})
+}
+
+// previousFor looks up the revision of key currently stored, or returns nil if
+// no hook needs it or there is no such revision.
+//
+// It deliberately runs before the caller opens its write transaction. GetByKey
+// is served by a connection taken from the pool rather than by the transaction,
+// so running it from inside a write transaction makes a transaction that
+// already holds the SQLite write lock wait on a second connection, which stalls
+// every other writer until that resolves.
+func (s *Store) previousFor(hooks []func(key string, obj any, prev any, tx db.TxClient) error, key string) (any, error) {
+	if len(hooks) == 0 {
+		return nil, nil
+	}
+	prev, exists, err := s.GetByKey(key)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+	return prev, nil
 }
 
 // GetByKey returns the object associated with the given object's key
@@ -430,11 +465,19 @@ func (s *Store) Update(obj any) error {
 		return err
 	}
 
+	prev, err := s.previousFor(s.afterUpdatePrevious, key)
+	if err != nil {
+		return err
+	}
+
 	err = s.WithTransaction(s.ctx, true, func(tx db.TxClient) error {
 		if err := s.Upsert(tx, s.upsertStmt, key, serialized); err != nil {
 			return err
 		}
-		return s.runAfterUpdate(key, obj, tx)
+		if err := s.runAfterUpdate(key, obj, tx); err != nil {
+			return err
+		}
+		return s.runAfterUpdatePrevious(key, obj, prev, tx)
 	})
 	if err != nil {
 		log.Errorf("Error in Store.Update for type %v: %v", s.name, err)
@@ -595,6 +638,18 @@ func (s *Store) RegisterAfterDeleteAll(f func(txC db.TxClient) error) {
 	s.afterDeleteAll = append(s.afterDeleteAll, f)
 }
 
+// RegisterAfterUpdatePrevious registers a func to be called after each update
+// event, receiving the revision the object had before the update.
+func (s *Store) RegisterAfterUpdatePrevious(f func(key string, obj any, prev any, txC db.TxClient) error) {
+	s.afterUpdatePrevious = append(s.afterUpdatePrevious, f)
+}
+
+// RegisterAfterDeletePrevious registers a func to be called after each deletion,
+// receiving the revision the object had before it was deleted.
+func (s *Store) RegisterAfterDeletePrevious(f func(key string, obj any, prev any, txC db.TxClient) error) {
+	s.afterDeletePrevious = append(s.afterDeletePrevious, f)
+}
+
 func (s *Store) RegisterBeforeDropAll(f func(txC db.TxClient) error) {
 	s.beforeDropAll = append(s.beforeDropAll, f)
 }
@@ -644,6 +699,28 @@ func (s *Store) runAfterDelete(key string, obj any, txC db.TxClient) error {
 	for _, f := range s.afterDelete {
 		err := f(key, obj, txC)
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runAfterUpdatePrevious executes functions registered to run after update
+// events that also need the previous revision of the object.
+func (s *Store) runAfterUpdatePrevious(key string, obj any, prev any, txC db.TxClient) error {
+	for _, f := range s.afterUpdatePrevious {
+		if err := f(key, obj, prev, txC); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runAfterDeletePrevious executes functions registered to run after delete
+// events that also need the previous revision of the object.
+func (s *Store) runAfterDeletePrevious(key string, obj any, prev any, txC db.TxClient) error {
+	for _, f := range s.afterDeletePrevious {
+		if err := f(key, obj, prev, txC); err != nil {
 			return err
 		}
 	}

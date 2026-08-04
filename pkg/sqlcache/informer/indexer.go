@@ -70,6 +70,8 @@ type Store interface {
 	RegisterAfterAdd(f func(key string, obj any, tx db.TxClient) error)
 	RegisterAfterUpdate(f func(key string, obj any, tx db.TxClient) error)
 	RegisterAfterDelete(f func(key string, obj any, tx db.TxClient) error)
+	RegisterAfterUpdatePrevious(f func(key string, obj any, prev any, tx db.TxClient) error)
+	RegisterAfterDeletePrevious(f func(key string, obj any, prev any, tx db.TxClient) error)
 	RegisterAfterDeleteAll(f func(tx db.TxClient) error)
 	RegisterBeforeDropAll(f func(tx db.TxClient) error)
 	GetShouldEncrypt() bool
