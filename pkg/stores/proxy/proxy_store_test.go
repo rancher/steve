@@ -343,7 +343,7 @@ func TestCreate(t *testing.T) {
 					"apiVersion": "v1",
 					"kind":       "Secret",
 					"metadata": map[string]interface{}{
-						"generateName": "t-",
+						"generateName": "s-",
 						"namespace":    "testing-ns",
 					},
 				}},
