@@ -26,7 +26,6 @@ var (
 func (i *IntegrationSuite) TestListSorting() {
 	ctx := i.T().Context()
 	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,
@@ -127,7 +126,6 @@ func (i *IntegrationSuite) testSortScenario(ctx context.Context, scenario string
 func (i *IntegrationSuite) TestListSortPodsByStateName() {
 	ctx := i.T().Context()
 	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,

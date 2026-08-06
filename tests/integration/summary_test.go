@@ -59,7 +59,6 @@ type SummaryTestConfig struct {
 func (i *IntegrationSuite) TestSummary() {
 	ctx := i.T().Context()
 
-	// Apply common manifests once for both test modes
 	commonManifestsFile := filepath.Join(testdataSummaryDir, "common.manifests.yaml")
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
 	i.doManifest(ctx, commonManifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
@@ -69,16 +68,10 @@ func (i *IntegrationSuite) TestSummary() {
 	// Cleanup common manifests after all tests complete
 	defer i.doManifestReversed(ctx, commonManifestsFile, i.doDelete)
 
-	// Run SQL mode first, then non-SQL mode sequentially
-	i.Run("SQL", func() {
-		i.runSummaryTest(ctx, true, gvrs)
-	})
-	i.Run("NonSQL", func() {
-		i.runSummaryTest(ctx, false, gvrs)
-	})
+	i.runSummaryTest(ctx, gvrs)
 }
 
-func (i *IntegrationSuite) runSummaryTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
+func (i *IntegrationSuite) runSummaryTest(ctx context.Context, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 
 	// Custom authenticator: use impersonation if header present, otherwise admin
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
@@ -91,24 +84,14 @@ func (i *IntegrationSuite) runSummaryTest(ctx context.Context, sqlCache bool, gv
 	}
 	authMiddleware := auth.ToMiddleware(auth.AuthenticatorFunc(impersonateOrAdmin))
 
-	var steveHandler http.Handler
-	var err error
-	if sqlCache {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache: true,
-			SQLCacheFactoryOptions: factory.CacheFactoryOptions{
-				GCInterval:  15 * time.Minute,
-				GCKeepCount: 1000,
-				UseTempDir:  true,
-			},
-			AuthMiddleware: authMiddleware,
-		})
-	} else {
-		steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-			SQLCache:       false,
-			AuthMiddleware: authMiddleware,
-		})
-	}
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+			UseTempDir:  true,
+		},
+		AuthMiddleware: authMiddleware,
+	})
 	i.Require().NoError(err)
 
 	httpServer := httptest.NewServer(steveHandler)
@@ -153,7 +136,7 @@ func (i *IntegrationSuite) runSummaryTest(ctx context.Context, sqlCache bool, gv
 				defer i.doManifestReversed(ctx, scenarioManifestsFile, i.doDelete)
 			}
 
-			i.testSummaryScenario(ctx, config, baseURL, sqlCache, csvWriter)
+			i.testSummaryScenario(ctx, config, baseURL, csvWriter)
 		})
 	}
 }
@@ -169,13 +152,10 @@ func (i *IntegrationSuite) readSummaryTestConfig(testFile string) SummaryTestCon
 	return config
 }
 
-func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config SummaryTestConfig, baseURL string, sqlCache bool, csvWriter *csv.Writer) {
+func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config SummaryTestConfig, baseURL string, csvWriter *csv.Writer) {
 	// Track continue token and revision across tests in this scenario
 	var lastContinueToken string
 	var lastRevision string
-	if !sqlCache {
-		i.T().Skip("Skipping non-sql tests")
-	}
 
 	for _, test := range config.Tests {
 		i.Run(test.Description, func() {
@@ -189,10 +169,8 @@ func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config Summa
 				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
 			}
 
-			// Convert labelSelector/fieldSelector to filter format for SQL mode
-			if sqlCache {
-				query = convertQueryForSQLCache(query)
-			}
+			// Convert labelSelector/fieldSelector to filter format for the SQL cache
+			query = convertQueryForSQLCache(query)
 			url := buildURLRaw(baseURL, config.SchemaID, test.Namespace, query)
 			fmt.Println(url)
 
