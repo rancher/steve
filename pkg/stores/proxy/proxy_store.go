@@ -34,6 +34,7 @@ import (
 
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/schema/converter"
 	metricsStore "github.com/rancher/steve/pkg/stores/metrics"
 	"github.com/rancher/steve/pkg/stores/partition"
 )
@@ -431,7 +432,11 @@ func (s *Store) Create(apiOp *types.APIRequest, schema *types.APISchema, params 
 	generateName := input.String("metadata", "generateName")
 
 	if name == "" && generateName == "" {
-		input.SetNested(schema.ID[0:1]+"-", "metadata", "generateName")
+		prefix := schema.ID[0:1] + "-"
+		if gvk := attributes.GVK(schema); gvk.Kind != "" {
+			prefix = converter.GenerateNamePrefix(gvk.Kind)
+		}
+		input.SetNested(prefix, "metadata", "generateName")
 	}
 
 	if attributes.Namespaced(schema) && namespace == "" {
