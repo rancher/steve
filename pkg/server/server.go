@@ -75,7 +75,6 @@ type Server struct {
 
 	aggregationSecretNamespace string
 	aggregationSecretName      string
-	SQLCache                   bool
 }
 
 // SQLCacheDBPath returns the path to the SQLite database file backing the SQL cache,
@@ -99,8 +98,6 @@ type Options struct {
 	AggregationSecretName      string
 	ClusterRegistry            string
 	ServerVersion              string
-	// SQLCache enables the SQLite-based caching mechanism
-	SQLCache bool
 
 	SQLCacheFactoryOptions factory.CacheFactoryOptions
 
@@ -121,29 +118,23 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		opts = &Options{}
 	}
 
-	var cacheFactory *factory.CacheFactory
-	if opts.SQLCache {
-		var err error
-		cacheFactory, err = factory.NewCacheFactory(opts.SQLCacheFactoryOptions)
-		if err != nil {
-			return nil, fmt.Errorf("creating SQL cache factory: %w", err)
-		}
+	cacheFactory, err := factory.NewCacheFactory(opts.SQLCacheFactoryOptions)
+	if err != nil {
+		return nil, fmt.Errorf("creating SQL cache factory: %w", err)
 	}
 
 	server := &Server{
-		RESTConfig:                 restConfig,
-		ClientFactory:              opts.ClientFactory,
-		AccessSetLookup:            opts.AccessSetLookup,
-		authMiddleware:             opts.AuthMiddleware,
-		controllers:                opts.Controllers,
-		next:                       opts.Next,
-		router:                     opts.Router,
-		aggregationSecretNamespace: opts.AggregationSecretNamespace,
-		aggregationSecretName:      opts.AggregationSecretName,
-		ClusterRegistry:            opts.ClusterRegistry,
-		Version:                    opts.ServerVersion,
-		// SQLCache enables the SQLite-based lasso caching mechanism
-		SQLCache:                      opts.SQLCache,
+		RESTConfig:                    restConfig,
+		ClientFactory:                 opts.ClientFactory,
+		AccessSetLookup:               opts.AccessSetLookup,
+		authMiddleware:                opts.AuthMiddleware,
+		controllers:                   opts.Controllers,
+		next:                          opts.Next,
+		router:                        opts.Router,
+		aggregationSecretNamespace:    opts.AggregationSecretNamespace,
+		aggregationSecretName:         opts.AggregationSecretName,
+		ClusterRegistry:               opts.ClusterRegistry,
+		Version:                       opts.ServerVersion,
 		cacheFactory:                  cacheFactory,
 		extensionAPIServer:            opts.ExtensionAPIServer,
 		SkipWaitForExtensionAPIServer: opts.SkipWaitForExtensionAPIServer,
@@ -218,49 +209,40 @@ func setup(ctx context.Context, server *Server) error {
 		return err
 	}
 
-	var onSchemasHandler schemacontroller.SchemasHandlerFunc
-	if server.SQLCache {
-		sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, server.cacheFactory, false)
-		if err != nil {
-			return err
-		}
+	sqlStore, err := sqlproxy.NewProxyStore(ctx, cols, cf, summaryCache, summaryCache, sf, server.cacheFactory, false)
+	if err != nil {
+		return err
+	}
 
-		errStore := proxy.NewErrorStore(
-			proxy.NewUnformatterStore(
-				proxy.NewWatchRefresh(
-					sqlpartition.NewStore(
-						sqlStore,
-						asl,
-					),
+	errStore := proxy.NewErrorStore(
+		proxy.NewUnformatterStore(
+			proxy.NewWatchRefresh(
+				sqlpartition.NewStore(
+					sqlStore,
 					asl,
 				),
+				asl,
 			),
-		)
-		store := metricsStore.NewMetricsStore(errStore)
-		// end store setup code
+		),
+	)
+	store := metricsStore.NewMetricsStore(errStore)
 
-		for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
-			sf.AddTemplate(template)
-		}
+	for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
+		sf.AddTemplate(template)
+	}
 
-		sqlSchemaTracker := schematracker.NewSchemaTracker(sqlStore)
+	sqlSchemaTracker := schematracker.NewSchemaTracker(sqlStore)
 
-		onSchemasHandler = func(schemas *schema.Collection) error {
-			var retErr error
+	onSchemasHandler := func(schemas *schema.Collection) error {
+		var retErr error
 
-			err := ccache.OnSchemas(schemas)
-			retErr = errors.Join(retErr, err)
+		err := ccache.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
 
-			err = sqlSchemaTracker.OnSchemas(schemas)
-			retErr = errors.Join(retErr, err)
+		err = sqlSchemaTracker.OnSchemas(schemas)
+		retErr = errors.Join(retErr, err)
 
-			return retErr
-		}
-	} else {
-		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), server.controllers.Core.Namespace().Cache(), common.TemplateOptions{InSQLMode: false}) {
-			sf.AddTemplate(template)
-		}
-		onSchemasHandler = ccache.OnSchemas
+		return retErr
 	}
 
 	schemas.SetupWatcher(ctx, server.BaseSchemas, asl, sf)
