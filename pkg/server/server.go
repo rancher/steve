@@ -227,7 +227,7 @@ func setup(ctx context.Context, server *Server) error {
 	)
 	store := metricsStore.NewMetricsStore(errStore)
 
-	for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery(), common.TemplateOptions{InSQLMode: true}) {
+	for _, template := range resources.DefaultSchemaTemplatesForStore(store, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
 		sf.AddTemplate(template)
 	}
 

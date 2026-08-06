@@ -45,11 +45,10 @@ func DefaultSchemaTemplatesForStore(store types.Store,
 	baseSchemas *types.APISchemas,
 	summaryCache *summarycache.SummaryCache,
 	lookup accesscontrol.AccessSetLookup,
-	discovery discovery.DiscoveryInterface,
-	options common.TemplateOptions) []schema.Template {
+	discovery discovery.DiscoveryInterface) []schema.Template {
 
 	return []schema.Template{
-		common.DefaultTemplateForStore(store, summaryCache, lookup, options),
+		common.DefaultTemplateForStore(store, summaryCache, lookup),
 		apigroups.Template(discovery),
 		{
 			ID:        "configmap",

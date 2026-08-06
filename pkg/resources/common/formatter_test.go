@@ -1136,7 +1136,7 @@ func Test_formatterLinks(t *testing.T) {
 				APIObject: test.apiObject,
 				Links:     test.currentLinks,
 			}
-			fmtter := formatter(nil, asl, TemplateOptions{InSQLMode: false})
+			fmtter := formatter(nil, asl)
 			fmtter(request, resource)
 			require.Equal(t, test.wantLinks, resource.Links)
 
@@ -1337,7 +1337,7 @@ func TestFormatterAddsResourcePermissions(t *testing.T) {
 
 			asl.EXPECT().AccessFor(&defaultUserInfo).Return(&accessSet).AnyTimes()
 
-			formatter := formatter(fakeCache, asl, TemplateOptions{InSQLMode: false})
+			formatter := formatter(fakeCache, asl)
 			formatter(req, resource)
 
 			// Extract the resultant resourcePermissions

@@ -25,18 +25,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/duration"
 )
 
-type TemplateOptions struct {
-	InSQLMode bool
-}
-
 // DefaultTemplateForStore provides a default schema template which uses a provided, pre-initialized store. Primarily used when creating a Template that uses a Lasso SQL store internally.
 func DefaultTemplateForStore(store types.Store,
 	summaryCache *summarycache.SummaryCache,
-	asl accesscontrol.AccessSetLookup,
-	options TemplateOptions) schema.Template {
+	asl accesscontrol.AccessSetLookup) schema.Template {
 	return schema.Template{
 		Store:     store,
-		Formatter: formatter(summaryCache, asl, options),
+		Formatter: formatter(summaryCache, asl),
 	}
 }
 
@@ -82,7 +77,7 @@ func buildBasePath(gvr schema2.GroupVersionResource, namespace string, includeNa
 	return buf.String()
 }
 
-func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLookup, options TemplateOptions) types.Formatter {
+func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLookup) types.Formatter {
 	return func(request *types.APIRequest, resource *types.RawResource) {
 		if resource.Schema == nil {
 			return
@@ -165,11 +160,9 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 			excludeFields(request, unstr)
 			excludeValues(request, unstr)
 
-			if options.InSQLMode {
-				isCRD := attributes.IsCRD(resource.Schema)
-				convertMetadataMultiValueFields(request, gvk, unstr)
-				convertMetadataTimestampFields(request, gvk, unstr, isCRD)
-			}
+			isCRD := attributes.IsCRD(resource.Schema)
+			convertMetadataMultiValueFields(request, gvk, unstr)
+			convertMetadataTimestampFields(request, gvk, unstr, isCRD)
 		}
 
 		if permsQuery := request.Query.Get("checkPermissions"); permsQuery != "" {
