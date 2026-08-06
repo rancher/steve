@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/apiserver/pkg/subscribe"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/accesscontrol"
+	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/steve/pkg/resources/apigroups"
 	"github.com/rancher/steve/pkg/resources/cluster"
@@ -15,14 +16,13 @@ import (
 	"github.com/rancher/steve/pkg/resources/formatters"
 	"github.com/rancher/steve/pkg/resources/userpreferences"
 	"github.com/rancher/steve/pkg/schema"
-	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/steve/pkg/summarycache"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/discovery"
 )
 
 func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache clustercache.ClusterCache,
-	cg proxy.ClientGetter, schemaFactory schema.Factory, serverVersion string) error {
+	cg client.ClientGetter, schemaFactory schema.Factory, serverVersion string) error {
 	counts.Register(baseSchema, ccache)
 	subscribe.Register(baseSchema, func(apiOp *types.APIRequest) *types.APISchemas {
 		user, ok := request.UserFrom(apiOp.Context())

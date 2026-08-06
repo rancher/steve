@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rancher/steve/pkg/stores/proxy"
+	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/wrangler/v3/pkg/condition"
 	"github.com/rancher/wrangler/v3/pkg/randomtoken"
 	"github.com/rancher/wrangler/v3/pkg/schemas/validation"
@@ -35,14 +35,14 @@ const (
 
 type PodImpersonation struct {
 	roleTimeout time.Duration
-	cg          proxy.ClientGetter
+	cg          client.ClientGetter
 	key         string
 	imageName   func() string
 	pending     map[string]bool
 	pendingLock sync.Mutex
 }
 
-func New(key string, cg proxy.ClientGetter, roleTimeout time.Duration, imageName func() string) *PodImpersonation {
+func New(key string, cg client.ClientGetter, roleTimeout time.Duration, imageName func() string) *PodImpersonation {
 	return &PodImpersonation{
 		roleTimeout: roleTimeout,
 		cg:          cg,

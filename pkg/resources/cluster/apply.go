@@ -9,8 +9,8 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/client"
 	steveschema "github.com/rancher/steve/pkg/schema"
-	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/wrangler/v3/pkg/apply"
 	"github.com/rancher/wrangler/v3/pkg/yaml"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -21,7 +21,7 @@ import (
 )
 
 type Apply struct {
-	cg            proxy.ClientGetter
+	cg            client.ClientGetter
 	schemaFactory steveschema.Factory
 }
 
