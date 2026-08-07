@@ -2378,3 +2378,77 @@ func TestPatchFallsBackToAPIOpNamespace(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "testing-ns", gotNamespace)
 }
+
+func TestCacheForRetriesOnConcurrentReset(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+	bloi := NewMockByOptionsLister(gomock.NewController(t))
+	c := &factory.Cache{ByOptionsLister: &informer.Informer{ByOptionsLister: bloi}}
+
+	s := &Store{
+		clientGetter:     cg,
+		cacheFactory:     cf,
+		transformBuilder: tb,
+	}
+
+	apiOp := &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}
+	apiSchema := &types.APISchema{
+		Schema: &schemas.Schema{Attributes: map[string]interface{}{
+			"verbs": []string{"list", "watch"},
+		}},
+	}
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+	attributes.SetGVK(apiSchema, gvk)
+
+	cg.EXPECT().TableAdminClient(apiOp, apiSchema, "", &WarningBuffer{}).Return(ri, nil)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+
+	gomock.InOrder(
+		// First call races with a concurrent schema Stop() and should be retried, not failed.
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w", gvk, factory.ErrCacheReset)),
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(c, nil),
+	)
+
+	got, err := s.cacheFor(context.Background(), apiOp, apiSchema)
+	assert.NoError(t, err)
+	assert.Equal(t, c, got)
+}
+
+func TestCacheForDoesNotRetryOnOtherErrors(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+
+	s := &Store{
+		clientGetter:     cg,
+		cacheFactory:     cf,
+		transformBuilder: tb,
+	}
+
+	apiOp := &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}
+	apiSchema := &types.APISchema{
+		Schema: &schemas.Schema{Attributes: map[string]interface{}{
+			"verbs": []string{"list", "watch"},
+		}},
+	}
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+	attributes.SetGVK(apiSchema, gvk)
+
+	cg.EXPECT().TableAdminClient(apiOp, apiSchema, "", &WarningBuffer{}).Return(ri, nil)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+
+	// An unrelated, non-retryable error should be surfaced immediately, with no retry.
+	cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+		Times(1).
+		Return(nil, errors.New("boom"))
+
+	_, err := s.cacheFor(context.Background(), apiOp, apiSchema)
+	assert.Error(t, err)
+}
