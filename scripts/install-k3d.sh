@@ -2,15 +2,15 @@
 set -e
 
 # renovate: datasource=github-release-attachments depName=k3d-io/k3d
-K3D_VERSION=v5.8.3
-# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.8.3
-K3D_SUM_linux_amd64=dbaa79a76ace7f4ca230a1ff41dc7d8a5036a8ad0309e9c54f9bf3836dbe853e
-# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.8.3
-K3D_SUM_linux_arm64=0b8110f2229631af7402fb828259330985918b08fefd38b7f1b788a1c8687216
-# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.8.3
-K3D_SUM_darwin_amd64=fd0f8e9e8ea4d8bc3674572ca6ed0833b639bf57c43c708616d937377324cfea
-# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.8.3
-K3D_SUM_darwin_arm64=8da468daa7dc7cf7cdd4735f90a9bb05179fa27858250f62e3d8cdf5b5ca0698
+K3D_VERSION=v5.9.0
+# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.9.0
+K3D_SUM_linux_amd64=06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.9.0
+K3D_SUM_linux_arm64=03cde5cf23e6e8e67de5a039ecf26e5b85aca82fba3e5d13dadf904cd218a250
+# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.9.0
+K3D_SUM_darwin_amd64=b4aabc37534f95b9c764e7823f2df923f50d57600837aa60a06266cce47db732
+# renovate: datasource=github-release-attachments depName=k3d-io/k3d digestVersion=v5.9.0
+K3D_SUM_darwin_arm64=fe106541d5d0a3f18debcd4d432a16f8c0ce3e6ddc06f8fbb6f696a122313e00
 
 DEST_DIR="./bin"
 mkdir -p "$DEST_DIR"
