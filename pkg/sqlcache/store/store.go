@@ -451,6 +451,17 @@ func (s *Store) Delete(obj any) error {
 	if err != nil {
 		return err
 	}
+	if t, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = t.Obj
+	}
+	if obj == nil {
+		// Tombstone with no payload. DeltaFIFO.Replace synthesizes these
+		// when its knownObjects lookup failed during a re-list — and that
+		// knownObjects is this same Store. There's nothing to delete and
+		// nothing to hand the after-delete hooks.
+		logrus.Warnf("Store.Delete for type %v: tombstone with no payload for key %q; skipping", s.name, key)
+		return nil
+	}
 	err = s.deleteByKey(key, obj)
 	if err != nil {
 		log.Errorf("Error in Store.Delete for type %v: %v", s.name, err)
