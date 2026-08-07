@@ -87,6 +87,7 @@ func (i *IntegrationSuite) runListTest(ctx context.Context, sqlCache bool, gvrs 
 			SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 				GCInterval:  15 * time.Minute,
 				GCKeepCount: 1000,
+				UseTempDir:  true,
 			},
 			AuthMiddleware: authMiddleware,
 		})

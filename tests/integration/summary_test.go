@@ -99,6 +99,7 @@ func (i *IntegrationSuite) runSummaryTest(ctx context.Context, sqlCache bool, gv
 			SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 				GCInterval:  15 * time.Minute,
 				GCKeepCount: 1000,
+				UseTempDir:  true,
 			},
 			AuthMiddleware: authMiddleware,
 		})
