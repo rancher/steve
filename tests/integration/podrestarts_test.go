@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,10 +39,10 @@ func (i *IntegrationSuite) TestPodRestarts() {
 	time.Sleep(8 * time.Second)
 
 	// Run SQL mode only - these tests are specifically for SQL cache with multi-value field support
-	i.runPodRestartsTest(ctx, true, gvrs)
+	i.runPodRestartsTest(ctx, gvrs)
 }
 
-func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool, gvrs map[k8sschema.GroupVersionResource]struct{}) {
+func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
 		info, ok, err := auth.Impersonation(req)
 		if ok || err != nil {
@@ -67,9 +68,10 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 	steveServer := httptest.NewServer(steveHandler)
 	defer steveServer.Close()
 
-	// Wait for cache to be populated
-	if sqlCache {
-		time.Sleep(2 * time.Second)
+	// Wait for the pod schema (and any other applied types) to be registered before
+	// hitting the API - a fixed sleep isn't enough on a slow/cold cluster.
+	for gvr := range gvrs {
+		i.waitForSchema(steveServer.URL, gvr)
 	}
 
 	matches, err := filepath.Glob(filepath.Join(testdataPodRestartsDir, "*.test.yaml"))
@@ -91,53 +93,65 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, sqlCache bool
 					url := buildURLRaw(steveServer.URL, config.SchemaID, test.Namespace, test.Query)
 					i.T().Logf("Testing: %s", url)
 
-					req, err := http.NewRequest("GET", url, nil)
-					i.Require().NoError(err)
-
-					if test.User != "" {
-						req.Header.Set("Impersonate-User", test.User)
-					}
-
-					resp, err := http.DefaultClient.Do(req)
-					i.Require().NoError(err)
-					defer resp.Body.Close()
-
-					i.Assert().Equal(http.StatusOK, resp.StatusCode, "request should succeed")
-
-					type Response struct {
-						Data []struct {
-							Metadata struct {
-								Name string `json:"name"`
-							} `json:"metadata"`
-						} `json:"data"`
-					}
-
-					var parsed Response
-					err = json.NewDecoder(resp.Body).Decode(&parsed)
-					i.Require().NoError(err)
-
-					var actualNames []string
-					for _, pod := range parsed.Data {
-						actualNames = append(actualNames, pod.Metadata.Name)
-					}
-
-					if test.ExpectContains {
-						expectedNames := make([]string, 0, len(test.Expect))
-						for _, expected := range test.Expect {
-							expectedNames = append(expectedNames, expected["name"])
+					// The SQL cache indexer processes newly-applied pods asynchronously,
+					// so even after the schema is registered the rows may not be indexed
+					// yet. Retry until the expected data shows up.
+					i.Require().EventuallyWithT(func(c *assert.CollectT) {
+						req, err := http.NewRequest("GET", url, nil)
+						if !assert.NoError(c, err) {
+							return
 						}
 
-						for _, expectedName := range expectedNames {
-							i.Assert().Contains(actualNames, expectedName, "expected pod %q to be in response", expectedName)
-						}
-					} else {
-						expectedNames := make([]string, 0, len(test.Expect))
-						for _, expected := range test.Expect {
-							expectedNames = append(expectedNames, expected["name"])
+						if test.User != "" {
+							req.Header.Set("Impersonate-User", test.User)
 						}
 
-						i.Assert().Equal(expectedNames, actualNames, "pod list order mismatch")
-					}
+						resp, err := http.DefaultClient.Do(req)
+						if !assert.NoError(c, err) {
+							return
+						}
+						defer resp.Body.Close()
+
+						if !assert.Equal(c, http.StatusOK, resp.StatusCode, "request should succeed") {
+							return
+						}
+
+						type Response struct {
+							Data []struct {
+								Metadata struct {
+									Name string `json:"name"`
+								} `json:"metadata"`
+							} `json:"data"`
+						}
+
+						var parsed Response
+						if !assert.NoError(c, json.NewDecoder(resp.Body).Decode(&parsed)) {
+							return
+						}
+
+						var actualNames []string
+						for _, pod := range parsed.Data {
+							actualNames = append(actualNames, pod.Metadata.Name)
+						}
+
+						if test.ExpectContains {
+							expectedNames := make([]string, 0, len(test.Expect))
+							for _, expected := range test.Expect {
+								expectedNames = append(expectedNames, expected["name"])
+							}
+
+							for _, expectedName := range expectedNames {
+								assert.Contains(c, actualNames, expectedName, "expected pod %q to be in response", expectedName)
+							}
+						} else {
+							expectedNames := make([]string, 0, len(test.Expect))
+							for _, expected := range test.Expect {
+								expectedNames = append(expectedNames, expected["name"])
+							}
+
+							assert.Equal(c, expectedNames, actualNames, "pod list order mismatch")
+						}
+					}, 5*time.Second, 100*time.Millisecond)
 				})
 			}
 		})
