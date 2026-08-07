@@ -10,7 +10,7 @@ replace (
 	github.com/matryer/moq => github.com/rancher/moq v0.0.0-20190404221404-ee5226d43009
 	github.com/stretchr/testify => github.com/stretchr/testify v1.11.1
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
-	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
+	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.5
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.36.0
@@ -40,7 +40,7 @@ require (
 	github.com/tinylib/msgp v1.6.4
 	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/mock v0.6.0
-	go.yaml.in/yaml/v3 v3.0.4
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sync v0.22.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/yaml.v3 v3.0.1
