@@ -38,7 +38,6 @@ func (i *IntegrationSuite) TestPodRestarts() {
 	i.T().Log("Waiting for pods to stabilize (8 seconds)...")
 	time.Sleep(8 * time.Second)
 
-	// Run SQL mode only - these tests are specifically for SQL cache with multi-value field support
 	i.runPodRestartsTest(ctx, gvrs)
 }
 
@@ -52,10 +51,7 @@ func (i *IntegrationSuite) runPodRestartsTest(ctx context.Context, gvrs map[k8ss
 	}
 	authMiddleware := auth.ToMiddleware(auth.AuthenticatorFunc(impersonateOrAdmin))
 
-	var steveHandler http.Handler
-	var err error
-	steveHandler, err = server.New(ctx, i.restCfg, &server.Options{
-		SQLCache: true,
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
 		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
 			GCInterval:  15 * time.Minute,
 			GCKeepCount: 1000,

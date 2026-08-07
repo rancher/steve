@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/client"
 	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/resources/virtual"
@@ -51,8 +52,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/jsonpath"
 )
@@ -383,20 +382,6 @@ func init() {
 	metav1.AddToGroupVersion(paramScheme, metav1.SchemeGroupVersion)
 }
 
-// ClientGetter is a dynamic kubernetes client factory.
-type ClientGetter interface {
-	IsImpersonating() bool
-	K8sInterface(ctx *types.APIRequest) (kubernetes.Interface, error)
-	AdminK8sInterface() (kubernetes.Interface, error)
-	Client(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
-	DynamicClient(ctx *types.APIRequest, warningHandler rest.WarningHandler) (dynamic.Interface, error)
-	AdminClient(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
-	TableClient(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
-	TableAdminClient(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
-	TableClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
-	TableAdminClientForWatch(ctx *types.APIRequest, schema *types.APISchema, namespace string, warningHandler rest.WarningHandler) (dynamic.ResourceInterface, error)
-}
-
 type SchemaColumnSetter interface {
 	SetColumns(ctx context.Context, schema *types.APISchema) error
 }
@@ -444,7 +429,7 @@ type TransformBuilder interface {
 
 type Store struct {
 	ctx              context.Context
-	clientGetter     ClientGetter
+	clientGetter     client.ClientGetter
 	notifier         RelationshipNotifier
 	cacheFactory     CacheFactory
 	cfInitializer    CacheFactoryInitializer
@@ -466,7 +451,7 @@ type CacheFactory interface {
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
-func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, schemas SchemaCollection, factory CacheFactory, needToInitNamespaceCache bool) (*Store, error) {
+func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter client.ClientGetter, notifier RelationshipNotifier, scache virtualCommon.SummaryCache, schemas SchemaCollection, factory CacheFactory, needToInitNamespaceCache bool) (*Store, error) {
 	store := &Store{
 		ctx:              ctx,
 		clientGetter:     clientGetter,
