@@ -9,8 +9,8 @@ import (
 	detector "github.com/rancher/kubernetes-provider-detector"
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
+	"github.com/rancher/steve/pkg/client"
 	steveschema "github.com/rancher/steve/pkg/schema"
-	"github.com/rancher/steve/pkg/stores/proxy"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
-func Register(ctx context.Context, apiSchemas *types.APISchemas, cg proxy.ClientGetter, schemaFactory steveschema.Factory) {
+func Register(ctx context.Context, apiSchemas *types.APISchemas, cg client.ClientGetter, schemaFactory steveschema.Factory) {
 	apiSchemas.InternalSchemas.TypeName("management.cattle.io.cluster", Cluster{})
 
 	apiSchemas.MustImportAndCustomize(&ApplyInput{}, nil)
@@ -60,7 +60,7 @@ func Register(ctx context.Context, apiSchemas *types.APISchemas, cg proxy.Client
 	})
 }
 
-func discoveryClient(cg proxy.ClientGetter) discovery.DiscoveryInterface {
+func discoveryClient(cg client.ClientGetter) discovery.DiscoveryInterface {
 	k8s, err := cg.AdminK8sInterface()
 	if err != nil {
 		return nil
@@ -68,7 +68,7 @@ func discoveryClient(cg proxy.ClientGetter) discovery.DiscoveryInterface {
 	return k8s.Discovery()
 }
 
-func provider(ctx context.Context, cg proxy.ClientGetter) string {
+func provider(ctx context.Context, cg client.ClientGetter) string {
 	var (
 		provider string
 		err      error
