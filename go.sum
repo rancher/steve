@@ -178,6 +178,8 @@ github.com/prometheus/procfs v0.19.2 h1:zUMhqEW66Ex7OXIiDkll3tl9a1ZdilUOd/F6ZXw4
 github.com/prometheus/procfs v0.19.2/go.mod h1:M0aotyiemPhBCM0z5w87kL22CxfcH05ZpYlu+b4J7mw=
 github.com/rancher/apiserver v0.9.8 h1:GC3jG042MokF37KHf4B3B8+XtZ+vTCT4ugtIcv6zZ0U=
 github.com/rancher/apiserver v0.9.8/go.mod h1:9Yb0jmFhnIJ1Mh1Wh84VnusSKT2RRye3W4K6gsxzQBk=
+github.com/rancher/apiserver v0.9.9 h1:FFOHbeA0GufVaosuJy9/dDh+czSTBUoWCRhPV5RNKzI=
+github.com/rancher/apiserver v0.9.9/go.mod h1:n0NjPc9f6rbwOjjRHaypLRNITe7GBKfMx2XH15IcAPQ=
 github.com/rancher/dynamiclistener v0.9.0-rc.3 h1:OywN69tzE84jGKNvtsPSdwzuE4IQzJVAN/Uoi2RcrkU=
 github.com/rancher/dynamiclistener v0.9.0-rc.3/go.mod h1:3Hcbw5m/9/RMas1eeghac6pdN2/cJ2BkNcIDjOCcEQg=
 github.com/rancher/dynamiclistener v0.9.1-rc.1 h1:JnGr/Vv4h7jayK7uyR5R743zlfjMC5xvcewO4P4hOxU=
