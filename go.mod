@@ -32,7 +32,7 @@ require (
 	github.com/rancher/dynamiclistener v0.9.1-rc.1
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/norman v0.9.8
+	github.com/rancher/norman v0.9.10
 	github.com/rancher/remotedialer v0.6.1
 	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/sirupsen/logrus v1.9.4
