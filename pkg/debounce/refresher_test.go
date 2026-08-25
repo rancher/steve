@@ -22,10 +22,11 @@ func newMockRefresher(buffer int) *mockRefresher {
 	}
 }
 
-// Refresh increments the counter and sends a signal on the channel.
+// Refresh increments the counter and sends a signal on the channel. The counter is
+// incremented first so that a test woken by the signal always observes the new count.
 func (m *mockRefresher) Refresh() error {
-	m.refreshCh <- struct{}{}
 	m.refreshCount.Add(1)
+	m.refreshCh <- struct{}{}
 	return nil
 }
 
