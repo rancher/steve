@@ -22,9 +22,9 @@ jobs:
     - name: Install mockgen
       run: go install go.uber.org/mock/mockgen@v0.4.0
     - name: Install golangci-lint
-      uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+      uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
       with:
-        version: v1.63.4
+        version: v2.11.4
     - name: Build
       run: make build-bin
     - name: Test
