@@ -33,6 +33,7 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/ownership"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/schema/converter"
@@ -1058,27 +1059,20 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return
 	}
 
-	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
+	if f, ok := ownership.Lookup(gvk); ok {
 		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
 		// See https://github.com/rancher/rancher/blob/7266e5e624f0d610c76ab0af33e30f5b72e11f61/pkg/ext/stores/tokens/tokens.go#L1186C2-L1195C3
 		// for similar code on how we determine if a user is admin
-		if accessSet == nil || !accessSet.Grants("list", schema.GroupResource{
+		isAdmin := accessSet != nil && accessSet.Grants("list", schema.GroupResource{
 			Resource: "*",
-		}, "", "") {
-			user, ok := request.UserFrom(apiOp.Request.Context())
-			if !ok {
-				err = apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
-				return
-			}
-			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
-				Filters: []sqltypes.Filter{
-					{
-						Field:   []string{"metadata", "labels", "cattle.io/user-id"},
-						Matches: []string{user.GetName()},
-						Op:      sqltypes.Eq,
-					},
-				},
-			})
+		}, "", "")
+		userInfo, ok := request.UserFrom(apiOp.Request.Context())
+		if !ok {
+			err = apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
+			return
+		}
+		if orFilter := f.SQLFilter(userInfo, isAdmin); orFilter != nil {
+			opts.Filters = append(opts.Filters, *orFilter)
 		}
 	}
 

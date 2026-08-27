@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/client"
 	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/ownership"
 	"github.com/rancher/steve/pkg/sqlcache/informer"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/rancher/steve/pkg/sqlcache/partition"
@@ -1033,6 +1034,20 @@ func TestAugmentRelationships(t *testing.T) {
 }
 
 func TestListByPartitionWithUserAccess(t *testing.T) {
+	targetGroup := "ext.cattle.io"
+	targetKind := "Token"
+	gvk := schema2.GroupVersionKind{
+		Group:   targetGroup,
+		Version: "v1",
+		Kind:    targetKind,
+	}
+	// This test exercises the ownership filter that (in production) is
+	// registered by rancher/rancher's pkg/ext/stores/install.go for its
+	// extension-apiserver-backed resources -- register the equivalent
+	// filter here so this test doesn't depend on rancher/rancher wiring.
+	ownership.Register(gvk, ownership.NewUserIDLabelFilter("cattle.io/user-id"))
+	defer ownership.Unregister(gvk)
+
 	type testCase struct {
 		description     string
 		accessSetSetter func(accessSet *accesscontrol.AccessSet)
@@ -1091,8 +1106,6 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			}
 			var partitions []partition.Partition
 			username := "flip"
-			targetGroup := "ext.cattle.io"
-			targetKind := "Token"
 			accessSet := &accesscontrol.AccessSet{ID: username}
 			accessSet.Add("list",
 				schema2.GroupResource{Group: targetGroup, Resource: "token"},
@@ -1120,10 +1133,6 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 					},
 					"verbs": []string{"list", "watch"},
 				}},
-			}
-			gvk := schema2.GroupVersionKind{
-				Group: targetGroup,
-				Kind:  targetKind,
 			}
 			opts := &sqltypes.ListOptions{
 				Filters: test.orFilters,
