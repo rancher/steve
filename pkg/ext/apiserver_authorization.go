@@ -53,3 +53,15 @@ func (a *AccessSetAuthorizer) Authorize(ctx context.Context, attrs authorizer.At
 	//     testtypes.ext.cattle.io is forbidden: User "unknown-user" cannot list resource "testtypes" in API group "ext.cattle.io" at the cluster scope
 	return authorizer.DecisionDeny, "", nil
 }
+
+// ConditionsAwareAuthorize implements [authorizer.Authorizer]. This authorizer
+// does not support conditions, so it always returns an unconditional decision.
+func (a *AccessSetAuthorizer) ConditionsAwareAuthorize(ctx context.Context, attrs authorizer.Attributes) authorizer.ConditionsAwareDecision {
+	return authorizer.ConditionsAwareDecisionFromParts(a.Authorize(ctx, attrs))
+}
+
+// EvaluateConditions implements [authorizer.Authorizer]. This authorizer does
+// not support conditions, so it always fails closed.
+func (a *AccessSetAuthorizer) EvaluateConditions(ctx context.Context, decision authorizer.ConditionsAwareDecision, data authorizer.ConditionsData) (authorized authorizer.Decision, reason string, err error) {
+	return authorizer.DecisionDeny, "", authorizer.ErrorConditionEvaluationNotSupported
+}
