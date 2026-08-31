@@ -48,9 +48,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	rtschema "k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
@@ -792,6 +794,25 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 	}
 
+	// Some resources (eg: ext.cattle.io Tokens and Kubeconfigs) scope
+	// visibility to their owning user by something other than RBAC -- see
+	// pkg/resources/ownership. ListByPartitions already applies that
+	// scoping to list/count results; apply the same scoping here so watch
+	// events for such resources aren't broadcast to every subscriber
+	// regardless of ownership.
+	gvk := attributes.GVK(schema)
+	ownershipFilter, hasOwnershipFilter := ownership.Lookup(gvk)
+	var ownerUserInfo user.Info
+	var ownerIsAdmin bool
+	if hasOwnershipFilter {
+		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
+		// See ListByPartitions above for how isAdmin is determined.
+		ownerIsAdmin = accessSet != nil && accessSet.Grants("list", rtschema.GroupResource{
+			Resource: "*",
+		}, "", "")
+		ownerUserInfo, _ = request.UserFrom(apiOp.Request.Context())
+	}
+
 	result := make(chan watch.Event)
 	go func() {
 		defer cancel()
@@ -811,7 +832,40 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 				Selector:  selector,
 			},
 		}
-		err := inf.ByOptionsLister.Watch(ctx, opts, result)
+
+		events := result
+		if hasOwnershipFilter {
+			// Interpose an unfiltered channel between the informer and the
+			// caller-visible result channel so each event's ownership can be
+			// checked before it's forwarded.
+			unfiltered := make(chan watch.Event)
+			events = unfiltered
+			forwarderDone := make(chan struct{})
+			go func() {
+				defer close(forwarderDone)
+				for event := range unfiltered {
+					if event.Type == watch.Error {
+						result <- event
+						continue
+					}
+					m, err := meta.Accessor(event.Object)
+					if err != nil {
+						logrus.Debugf("watch cannot process unexpected object: %s", err)
+						continue
+					}
+					if !ownershipFilter.Matches(ownerUserInfo, ownerIsAdmin, m.GetLabels()) {
+						continue
+					}
+					result <- event
+				}
+			}()
+			defer func() {
+				close(unfiltered)
+				<-forwarderDone
+			}()
+		}
+
+		err := inf.ByOptionsLister.Watch(ctx, opts, events)
 		if err != nil {
 			returnErr(err, result)
 			return
