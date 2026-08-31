@@ -2,7 +2,6 @@ package ui
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -94,7 +93,7 @@ func NewUIHandler(opts *Options) *Handler {
 
 func (u *Handler) canDownload(url string) bool {
 	u.downloadOnce.Do(func() {
-		if err := serveIndex(ioutil.Discard, url); err == nil {
+		if err := serveIndex(io.Discard, url); err == nil {
 			u.downloadSuccess = true
 		} else {
 			logrus.Errorf("Failed to download %s, falling back to packaged UI", url)
