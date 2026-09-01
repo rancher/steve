@@ -10,11 +10,14 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/clustercache"
+	"github.com/rancher/steve/pkg/resources/ownership"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
 var (
@@ -329,6 +332,21 @@ func (s *Store) getCount(apiOp *types.APIRequest) Count {
 
 		all := access.Grants("list", "*", "*")
 
+		// Some resources from Rancher extension apiservers have additional
+		// visibility that is not just based on RBAC. (eg: ext.cattle.io/v1 Tokens)
+		//
+		// Those requires more filtering rules.
+		ownershipFilter, hasOwnershipFilter := ownership.Lookup(gvk)
+		var userInfo user.Info
+		var isAdmin bool
+		if hasOwnershipFilter {
+			userInfo, _ = request.UserFrom(apiOp.Request.Context())
+			accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
+			isAdmin = accessSet != nil && accessSet.Grants("list", schema2.GroupResource{
+				Resource: "*",
+			}, "", "")
+		}
+
 		for _, obj := range s.ccache.List(gvk) {
 			name, ns, revision, summary, ok := getInfo(obj, schema)
 			if !ok {
@@ -337,6 +355,13 @@ func (s *Store) getCount(apiOp *types.APIRequest) Count {
 
 			if !all && !access.Grants("list", ns, name) && !access.Grants("get", ns, name) {
 				continue
+			}
+
+			if hasOwnershipFilter {
+				objMeta, err := meta.Accessor(obj)
+				if err != nil || userInfo == nil || !ownershipFilter.Matches(userInfo, isAdmin, objMeta.GetLabels()) {
+					continue
+				}
 			}
 
 			if revision > rev {

@@ -33,6 +33,7 @@ import (
 	"github.com/rancher/steve/pkg/client"
 	controllerschema "github.com/rancher/steve/pkg/controllers/schema"
 	"github.com/rancher/steve/pkg/resources/common"
+	"github.com/rancher/steve/pkg/resources/ownership"
 	"github.com/rancher/steve/pkg/resources/virtual"
 	virtualCommon "github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/schema/converter"
@@ -46,10 +47,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
@@ -278,9 +280,9 @@ var (
 		"id":                  &informer.JSONPathField{Path: []string{"id"}},
 		"metadata.state.name": &informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
 	}
-	namespaceGVK             = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
-	mcioProjectGvk           = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
-	pcioClusterGvk           = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
+	namespaceGVK             = k8sschema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
+	mcioProjectGvk           = k8sschema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
+	pcioClusterGvk           = k8sschema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
 	namespaceProjectLabelDep = sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
 		SourceGVK: gvkKey("", "v1", "Namespace"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
@@ -295,7 +297,7 @@ var (
 		ExternalLabelDependencies: []sqltypes.ExternalLabelDependency{namespaceProjectLabelDep},
 	}
 
-	secretGVK                    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+	secretGVK                    = k8sschema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
 	secretProjectLabelDisplayDep = sqltypes.MustNewExternalLabelDependency(sqltypes.ExternalLabelDependency{
 		SourceGVK: gvkKey("", "v1", "Secret"),
 		TargetGVK: gvkKey("management.cattle.io", "v3", "Project"),
@@ -388,13 +390,13 @@ type SchemaColumnSetter interface {
 
 type SchemaCollection interface {
 	Schema(id string) *types.APISchema
-	ByGVK(gvk schema.GroupVersionKind) string
+	ByGVK(gvk k8sschema.GroupVersionKind) string
 }
 
 type Cache interface {
 	// AugmentList takes a list of resources, and for some of them,
 	// adds related data to each item in the list
-	AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK schema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error
+	AugmentList(ctx context.Context, list *unstructured.UnstructuredList, childGVK k8sschema.GroupVersionKind, childSchemaName string, useSelectors bool, accessList accesscontrol.AccessListByVerb) error
 
 	// ListByOptions returns objects according to the specified list options and partitions.
 	// Specifically:
@@ -424,7 +426,7 @@ type RelationshipNotifier interface {
 }
 
 type TransformBuilder interface {
-	GetTransformFunc(gvk schema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc
+	GetTransformFunc(gvk k8sschema.GroupVersionKind, colDefs []common.ColumnDefinition, isCRD bool, jsonPaths map[string]*jsonpath.JSONPath) cache.TransformFunc
 }
 
 type Store struct {
@@ -445,9 +447,9 @@ type Store struct {
 type CacheFactoryInitializer func() (CacheFactory, error)
 
 type CacheFactory interface {
-	CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk schema.GroupVersionKind, namespaced bool, watchable bool, disableWatchList bool) (*factory.Cache, error)
+	CacheFor(ctx context.Context, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, client dynamic.ResourceInterface, gvk k8sschema.GroupVersionKind, namespaced bool, watchable bool, disableWatchList bool) (*factory.Cache, error)
 	DoneWithCache(*factory.Cache)
-	Stop(gvk schema.GroupVersionKind) error
+	Stop(gvk k8sschema.GroupVersionKind) error
 }
 
 // NewProxyStore returns a Store implemented directly on top of kubernetes.
@@ -480,7 +482,7 @@ func NewProxyStore(ctx context.Context, c SchemaColumnSetter, clientGetter clien
 }
 
 // Reset locks the store, resets the underlying cache factory, and warm the namespace cache.
-func (s *Store) Reset(gvk schema.GroupVersionKind) error {
+func (s *Store) Reset(gvk k8sschema.GroupVersionKind) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.namespaceCache != nil && gvk == namespaceGVK {
@@ -561,7 +563,7 @@ func (s *Store) initializeNamespaceCache() error {
 	return nil
 }
 
-func getFieldForGVK(gvk schema.GroupVersionKind) map[string]informer.IndexedField {
+func getFieldForGVK(gvk k8sschema.GroupVersionKind) map[string]informer.IndexedField {
 	fields := make(map[string]informer.IndexedField)
 	// Add common fields
 	for k, v := range commonIndexFields {
@@ -582,7 +584,7 @@ func gvkKey(group, version, kind string) string {
 // getFieldAndColInfo converts object field names from types.APISchema's format into steve's
 // cache.sql.informer's IndexedField format (e.g. "metadata.resourceVersion" is ["metadata", "resourceVersion"])
 // It also returns type info for each field
-func getFieldAndColInfo(s *types.APISchema, gvk schema.GroupVersionKind) (map[string]informer.IndexedField, []common.ColumnDefinition) {
+func getFieldAndColInfo(s *types.APISchema, gvk k8sschema.GroupVersionKind) (map[string]informer.IndexedField, []common.ColumnDefinition) {
 	fields := make(map[string]informer.IndexedField)
 	colDefs := common.GetColumnDefinitions(s)
 	typeGuidance := getTypeGuidance(colDefs, gvk)
@@ -791,6 +793,25 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 	}
 
+	// Some resources (eg: ext.cattle.io Tokens and Kubeconfigs) scope
+	// visibility to their owning user by something other than RBAC -- see
+	// pkg/resources/ownership. ListByPartitions already applies that
+	// scoping to list/count results; apply the same scoping here so watch
+	// events for such resources aren't broadcast to every subscriber
+	// regardless of ownership.
+	gvk := attributes.GVK(schema)
+	ownershipFilter, hasOwnershipFilter := ownership.Lookup(gvk)
+	var ownerUserInfo user.Info
+	var ownerIsAdmin bool
+	if hasOwnershipFilter {
+		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
+		// See ListByPartitions above for how isAdmin is determined.
+		ownerIsAdmin = accessSet != nil && accessSet.Grants("list", k8sschema.GroupResource{
+			Resource: "*",
+		}, "", "")
+		ownerUserInfo, _ = request.UserFrom(apiOp.Request.Context())
+	}
+
 	result := make(chan watch.Event)
 	go func() {
 		defer cancel()
@@ -810,7 +831,40 @@ func (s *Store) watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 				Selector:  selector,
 			},
 		}
-		err := inf.ByOptionsLister.Watch(ctx, opts, result)
+
+		events := result
+		if hasOwnershipFilter {
+			// Interpose an unfiltered channel between the informer and the
+			// caller-visible result channel so each event's ownership can be
+			// checked before it's forwarded.
+			unfiltered := make(chan watch.Event)
+			events = unfiltered
+			forwarderDone := make(chan struct{})
+			go func() {
+				defer close(forwarderDone)
+				for event := range unfiltered {
+					if event.Type == watch.Error {
+						result <- event
+						continue
+					}
+					m, err := meta.Accessor(event.Object)
+					if err != nil {
+						logrus.Debugf("watch cannot process unexpected object: %s", err)
+						continue
+					}
+					if !ownershipFilter.Matches(ownerUserInfo, ownerIsAdmin, m.GetLabels()) {
+						continue
+					}
+					result <- event
+				}
+			}()
+			defer func() {
+				close(unfiltered)
+				<-forwarderDone
+			}()
+		}
+
+		err := inf.ByOptionsLister.Watch(ctx, opts, events)
 		if err != nil {
 			returnErr(err, result)
 			return
@@ -982,7 +1036,7 @@ func (s *Store) Delete(apiOp *types.APIRequest, schema *types.APISchema, id stri
 	return obj, buffer, nil
 }
 
-var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
+var TypeGuidanceTable = map[k8sschema.GroupVersionKind]map[string]string{
 	{Group: "", Version: "v1", Kind: "Secret"}: {
 		"metadata.fields[2]": "INT",
 	},
@@ -994,7 +1048,7 @@ var TypeGuidanceTable = map[schema.GroupVersionKind]map[string]string{
 	},
 }
 
-func getTypeGuidance(cols []common.ColumnDefinition, gvk schema.GroupVersionKind) map[string]string {
+func getTypeGuidance(cols []common.ColumnDefinition, gvk k8sschema.GroupVersionKind) map[string]string {
 	guidance := make(map[string]string)
 	ptn := regexp.MustCompile(`(?i)\bnumber of\b`)
 	for _, col := range cols {
@@ -1058,27 +1112,20 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 		return
 	}
 
-	if gvk.Group == "ext.cattle.io" && (gvk.Kind == "Token" || gvk.Kind == "Kubeconfig") {
+	if f, ok := ownership.Lookup(gvk); ok {
 		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
 		// See https://github.com/rancher/rancher/blob/7266e5e624f0d610c76ab0af33e30f5b72e11f61/pkg/ext/stores/tokens/tokens.go#L1186C2-L1195C3
 		// for similar code on how we determine if a user is admin
-		if accessSet == nil || !accessSet.Grants("list", schema.GroupResource{
+		isAdmin := accessSet != nil && accessSet.Grants("list", k8sschema.GroupResource{
 			Resource: "*",
-		}, "", "") {
-			user, ok := request.UserFrom(apiOp.Request.Context())
-			if !ok {
-				err = apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
-				return
-			}
-			opts.Filters = append(opts.Filters, sqltypes.OrFilter{
-				Filters: []sqltypes.Filter{
-					{
-						Field:   []string{"metadata", "labels", "cattle.io/user-id"},
-						Matches: []string{user.GetName()},
-						Op:      sqltypes.Eq,
-					},
-				},
-			})
+		}, "", "")
+		userInfo, ok := request.UserFrom(apiOp.Request.Context())
+		if !ok {
+			err = apierror.NewAPIError(validation.MissingRequired, "failed to get user info from the request.Context object")
+			return
+		}
+		if orFilter := f.SQLFilter(userInfo, isAdmin); orFilter != nil {
+			opts.Filters = append(opts.Filters, *orFilter)
 		}
 	}
 
@@ -1098,21 +1145,21 @@ func (s *Store) ListByPartitions(apiOp *types.APIRequest, apiSchema *types.APISc
 	return
 }
 
-func (s *Store) AugmentRelationships(ctx context.Context, gvk schema.GroupVersionKind, list *unstructured.UnstructuredList, apiOp *types.APIRequest) error {
+func (s *Store) AugmentRelationships(ctx context.Context, gvk k8sschema.GroupVersionKind, list *unstructured.UnstructuredList, apiOp *types.APIRequest) error {
 	type GVKWithSchemaName struct {
-		gvk          schema.GroupVersionKind
+		gvk          k8sschema.GroupVersionKind
 		schemaName   string
 		useSelectors bool
 	}
-	podGVK := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
-	jobGVK := schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}
-	dependentChildInfoFromParentGVK := map[schema.GroupVersionKind]GVKWithSchemaName{
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}:  {podGVK, "pod", true},
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"}:   {podGVK, "pod", true},
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "ReplicaSet"}:  {podGVK, "pod", true},
-		schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}: {podGVK, "pod", true},
-		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}:        {podGVK, "pod", true},
-		schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}:    {jobGVK, "batch.job", false},
+	podGVK := k8sschema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+	jobGVK := k8sschema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}
+	dependentChildInfoFromParentGVK := map[k8sschema.GroupVersionKind]GVKWithSchemaName{
+		k8sschema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}:  {podGVK, "pod", true},
+		k8sschema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "DaemonSet"}:   {podGVK, "pod", true},
+		k8sschema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "ReplicaSet"}:  {podGVK, "pod", true},
+		k8sschema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}: {podGVK, "pod", true},
+		k8sschema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "Job"}:        {podGVK, "pod", true},
+		k8sschema.GroupVersionKind{Group: "batch", Version: "v1", Kind: "CronJob"}:    {jobGVK, "batch.job", false},
 	}
 	childInfo, ok := dependentChildInfoFromParentGVK[gvk]
 	if !ok {
@@ -1199,7 +1246,7 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 	// so we must initialize this one as well
 	if gvk == pcioClusterGvk {
 		var mgmtSchema *types.APISchema
-		if id := s.schemas.ByGVK(schema.GroupVersionKind{
+		if id := s.schemas.ByGVK(k8sschema.GroupVersionKind{
 			Group:   "management.cattle.io",
 			Version: "v3",
 			Kind:    "Cluster",

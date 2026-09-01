@@ -1,0 +1,83 @@
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-alice-1
+  labels:
+    cattle.io/user-id: user-alice
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-alice-2
+  labels:
+    cattle.io/user-id: user-alice
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-bob-1
+  labels:
+    cattle.io/user-id: user-bob
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-unowned-1
+---
+# Every user in this test (admin included) is granted a blanket "list all
+# bananas" RBAC rule. This mirrors the real-world ext.cattle.io Token/
+# Kubeconfig setup: RBAC alone grants everyone list access, and the extra
+# per-user scoping comes entirely from the ownership.Filter, not from RBAC.
+# If ownership.Filter weren't applied to /v1/count, this RBAC rule would be
+# enough for a non-admin to see the true global count.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ownership-test-banana-lister
+rules:
+  - apiGroups: ["fruits.cattle.io"]
+    resources: ["bananas"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ownership-test-banana-lister-alice
+subjects:
+  - kind: User
+    name: user-alice
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: ownership-test-banana-lister
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ownership-test-banana-lister-bob
+subjects:
+  - kind: User
+    name: user-bob
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: ownership-test-banana-lister
+  apiGroup: rbac.authorization.k8s.io
+---
+# user-carol owns zero bananas but still has the same blanket RBAC list
+# grant as everyone else, so she can exercise the "authenticated, RBAC
+# allows list, but ownership.Filter legitimately yields zero" case as
+# distinct from an outright RBAC-denied (403/404) request.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ownership-test-banana-lister-carol
+subjects:
+  - kind: User
+    name: user-carol
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: ownership-test-banana-lister
+  apiGroup: rbac.authorization.k8s.io
