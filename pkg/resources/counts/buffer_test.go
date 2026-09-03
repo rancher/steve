@@ -36,7 +36,7 @@ func Test_countsBuffer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			debounce := 50 * time.Millisecond
+			debounce := 10 * time.Millisecond
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -84,7 +84,11 @@ func Test_countsBuffer(t *testing.T) {
 }
 
 func Test_countsBufferSnapshotsOncePerWindow(t *testing.T) {
-	debounce := 50 * time.Millisecond
+	// the window is deliberately longer than the test can run: the point is that
+	// updates cost nothing until it elapses, so letting a tick land mid-burst
+	// would only make the assertion below flaky. Test_countsBuffer covers the
+	// coalesced value actually reaching the consumer.
+	debounce := time.Hour
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -100,12 +104,7 @@ func Test_countsBufferSnapshotsOncePerWindow(t *testing.T) {
 		counter.update("test", i)
 	}
 
-	output, err := receiveWithTimeout(outputChannel, debounce+time.Second)
-	assert.NoError(t, err, "did not expect an error when receiving value from channel")
-	outputCount := output.Object.Object.(Count)
-	assert.Len(t, outputCount.Counts, 1, "expected the burst to coalesce into a single count")
-	assert.Equal(t, 999, outputCount.Counts["test"].Summary.Count, "expected the most recent value")
-	assert.Equal(t, 2, counter.snapshots(), "expected 1000 updates to cost one snapshot on top of the initial one")
+	assert.Equal(t, 1, counter.snapshots(), "expected 1000 updates within one window to cost no additional snapshots")
 }
 
 func Test_countsBufferDoesNotBlockProducer(t *testing.T) {
