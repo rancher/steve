@@ -115,19 +115,12 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 // Watch creates a watch for the Counts schema. This returns only the counts which have changed since the watch was established
 func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan types.APIEvent, error) {
 	var (
-		result      = make(chan Count, 100)
 		counts      map[string]ItemCount
 		gvkToSchema = map[schema2.GroupVersionKind]*types.APISchema{}
 		countLock   sync.Mutex
+		changed     = map[string]struct{}{}
+		wake        = make(chan struct{}, 1)
 	)
-
-	go func() {
-		<-apiOp.Context().Done()
-		countLock.Lock()
-		close(result)
-		result = nil
-		countLock.Unlock()
-	}()
 
 	counts = s.getCount(apiOp).Counts
 	for id := range counts {
@@ -142,10 +135,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	onChange := func(add bool, gvk schema2.GroupVersionKind, _ string, obj, oldObj runtime.Object) error {
 		countLock.Lock()
 		defer countLock.Unlock()
-
-		if result == nil {
-			return nil
-		}
 
 		schema := gvkToSchema[gvk]
 		if schema == nil {
@@ -181,16 +170,38 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 
 		counts[schema.ID] = itemCount
-		changedCount := map[string]ItemCount{
-			schema.ID: *itemCount.DeepCopy(),
-		}
+		changed[schema.ID] = struct{}{}
 
-		result <- Count{
-			ID:     "count",
-			Counts: changedCount,
+		select {
+		case wake <- struct{}{}:
+		default:
 		}
 
 		return nil
+	}
+
+	snapshot := func() (Count, bool) {
+		countLock.Lock()
+		defer countLock.Unlock()
+
+		if len(changed) == 0 {
+			return Count{}, false
+		}
+
+		changedCounts := make(map[string]ItemCount, len(changed))
+		for id := range changed {
+			itemCount, ok := counts[id]
+			if !ok {
+				continue
+			}
+			changedCounts[id] = *itemCount.DeepCopy()
+		}
+		clear(changed)
+
+		return Count{
+			ID:     "count",
+			Counts: changedCounts,
+		}, true
 	}
 
 	s.ccache.OnAdd(apiOp.Context(), func(gvk schema2.GroupVersionKind, key string, obj runtime.Object) error {
@@ -204,7 +215,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	})
 
 	// buffer the counts so that we don't spam the consumer with constant updates
-	return countsBuffer(result), nil
+	return countsBuffer(apiOp.Context(), wake, snapshot, debounceDuration), nil
 }
 
 func (s *Store) schemasToWatch(apiOp *types.APIRequest) (result []*types.APISchema) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -300,5 +301,53 @@ func makeSummarizedObject(gvk schema2.GroupVersionKind, name string, namespace s
 				ResourceVersion: version, // any non-zero value should work here. 0 seems to have specific meaning for counts
 			},
 		},
+	}
+}
+
+func BenchmarkWatchOnChange(b *testing.B) {
+	for _, numNamespaces := range []int{10, 500, 2000} {
+		b.Run(fmt.Sprintf("namespaces=%d", numNamespaces), func(b *testing.B) {
+			testSchema := makeSchema(testResource)
+			addGenericPermissionsToSchema(testSchema, "list")
+			testSchemas := types.EmptyAPISchemas()
+			testSchemas.MustAddSchema(*testSchema)
+			testOp := &types.APIRequest{
+				Schemas:       testSchemas,
+				AccessControl: &server.SchemaBasedAccess{},
+				Request:       &http.Request{},
+			}
+
+			fakeCache := NewFakeClusterCache()
+			gvk := attributes.GVK(testSchema)
+			for i := 0; i < numNamespaces; i++ {
+				fakeCache.AddSummaryObj(makeSummarizedObject(gvk, "obj", fmt.Sprintf("ns-%d", i), "1"))
+			}
+			counts.Register(testSchemas, fakeCache)
+
+			countSchema := testSchemas.LookupSchema("count")
+			resChannel, err := countSchema.Store.Watch(testOp, nil, types.WatchRequest{})
+			assert.NoError(b, err)
+
+			// the consumer must keep reading or the watch stalls
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for range resChannel {
+				}
+			}()
+
+			old := makeSummarizedObject(gvk, "obj", "ns-0", "1")
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				next := makeSummarizedObject(gvk, "obj", "ns-0", strconv.Itoa(i+2))
+				// flip the state so the handler doesn't short-circuit as a no-op
+				next.Summary.Transitioning = i%2 == 0
+				if err := fakeCache.changeHandler(gvk, "n/a", next, old); err != nil {
+					b.Fatal(err)
+				}
+				old = next
+			}
+		})
 	}
 }

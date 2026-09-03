@@ -1,8 +1,10 @@
 package counts
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,14 +36,14 @@ func Test_countsBuffer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			debounceDuration = 10 * time.Millisecond
-			countsChannel := make(chan Count, 100)
-			outputChannel := countsBuffer(countsChannel)
+			debounce := 50 * time.Millisecond
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-			countsChannel <- Count{
-				ID:     "count",
-				Counts: map[string]ItemCount{"test": createItemCount(1)},
-			}
+			counter := newFakeCounter()
+			outputChannel := countsBuffer(ctx, counter.wake, counter.snapshot, debounce)
+
+			counter.update("test", 1)
 
 			// first event is not buffered, so we expect to receive it quicker than the debounce
 			_, err := receiveWithTimeout(outputChannel, time.Second*1)
@@ -49,22 +51,16 @@ func Test_countsBuffer(t *testing.T) {
 
 			// stream our standard count events
 			for i := 0; i < test.numInputEvents; i++ {
-				countsChannel <- Count{
-					ID:     "count",
-					Counts: map[string]ItemCount{strconv.Itoa(i): createItemCount(1)},
-				}
+				counter.update(strconv.Itoa(i), 1)
 			}
 
 			// stream any overrides, if applicable
 			for key, value := range test.overrideInput {
-				countsChannel <- Count{
-					ID:     "count",
-					Counts: map[string]ItemCount{strconv.Itoa(key): createItemCount(value)},
-				}
+				counter.update(strconv.Itoa(key), value)
 			}
 
 			// due to complexities of cycle calculation, give a slight delay for the event to actually stream
-			output, err := receiveWithTimeout(outputChannel, debounceDuration+time.Millisecond*10)
+			output, err := receiveWithTimeout(outputChannel, debounce+time.Second)
 			assert.NoError(t, err, "did not expect an error when receiving value from channel")
 			outputCount := output.Object.Object.(Count)
 			assert.Len(t, outputCount.Counts, test.numInputEvents)
@@ -85,6 +81,110 @@ func Test_countsBuffer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_countsBufferSnapshotsOncePerWindow(t *testing.T) {
+	debounce := 50 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	counter := newFakeCounter()
+	outputChannel := countsBuffer(ctx, counter.wake, counter.snapshot, debounce)
+
+	// the first update is emitted immediately, costing one snapshot
+	counter.update("test", 1)
+	_, err := receiveWithTimeout(outputChannel, time.Second)
+	assert.NoError(t, err, "Expected first event to be received quickly")
+
+	for i := 0; i < 1000; i++ {
+		counter.update("test", i)
+	}
+
+	output, err := receiveWithTimeout(outputChannel, debounce+time.Second)
+	assert.NoError(t, err, "did not expect an error when receiving value from channel")
+	outputCount := output.Object.Object.(Count)
+	assert.Len(t, outputCount.Counts, 1, "expected the burst to coalesce into a single count")
+	assert.Equal(t, 999, outputCount.Counts["test"].Summary.Count, "expected the most recent value")
+	assert.Equal(t, 2, counter.snapshots(), "expected 1000 updates to cost one snapshot on top of the initial one")
+}
+
+func Test_countsBufferDoesNotBlockProducer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	counter := newFakeCounter()
+	// deliberately never read from the returned channel
+	countsBuffer(ctx, counter.wake, counter.snapshot, 10*time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 10000; i++ {
+			counter.update(strconv.Itoa(i%50), i)
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("producer blocked on an unread consumer")
+	}
+}
+
+// fakeCounter mimics the producer side of Store.Watch: it records which schema
+// IDs have changed and only materializes a copy of them when the debouncer asks.
+type fakeCounter struct {
+	lock         sync.Mutex
+	counts       map[string]ItemCount
+	changed      map[string]struct{}
+	snapshotCall int
+
+	wake chan struct{}
+}
+
+func newFakeCounter() *fakeCounter {
+	return &fakeCounter{
+		counts:  map[string]ItemCount{},
+		changed: map[string]struct{}{},
+		wake:    make(chan struct{}, 1),
+	}
+}
+
+func (f *fakeCounter) update(id string, count int) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.counts[id] = createItemCount(count)
+	f.changed[id] = struct{}{}
+	select {
+	case f.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (f *fakeCounter) snapshot() (Count, bool) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if len(f.changed) == 0 {
+		return Count{}, false
+	}
+	f.snapshotCall++
+
+	changedCounts := make(map[string]ItemCount, len(f.changed))
+	for id := range f.changed {
+		itemCount := f.counts[id]
+		changedCounts[id] = *itemCount.DeepCopy()
+	}
+	clear(f.changed)
+
+	return Count{ID: "count", Counts: changedCounts}, true
+}
+
+func (f *fakeCounter) snapshots() int {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	return f.snapshotCall
 }
 
 // receiveWithTimeout tries to get a value from input within duration. Returns an error if no input was received during that period
