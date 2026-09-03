@@ -44,11 +44,31 @@ type Options struct {
 	ReleaseSetting BoolSetting
 	// The version of API UI to use
 	APIUIVersionSetting StringSetting
+	// The Content-Security-Policy to serve the UI with. The literal "{nonce}"
+	// is replaced with a per-request nonce, which is also added to every inline
+	// script and style in the index file. An empty policy disables the header.
+	CSPPolicy StringSetting
+	// How CSPPolicy is delivered: "off", "report-only" or "enforce"
+	CSPMode StringSetting
 }
 
 func NewUIHandler(opts *Options) *Handler {
 	if opts == nil {
 		opts = &Options{}
+	}
+
+	cspPolicy := opts.CSPPolicy
+	if cspPolicy == nil {
+		cspPolicy = func() string {
+			return ""
+		}
+	}
+
+	cspMode := opts.CSPMode
+	if cspMode == nil {
+		cspMode = func() string {
+			return CSPModeOff
+		}
 	}
 
 	h := &Handler{
@@ -60,12 +80,15 @@ func NewUIHandler(opts *Options) *Handler {
 		middleware: middleware.Chain{
 			middleware.Gzip,
 			middleware.FrameOptions,
+			cspStatic(cspPolicy, cspMode),
 			middleware.CacheMiddleware("json", "js", "css"),
 		}.Handler,
 		indexMiddleware: middleware.Chain{
 			middleware.Gzip,
 			middleware.NoCache,
 			middleware.FrameOptions,
+			csp(cspPolicy, cspMode),
+			injectNonce,
 			middleware.ContentType,
 		}.Handler,
 	}
