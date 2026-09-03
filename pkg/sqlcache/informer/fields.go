@@ -42,8 +42,7 @@ func (f *JSONPathField) ColumnType() string {
 }
 
 func (f *JSONPathField) GetValue(obj *unstructured.Unstructured) (any, error) {
-	col := toColumnName(f.Path)
-	value, err := getField(obj, col)
+	value, err := getField(obj, f.ColumnName())
 	if err != nil {
 		return nil, err
 	}
