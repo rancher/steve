@@ -1,0 +1,64 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches:
+    - main
+    paths:
+    - '**/*.go'
+    - '**/go.mod'
+    - '**/go.sum'
+    - '.github/workflows/security-scan.yaml'
+  # New advisories are published against code that has not changed, so the
+  # supported release branches are re-scanned on a schedule rather than only
+  # when a pull request happens to touch them.
+  schedule:
+  # 08:00 UTC, after both Renovate passes (04:30 / 06:30) so that fixes merged
+  # overnight are reflected in the same day's scan.
+  - cron: '0 8 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  govulncheck:
+    name: govulncheck (${{ matrix.ref || 'pull request' }})
+    runs-on: ubuntu-latest
+    # TODO: remove once the findings reported by the first scheduled run have
+    # been triaged. Until then this job reports without blocking merges.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # On a pull request scan only the merge result (empty ref); on a
+        # scheduled or manual run scan every supported branch.
+        ref: ${{ github.event_name == 'pull_request' && fromJSON('[""]') || fromJSON('["main","release/v0.9","release/v0.8","release/v0.7","release/v0.6","release/v0.5"]') }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ matrix.ref }}
+        persist-credentials: false
+
+    - name: Install Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        # govulncheck must be built and run with the same Go version as the
+        # branch under test: it will refuse to analyse source newer than its
+        # own toolchain, and stdlib findings are only accurate for the
+        # toolchain that actually ships.
+        go-version-file: 'go.mod'
+        check-latest: true
+
+    - name: Install govulncheck
+      env:
+        GOVULNCHECK_VERSION: v1.7.0
+      run: go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+
+    - name: Run govulncheck
+      run: govulncheck -show verbose ./...
