@@ -20,10 +20,15 @@ on:
 
 permissions:
   contents: read
+  # Required to post and update the report comment on pull requests.
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOVULNCHECK_VERSION: v1.7.0
 
 jobs:
   govulncheck:
@@ -56,9 +61,154 @@ jobs:
         check-latest: true
 
     - name: Install govulncheck
-      env:
-        GOVULNCHECK_VERSION: v1.7.0
       run: go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
 
     - name: Run govulncheck
-      run: govulncheck -show verbose ./...
+      id: scan
+      run: |
+        set -uo pipefail
+        exit_code=0
+        govulncheck -format json ./... > "${RUNNER_TEMP}/govulncheck.json" || exit_code=$?
+        echo "exit-code=${exit_code}" >> "${GITHUB_OUTPUT}"
+
+    - name: Render report
+      env:
+        SCAN_LABEL: ${{ matrix.ref || format('pull request (commit {0})', github.event.pull_request.head.sha) }}
+      run: |
+        set -euo pipefail
+
+        cat > "${RUNNER_TEMP}/report.jq" <<'JQ'
+        # The JSON stream carries the whole consulted advisory set, so only keep
+        # the OSV records that actually produced a finding.
+        ([.[] | select(.osv) | .osv] | INDEX(.id)) as $osvs
+        | [.[] | select(.finding) | .finding] as $findings
+
+        | ($findings | map(
+            . as $f
+            | ($f.trace[0] // {}) as $t
+            | {
+                id: $f.osv,
+                fixed: ($f.fixed_version // ""),
+                module: ($t.module // "?"),
+                version: ($t.version // ""),
+                # 3 = a symbol this code calls, 2 = an imported package,
+                # 1 = present in the module graph only.
+                level: (if $t.function then 3 elif $t.package then 2 else 1 end),
+                trace: (if $t.function
+                        then (($t.package // $t.module) + "." + ($t.function | split(".") | last))
+                        else "" end)
+              }
+          )) as $rows
+
+        | ($rows | group_by(.id) | map({
+            id: .[0].id,
+            fixed: (map(.fixed) | map(select(. != "")) | first // ""),
+            module: .[0].module,
+            version: (map(.version) | map(select(. != "")) | first // ""),
+            level: (map(.level) | max),
+            example: (map(select(.trace != "") | .trace) | first // ""),
+            summary: (($osvs[.[0].id].summary // "") | gsub("\n"; " ") | gsub("\\|"; "\\|")),
+            aliases: (($osvs[.[0].id].aliases // []) | join(", "))
+          })) as $vulns
+
+        | ($vulns | map(select(.level == 3)) | sort_by(.module, .id)) as $called
+        | ($vulns | map(select(.level == 2)) | sort_by(.module, .id)) as $imported
+        | ($vulns | map(select(.level == 1)) | sort_by(.module, .id)) as $required
+
+        | ["<!-- govulncheck-report -->"]
+        + ["## \(if ($called|length) > 0 then "🔴" elif ($vulns|length) > 0 then "🟡" else "✅" end) govulncheck — \($label)"]
+        + [""]
+        + (if ($vulns | length) == 0 then
+             ["No known vulnerabilities found."]
+           else
+             ["**\($called|length)** reachable from this code · **\($imported|length)** in imported packages · **\($required|length)** in required modules only."]
+           end)
+        + [""]
+
+        + (if ($called | length) > 0 then
+            ["### Called by this code"]
+            + [""]
+            + ["govulncheck traced a call path from this module to the vulnerable symbol, so these are reachable rather than merely present."]
+            + [""]
+            + ["| Advisory | CVE / GHSA | Module | Found | Fixed in | Example call path |"]
+            + ["|---|---|---|---|---|---|"]
+            + ($called | map(
+                "| [\(.id)](https://pkg.go.dev/vuln/\(.id)) | \(if .aliases == "" then "—" else .aliases end) | `\(.module)` | `\(.version)` | \(if .fixed == "" then "**no fix available**" else "`\(.fixed)`" end) | \(if .example == "" then "—" else "`\(.example)`" end) |"
+              ))
+            + [""]
+            + ["<details><summary>Summaries</summary>", ""]
+            + ($called | map("- **\(.id)** — \(.summary)"))
+            + ["", "</details>", ""]
+          else [] end)
+
+        + (if ($imported | length) > 0 then
+            ["<details><summary>Vulnerabilities in imported packages, not called — \($imported|length)</summary>", ""]
+            + ["| Advisory | Module | Found | Fixed in |", "|---|---|---|---|"]
+            + ($imported | map(
+                "| [\(.id)](https://pkg.go.dev/vuln/\(.id)) | `\(.module)` | `\(.version)` | \(if .fixed == "" then "no fix available" else "`\(.fixed)`" end) |"
+              ))
+            + ["", "</details>", ""]
+          else [] end)
+
+        + (if ($required | length) > 0 then
+            ["<details><summary>Vulnerabilities in required modules only — \($required|length)</summary>", ""]
+            + ["| Advisory | Module | Found | Fixed in |", "|---|---|---|---|"]
+            + ($required | map(
+                "| [\(.id)](https://pkg.go.dev/vuln/\(.id)) | `\(.module)` | `\(.version)` | \(if .fixed == "" then "no fix available" else "`\(.fixed)`" end) |"
+              ))
+            + ["", "</details>", ""]
+          else [] end)
+
+        + (if ($called | length) > 0 then
+            ["> This check is advisory and does not block merging. Entries with **no fix available** cannot be resolved by a dependency bump and need an accepted-risk decision."]
+            + [""]
+           else [] end)
+
+        | join("\n")
+        JQ
+
+        jq -rs -f "${RUNNER_TEMP}/report.jq" --arg label "${SCAN_LABEL}" \
+          "${RUNNER_TEMP}/govulncheck.json" > "${RUNNER_TEMP}/report.md"
+
+        printf '\n<sub>govulncheck %s · updated %s · <a href="%s/%s/actions/runs/%s">run</a></sub>\n' \
+          "${GOVULNCHECK_VERSION}" "$(date -u '+%Y-%m-%d %H:%M UTC')" \
+          "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" \
+          >> "${RUNNER_TEMP}/report.md"
+
+        cat "${RUNNER_TEMP}/report.md" >> "${GITHUB_STEP_SUMMARY}"
+        cat "${RUNNER_TEMP}/report.md"
+
+    - name: Post or update pull request comment
+      if: github.event_name == 'pull_request'
+      # Pull requests from forks receive a read-only token, so the comment
+      # cannot be written. The report is still available in the job summary.
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -euo pipefail
+
+        # Not piped through head: that closes the pipe early and trips pipefail.
+        comment_ids="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+          --paginate \
+          --jq '.[] | select(.body | startswith("<!-- govulncheck-report -->")) | .id')"
+        comment_id="${comment_ids%%$'\n'*}"
+
+        payload="$(jq -Rs '{body: .}' "${RUNNER_TEMP}/report.md")"
+
+        if [ -n "${comment_id}" ]; then
+          echo "Updating existing comment ${comment_id}"
+          printf '%s' "${payload}" \
+            | gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" --input - > /dev/null
+        else
+          echo "Creating new comment"
+          printf '%s' "${payload}" \
+            | gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - > /dev/null
+        fi
+
+    - name: Fail if vulnerabilities were found
+      if: steps.scan.outputs.exit-code != '0'
+      run: |
+        echo "govulncheck exited with ${{ steps.scan.outputs.exit-code }}; see the report above."
+        exit 1
