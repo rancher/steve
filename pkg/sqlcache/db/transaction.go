@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -13,12 +14,33 @@ import (
 // rationale 2: allow mocking
 type TxClient interface {
 	Exec(query string, args ...any) (sql.Result, error)
+
+	// Query runs a one-shot query on the transaction's own connection.
+	//
+	// Prefer this over Client.Prepare + Client.QueryForRows for any read
+	// issued while a write transaction is open. A *sql.Stmt prepared on the
+	// pool records every connection it was prepared on, and Stmt.finalClose
+	// takes driverConn.Lock on each of them - but rows.Close returns that
+	// connection to the pool *before* running finalClose. A writer that grabs
+	// the just-freed connection holds its mutex for the whole of
+	// BEGIN IMMEDIATE, so the transaction holding the SQLite write lock ends
+	// up waiting on a writer that is waiting on that same write lock. Nothing
+	// breaks the cycle except busy_timeout.
+	//
+	// Query goes through sql.Tx.QueryContext, which reuses the transaction's
+	// already-checked-out connection and never creates a *sql.Stmt, so there
+	// is nothing to finalClose and no pooled connection to lock.
+	//
+	// The returned Rows must be closed before the transaction commits.
+	Query(ctx context.Context, query string, args ...any) (Rows, error)
+
 	Stmt(stmt Stmt) Stmt
 }
 
 // Tx represents the methods used from sql.Tx
 type Tx interface {
 	Exec(query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	Stmt(stmt *sql.Stmt) *sql.Stmt
 	Commit() error
 	Rollback() error
@@ -51,6 +73,18 @@ func (c txClient) Exec(query string, args ...any) (sql.Result, error) {
 		}
 	}
 	return res, err
+}
+
+func (c txClient) Query(ctx context.Context, query string, args ...any) (Rows, error) {
+	defer c.queryLogger.Log(time.Now(), query, args)
+	r, err := c.tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, &QueryError{
+			QueryString: query,
+			Err:         err,
+		}
+	}
+	return rows{Rows: r, queryString: query}, nil
 }
 
 func (c txClient) Stmt(s Stmt) Stmt {
