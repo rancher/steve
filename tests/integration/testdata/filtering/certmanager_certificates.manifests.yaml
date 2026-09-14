@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: emerald
+  namespace: default
+  labels:
+    test.cattle.io/certificates: sapphire
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: oak
+  namespace: default
+spec:
+  selfSigned: {}
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: willow
+  namespace: default
+spec:
+  selfSigned: {}
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cheddar
+  namespace: default
+spec:
+  commonName: cheddar
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oak
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: emerald
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: brie
+  namespace: default
+spec:
+  commonName: brie
+  dnsNames:
+  - farfalle
+  - penne
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: willow
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: emerald
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: camembert
+  namespace: default
+spec:
+  commonName: camembert
+  dnsNames:
+  - bucatini
+  - penne
+  - ravioli
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oak
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: emerald
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: feta
+  namespace: default
+spec:
+  dnsNames:
+  - blintz
+  - orzo
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oak
+  secretName: emerald
