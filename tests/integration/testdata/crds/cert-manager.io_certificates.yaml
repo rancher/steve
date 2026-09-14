@@ -1,0 +1,243 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: certificates.cert-manager.io
+spec:
+  group: cert-manager.io
+  names:
+    kind: Certificate
+    listKind: CertificateList
+    plural: certificates
+    shortNames:
+    - cert
+    - certs
+    singular: certificate
+  scope: Namespaced
+  versions:
+  - name: v1
+    additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: string
+    - jsonPath: .spec.secretName
+      name: Secret
+      type: string
+    - jsonPath: .spec.issuerRef.name
+      name: Issuer
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              additionalOutputFormats:
+                items:
+                  properties:
+                    type:
+                      enum:
+                      - DER
+                      - CombinedPEM
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              commonName:
+                type: string
+              dnsNames:
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              issuerRef:
+                properties:
+                  group:
+                    type: string
+                  kind:
+                    type: string
+                  name:
+                    type: string
+                required:
+                - name
+                type: object
+              privateKey:
+                properties:
+                  algorithm:
+                    enum:
+                    - RSA
+                    - ECDSA
+                    - Ed25519
+                    type: string
+                  encoding:
+                    enum:
+                    - PKCS1
+                    - PKCS8
+                    type: string
+                  rotationPolicy:
+                    enum:
+                    - Never
+                    - Always
+                    type: string
+                  size:
+                    type: integer
+                type: object
+              secretName:
+                type: string
+            required:
+            - issuerRef
+            - secretName
+            type: object
+          status:
+            properties:
+              acme:
+                description: ACME stores information that is fetched from the ACME
+                  CA server.
+                properties:
+                  ari:
+                    description: |-
+                      ARI stores the ACME Renewal Information that is fetched from the ACME server
+                      in accordance with RFC 9773. This is only populated if the ARI feature gate is enabled.
+                    properties:
+                      explanationURL:
+                        description: |-
+                          ExplanationURL is a human-readable URL that may explain why the suggested window
+                          has its current value.
+                        type: string
+                      lastChecked:
+                        description: LastChecked is the time at which the ACME server
+                          was last checked for renewal information.
+                        format: date-time
+                        type: string
+                      lastError:
+                        description: LastError is the last error encountered when
+                          checking the ACME server for renewal information, if any.
+                        type: string
+                      nextCheck:
+                        description: NextCheck is the time at which the ACME server
+                          will next be checked for renewal information.
+                        format: date-time
+                        type: string
+                      suggestedWindow:
+                        description: SuggestedWindow is the suggested renewal window
+                          as returned by the ACME server in accordance with RFC 9773.
+                        properties:
+                          end:
+                            description: End is the end of the suggested renewal window.
+                            format: date-time
+                            type: string
+                          start:
+                            description: Start is the start of the suggested renewal
+                              window.
+                            format: date-time
+                            type: string
+                        required:
+                        - end
+                        - start
+                        type: object
+                    type: object
+                type: object
+              conditions:
+                description: |-
+                  List of status conditions to indicate the status of certificates.
+                  Known condition types are `Ready` and `Issuing`.
+                items:
+                  description: CertificateCondition contains condition information
+                    for a Certificate.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        LastTransitionTime is the timestamp corresponding to the last status
+                        change of this condition.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        Message is a human readable description of the details of the last
+                        transition, complementing reason.
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        If set, this represents the .metadata.generation that the condition was
+                        set based upon.
+                        For instance, if .metadata.generation is currently 12, but the
+                        .status.condition[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the Certificate.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: |-
+                        Reason is a brief machine readable explanation for the condition's last
+                        transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of (`True`, `False`,
+                        `Unknown`).
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: Type of the condition, known values are (`Ready`,
+                        `Issuing`).
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              notAfter:
+                description: |-
+                  The expiration time of the certificate stored in the secret named
+                  by this resource in `spec.secretName`.
+                format: date-time
+                type: string
+              notBefore:
+                description: |-
+                  The time after which the certificate stored in the secret named
+                  by this resource in `spec.secretName` is valid.
+                format: date-time
+                type: string
+              renewalTime:
+                description: |-
+                  RenewalTime is the time at which the certificate will be next
+                  renewed.
+                  If not set, no upcoming renewal is scheduled.
+                format: date-time
+                type: string
+              revision:
+                description: |-
+                  The current 'revision' of the certificate as issued.
+
+                  When a CertificateRequest resource is created, it will have the
+                  `cert-manager.io/certificate-revision` set to one greater than the
+                  current value of this field.
+
+                  Upon issuance, this field will be set to the value of the annotation
+                  on the CertificateRequest resource used to issue the certificate.
+
+                  Persisting the value on the CertificateRequest resource allows the
+                  certificates controller to know whether a request is part of an old
+                  issuance or if it is part of the ongoing revision's issuance by
+                  checking if the revision value in the annotation is greater than this
+                  field.
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
