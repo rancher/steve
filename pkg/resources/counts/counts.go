@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/steve/pkg/resources/ownership"
+	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -29,7 +30,7 @@ var (
 )
 
 // Register registers a new count schema. This schema isn't a true resource but instead returns counts for other resources
-func Register(schemas *types.APISchemas, ccache clustercache.ClusterCache) {
+func Register(schemas *types.APISchemas, ccache clustercache.ClusterCache, schemaFactory schema.Factory) {
 	schemas.MustImportAndCustomize(Count{}, func(schema *types.APISchema) {
 		schema.CollectionMethods = []string{http.MethodGet}
 		schema.ResourceMethods = []string{http.MethodGet}
@@ -42,7 +43,8 @@ func Register(schemas *types.APISchemas, ccache clustercache.ClusterCache) {
 			},
 		}
 		schema.Store = &Store{
-			ccache: ccache,
+			ccache:        ccache,
+			schemaFactory: schemaFactory,
 		}
 	})
 }
@@ -90,7 +92,8 @@ func (i *ItemCount) DeepCopy() *ItemCount {
 
 type Store struct {
 	empty.Store
-	ccache clustercache.ClusterCache
+	ccache        clustercache.ClusterCache
+	schemaFactory schema.Factory
 }
 
 func toAPIObject(c Count) types.APIObject {
@@ -118,10 +121,11 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 // Watch creates a watch for the Counts schema. This returns only the counts which have changed since the watch was established
 func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan types.APIEvent, error) {
 	var (
-		result      = make(chan Count, 100)
-		counts      map[string]ItemCount
-		gvkToSchema = map[schema2.GroupVersionKind]*types.APISchema{}
-		countLock   sync.Mutex
+		result         = make(chan Count, 100)
+		counts         map[string]ItemCount
+		schemasChanged = make(chan struct{}, 1)
+		gvkToSchema    = map[schema2.GroupVersionKind]*types.APISchema{}
+		countLock      sync.Mutex
 	)
 
 	go func() {
@@ -142,6 +146,64 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		gvkToSchema[attributes.GVK(schema)] = schema
 	}
 
+	// Subscribe to global schema changes, then re-filter for this user
+	if s.schemaFactory != nil {
+		s.schemaFactory.OnChange(apiOp.Context(), func() {
+			select {
+			case schemasChanged <- struct{}{}:
+			default:
+			}
+		})
+	}
+
+	go func() {
+		for {
+			select {
+			case <-apiOp.Context().Done():
+				return
+			case <-schemasChanged:
+				countLock.Lock()
+				if result == nil {
+					countLock.Unlock()
+					continue
+				}
+
+				// Get fresh user-filtered schemas
+				newSchemas := s.getUserSchemas(apiOp)
+				newGVKs := map[schema2.GroupVersionKind]*types.APISchema{}
+				for _, schema := range newSchemas {
+					gvk := attributes.GVK(schema)
+					newGVKs[gvk] = schema
+				}
+
+				// Check if any new GVKs were added and collect them
+				var addedGVKs []schema2.GroupVersionKind
+				for gvk := range newGVKs {
+					if _, exists := gvkToSchema[gvk]; !exists {
+						addedGVKs = append(addedGVKs, gvk)
+						gvkToSchema[gvk] = newGVKs[gvk]
+					}
+				}
+
+				// If we added new GVKs, list existing resources from ClusterCache and add to counts
+				if len(addedGVKs) > 0 {
+					// For each new GVK, compute its count using the same logic as getCount()
+					for _, gvk := range addedGVKs {
+						schema := newGVKs[gvk]
+						counts[schema.ID] = s.countForSchema(schema, apiOp)
+					}
+
+					// Send full COUNT update with both old and new resource types
+					result <- Count{
+						ID:     "count",
+						Counts: counts,
+					}
+				}
+				countLock.Unlock()
+			}
+		}
+	}()
+
 	onChange := func(add bool, gvk schema2.GroupVersionKind, _ string, obj, oldObj runtime.Object) error {
 		countLock.Lock()
 		defer countLock.Unlock()
@@ -161,6 +223,10 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 
 		itemCount := counts[schema.ID]
+		// Initialize Namespaces map if nil (new schema)
+		if itemCount.Namespaces == nil {
+			itemCount.Namespaces = map[string]Summary{}
+		}
 		if revision <= itemCount.Revision {
 			return nil
 		}
@@ -208,6 +274,57 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 
 	// buffer the counts so that we don't spam the consumer with constant updates
 	return countsBuffer(result), nil
+}
+
+// getUserSchemas fetches user-filtered schemas from the factory
+func (s *Store) getUserSchemas(apiOp *types.APIRequest) []*types.APISchema {
+	if s.schemaFactory == nil {
+		// Fallback to apiOp.Schemas if no factory (for tests)
+		return s.schemasToWatch(apiOp)
+	}
+
+	user, ok := request.UserFrom(apiOp.Context())
+	if !ok {
+		return s.schemasToWatch(apiOp)
+	}
+
+	userSchemas, err := s.schemaFactory.Schemas(user)
+	if err != nil {
+		return s.schemasToWatch(apiOp)
+	}
+
+	return s.schemasToWatchFromSchemas(userSchemas, apiOp.AccessControl)
+}
+
+// schemasToWatchFromSchemas filters schemas without needing full apiOp
+func (s *Store) schemasToWatchFromSchemas(schemas *types.APISchemas, accessControl types.AccessControl) []*types.APISchema {
+	var result []*types.APISchema
+
+	for _, schema := range schemas.Schemas {
+		if ignore[schema.ID] {
+			continue
+		}
+		if schema.Store == nil {
+			continue
+		}
+
+		// Create minimal apiOp for access checks
+		tempOp := &types.APIRequest{
+			Schemas:       schemas,
+			AccessControl: accessControl,
+		}
+
+		if accessControl.CanList(tempOp, schema) != nil {
+			continue
+		}
+		if accessControl.CanWatch(tempOp, schema) != nil {
+			continue
+		}
+
+		result = append(result, schema)
+	}
+
+	return result
 }
 
 func (s *Store) schemasToWatch(apiOp *types.APIRequest) (result []*types.APISchema) {
@@ -318,61 +435,67 @@ func simpleState(summary summary.Summary) string {
 	return ""
 }
 
+// countForSchema computes the ItemCount for a single schema by listing all objects from ClusterCache
+func (s *Store) countForSchema(schema *types.APISchema, apiOp *types.APIRequest) ItemCount {
+	gvk := attributes.GVK(schema)
+	access, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
+
+	rev := 0
+	itemCount := ItemCount{
+		Namespaces: map[string]Summary{},
+	}
+
+	all := access.Grants("list", "*", "*")
+
+	// Some resources from Rancher extension apiservers have additional
+	// visibility that is not just based on RBAC. (eg: ext.cattle.io/v1 Tokens)
+	//
+	// Those requires more filtering rules.
+	ownershipFilter, hasOwnershipFilter := ownership.Lookup(gvk)
+	var userInfo user.Info
+	var isAdmin bool
+	if hasOwnershipFilter {
+		userInfo, _ = request.UserFrom(apiOp.Request.Context())
+		accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
+		isAdmin = accessSet != nil && accessSet.Grants("list", schema2.GroupResource{
+			Resource: "*",
+		}, "", "")
+	}
+
+	for _, obj := range s.ccache.List(gvk) {
+		name, ns, revision, summary, ok := getInfo(obj, schema)
+		if !ok {
+			continue
+		}
+
+		if !all && !access.Grants("list", ns, name) && !access.Grants("get", ns, name) {
+			continue
+		}
+
+		if hasOwnershipFilter {
+			objMeta, err := meta.Accessor(obj)
+			if err != nil || userInfo == nil || !ownershipFilter.Matches(userInfo, isAdmin, objMeta.GetLabels()) {
+				continue
+			}
+		}
+
+		if revision > rev {
+			rev = revision
+		}
+
+		itemCount = addCounts(itemCount, ns, summary)
+	}
+
+	itemCount.Revision = rev
+	return itemCount
+}
+
 func (s *Store) getCount(apiOp *types.APIRequest) Count {
+	schemas := s.schemasToWatch(apiOp)
 	counts := map[string]ItemCount{}
 
-	for _, schema := range s.schemasToWatch(apiOp) {
-		gvk := attributes.GVK(schema)
-		access, _ := attributes.Access(schema).(accesscontrol.AccessListByVerb)
-
-		rev := 0
-		itemCount := ItemCount{
-			Namespaces: map[string]Summary{},
-		}
-
-		all := access.Grants("list", "*", "*")
-
-		// Some resources from Rancher extension apiservers have additional
-		// visibility that is not just based on RBAC. (eg: ext.cattle.io/v1 Tokens)
-		//
-		// Those requires more filtering rules.
-		ownershipFilter, hasOwnershipFilter := ownership.Lookup(gvk)
-		var userInfo user.Info
-		var isAdmin bool
-		if hasOwnershipFilter {
-			userInfo, _ = request.UserFrom(apiOp.Request.Context())
-			accessSet := accesscontrol.AccessSetFromAPIRequest(apiOp)
-			isAdmin = accessSet != nil && accessSet.Grants("list", schema2.GroupResource{
-				Resource: "*",
-			}, "", "")
-		}
-
-		for _, obj := range s.ccache.List(gvk) {
-			name, ns, revision, summary, ok := getInfo(obj, schema)
-			if !ok {
-				continue
-			}
-
-			if !all && !access.Grants("list", ns, name) && !access.Grants("get", ns, name) {
-				continue
-			}
-
-			if hasOwnershipFilter {
-				objMeta, err := meta.Accessor(obj)
-				if err != nil || userInfo == nil || !ownershipFilter.Matches(userInfo, isAdmin, objMeta.GetLabels()) {
-					continue
-				}
-			}
-
-			if revision > rev {
-				rev = revision
-			}
-
-			itemCount = addCounts(itemCount, ns, summary)
-		}
-
-		itemCount.Revision = rev
-		counts[schema.ID] = itemCount
+	for _, schema := range schemas {
+		counts[schema.ID] = s.countForSchema(schema, apiOp)
 	}
 
 	return Count{
