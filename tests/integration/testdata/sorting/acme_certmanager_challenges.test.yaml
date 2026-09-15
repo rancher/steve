@@ -1,0 +1,24 @@
+schemaID: acme.cert-manager.io.challenges
+tests:
+- description: "sort by spec.type,metadata.name"
+  query: "sort=spec.type,metadata.name"
+  expected:
+  - default/daiquiri
+  - default/negroni
+  - default/margarita
+- description: "sort by status.presented,metadata.name"
+  query: "sort=status.presented,metadata.name"
+  expected:
+  - default/daiquiri
+  - default/margarita
+  - default/negroni
+- description: "sort by status.presented,metadata.name,filter by spec.type=DNS-01"
+  query: "sort=status.presented,metadata.name&filter=spec.type=DNS-01"
+  expected:
+  - default/daiquiri
+  - default/negroni
+- description: "sort by spec.type,metadata.name, filter by status.presented=true"
+  query: "sort=spec.type,metadata.name&filter=status.presented=true"
+  expected:
+  - default/negroni
+  - default/margarita
