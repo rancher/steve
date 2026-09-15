@@ -1,0 +1,11 @@
+schemaID: cert-manager.io.certificates
+tests:
+- description: "spec.dnsNames contains penne"
+  query: "filter=spec.dnsNames+CONTAINS+penne"
+  expected:
+  - default/brie
+  - default/camembert
+- description: "spec.dnsNames contains orzo"
+  query: "filter=spec.dnsNames+CONTAINS+orzo"
+  expected:
+  - default/feta

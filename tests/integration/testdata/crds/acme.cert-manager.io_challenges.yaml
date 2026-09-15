@@ -1,0 +1,78 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: challenges.acme.cert-manager.io
+spec:
+  group: acme.cert-manager.io
+  names:
+    categories:
+    - cert-manager
+    - cert-manager-acme
+    kind: Challenge
+    listKind: ChallengeList
+    plural: challenges
+    singular: challenge
+  scope: Namespaced
+  versions:
+  - name: v1
+    additionalPrinterColumns:
+    - jsonPath: .status.state
+      name: State
+      type: string
+    - jsonPath: .status.reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              issuerRef:
+                properties:
+                  group:
+                    type: string
+                  kind:
+                    type: string
+                  name:
+                    description: Name of the issuer being referred to.
+                    type: string
+                required:
+                - name
+                type: object
+              type:
+                enum:
+                - HTTP-01
+                - DNS-01
+                type: string
+              wildcard:
+                description: |-
+                  wildcard will be true if this challenge is for a wildcard identifier,
+                  for example '*.example.com'.
+                type: boolean
+            required:
+            - issuerRef
+            - type
+            type: object
+          status:
+            properties:
+              presented:
+                type: boolean
+            type: object
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

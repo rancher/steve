@@ -1,0 +1,16 @@
+schemaID: cert-manager.io.certificates
+tests:
+- description: "sort by status.notAfter"
+  query: "sort=status.notAfter"
+  expected:
+  - default/camembert
+  - default/feta
+  - default/brie
+  - default/cheddar
+- description: "sort by status.renewalTime"
+  query: "sort=status.renewalTime"
+  expected:
+  - default/feta
+  - default/cheddar
+  - default/brie
+  - default/camembert

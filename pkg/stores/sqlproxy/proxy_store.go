@@ -131,6 +131,10 @@ var (
 			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
 			"spec.displayName": &informer.JSONPathField{Path: []string{"spec", "displayName"}},
 		},
+		gvkKey("acme.cert-manager.io", "v1", "Challenge"): {
+			"spec.type":        &informer.JSONPathField{Path: []string{"spec", "type"}},
+			"status.presented": &informer.JSONPathField{Path: []string{"status", "presented"}},
+		},
 		gvkKey("", "v1", "Service"): {
 			"spec.clusterIP": &informer.JSONPathField{Path: []string{"spec", "clusterIP"}},
 			"spec.type":      &informer.JSONPathField{Path: []string{"spec", "type"}},
@@ -182,6 +186,11 @@ var (
 			"status.action":      &informer.JSONPathField{Path: []string{"status", "action"}},
 			"status.namespace":   &informer.JSONPathField{Path: []string{"status", "namespace"}},
 			"status.releaseName": &informer.JSONPathField{Path: []string{"status", "releaseName"}},
+		},
+		gvkKey("cert-manager.io", "v1", "Certificate"): {
+			"status.notAfter":    &informer.JSONPathField{Path: []string{"status", "notAfter"}},
+			"status.renewalTime": &informer.JSONPathField{Path: []string{"status", "renewalTime"}},
+			"spec.dnsNames":      &informer.JSONPathField{Path: []string{"spec", "dnsNames"}},
 		},
 		gvkKey("cluster.x-k8s.io", "v1beta1", "Machine"): {
 			"spec.clusterName": &informer.JSONPathField{Path: []string{"spec", "clusterName"}},
