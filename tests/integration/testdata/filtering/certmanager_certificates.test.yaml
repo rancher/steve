@@ -5,7 +5,7 @@ tests:
   expected:
   - default/brie
   - default/camembert
-- description: "spec.renewalTime before X"
+- description: "spec.dnsNames contains orzo"
   query: "filter=spec.dnsNames+CONTAINS+orzo"
   expected:
   - default/feta
