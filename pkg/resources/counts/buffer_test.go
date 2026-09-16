@@ -2,6 +2,7 @@ package counts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_countsBuffer(t *testing.T) {
@@ -62,7 +64,7 @@ func Test_countsBuffer(t *testing.T) {
 			// due to complexities of cycle calculation, give a slight delay for the event to actually stream
 			output, err := receiveWithTimeout(outputChannel, debounce+time.Second)
 			assert.NoError(t, err, "did not expect an error when receiving value from channel")
-			outputCount := output.Object.Object.(Count)
+			outputCount := decodeCount(t, output)
 			assert.Len(t, outputCount.Counts, test.numInputEvents)
 			for outputID, outputItem := range outputCount.Counts {
 				outputIdx, err := strconv.Atoi(outputID)
@@ -130,6 +132,51 @@ func Test_countsBufferDoesNotBlockProducer(t *testing.T) {
 	}
 }
 
+func Test_watchWireFormatUnchanged(t *testing.T) {
+	count := Count{
+		ID: "count",
+		Counts: map[string]ItemCount{
+			"apps.deployment": {
+				Summary: Summary{Count: 7, Error: 1, Transitioning: 2, States: map[string]int{"error": 1, "in-progress": 2}},
+				Namespaces: map[string]Summary{
+					"default":     {Count: 4},
+					"kube-system": {Count: 3, Error: 1, States: map[string]int{"error": 1}},
+					// characters json.Marshal escapes, to prove that routing the
+					// bytes back through json.Marshal doesn't escape them twice
+					"ns<&>": {Count: 0},
+				},
+				Revision: 99,
+			},
+			"v1.pod": {Summary: Summary{Count: 1}},
+		},
+	}
+
+	raw, err := json.Marshal(&count)
+	require.NoError(t, err)
+
+	marshalResource := func(obj types.APIObject) string {
+		resource := &types.RawResource{
+			ID:        "count",
+			Type:      "count",
+			Schema:    &types.APISchema{},
+			Links:     map[string]string{"self": "/v1/counts/count"},
+			Actions:   map[string]string{},
+			APIObject: obj,
+		}
+		out, err := json.Marshal(resource)
+		require.NoError(t, err)
+		return string(out)
+	}
+
+	serializedLate := marshalResource(toAPIObject(&count))
+	serializedEarly := marshalResource(toRawAPIObject("count", raw))
+
+	assert.Equal(t, serializedLate, serializedEarly)
+	// guard against both sides degenerating to a resource with no counts spliced in
+	assert.Contains(t, serializedEarly, `"apps.deployment"`)
+	assert.NotContains(t, serializedEarly, `<\\u0026`, "expected no double escaping")
+}
+
 // fakeCounter mimics the producer side of Store.Watch: it records which schema
 // IDs have changed and only materializes a copy of them when the debouncer asks.
 type fakeCounter struct {
@@ -161,7 +208,7 @@ func (f *fakeCounter) update(id string, count int) {
 	}
 }
 
-func (f *fakeCounter) snapshot() (*Count, bool) {
+func (f *fakeCounter) snapshot() (json.RawMessage, bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -172,18 +219,35 @@ func (f *fakeCounter) snapshot() (*Count, bool) {
 
 	changedCounts := make(map[string]ItemCount, len(f.changed))
 	for id := range f.changed {
-		itemCount := f.counts[id]
-		changedCounts[id] = *itemCount.DeepCopy()
+		changedCounts[id] = f.counts[id]
+	}
+
+	raw, err := json.Marshal(&Count{ID: "count", Counts: changedCounts})
+	if err != nil {
+		return nil, false
 	}
 	clear(f.changed)
 
-	return &Count{ID: "count", Counts: changedCounts}, true
+	return raw, true
 }
 
 func (f *fakeCounter) snapshots() int {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	return f.snapshotCall
+}
+
+// decodeCount reads back the Count an APIEvent carries. The watch serializes
+// under its counts lock, so the event holds bytes rather than a Count value.
+func decodeCount(t *testing.T, event *types.APIEvent) Count {
+	t.Helper()
+
+	raw, ok := event.Object.Object.(json.RawMessage)
+	require.Truef(t, ok, "expected a serialized count, got %T", event.Object.Object)
+
+	var count Count
+	require.NoError(t, json.Unmarshal(raw, &count))
+	return count
 }
 
 // receiveWithTimeout tries to get a value from input within duration. Returns an error if no input was received during that period

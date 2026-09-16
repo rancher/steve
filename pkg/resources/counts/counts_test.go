@@ -2,6 +2,7 @@ package counts_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -162,7 +164,7 @@ func TestWatch(t *testing.T) {
 			} else {
 				assert.NoError(t, err, "got an error when attempting to get a value from the result channel")
 				assert.NotNilf(t, outputCount, "expected a new count value, did not get one")
-				count := outputCount.Object.Object.(counts.Count)
+				count := decodeCount(t, outputCount)
 				assert.Len(t, count.Counts, 1, "only expected one count event")
 				itemCount, ok := count.Counts[testResource]
 				assert.True(t, ok, "expected an item count for %s", testResource)
@@ -170,6 +172,19 @@ func TestWatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+// decodeCount reads back the Count an APIEvent carries. Store.Watch serializes
+// under its counts lock, so the event holds bytes rather than a Count value.
+func decodeCount(t *testing.T, event *types.APIEvent) counts.Count {
+	t.Helper()
+
+	raw, ok := event.Object.Object.(json.RawMessage)
+	require.Truef(t, ok, "expected a serialized count, got %T", event.Object.Object)
+
+	var count counts.Count
+	require.NoError(t, json.Unmarshal(raw, &count))
+	return count
 }
 
 // receiveWithTimeout tries to get a value from input within duration. Returns an error if no input was received during that period
