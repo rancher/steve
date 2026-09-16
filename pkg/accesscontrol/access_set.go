@@ -3,13 +3,11 @@ package accesscontrol
 import (
 	"sort"
 
+	"github.com/rancher/apiserver/pkg/types"
+	"github.com/rancher/steve/pkg/attributes"
 	v1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
-	rbacv1 "k8s.io/kubernetes/pkg/apis/rbac/v1"
-
-	"github.com/rancher/apiserver/pkg/types"
-	"github.com/rancher/steve/pkg/attributes"
 )
 
 type AccessSet struct {
@@ -107,12 +105,12 @@ func (a *AccessSet) GrantsNonResource(verb, url string) bool {
 
 	if _, ok := a.nonResourceSet[nonResourceKey{url: url, verb: verb}]; ok {
 		rule := &v1.PolicyRule{NonResourceURLs: []string{url}, Verbs: []string{verb}}
-		return rbacv1.NonResourceURLMatches(rule, url) && rbacv1.VerbMatches(rule, verb)
+		return NonResourceURLMatches(rule, url) && VerbMatches(rule, verb)
 	}
 
 	for key := range a.nonResourceSet {
 		rule := &v1.PolicyRule{NonResourceURLs: []string{key.url}, Verbs: []string{key.verb}}
-		if rbacv1.NonResourceURLMatches(rule, url) && rbacv1.VerbMatches(rule, verb) {
+		if NonResourceURLMatches(rule, url) && VerbMatches(rule, verb) {
 			return true
 		}
 	}
