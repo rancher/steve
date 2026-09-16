@@ -96,24 +96,24 @@ type Store struct {
 	schemaFactory schema.Factory
 }
 
-func toAPIObject(c Count) types.APIObject {
+func toAPIObject(c *Count) types.APIObject {
 	return types.APIObject{
 		Type:   "count",
 		ID:     c.ID,
-		Object: c,
+		Object: *c,
 	}
 }
 
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
 	c := s.getCount(apiOp)
-	return toAPIObject(c), nil
+	return toAPIObject(&c), nil
 }
 
 func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
 	c := s.getCount(apiOp)
 	return types.APIObjectList{
 		Objects: []types.APIObject{
-			toAPIObject(c),
+			toAPIObject(&c),
 		},
 	}, nil
 }
@@ -257,12 +257,12 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	// event mutate a Count that is still being serialized onto the websocket.
 	// Emit time is the latest point at which the copy can be taken, which is
 	// what makes it cost one copy per debounce window rather than one per event.
-	snapshot := func() (Count, bool) {
+	snapshot := func() (*Count, bool) {
 		countLock.Lock()
 		defer countLock.Unlock()
 
 		if len(changed) == 0 {
-			return Count{}, false
+			return nil, false
 		}
 
 		changedCounts := make(map[string]ItemCount, len(changed))
@@ -275,7 +275,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 		clear(changed)
 
-		return Count{
+		return &Count{
 			ID:     "count",
 			Counts: changedCounts,
 		}, true

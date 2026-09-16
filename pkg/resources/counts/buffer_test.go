@@ -161,12 +161,12 @@ func (f *fakeCounter) update(id string, count int) {
 	}
 }
 
-func (f *fakeCounter) snapshot() (Count, bool) {
+func (f *fakeCounter) snapshot() (*Count, bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	if len(f.changed) == 0 {
-		return Count{}, false
+		return nil, false
 	}
 	f.snapshotCall++
 
@@ -177,7 +177,7 @@ func (f *fakeCounter) snapshot() (Count, bool) {
 	}
 	clear(f.changed)
 
-	return Count{ID: "count", Counts: changedCounts}, true
+	return &Count{ID: "count", Counts: changedCounts}, true
 }
 
 func (f *fakeCounter) snapshots() int {
