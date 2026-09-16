@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: emerald
+  namespace: default
+  labels:
+    test.cattle.io/certificates: sapphire
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: oak
+  namespace: default
+spec:
+  selfSigned: {}
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: willow
+  namespace: default
+spec:
+  selfSigned: {}
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cheddar
+  namespace: default
+spec:
+  commonName: cheddar
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oak
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: emerald
+status:
+  notAfter: "2026-12-14T17:28:10Z"
+  renewalTime: "2002-11-14T17:28:10Z"
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: brie
+  namespace: default
+spec:
+  commonName: brie
+  dnsNames:
+  - farfalle
+  - penne
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: willow
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: emerald
+status:
+  notAfter: "1997-11-17T17:28:10Z"
+  renewalTime: "2003-11-13T17:28:10Z"
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: camembert
+  namespace: default
+spec:
+  commonName: camembert
+  dnsNames:
+  - bucatini
+  - penne
+  - ravioli
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oak
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: emerald
+status:
+  notAfter: "1977-05-08T17:28:10Z"
+  renewalTime: "2004-04-08T17:28:10Z"
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: feta
+  namespace: default
+spec:
+  dnsNames:
+  - blintz
+  - orzo
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oak
+  secretName: emerald
+status:
+  notAfter: "1978-12-15T17:28:10Z"
+  renewalTime: "2001-11-15T17:28:10Z"
