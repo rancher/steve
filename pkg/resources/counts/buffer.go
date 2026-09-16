@@ -22,6 +22,7 @@ func countsBuffer(ctx context.Context, wake <-chan struct{}, snapshot func() (Co
 
 // debounceCounts converts counts from snapshot into an APIEvent, and updates the result channel at a reduced pace
 func debounceCounts(ctx context.Context, result chan types.APIEvent, wake <-chan struct{}, snapshot func() (Count, bool), debounce time.Duration) {
+	// counts aren't a critical value. To avoid excess UI processing, only send updates after debounce has elapsed
 	t := time.NewTicker(debounce)
 	defer t.Stop()
 

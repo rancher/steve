@@ -248,6 +248,15 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		return nil
 	}
 
+	// snapshot returns the counts that have changed since it was last called.
+	//
+	// The ItemCount is deep copied because the producer mutates it, not the
+	// consumer: addCounts/removeCounts write into itemCount.Namespaces and
+	// Summary.States in place, so the maps held in counts keep changing as
+	// further events arrive. Handing those maps out directly would let the next
+	// event mutate a Count that is still being serialized onto the websocket.
+	// Emit time is the latest point at which the copy can be taken, which is
+	// what makes it cost one copy per debounce window rather than one per event.
 	snapshot := func() (Count, bool) {
 		countLock.Lock()
 		defer countLock.Unlock()
