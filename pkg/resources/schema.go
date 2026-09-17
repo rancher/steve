@@ -23,7 +23,7 @@ import (
 
 func DefaultSchemas(ctx context.Context, baseSchema *types.APISchemas, ccache clustercache.ClusterCache,
 	cg client.ClientGetter, schemaFactory schema.Factory, serverVersion string) error {
-	counts.Register(baseSchema, ccache)
+	counts.Register(baseSchema, ccache, schemaFactory)
 	subscribe.Register(baseSchema, func(apiOp *types.APIRequest) *types.APISchemas {
 		user, ok := request.UserFrom(apiOp.Context())
 		if ok {
