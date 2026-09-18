@@ -63,6 +63,7 @@ const (
 )
 
 var (
+	compoundNameRegex       = regexp.MustCompile(`[^a-zA-Z0-9_\-./]`)
 	containsNonNumericRegex = regexp.MustCompile(`\D`)
 	failedToGetFromSliceFmt = "[listoption indexer] failed to get subfield [%s] from slice items"
 	namespacesDbName        = "_v1_Namespace"
@@ -1189,14 +1190,11 @@ func getLabelColumnNameToDisplay(fieldParts []string) (string, error) {
 	if len(lastPart) > nameLimit {
 		return "", fmt.Errorf("label value %s..%s (%d chars, max %d) is too long", lastPart[0:10], lastPart[len(lastPart)-10:], len(lastPart), nameLimit)
 	}
-	simpleName := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
-	if simpleName.MatchString(lastPart) {
+	if isSimpleName(lastPart) {
 		columnNameToDisplay = strings.Join(fieldParts, ".")
+	} else if compoundNameRegex.MatchString(lastPart) {
+		return "", fmt.Errorf("invalid label name: %s", lastPart)
 	} else {
-		compoundName := regexp.MustCompile(`[^a-zA-Z0-9_\-./]`)
-		if compoundName.MatchString(lastPart) {
-			return "", fmt.Errorf("invalid label name: %s", lastPart)
-		}
 		columnNameToDisplay = fmt.Sprintf("metadata.labels[%s]", lastPart)
 	}
 	return columnNameToDisplay, nil
@@ -1331,11 +1329,33 @@ func smartJoin(s []string) string {
 		return s[0]
 	}
 	lastBit := s[len(s)-1]
-	simpleName := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
-	if simpleName.MatchString(lastBit) {
+	if isSimpleName(lastBit) {
 		return strings.Join(s, ".")
 	}
 	return fmt.Sprintf("%s[%s]", strings.Join(s[0:len(s)-1], "."), lastBit)
+}
+
+// isSimpleName reports whether s matches `^[a-zA-Z_][a-zA-Z0-9_]*$`.
+//
+// This is deliberately hand-rolled rather than a regexp: smartJoin sits on the
+// per-object write path of the SQL cache (see ListOptionIndexer.addIndexFields),
+// so it must not allocate.
+func isSimpleName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '_':
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9' && i > 0:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // toColumnName returns the column name corresponding to a field expressed as string slice
