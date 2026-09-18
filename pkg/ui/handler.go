@@ -44,11 +44,20 @@ type Options struct {
 	ReleaseSetting BoolSetting
 	// The version of API UI to use
 	APIUIVersionSetting StringSetting
+	// The Content-Security-Policy to serve the UI with
+	CSPPolicy StringSetting
 }
 
 func NewUIHandler(opts *Options) *Handler {
 	if opts == nil {
 		opts = &Options{}
+	}
+
+	cspPolicy := opts.CSPPolicy
+	if cspPolicy == nil {
+		cspPolicy = func() string {
+			return DefaultCSPPolicy
+		}
 	}
 
 	h := &Handler{
@@ -60,12 +69,14 @@ func NewUIHandler(opts *Options) *Handler {
 		middleware: middleware.Chain{
 			middleware.Gzip,
 			middleware.FrameOptions,
+			CSP(cspPolicy),
 			middleware.CacheMiddleware("json", "js", "css"),
 		}.Handler,
 		indexMiddleware: middleware.Chain{
 			middleware.Gzip,
 			middleware.NoCache,
 			middleware.FrameOptions,
+			CSP(cspPolicy),
 			middleware.ContentType,
 		}.Handler,
 	}
