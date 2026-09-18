@@ -4,6 +4,8 @@ package virtual
 
 import (
 	"fmt"
+	"github.com/rancher/steve/pkg/resources/virtual/acmechallenges"
+	"github.com/rancher/steve/pkg/resources/virtual/certificates"
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
