@@ -4,6 +4,8 @@ package virtual
 
 import (
 	"fmt"
+	"github.com/rancher/steve/pkg/resources/virtual/acmechallenges"
+	"github.com/rancher/steve/pkg/resources/virtual/certificates"
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
@@ -43,16 +45,17 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	converters := make([]func(*unstructured.Unstructured) (*unstructured.Unstructured, error), 0)
 	converters = append(converters, t.defaultFields.TransformCommon)
 
+	switch gvk {
 	// v1/Event
-	if gvk == rescommon.EventGVK {
+	case rescommon.EventGVK:
 		converters = append(converters, events.TransformEventObject)
 
 		// management.cattle.io/v3/Cluster
-	} else if gvk == rescommon.MgmtClusterGVK {
+	case rescommon.MgmtClusterGVK:
 		converters = append(converters, clusters.TransformManagedCluster)
 
 		// v1/Pod
-	} else if gvk == rescommon.PodGVK {
+	case rescommon.PodGVK:
 		converters = append(converters, pods.TransformPodObject)
 
 		// Register multi-value converter
@@ -66,6 +69,13 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 			},
 		}
 		converters = append(converters, multiValueConverter.Transform)
+
+	case rescommon.CertManagerCertificateGVK:
+		// v1/cert-manager.io.certificates
+		converters = append(converters, certificates.TransformCertificate)
+	case rescommon.AcmeCertManagerChallengeGVK:
+		// v1/acme.cert-manager.io.challenges
+		converters = append(converters, acmechallenges.TransformChallenge)
 	}
 
 	// Detecting if we need to convert date fields
