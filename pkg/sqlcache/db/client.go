@@ -84,6 +84,11 @@ func (c *client) WithTransaction(ctx context.Context, forWriting bool, f WithTra
 }
 
 func (c *client) withTransaction(ctx context.Context, forWriting bool, f WithTransactionFunction) error {
+	if forWriting {
+		c.writeMu.Lock()
+		defer c.writeMu.Unlock()
+	}
+
 	c.connLock.RLock()
 	// note: this assumes _txlock=immediate in the connection string, see NewConnection
 	tx, err := c.beginTX(ctx, forWriting)
@@ -162,6 +167,7 @@ type client struct {
 	Client
 	conn      Connection
 	connLock  sync.RWMutex
+	writeMu   sync.Mutex
 	encryptor Encryptor
 	decryptor Decryptor
 	encoding  encoding
