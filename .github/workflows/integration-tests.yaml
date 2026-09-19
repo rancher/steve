@@ -1,0 +1,37 @@
+name: Integration tests
+
+on:
+  pull_request: {}
+  push:
+    branches:
+    - master
+    - release/*
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name : Checkout repository
+      # https://github.com/actions/checkout/releases/tag/v4.1.1
+      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+    - name: Install Go
+      # https://github.com/actions/setup-go/releases/tag/v5.0.0
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install k3d
+      run: |
+        curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run integration tests
+      run: make integration-tests
+      env:
+        INTEGRATION_TEST_ARGS: "-v -count=1"
