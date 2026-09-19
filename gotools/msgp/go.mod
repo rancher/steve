@@ -1,6 +1,6 @@
 module github.com/rancher/steve/gotools/msgp
 
-go 1.25.0
+go 1.26.0
 
 tool github.com/tinylib/msgp
 
