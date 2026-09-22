@@ -54,7 +54,10 @@ func TestTransformCertificate(t *testing.T) {
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
-							map[string]interface{}{"type": "Ready"},
+							map[string]interface{}{
+								"type":   "Ready",
+								"status": "True",
+							},
 						},
 						"notAfter":    tomorrow.Format(time.RFC3339),
 						"notBefore":   yesterday.Format(time.RFC3339),
@@ -77,7 +80,10 @@ func TestTransformCertificate(t *testing.T) {
 					},
 					"status": map[string]interface{}{
 						"conditions": []interface{}{
-							map[string]interface{}{"type": "Ready"},
+							map[string]interface{}{
+								"type":   "Ready",
+								"status": "True",
+							},
 						},
 						"notAfter":    tomorrow.Format(time.RFC3339),
 						"notBefore":   yesterday.Format(time.RFC3339),
@@ -410,6 +416,157 @@ func TestTransformCertificate(t *testing.T) {
 						"notAfter":    tomorrow.Format(time.RFC3339),
 					},
 					"id": "beakersFarmNamespace/willExpire",
+				},
+			},
+		},
+		{
+			name: "looks good, but lastCondition.status is false => error",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "falseStatus",
+						"namespace": "oliviasPoolNamespace",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "False",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "oliviasPoolNamespace/falseStatus",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "falseStatus",
+						"namespace": "oliviasPoolNamespace",
+						"state": map[string]interface{}{
+							"name":  "active",
+							"error": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "False",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "oliviasPoolNamespace/falseStatus",
+				},
+			},
+		},
+		{
+			name: "looks good, but lastCondition.status is unknown => error",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "unknownStatus",
+						"namespace": "geraldsHouseNamespace",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "Unknown",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "geraldsHouseNamespace/unknownStatus",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "unknownStatus",
+						"namespace": "geraldsHouseNamespace",
+						"state": map[string]interface{}{
+							"name":  "active",
+							"error": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "Unknown",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "geraldsHouseNamespace/unknownStatus",
+				},
+			},
+		},
+		{
+			name: "looks good, but lastCondition.status is missing => error",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "missingStatus",
+						"namespace": "paisPlateNamespace",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "paisPlateNamespace/missingStatus",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "missingStatus",
+						"namespace": "paisPlateNamespace",
+						"state": map[string]interface{}{
+							"name":  "active",
+							"error": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "paisPlateNamespace/missingStatus",
 				},
 			},
 		},

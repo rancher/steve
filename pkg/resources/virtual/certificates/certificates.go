@@ -63,11 +63,15 @@ func getCertificateState(obj *unstructured.Unstructured) (string, bool, error) {
 			return "expiring", false, nil
 		}
 	}
-	typeNameValue, ok := mostRecentCondition["type"]
-	if ok {
-		typeName, ok := typeNameValue.(string)
-		if ok && typeName == "Ready" {
-			return "active", false, nil
+	if typeNameValue, ok := mostRecentCondition["type"]; ok {
+		if typeName, ok := typeNameValue.(string); ok && typeName == "Ready" {
+			isError := true
+			if statusValue, ok := mostRecentCondition["status"]; ok {
+				if status, ok := statusValue.(string); ok && status == "True" {
+					isError = false
+				}
+			}
+			return "active", isError, nil
 		}
 	}
 	return "pending", false, nil
