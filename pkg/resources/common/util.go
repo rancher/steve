@@ -43,8 +43,9 @@ func GetColumnDefinitions(schema *types.APISchema) []ColumnDefinition {
 
 // Common GroupVersionKind definitions used throughout the codebase
 var (
-	PodGVK                 = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
-	EventGVK               = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Event"}
-	MgmtClusterGVK         = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}
-	ProvisioningClusterGVK = schema.GroupVersionKind{Group: "provisioning.cattle.io", Version: "v1", Kind: "Cluster"}
+	PodGVK                      = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+	EventGVK                    = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Event"}
+	MgmtClusterGVK              = schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}
+	AcmeCertManagerChallengeGVK = schema.GroupVersionKind{Group: "acme.cert-manager.io", Version: "v1", Kind: "Challenge"}
+	CertManagerCertificateGVK   = schema.GroupVersionKind{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"}
 )
