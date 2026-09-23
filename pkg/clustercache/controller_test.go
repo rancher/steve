@@ -9,12 +9,15 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
 	steveschema "github.com/rancher/steve/pkg/schema"
+	v1schema "github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/rancher/wrangler/v3/pkg/summary/client"
-	v1schema "github.com/rancher/wrangler/v3/pkg/schemas"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -136,6 +139,74 @@ func TestOnSchemasDoesNotHoldClusterCacheLockWhileWaitingForSync(t *testing.T) {
 // The test guarantees ordering by holding the cache lock while cancelling watcher A
 // and installing watcher B, so that watcher A's cleanup (which must acquire the same
 // lock) is forced to run after watcher B is already in the map.
+func TestValidSchemaVerbs(t *testing.T) {
+	tests := []struct {
+		name         string
+		verbs        []string
+		wantValid    bool
+		wantCanWatch bool
+	}{
+		{name: "list and watch", verbs: []string{"list", "watch"}, wantValid: true, wantCanWatch: true},
+		{name: "list only", verbs: []string{"get", "list", "create", "delete"}, wantValid: true, wantCanWatch: false},
+		{name: "watch without list", verbs: []string{"watch"}, wantValid: false, wantCanWatch: true},
+		{name: "no list no watch", verbs: []string{"get", "create"}, wantValid: false, wantCanWatch: false},
+		{name: "empty", verbs: nil, wantValid: false, wantCanWatch: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &types.APISchema{Schema: &v1schema.Schema{ID: "test"}}
+			attributes.SetVerbs(s, tc.verbs)
+			if got := validSchema(s); got != tc.wantValid {
+				t.Errorf("validSchema() = %v, want %v", got, tc.wantValid)
+			}
+			if got := schemaSupportsWatch(s); got != tc.wantCanWatch {
+				t.Errorf("schemaSupportsWatch() = %v, want %v", got, tc.wantCanWatch)
+			}
+		})
+	}
+}
+
+// TestOnSchemasCachesListOnlyResourceViaPolling verifies that a schema without
+// the "watch" verb is still cached: the initial reflector List (through the
+// dynamic client) seeds the store so cc.List(gvk) returns the object.
+func TestOnSchemasCachesListOnlyResourceViaPolling(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	gvr := schema2.GroupVersionResource{Group: "actions.kio.kasten.io", Version: "v1alpha1", Resource: "backupactions"}
+	gvk := schema2.GroupVersionKind{Group: "actions.kio.kasten.io", Version: "v1alpha1", Kind: "BackupAction"}
+	id := "backupactions.actions.kio.kasten.io"
+
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(gvk)
+	obj.SetName("empty2")
+	obj.SetNamespace("junk")
+	obj.SetResourceVersion("1")
+
+	scheme := runtime.NewScheme()
+	gvrToListKind := map[schema2.GroupVersionResource]string{gvr: "BackupActionList"}
+	dynClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(scheme, gvrToListKind, obj)
+
+	cc := newTestCache(ctx, nil)
+	cc.dynamicClient = dynClient
+
+	s := fakeSchema(id, gvr, gvk)
+	attributes.SetVerbs(s, []string{"get", "list", "create", "delete"}) // no watch
+
+	col := steveschema.NewCollection(ctx, types.EmptyAPISchemas(), nil)
+	col.Reset(map[string]*types.APISchema{id: s})
+
+	if err := cc.OnSchemas(col); err != nil {
+		t.Fatalf("OnSchemas returned error: %v", err)
+	}
+
+	items := cc.List(gvk)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 cached item for list-only resource, got %d", len(items))
+	}
+}
+
 func TestOnSchemasStaleWatcherDeletionProtection(t *testing.T) {
 	listStarted := make(chan struct{})
 	unblockA := make(chan struct{})
