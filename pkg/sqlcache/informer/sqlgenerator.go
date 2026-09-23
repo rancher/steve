@@ -1344,13 +1344,22 @@ func isSimpleName(s string) bool {
 	if s == "" {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
+	// the first byte is the only one that rejects digits, so test it up front
+	// rather than carrying an i > 0 guard through every iteration
+	switch c := s[0]; {
+	case c == '_':
+	case c >= 'a' && c <= 'z':
+	case c >= 'A' && c <= 'Z':
+	default:
+		return false
+	}
+	for i := 1; i < len(s); i++ {
 		c := s[i]
 		switch {
 		case c == '_':
 		case c >= 'a' && c <= 'z':
 		case c >= 'A' && c <= 'Z':
-		case c >= '0' && c <= '9' && i > 0:
+		case c >= '0' && c <= '9':
 		default:
 			return false
 		}
