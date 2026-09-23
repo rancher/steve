@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/partition"
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 	sqlStore "github.com/rancher/steve/pkg/sqlcache/store"
+	"github.com/rancher/steve/pkg/synthetic"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -87,7 +88,7 @@ func NewInformer(ctx context.Context, client dynamic.ResourceInterface, fields m
 	if !watchable {
 		watchFunc = func(options metav1.ListOptions) (watch.Interface, error) {
 			ctx, cancel := context.WithCancel(ctx)
-			return newSyntheticWatcher(ctx, cancel, gvk).watch(client, options, defaultRefreshTime)
+			return synthetic.NewSyntheticWatcher(ctx, cancel, gvk).Watch(client, options, defaultRefreshTime)
 		}
 	}
 	listWatcher := &cache.ListWatch{

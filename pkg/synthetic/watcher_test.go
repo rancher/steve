@@ -2,7 +2,7 @@
 Copyright 2024 SUSE LLC
 */
 
-package informer
+package synthetic
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,11 +18,30 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
 )
 
+// fakeResourceInterface returns lists[0] on the first List call and lists[1] on
+// every subsequent call. Only List is exercised by the watcher.
+type fakeResourceInterface struct {
+	dynamic.ResourceInterface
+	mu    sync.Mutex
+	lists []*unstructured.UnstructuredList
+	calls int
+}
+
+func (f *fakeResourceInterface) List(_ context.Context, _ metav1.ListOptions) (*unstructured.UnstructuredList, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	idx := f.calls
+	if idx >= len(f.lists) {
+		idx = len(f.lists) - 1
+	}
+	f.calls++
+	return f.lists[idx], nil
+}
+
 func TestSyntheticWatcher(t *testing.T) {
-	dynamicClient := NewMockResourceInterface(gomock.NewController(t))
-	var err error
 	cs1 := v1.ComponentStatus{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -74,7 +92,6 @@ func TestSyntheticWatcher(t *testing.T) {
 	}
 	list, err := makeCSList(cs1, cs2, cs3, cs4)
 	assert.Nil(t, err)
-	dynamicClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(list, nil)
 	// Make copies to avoid modifying objects before the watcher has processed them.
 	cs1b := cs1.DeepCopy()
 	cs1b.ObjectMeta.ResourceVersion = "rv1.2"
@@ -82,13 +99,14 @@ func TestSyntheticWatcher(t *testing.T) {
 	cs2b.ObjectMeta.ResourceVersion = "rv2.2"
 	list2, err := makeCSList(*cs1b, *cs2b, cs4)
 	assert.Nil(t, err)
-	dynamicClient.EXPECT().List(gomock.Any(), gomock.Any()).AnyTimes().Return(list2, nil)
+
+	dynamicClient := &fakeResourceInterface{lists: []*unstructured.UnstructuredList{list, list2}}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sw := newSyntheticWatcher(ctx, cancel, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ComponentStatus"})
+	sw := NewSyntheticWatcher(ctx, cancel, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ComponentStatus"})
 	pollingInterval := 10 * time.Millisecond
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
-		return sw.watch(dynamicClient, options, pollingInterval)
+		return sw.Watch(dynamicClient, options, pollingInterval)
 	}
 	options := metav1.ListOptions{}
 	w, err := watchFunc(options)
