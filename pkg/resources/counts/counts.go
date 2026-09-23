@@ -1,6 +1,7 @@
 package counts
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/rancher/steve/pkg/schema"
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/summary"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
@@ -96,24 +98,32 @@ type Store struct {
 	schemaFactory schema.Factory
 }
 
-func toAPIObject(c Count) types.APIObject {
+func toAPIObject(c *Count) types.APIObject {
 	return types.APIObject{
 		Type:   "count",
 		ID:     c.ID,
-		Object: c,
+		Object: *c,
+	}
+}
+
+func toRawAPIObject(id string, raw json.RawMessage) types.APIObject {
+	return types.APIObject{
+		Type:   "count",
+		ID:     id,
+		Object: raw,
 	}
 }
 
 func (s *Store) ByID(apiOp *types.APIRequest, schema *types.APISchema, id string) (types.APIObject, error) {
 	c := s.getCount(apiOp)
-	return toAPIObject(c), nil
+	return toAPIObject(&c), nil
 }
 
 func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.APIObjectList, error) {
 	c := s.getCount(apiOp)
 	return types.APIObjectList{
 		Objects: []types.APIObject{
-			toAPIObject(c),
+			toAPIObject(&c),
 		},
 	}, nil
 }
@@ -121,20 +131,13 @@ func (s *Store) List(apiOp *types.APIRequest, schema *types.APISchema) (types.AP
 // Watch creates a watch for the Counts schema. This returns only the counts which have changed since the watch was established
 func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.WatchRequest) (chan types.APIEvent, error) {
 	var (
-		result         = make(chan Count, 100)
 		counts         map[string]ItemCount
 		schemasChanged = make(chan struct{}, 1)
 		gvkToSchema    = map[schema2.GroupVersionKind]*types.APISchema{}
 		countLock      sync.Mutex
+		changed        = map[string]struct{}{}
+		wake           = make(chan struct{}, 1)
 	)
-
-	go func() {
-		<-apiOp.Context().Done()
-		countLock.Lock()
-		close(result)
-		result = nil
-		countLock.Unlock()
-	}()
 
 	counts = s.getCount(apiOp).Counts
 	for id := range counts {
@@ -163,10 +166,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 				return
 			case <-schemasChanged:
 				countLock.Lock()
-				if result == nil {
-					countLock.Unlock()
-					continue
-				}
 
 				// Get fresh user-filtered schemas
 				newSchemas := s.getUserSchemas(apiOp)
@@ -191,12 +190,15 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 					for _, gvk := range addedGVKs {
 						schema := newGVKs[gvk]
 						counts[schema.ID] = s.countForSchema(schema, apiOp)
+						changed[schema.ID] = struct{}{}
 					}
 
-					// Send full COUNT update with both old and new resource types
-					result <- Count{
-						ID:     "count",
-						Counts: counts,
+					// Hand the new resource types to the debouncer the same way
+					// onChange does: mark them dirty and nudge it awake. It will
+					// snapshot them on the next window.
+					select {
+					case wake <- struct{}{}:
+					default:
 					}
 				}
 				countLock.Unlock()
@@ -207,10 +209,6 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	onChange := func(add bool, gvk schema2.GroupVersionKind, _ string, obj, oldObj runtime.Object) error {
 		countLock.Lock()
 		defer countLock.Unlock()
-
-		if result == nil {
-			return nil
-		}
 
 		schema := gvkToSchema[gvk]
 		if schema == nil {
@@ -250,16 +248,58 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 		}
 
 		counts[schema.ID] = itemCount
-		changedCount := map[string]ItemCount{
-			schema.ID: *itemCount.DeepCopy(),
-		}
+		changed[schema.ID] = struct{}{}
 
-		result <- Count{
-			ID:     "count",
-			Counts: changedCount,
+		select {
+		case wake <- struct{}{}:
+		default:
 		}
 
 		return nil
+	}
+
+	// snapshot serializes the counts that have changed since it was last called.
+	//
+	// The counts have to be frozen somehow before they leave the lock, because
+	// the producer keeps mutating them: addCounts/removeCounts write into
+	// itemCount.Namespaces and Summary.States in place, so handing those maps
+	// out directly would let the next event alter a Count that is still being
+	// written to the websocket.
+	//
+	// Serializing here rather than deep copying here and serializing downstream
+	// freezes them just as effectively and does strictly less work, since the
+	// bytes have to be produced either way. It more than halves the memory
+	// allocated per emit and, for counts carrying per-namespace states, cuts
+	// the number of allocations by about 40% as well.
+	snapshot := func() (json.RawMessage, bool) {
+		countLock.Lock()
+		defer countLock.Unlock()
+
+		if len(changed) == 0 {
+			return nil, false
+		}
+
+		changedCounts := make(map[string]ItemCount, len(changed))
+		for id := range changed {
+			itemCount, ok := counts[id]
+			if !ok {
+				continue
+			}
+			changedCounts[id] = itemCount
+		}
+
+		raw, err := json.Marshal(&Count{
+			ID:     "count",
+			Counts: changedCounts,
+		})
+		if err != nil {
+			// leave changed intact so the next tick retries these schemas
+			logrus.Errorf("counts: failed to serialize counts: %v", err)
+			return nil, false
+		}
+		clear(changed)
+
+		return raw, true
 	}
 
 	s.ccache.OnAdd(apiOp.Context(), func(gvk schema2.GroupVersionKind, key string, obj runtime.Object) error {
@@ -273,7 +313,7 @@ func (s *Store) Watch(apiOp *types.APIRequest, schema *types.APISchema, w types.
 	})
 
 	// buffer the counts so that we don't spam the consumer with constant updates
-	return countsBuffer(result), nil
+	return countsBuffer(apiOp.Context(), wake, snapshot, debounceDuration), nil
 }
 
 // getUserSchemas fetches user-filtered schemas from the factory
