@@ -3098,6 +3098,26 @@ func TestSmartJoin(t *testing.T) {
 	}
 }
 
+func BenchmarkSmartJoin(b *testing.B) {
+	benchmarks := []struct {
+		name       string
+		fieldArray []string
+	}{
+		{"simple", []string{"metadata", "creationTimestamp"}},
+		{"bracketed", []string{"metadata", "labels", "rancher.cattle.io/moo"}},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				sinkSmartJoin = smartJoin(bm.fieldArray)
+			}
+		})
+	}
+}
+
+var sinkSmartJoin string
+
 // Tests to verify we can sort on say pods on `spec.containers.image[i]`
 func TestSortPodsOnArrayAccess(t *testing.T) {
 	ctx := context.Background()
