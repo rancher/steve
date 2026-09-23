@@ -2,8 +2,10 @@ package counts_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/schemas"
 	"github.com/rancher/wrangler/v3/pkg/summary"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -161,7 +164,7 @@ func TestWatch(t *testing.T) {
 			} else {
 				assert.NoError(t, err, "got an error when attempting to get a value from the result channel")
 				assert.NotNilf(t, outputCount, "expected a new count value, did not get one")
-				count := outputCount.Object.Object.(counts.Count)
+				count := decodeCount(t, outputCount)
 				assert.Len(t, count.Counts, 1, "only expected one count event")
 				itemCount, ok := count.Counts[testResource]
 				assert.True(t, ok, "expected an item count for %s", testResource)
@@ -169,6 +172,19 @@ func TestWatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+// decodeCount reads back the Count an APIEvent carries. Store.Watch serializes
+// under its counts lock, so the event holds bytes rather than a Count value.
+func decodeCount(t *testing.T, event *types.APIEvent) counts.Count {
+	t.Helper()
+
+	raw, ok := event.Object.Object.(json.RawMessage)
+	require.Truef(t, ok, "expected a serialized count, got %T", event.Object.Object)
+
+	var count counts.Count
+	require.NoError(t, json.Unmarshal(raw, &count))
+	return count
 }
 
 // receiveWithTimeout tries to get a value from input within duration. Returns an error if no input was received during that period
@@ -300,5 +316,53 @@ func makeSummarizedObject(gvk schema2.GroupVersionKind, name string, namespace s
 				ResourceVersion: version, // any non-zero value should work here. 0 seems to have specific meaning for counts
 			},
 		},
+	}
+}
+
+func BenchmarkWatchOnChange(b *testing.B) {
+	for _, numNamespaces := range []int{10, 500, 2000} {
+		b.Run(fmt.Sprintf("namespaces=%d", numNamespaces), func(b *testing.B) {
+			testSchema := makeSchema(testResource)
+			addGenericPermissionsToSchema(testSchema, "list")
+			testSchemas := types.EmptyAPISchemas()
+			testSchemas.MustAddSchema(*testSchema)
+			testOp := &types.APIRequest{
+				Schemas:       testSchemas,
+				AccessControl: &server.SchemaBasedAccess{},
+				Request:       &http.Request{},
+			}
+
+			fakeCache := NewFakeClusterCache()
+			gvk := attributes.GVK(testSchema)
+			for i := 0; i < numNamespaces; i++ {
+				fakeCache.AddSummaryObj(makeSummarizedObject(gvk, "obj", fmt.Sprintf("ns-%d", i), "1"))
+			}
+			counts.Register(testSchemas, fakeCache)
+
+			countSchema := testSchemas.LookupSchema("count")
+			resChannel, err := countSchema.Store.Watch(testOp, nil, types.WatchRequest{})
+			assert.NoError(b, err)
+
+			// the consumer must keep reading or the watch stalls
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for range resChannel {
+				}
+			}()
+
+			old := makeSummarizedObject(gvk, "obj", "ns-0", "1")
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				next := makeSummarizedObject(gvk, "obj", "ns-0", strconv.Itoa(i+2))
+				// flip the state so the handler doesn't short-circuit as a no-op
+				next.Summary.Transitioning = i%2 == 0
+				if err := fakeCache.changeHandler(gvk, "n/a", next, old); err != nil {
+					b.Fatal(err)
+				}
+				old = next
+			}
+		})
 	}
 }
