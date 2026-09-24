@@ -451,7 +451,7 @@ func TestTransformCertificate(t *testing.T) {
 						"name":      "falseStatus",
 						"namespace": "oliviasPoolNamespace",
 						"state": map[string]interface{}{
-							"name":  "active",
+							"name":  "error",
 							"error": true,
 						},
 					},
@@ -471,7 +471,7 @@ func TestTransformCertificate(t *testing.T) {
 			},
 		},
 		{
-			name: "looks good, but lastCondition.status is unknown => error",
+			name: "looks good, but lastCondition.status is unknown => pending",
 			input: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "cert-manager.io/v1",
@@ -502,8 +502,8 @@ func TestTransformCertificate(t *testing.T) {
 						"name":      "unknownStatus",
 						"namespace": "geraldsHouseNamespace",
 						"state": map[string]interface{}{
-							"name":  "active",
-							"error": true,
+							"name":  "pending",
+							"error": false,
 						},
 					},
 					"status": map[string]interface{}{
@@ -522,7 +522,7 @@ func TestTransformCertificate(t *testing.T) {
 			},
 		},
 		{
-			name: "looks good, but lastCondition.status is missing => error",
+			name: "looks good, but lastCondition.status is missing => pending",
 			input: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "cert-manager.io/v1",
@@ -552,8 +552,8 @@ func TestTransformCertificate(t *testing.T) {
 						"name":      "missingStatus",
 						"namespace": "paisPlateNamespace",
 						"state": map[string]interface{}{
-							"name":  "active",
-							"error": true,
+							"name":  "pending",
+							"error": false,
 						},
 					},
 					"status": map[string]interface{}{
