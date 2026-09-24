@@ -710,3 +710,191 @@ func TestTransformChain(t *testing.T) {
 		})
 	}
 }
+
+func TestTransformCertManagerStatus(t *testing.T) {
+	const certManagerApiVersion = "cert-manager.io/v1"
+	type certTestType struct {
+		testName         string
+		objNamespace     string
+		objName          string
+		conditionType    string
+		conditionStatus  string
+		inputStateName   string
+		inputStateError  bool
+		outputStateName  string
+		outputStateError bool
+		wantError        bool
+		errorSubstring   string
+	}
+
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+	tomorrow := now.AddDate(0, 0, 1)
+
+	// cert-manager.io types:
+	certManagerTypeNames := []string{"certificaterequests", "certificates", "clusterissuers", "issuers"}
+
+	tests := []certTestType{
+		{
+			testName:         "%s is ok",
+			objNamespace:     "morriesfarm",
+			objName:          "jack",
+			conditionType:    "Ready",
+			conditionStatus:  "True",
+			inputStateName:   "active",
+			inputStateError:  false,
+			outputStateName:  "active",
+			outputStateError: false,
+		},
+		{
+			testName:         "%s: type:ready,status:false => should be an error",
+			objNamespace:     "amandasfarm",
+			objName:          "liam",
+			conditionType:    "Ready",
+			conditionStatus:  "False",
+			inputStateName:   "active",
+			inputStateError:  false,
+			outputStateName:  "error",
+			outputStateError: true,
+		},
+		{
+			testName:         "%s: type:ready,status:unknown => should be pending",
+			objNamespace:     "kaylasfarm",
+			objName:          "noah",
+			conditionType:    "Ready",
+			conditionStatus:  "Unknown",
+			inputStateName:   "active",
+			inputStateError:  false,
+			outputStateName:  "pending",
+			outputStateError: false,
+		},
+		{
+			testName:         "%s: type:ready,status:missing => should be pending",
+			objNamespace:     "kaylasfarm",
+			objName:          "noah",
+			conditionType:    "Ready",
+			inputStateName:   "active",
+			inputStateError:  false,
+			outputStateName:  "error",
+			outputStateError: true,
+		},
+	}
+
+	for _, test := range tests {
+		for _, typeName := range certManagerTypeNames {
+			fullTestName := fmt.Sprintf(test.testName, typeName)
+			testID := test.objNamespace + "/" + test.objName
+			t.Run(fullTestName, func(t *testing.T) {
+				conditions := []any{}
+				if test.conditionType != "" {
+					conditions = []interface{}{
+						map[string]interface{}{
+							"status": test.conditionStatus,
+							"type":   test.conditionType,
+						},
+					}
+				}
+				statusCore := map[string]interface{}{
+					"notAfter":    tomorrow.Format(time.RFC3339),
+					"notBefore":   yesterday.Format(time.RFC3339),
+					"renewalTime": tomorrow.Format(time.RFC3339),
+				}
+				if len(conditions) > 0 {
+					statusCore["conditions"] = conditions
+				}
+				metadataCore := map[string]interface{}{
+					"name":      test.objName,
+					"namespace": test.objNamespace,
+				}
+				if test.inputStateName != "" {
+					metadataCore["state"] = map[string]interface{}{
+						"name":  test.inputStateName,
+						"error": test.inputStateError,
+					}
+				}
+				testInput := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": certManagerApiVersion,
+						"kind":       typeName,
+						"metadata":   metadataCore,
+						"status":     statusCore,
+						"id":         testID,
+					},
+				}
+				var testOutput *unstructured.Unstructured
+				if !test.wantError {
+					metadataOutputCore := map[string]interface{}{
+						"name":          test.objName,
+						"namespace":     test.objNamespace,
+						"relationships": []any(nil),
+					}
+					if test.outputStateName != "" {
+						metadataOutputCore["state"] = map[string]interface{}{
+							"name":          test.outputStateName,
+							"error":         test.outputStateError,
+							"message":       "",
+							"transitioning": false,
+						}
+					} else if test.inputStateName != "" {
+						metadataOutputCore["state"] = map[string]interface{}{
+							"name":          test.inputStateName,
+							"error":         test.inputStateError,
+							"message":       "",
+							"transitioning": false,
+						}
+					}
+					testOutput = &unstructured.Unstructured{
+						Object: map[string]interface{}{
+							"apiVersion": certManagerApiVersion,
+							"kind":       typeName,
+							"metadata":   metadataOutputCore,
+							"status":     statusCore,
+							"id":         testID,
+							"_id":        testID,
+						},
+					}
+				}
+				fakeCache := common.FakeSummaryCache{
+					SummarizedObject: &summary.SummarizedObject{
+						PartialObjectMetadata: v1.PartialObjectMetadata{
+							ObjectMeta: v1.ObjectMeta{
+								Name:      test.objName,
+								Namespace: test.objNamespace,
+							},
+							TypeMeta: v1.TypeMeta{
+								APIVersion: certManagerApiVersion,
+								Kind:       typeName,
+							},
+						},
+						Summary: summary.Summary{
+							State:         test.inputStateName,
+							Error:         test.inputStateError,
+							Message:       []string{},
+							Transitioning: false,
+						},
+					},
+					Relationships: []summarycache.Relationship{},
+				}
+
+				tb := NewTransformBuilder(&fakeCache)
+				raw, isSignal, err := common.GetUnstructured(testInput)
+				require.False(t, isSignal)
+				require.Nil(t, err)
+				apiVersion := raw.GetAPIVersion()
+				parts := strings.Split(apiVersion, "/")
+				gvk := schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: raw.GetKind()}
+				fakeColumns := []rescommon.ColumnDefinition{}
+				isCRD := true
+				jsonPaths := map[string]*jsonpath.JSONPath{}
+				output, err := tb.GetTransformFunc(gvk, fakeColumns, isCRD, jsonPaths)(testInput)
+				if test.wantError {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, testOutput, output)
+
+				}
+			})
+		}
+	}
+}
