@@ -34,6 +34,7 @@ type ListOptionIndexer struct {
 	indexedFields map[string]IndexedField // UI field ID -> field for O(1) lookups
 	columnOrder   []string                // all UI field IDs (sorted, for deterministic iteration)
 	uniqueColumns []string                // unique database column names (for schema creation and value extraction)
+	orderedFields []IndexedField          // fields backing uniqueColumns, same order/length
 
 	// lock protects latestRV
 	lock     sync.RWMutex
@@ -143,18 +144,26 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	slices.Sort(columnOrder)
 
 	// Build list of unique database columns (deduplicating by ColumnName())
-	// Multiple UI field IDs may map to the same database column
-	seenColumns := make(map[string]bool)
-	uniqueColumns := make([]string, 0)
+	// Multiple UI field IDs may map to the same database column; the first one
+	// in columnOrder wins.
+	columnToField := make(map[string]IndexedField, len(indexedFields))
+	uniqueColumns := make([]string, 0, len(indexedFields))
 	for _, mapKey := range columnOrder {
 		field := indexedFields[mapKey]
 		colName := field.ColumnName()
-		if !seenColumns[colName] {
-			seenColumns[colName] = true
+		if _, seen := columnToField[colName]; !seen {
+			columnToField[colName] = field
 			uniqueColumns = append(uniqueColumns, colName)
 		}
 	}
 	slices.Sort(uniqueColumns)
+
+	// Resolve each unique column to its backing field once, up front.
+	// addIndexFields runs on every object write, so it must not re-derive this.
+	orderedFields := make([]IndexedField, len(uniqueColumns))
+	for i, colName := range uniqueColumns {
+		orderedFields[i] = columnToField[colName]
+	}
 
 	maxEventHistory := opts.GCKeepCount
 	if maxEventHistory <= 0 {
@@ -167,6 +176,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 		indexedFields: indexedFields,
 		columnOrder:   columnOrder,
 		uniqueColumns: uniqueColumns,
+		orderedFields: orderedFields,
 		eventLog:      ring.NewCircularBuffer[*event](maxEventHistory),
 	}
 	l.RegisterAfterAdd(l.addIndexFields)
@@ -183,15 +193,8 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 	l.RegisterBeforeDropAll(l.dropFields)
 
 	columnDefs := make([]string, 0, len(uniqueColumns))
-	for _, colName := range uniqueColumns {
-		var field IndexedField
-		for _, mapKey := range columnOrder {
-			if indexedFields[mapKey].ColumnName() == colName {
-				field = indexedFields[mapKey]
-				break
-			}
-		}
-		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, field.ColumnType()))
+	for i, colName := range uniqueColumns {
+		columnDefs = append(columnDefs, fmt.Sprintf(`"%s" %s`, colName, orderedFields[i].ColumnType()))
 	}
 
 	dbName := db.Sanitize(i.GetName())
@@ -406,16 +409,10 @@ func (l *ListOptionIndexer) addIndexFields(key string, obj any, tx db.TxClient) 
 		return fmt.Errorf("expected unstructured.Unstructured, got %T", obj)
 	}
 
-	args := []any{key}
+	args := make([]any, 0, len(l.orderedFields)+1)
+	args = append(args, key)
 
-	for _, actualColumnName := range l.uniqueColumns {
-		var field IndexedField
-		for _, mapKey := range l.columnOrder {
-			if l.indexedFields[mapKey].ColumnName() == actualColumnName {
-				field = l.indexedFields[mapKey]
-				break
-			}
-		}
+	for _, field := range l.orderedFields {
 		value, err := field.GetValue(unstrObj)
 		if err != nil {
 			logrus.Errorf("cannot index object of type [%s] with key [%s] for indexer [%s]: %v", l.GetType().String(), key, l.GetName(), err)
