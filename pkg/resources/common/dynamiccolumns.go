@@ -64,6 +64,7 @@ func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema
 	}
 	t, ok := obj.(*metav1.Table)
 	if !ok {
+		attributes.SetTable(schema, false)
 		return nil
 	}
 
@@ -76,6 +77,8 @@ func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema
 			})
 		}
 		attributes.SetColumns(schema, cols)
+	} else {
+		attributes.SetColumns(schema, []ColumnDefinition{})
 	}
 
 	return nil
