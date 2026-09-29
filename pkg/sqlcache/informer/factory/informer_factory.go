@@ -29,9 +29,6 @@ import (
 // Stop() always leaves the informer ready for a fresh initialization by the time it returns.
 var ErrCacheReset = errors.New("cache was reset by a concurrent Stop")
 
-// cacheResetRetryDelay is how long CacheFor waits before retrying after its informer creation was canceled by a concurrent Stop.
-const cacheResetRetryDelay = 10 * time.Millisecond
-
 // EncryptAllEnvVar is set to "true" if users want all types' data blobs to be encrypted in SQLite
 // otherwise only variables in defaultEncryptedResourceTypes will have their blobs encrypted
 const EncryptAllEnvVar = "CATTLE_ENCRYPT_CACHE_ALL"
@@ -189,16 +186,6 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields map[string]informer.
 			return nil, ctx.Err()
 		}
 		if initialized, err := f.ensureInformerInitialized(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable, disableWatchList); err != nil {
-			if errors.Is(err, ErrCacheReset) && f.ctx.Err() == nil {
-				// A concurrent Stop() canceled the informer while it was being created. Stop() is waiting
-				// for us to release gi.mutex and will then install a fresh context, so wait a bit and retry.
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case <-time.After(cacheResetRetryDelay):
-				}
-				continue
-			}
 			return nil, err
 		} else if gi.informer == nil {
 			// Special case for race condition: if Stop() is called while or immediately after this informer was initialized
@@ -264,8 +251,11 @@ func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields map[
 	if err != nil {
 		if gi.ctx.Err() != nil && f.ctx.Err() == nil {
 			// Stop() canceled gi.ctx while the informer was being created (eg: schema refresh), which aborts
-			// any in-flight database transaction. That's transient, not a real failure.
-			return fmt.Errorf("creating informer for %v was canceled by a concurrent Stop: %w: %w", gvk, ErrCacheReset, err)
+			// any in-flight database transaction. That's expected, not worth an error log. We must not retry
+			// here: the fields and transform given to CacheFor come from the schema before the refresh, so
+			// retrying would build the new informer from stale schema. Let the caller start over.
+			log.Debugf("creating informer for %v was canceled by a concurrent Stop: %v", gvk, err)
+			return fmt.Errorf("creating informer for %v was canceled by a concurrent Stop: %w", gvk, err)
 		}
 		log.Errorf("creating informer for %v: %v", gvk, err)
 		return err

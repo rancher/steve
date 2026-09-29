@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -531,9 +530,10 @@ func TestCacheFor(t *testing.T) {
 	}
 }
 
-// TestCacheForStopDuringInformerCreation reproduces a schema refresh calling Stop() while CacheFor is still creating
-// the informer. Stop() cancels the informer's context, which aborts the database transaction in NewInformer. CacheFor
-// must retry against the fresh context rather than surfacing that transient failure.
+// TestCacheForStopDuringInformerCreation covers a schema refresh calling Stop() while CacheFor is still creating the
+// informer. Stop() cancels the informer's context, which aborts the database transaction in NewInformer. CacheFor must
+// not retry with its arguments, which come from the pre-refresh schema, and must leave the factory usable so that the
+// next CacheFor call builds the informer from the current schema.
 func TestCacheForStopDuringInformerCreation(t *testing.T) {
 	dbClient := NewMockClient(gomock.NewController(t))
 	dynamicClient := NewMockResourceInterface(gomock.NewController(t))
@@ -550,10 +550,16 @@ func TestCacheForStopDuringInformerCreation(t *testing.T) {
 		ByOptionsLister:     bloi,
 	}
 
+	oldField := &informer.JSONPathField{Path: []string{"old"}}
+	oldFields := map[string]informer.IndexedField{oldField.ColumnName(): oldField}
+	newField := &informer.JSONPathField{Path: []string{"new"}}
+	newFields := map[string]informer.IndexedField{newField.ColumnName(): newField}
+
 	creating := make(chan struct{})
-	var calls atomic.Int32
+	var seenFields []map[string]informer.IndexedField
 	testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, disableWatchList bool, gcKeepCount int) (*informer.Informer, error) {
-		if calls.Add(1) > 1 {
+		seenFields = append(seenFields, fields)
+		if len(seenFields) > 1 {
 			return i, nil
 		}
 		// First creation: signal that we're mid-creation, then fail the way a canceled DB transaction does
@@ -575,11 +581,19 @@ func TestCacheForStopDuringInformerCreation(t *testing.T) {
 		stopErr <- f.Stop(expectedGVK)
 	}()
 
-	c, err := f.CacheFor(context.Background(), nil, nil, nil, nil, dynamicClient, expectedGVK, false, true, false)
-	require.NoError(t, err)
+	_, err := f.CacheFor(context.Background(), oldFields, nil, nil, nil, dynamicClient, expectedGVK, false, true, false)
+	require.Error(t, err)
 	require.NoError(t, <-stopErr)
+	// Retrying with the stale arguments would build the informer from the old schema, so CacheFor must not do it
+	assert.NotErrorIs(t, err, ErrCacheReset)
+	require.Len(t, seenFields, 1)
+
+	// The next call, with the current schema, must succeed and build the informer from it
+	c, err := f.CacheFor(context.Background(), newFields, nil, nil, nil, dynamicClient, expectedGVK, false, true, false)
+	require.NoError(t, err)
+	require.Len(t, seenFields, 2)
+	assert.Equal(t, newFields, seenFields[1])
 	assert.Equal(t, i, c.ByOptionsLister)
-	assert.Equal(t, int32(2), calls.Load())
 	f.DoneWithCache(c)
 	require.NoError(t, f.Stop(expectedGVK))
 }
