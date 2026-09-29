@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -593,6 +594,75 @@ func TestCacheForStopDuringInformerCreation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, seenFields, 2)
 	assert.Equal(t, newFields, seenFields[1])
+	assert.Equal(t, i, c.ByOptionsLister)
+	f.DoneWithCache(c)
+	require.NoError(t, f.Stop(expectedGVK))
+}
+
+// TestCacheForRetryAfterStopDuringInformerCreation checks that a caller retrying after ErrCacheReset succeeds once it
+// gives Stop() a moment to finish, and that the retry builds the informer from the arguments it is given.
+func TestCacheForRetryAfterStopDuringInformerCreation(t *testing.T) {
+	dbClient := NewMockClient(gomock.NewController(t))
+	dynamicClient := NewMockResourceInterface(gomock.NewController(t))
+	expectedGVK := schema.GroupVersionKind{}
+
+	bloi := NewMockByOptionsLister(gomock.NewController(t))
+	bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
+	sii := NewMockSharedIndexInformer(gomock.NewController(t))
+	sii.EXPECT().HasSynced().Return(true).AnyTimes()
+	sii.EXPECT().Run(gomock.Any()).MinTimes(1)
+	sii.EXPECT().SetWatchErrorHandler(gomock.Any())
+	i := &informer.Informer{
+		SharedIndexInformer: sii,
+		ByOptionsLister:     bloi,
+	}
+
+	oldField := &informer.JSONPathField{Path: []string{"old"}}
+	newField := &informer.JSONPathField{Path: []string{"new"}}
+	creating := make(chan struct{})
+	var seenFields []map[string]informer.IndexedField
+	testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, disableWatchList bool, gcKeepCount int) (*informer.Informer, error) {
+		// Like a transaction started with a canceled context
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("begin tx: %w", err)
+		}
+		seenFields = append(seenFields, fields)
+		if len(seenFields) > 1 {
+			return i, nil
+		}
+		close(creating)
+		<-ctx.Done()
+		return nil, fmt.Errorf("rollback failed due to canceled context: %w", ctx.Err())
+	}
+	f := &CacheFactory{
+		dbClient:    dbClient,
+		newInformer: testNewInformer,
+		informers:   map[schema.GroupVersionKind]*guardedInformer{},
+	}
+	f.ctx, f.cancel = context.WithCancel(context.Background())
+	defer f.cancel()
+
+	go func() {
+		<-creating
+		f.Stop(expectedGVK)
+	}()
+
+	fields := map[string]informer.IndexedField{oldField.ColumnName(): oldField}
+	var c *Cache
+	var err error
+	for attempt := 0; attempt <= 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 25 * time.Millisecond)
+			fields = map[string]informer.IndexedField{newField.ColumnName(): newField}
+		}
+		c, err = f.CacheFor(context.Background(), fields, nil, nil, nil, dynamicClient, expectedGVK, false, true, false)
+		if !errors.Is(err, ErrCacheReset) {
+			break
+		}
+	}
+	require.NoError(t, err)
+	require.NotEmpty(t, seenFields)
+	assert.Equal(t, map[string]informer.IndexedField{newField.ColumnName(): newField}, seenFields[len(seenFields)-1])
 	assert.Equal(t, i, c.ByOptionsLister)
 	f.DoneWithCache(c)
 	require.NoError(t, f.Stop(expectedGVK))

@@ -2532,3 +2532,39 @@ func TestCacheForRetriesWithFreshSchemaOnErrCacheReset(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, c, got)
 }
+
+func TestCacheForFailsOnErrCacheResetWhenSchemaIsGone(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+	sc := NewMockSchemaCollection(gomock.NewController(t))
+
+	s := &Store{
+		clientGetter:     cg,
+		cacheFactory:     cf,
+		transformBuilder: tb,
+		schemas:          sc,
+	}
+
+	apiOp := &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+	apiSchema := &types.APISchema{
+		Schema: &schemas.Schema{
+			ID:         "gvk-id",
+			Attributes: map[string]interface{}{"verbs": []string{"list", "watch"}},
+		},
+	}
+	attributes.SetGVK(apiSchema, gvk)
+
+	cg.EXPECT().TableAdminClient(apiOp, apiSchema, "", &WarningBuffer{}).Return(ri, nil)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+	// The type was removed while we were waiting, so there's nothing left to build a cache for
+	sc.EXPECT().ByGVK(gvk).Return("")
+	cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, fmt.Errorf("reset: %w", factory.ErrCacheReset))
+
+	_, err := s.cacheFor(context.Background(), apiOp, apiSchema)
+	assert.ErrorContains(t, err, "schema no longer exists")
+}
