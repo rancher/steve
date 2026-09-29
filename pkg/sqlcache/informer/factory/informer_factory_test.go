@@ -585,7 +585,7 @@ func TestCacheForStopDuringInformerCreation(t *testing.T) {
 	require.Error(t, err)
 	require.NoError(t, <-stopErr)
 	// Retrying with the stale arguments would build the informer from the old schema, so CacheFor must not do it
-	assert.NotErrorIs(t, err, ErrCacheReset)
+	assert.ErrorIs(t, err, ErrCacheReset)
 	require.Len(t, seenFields, 1)
 
 	// The next call, with the current schema, must succeed and build the informer from it

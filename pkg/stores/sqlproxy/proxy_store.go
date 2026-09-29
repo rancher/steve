@@ -1326,17 +1326,6 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	}
 
 	gvk := attributes.GVK(apiSchema)
-	// TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
-	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
-	fields, cols := getFieldAndColInfo(apiSchema, gvk)
-	// Merge type-specific fields into map
-	for k, v := range getFieldForGVK(gvk) {
-		fields[k] = v
-	}
-
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
-	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(apiSchema)
 
 	// A concurrent schema/column definition change can reset gvk's cache (see
 	// factory.ErrCacheReset) right as we're waiting for it to become ready, canceling our
@@ -1345,6 +1334,23 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	const maxCacheResetRetries = 3
 	var inf *factory.Cache
 	for attempt := 0; attempt <= maxCacheResetRetries; attempt++ {
+		if attempt > 0 && s.schemas != nil {
+			if id := s.schemas.ByGVK(gvk); id != "" {
+				if freshSchema := s.schemas.Schema(id); freshSchema != nil {
+					apiSchema = freshSchema
+				}
+			}
+		}
+
+		fields, cols := getFieldAndColInfo(apiSchema, gvk)
+		for k, v := range getFieldForGVK(gvk) {
+			fields[k] = v
+		}
+
+		transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
+		tableClient := &tablelistconvert.Client{ResourceInterface: client}
+		ns := attributes.Namespaced(apiSchema)
+
 		inf, err = s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema), watchlist.Disabled(apiSchema))
 		if err == nil || !errors.Is(err, factory.ErrCacheReset) {
 			break

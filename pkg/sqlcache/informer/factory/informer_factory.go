@@ -251,11 +251,10 @@ func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields map[
 	if err != nil {
 		if gi.ctx.Err() != nil && f.ctx.Err() == nil {
 			// Stop() canceled gi.ctx while the informer was being created (eg: schema refresh), which aborts
-			// any in-flight database transaction. That's expected, not worth an error log. We must not retry
-			// here: the fields and transform given to CacheFor come from the schema before the refresh, so
-			// retrying would build the new informer from stale schema. Let the caller start over.
+			// any in-flight database transaction. That's expected, not worth an error log. Return ErrCacheReset
+			// so callers (like Store.cacheFor) can retry with refreshed schema rather than failing the request.
 			log.Debugf("creating informer for %v was canceled by a concurrent Stop: %v", gvk, err)
-			return fmt.Errorf("creating informer for %v was canceled by a concurrent Stop: %w", gvk, err)
+			return fmt.Errorf("creating informer for %v was canceled by a concurrent Stop: %w: %w", gvk, ErrCacheReset, err)
 		}
 		log.Errorf("creating informer for %v: %v", gvk, err)
 		return err
