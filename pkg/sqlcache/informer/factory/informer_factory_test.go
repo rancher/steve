@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/rancher/steve/pkg/sqlcache/sqltypes"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -527,4 +529,57 @@ func TestCacheFor(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
+}
+
+// TestCacheForStopDuringInformerCreation reproduces a schema refresh calling Stop() while CacheFor is still creating
+// the informer. Stop() cancels the informer's context, which aborts the database transaction in NewInformer. CacheFor
+// must retry against the fresh context rather than surfacing that transient failure.
+func TestCacheForStopDuringInformerCreation(t *testing.T) {
+	dbClient := NewMockClient(gomock.NewController(t))
+	dynamicClient := NewMockResourceInterface(gomock.NewController(t))
+	expectedGVK := schema.GroupVersionKind{}
+
+	bloi := NewMockByOptionsLister(gomock.NewController(t))
+	bloi.EXPECT().DropAll(gomock.Any()).AnyTimes()
+	sii := NewMockSharedIndexInformer(gomock.NewController(t))
+	sii.EXPECT().HasSynced().Return(true).AnyTimes()
+	sii.EXPECT().Run(gomock.Any()).MinTimes(1)
+	sii.EXPECT().SetWatchErrorHandler(gomock.Any())
+	i := &informer.Informer{
+		SharedIndexInformer: sii,
+		ByOptionsLister:     bloi,
+	}
+
+	creating := make(chan struct{})
+	var calls atomic.Int32
+	testNewInformer := func(ctx context.Context, client dynamic.ResourceInterface, fields map[string]informer.IndexedField, externalUpdateInfo *sqltypes.ExternalGVKUpdates, selfUpdateInfo *sqltypes.ExternalGVKUpdates, transform cache.TransformFunc, gvk schema.GroupVersionKind, db db.Client, shouldEncrypt bool, namespaced bool, watchable bool, disableWatchList bool, gcKeepCount int) (*informer.Informer, error) {
+		if calls.Add(1) > 1 {
+			return i, nil
+		}
+		// First creation: signal that we're mid-creation, then fail the way a canceled DB transaction does
+		close(creating)
+		<-ctx.Done()
+		return nil, fmt.Errorf("transaction: while executing query: got error: sql: transaction has already been committed or rolled back\nrollback failed due to canceled context: %w", ctx.Err())
+	}
+	f := &CacheFactory{
+		dbClient:    dbClient,
+		newInformer: testNewInformer,
+		informers:   map[schema.GroupVersionKind]*guardedInformer{},
+	}
+	f.ctx, f.cancel = context.WithCancel(context.Background())
+	defer f.cancel()
+
+	stopErr := make(chan error, 1)
+	go func() {
+		<-creating
+		stopErr <- f.Stop(expectedGVK)
+	}()
+
+	c, err := f.CacheFor(context.Background(), nil, nil, nil, nil, dynamicClient, expectedGVK, false, true, false)
+	require.NoError(t, err)
+	require.NoError(t, <-stopErr)
+	assert.Equal(t, i, c.ByOptionsLister)
+	assert.Equal(t, int32(2), calls.Load())
+	f.DoneWithCache(c)
+	require.NoError(t, f.Stop(expectedGVK))
 }

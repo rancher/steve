@@ -29,6 +29,9 @@ import (
 // Stop() always leaves the informer ready for a fresh initialization by the time it returns.
 var ErrCacheReset = errors.New("cache was reset by a concurrent Stop")
 
+// cacheResetRetryDelay is how long CacheFor waits before retrying after its informer creation was canceled by a concurrent Stop.
+const cacheResetRetryDelay = 10 * time.Millisecond
+
 // EncryptAllEnvVar is set to "true" if users want all types' data blobs to be encrypted in SQLite
 // otherwise only variables in defaultEncryptedResourceTypes will have their blobs encrypted
 const EncryptAllEnvVar = "CATTLE_ENCRYPT_CACHE_ALL"
@@ -186,6 +189,16 @@ func (f *CacheFactory) CacheFor(ctx context.Context, fields map[string]informer.
 			return nil, ctx.Err()
 		}
 		if initialized, err := f.ensureInformerInitialized(gi, fields, externalUpdateInfo, selfUpdateInfo, transform, client, gvk, namespaced, watchable, disableWatchList); err != nil {
+			if errors.Is(err, ErrCacheReset) && f.ctx.Err() == nil {
+				// A concurrent Stop() canceled the informer while it was being created. Stop() is waiting
+				// for us to release gi.mutex and will then install a fresh context, so wait a bit and retry.
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(cacheResetRetryDelay):
+				}
+				continue
+			}
 			return nil, err
 		} else if gi.informer == nil {
 			// Special case for race condition: if Stop() is called while or immediately after this informer was initialized
@@ -249,6 +262,11 @@ func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields map[
 	// search for "func NewInformer(ctx"
 	i, err := f.newInformer(gi.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, disableWatchList, f.gcKeepCount)
 	if err != nil {
+		if gi.ctx.Err() != nil && f.ctx.Err() == nil {
+			// Stop() canceled gi.ctx while the informer was being created (eg: schema refresh), which aborts
+			// any in-flight database transaction. That's transient, not a real failure.
+			return fmt.Errorf("creating informer for %v was canceled by a concurrent Stop: %w: %w", gvk, ErrCacheReset, err)
+		}
 		log.Errorf("creating informer for %v: %v", gvk, err)
 		return err
 	}
@@ -278,17 +296,20 @@ func (f *CacheFactory) waitForCacheReady(ctx context.Context, gvk schema.GroupVe
 	// the client has been canceled.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// gi.ctx is replaced by Stop(), so read it here while we hold gi.mutex rather than from the goroutine below,
+	// which can outlive this call.
+	giCtx := gi.ctx
 	go func() {
 		select {
 		case <-ctx.Done():
-		case <-gi.ctx.Done():
+		case <-giCtx.Done():
 			cancel()
 		}
 	}()
 
 	if !cache.WaitForCacheSync(ctx.Done(), gi.informer.HasSynced) {
-		if gi.ctx.Err() != nil {
-			return nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w: %w", gvk, ErrCacheReset, gi.ctx.Err())
+		if giCtx.Err() != nil {
+			return nil, fmt.Errorf("cache context canceled while waiting for SQL cache sync for %v: %w: %w", gvk, ErrCacheReset, giCtx.Err())
 		}
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("request context canceled while waiting for SQL cache sync for %v: %w", gvk, ctx.Err())
