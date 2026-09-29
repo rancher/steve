@@ -1342,6 +1342,10 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 			}
 		}
 
+		if s.columnSetter != nil && attributes.Columns(apiSchema) == nil {
+			_ = s.columnSetter.SetColumns(ctx, apiSchema)
+		}
+
 		fields, cols := getFieldAndColInfo(apiSchema, gvk)
 		for k, v := range getFieldForGVK(gvk) {
 			fields[k] = v
