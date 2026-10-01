@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -13,12 +14,18 @@ import (
 // rationale 2: allow mocking
 type TxClient interface {
 	Exec(query string, args ...any) (sql.Result, error)
+
+	// Query reads on the transaction's own connection; use it instead of
+	// Client.Prepare + QueryForRows inside a write transaction, which deadlocks.
+	Query(ctx context.Context, query string, args ...any) (Rows, error)
+
 	Stmt(stmt Stmt) Stmt
 }
 
 // Tx represents the methods used from sql.Tx
 type Tx interface {
 	Exec(query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	Stmt(stmt *sql.Stmt) *sql.Stmt
 	Commit() error
 	Rollback() error
@@ -51,6 +58,18 @@ func (c txClient) Exec(query string, args ...any) (sql.Result, error) {
 		}
 	}
 	return res, err
+}
+
+func (c txClient) Query(ctx context.Context, query string, args ...any) (Rows, error) {
+	defer c.queryLogger.Log(time.Now(), query, args)
+	r, err := c.tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, &QueryError{
+			QueryString: query,
+			Err:         err,
+		}
+	}
+	return rows{Rows: r, queryString: query}, nil
 }
 
 func (c txClient) Stmt(s Stmt) Stmt {

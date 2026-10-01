@@ -313,6 +313,26 @@ func (mr *MockTxMockRecorder) Exec(query any, args ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockTx)(nil).Exec), varargs...)
 }
 
+// QueryContext mocks base method.
+func (m *MockTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "QueryContext", varargs...)
+	ret0, _ := ret[0].(*sql.Rows)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryContext indicates an expected call of QueryContext.
+func (mr *MockTxMockRecorder) QueryContext(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryContext", reflect.TypeOf((*MockTx)(nil).QueryContext), varargs...)
+}
+
 // Rollback mocks base method.
 func (m *MockTx) Rollback() error {
 	m.ctrl.T.Helper()
@@ -383,6 +403,26 @@ func (mr *MockTxClientMockRecorder) Exec(query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockTxClient)(nil).Exec), varargs...)
+}
+
+// Query mocks base method.
+func (m *MockTxClient) Query(ctx context.Context, query string, args ...any) (Rows, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].(Rows)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockTxClientMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockTxClient)(nil).Query), varargs...)
 }
 
 // Stmt mocks base method.

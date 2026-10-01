@@ -160,12 +160,7 @@ func (i *Indexer) AfterUpsert(key string, obj any, tx db.TxClient) error {
 	multiInsertQuery := fmt.Sprintf(addIndexFmt,
 		db.Sanitize(i.Store.GetName()),
 		strings.Join(slices.Repeat([]string{addIndexValuesPlaceholderFmt}, rowsToInsert), ", "))
-	stmt, err := i.Prepare(multiInsertQuery)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	if _, err := tx.Stmt(stmt).Exec(valuesToInsert...); err != nil {
+	if _, err := tx.Exec(multiInsertQuery, valuesToInsert...); err != nil {
 		return err
 	}
 
