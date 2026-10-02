@@ -199,6 +199,18 @@ tests:
   namespace: test-ns-2
   query: filter=metadata.annotations[management.cattle.io/project-scoped-secret-copy]=potatoes
   expect: []
+- description: user:user-a,namespace:test-ns-2,query:filter=metadata.annotations[field.cattle.io/description]=test-secret-description
+  user: user-a
+  namespace: test-ns-2
+  query: filter=metadata.annotations[field.cattle.io/description]=test-secret-description
+  expect:
+  - name: test4
+    namespace: test-ns-2
+- description: user:user-a,namespace:test-ns-1,query:filter=metadata.annotations[field.cattle.io/description]=test-secret-description
+  user: user-a
+  namespace: test-ns-1
+  query: filter=metadata.annotations[field.cattle.io/description]=test-secret-description
+  expect: []
 - description: user:user-b,namespace:none,query:labelSelector=test-label=2
   user: user-b
   namespace: ''

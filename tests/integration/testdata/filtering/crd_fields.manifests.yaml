@@ -1,0 +1,68 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.filtering.cattle.io
+spec:
+  group: filtering.cattle.io
+  names:
+    kind: Widget
+    listKind: WidgetList
+    plural: widgets
+    singular: widget
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          foo:
+            type: string
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gizmos.filtering.cattle.io
+spec:
+  group: filtering.cattle.io
+  names:
+    kind: Gizmo
+    listKind: GizmoList
+    plural: gizmos
+    singular: gizmo
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          foo:
+            type: string
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sprockets.other.cattle.io
+spec:
+  group: other.cattle.io
+  names:
+    kind: Sprocket
+    listKind: SprocketList
+    plural: sprockets
+    singular: sprocket
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          foo:
+            type: string
+    served: true
+    storage: true
