@@ -292,6 +292,7 @@ var (
 	commonIndexFields = map[string]informer.IndexedField{
 		"id":                  &informer.JSONPathField{Path: []string{"id"}},
 		"metadata.state.name": &informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+		"metadata.annotations[field.cattle.io/description]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}},
 	}
 	namespaceGVK             = k8sschema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = k8sschema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
