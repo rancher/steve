@@ -174,6 +174,10 @@ var (
 			"metadata.state.transitioning":        &informer.JSONPathField{Path: []string{"metadata", "state", "transitioning"}},
 			"spec.template.spec.containers.image": &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
 		},
+		gvkKey("apiextensions.k8s.io", "v1", "CustomResourceDefinition"): {
+			"spec.group":          &informer.JSONPathField{Path: []string{"spec", "group"}},
+			"spec.names.singluar": &informer.JSONPathField{Path: []string{"spec", "names", "singular"}},
+		},
 		gvkKey("catalog.cattle.io", "v1", "App"): {
 			"spec.chart.metadata.name": &informer.JSONPathField{Path: []string{"spec", "chart", "metadata", "name"}},
 		},
