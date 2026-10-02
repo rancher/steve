@@ -112,11 +112,13 @@ func TestNewProxyStore(t *testing.T) {
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(context.Background(),
 				map[string]informer.IndexedField{
-					idField.ColumnName():      idField,
-					stateField.ColumnName():   stateField,
-					displayField.ColumnName(): displayField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					displayField.ColumnName():     displayField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -250,11 +252,13 @@ func TestNewProxyStore(t *testing.T) {
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(context.Background(),
 				map[string]informer.IndexedField{
-					idField.ColumnName():      idField,
-					stateField.ColumnName():   stateField,
-					displayField.ColumnName(): displayField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					displayField.ColumnName():     displayField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -368,12 +372,14 @@ func TestListByPartitions(t *testing.T) {
 			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
 				map[string]informer.IndexedField{
-					someField.ColumnName():  someField,
-					idField.ColumnName():    idField,
-					stateField.ColumnName(): stateField,
-					gvkField.ColumnName():   gvkField,
+					someField.ColumnName():        someField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					gvkField.ColumnName():         gvkField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -543,12 +549,14 @@ func TestListByPartitions(t *testing.T) {
 			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
 				map[string]informer.IndexedField{
-					someField.ColumnName():  someField,
-					idField.ColumnName():    idField,
-					stateField.ColumnName(): stateField,
-					gvkField.ColumnName():   gvkField,
+					someField.ColumnName():        someField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					gvkField.ColumnName():         gvkField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -640,12 +648,14 @@ func TestListByPartitions(t *testing.T) {
 			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
 				map[string]informer.IndexedField{
-					someField.ColumnName():  someField,
-					idField.ColumnName():    idField,
-					stateField.ColumnName(): stateField,
-					gvkField.ColumnName():   gvkField,
+					someField.ColumnName():        someField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					gvkField.ColumnName():         gvkField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -735,12 +745,14 @@ func TestListByPartitions(t *testing.T) {
 			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
 				map[string]informer.IndexedField{
-					someField.ColumnName():  someField,
-					idField.ColumnName():    idField,
-					stateField.ColumnName(): stateField,
-					gvkField.ColumnName():   gvkField,
+					someField.ColumnName():        someField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					gvkField.ColumnName():         gvkField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -1146,11 +1158,13 @@ func TestListByPartitionWithUserAccess(t *testing.T) {
 			someField := &informer.JSONPathField{Path: []string{"some", "field"}}
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(gomock.Cond(isDerivedContext),
 				map[string]informer.IndexedField{
-					someField.ColumnName():  someField,
-					idField.ColumnName():    idField,
-					stateField.ColumnName(): stateField,
+					someField.ColumnName():        someField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -1220,11 +1234,13 @@ func TestReset(t *testing.T) {
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
 			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			cf.EXPECT().CacheFor(context.Background(),
 				map[string]informer.IndexedField{
-					idField.ColumnName():      idField,
-					stateField.ColumnName():   stateField,
-					displayField.ColumnName(): displayField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					displayField.ColumnName():     displayField,
 				},
 				gomock.Any(),
 				gomock.Any(),
@@ -1381,12 +1397,14 @@ func TestReset(t *testing.T) {
 			cg.EXPECT().TableAdminClient(nil, nsSchema, "", &WarningBuffer{}).Return(ri, nil)
 			idField := &informer.JSONPathField{Path: []string{"id"}}
 			stateField := &informer.JSONPathField{Path: []string{"metadata", "state", "name"}}
+			descriptionField := &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}}
 			displayField := &informer.JSONPathField{Path: []string{"spec", "displayName"}}
 			cf.EXPECT().CacheFor(context.Background(),
 				map[string]informer.IndexedField{
-					idField.ColumnName():      idField,
-					stateField.ColumnName():   stateField,
-					displayField.ColumnName(): displayField,
+					idField.ColumnName():          idField,
+					stateField.ColumnName():       stateField,
+					descriptionField.ColumnName(): descriptionField,
+					displayField.ColumnName():     displayField,
 				},
 				gomock.Any(),
 				gomock.Any(),
