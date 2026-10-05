@@ -139,6 +139,10 @@ var (
 			"spec.clusterIP": &informer.JSONPathField{Path: []string{"spec", "clusterIP"}},
 			"spec.type":      &informer.JSONPathField{Path: []string{"spec", "type"}},
 		},
+		gvkKey("apiextensions.k8s.io", "v1", "CustomResourceDefinition"): {
+			"spec.group":          &informer.JSONPathField{Path: []string{"spec", "group"}},
+			"spec.names.singular": &informer.JSONPathField{Path: []string{"spec", "names", "singular"}},
+		},
 		gvkKey("apps", "v1", "DaemonSet"): {
 			"metadata.annotations[field.cattle.io/publicEndpoints]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/publicEndpoints"}},
 			"spec.template.spec.containers.image":                   &informer.JSONPathField{Path: []string{"spec", "template", "spec", "containers", "image"}},
@@ -288,6 +292,7 @@ var (
 	commonIndexFields = map[string]informer.IndexedField{
 		"id":                  &informer.JSONPathField{Path: []string{"id"}},
 		"metadata.state.name": &informer.JSONPathField{Path: []string{"metadata", "state", "name"}},
+		"metadata.annotations[field.cattle.io/description]": &informer.JSONPathField{Path: []string{"metadata", "annotations", "field.cattle.io/description"}},
 	}
 	namespaceGVK             = k8sschema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 	mcioProjectGvk           = k8sschema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}

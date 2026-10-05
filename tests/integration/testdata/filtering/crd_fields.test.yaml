@@ -1,0 +1,18 @@
+schemaID: apiextensions.k8s.io.customresourcedefinitions
+tests:
+- description: "filter by spec.group"
+  query: "filter=spec.group=filtering.cattle.io"
+  expected:
+  - widgets.filtering.cattle.io
+  - gizmos.filtering.cattle.io
+- description: "filter by spec.group (other group)"
+  query: "filter=spec.group=other.cattle.io"
+  expected:
+  - sprockets.other.cattle.io
+- description: "filter by spec.names.singular"
+  query: "filter=spec.names.singular=widget"
+  expected:
+  - widgets.filtering.cattle.io
+- description: "filter by spec.names.singular (no match)"
+  query: "filter=spec.names.singular=doesnotexist"
+  expected: []
