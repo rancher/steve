@@ -268,6 +268,26 @@ func (mr *MockTxClientMockRecorder) Exec(query any, args ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockTxClient)(nil).Exec), varargs...)
 }
 
+// Query mocks base method.
+func (m *MockTxClient) Query(ctx context.Context, query string, args ...any) (db.Rows, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].(db.Rows)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockTxClientMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockTxClient)(nil).Query), varargs...)
+}
+
 // Stmt mocks base method.
 func (m *MockTxClient) Stmt(stmt db.Stmt) db.Stmt {
 	m.ctrl.T.Helper()
