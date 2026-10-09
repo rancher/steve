@@ -1,0 +1,14 @@
+schemaID: fruits.cattle.io.bananas
+tests:
+- query: filter=color=green
+  expected: [green]
+- query: filter=metadata.name+IN+(yellow)
+  expected: [yellow]
+- query: filter=metadata.name+NOTIN+(yellow)
+  expected: [black, green]
+- query: filter=metadata.name+IN+(yellow,black)
+  expected: [black, yellow]
+- query: filter=metadata.name+NOTIN+(yellow,black)
+  expected: [green]
+- query: filter=metadata.name+NOTIN+()
+  expected: [black, green, yellow]
