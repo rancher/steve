@@ -36,13 +36,24 @@ func NewDynamicColumns(config *rest.Config) (*DynamicColumns, error) {
 }
 
 func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema) error {
-	if attributes.Columns(schema) != nil {
+	//initialColumns := attributes.Columns(schema)
+	//TODO: Compare initialColumns with newColumns, although initially
+	// initialColumns is []table.Column and newColumns will be []ColumnDefinition
+	newColumns, err := d.setColumnsIfAvailable(ctx, schema)
+	if err != nil {
+		return err
+	}
+	if newColumns == nil {
 		return nil
 	}
+	attributes.SetColumns(schema, newColumns)
+	return nil
+}
 
+func (d *DynamicColumns) setColumnsIfAvailable(ctx context.Context, schema *types.APISchema) (interface{}, error) {
 	gvr := attributes.GVR(schema)
 	if gvr.Resource == "" {
-		return nil
+		return nil, nil
 	}
 
 	r := d.client.Get()
@@ -60,11 +71,11 @@ func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema
 	obj, err := r.Do(ctx).Get()
 	if err != nil {
 		attributes.SetTable(schema, false)
-		return nil
+		return nil, nil
 	}
 	t, ok := obj.(*metav1.Table)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	if len(t.ColumnDefinitions) > 0 {
@@ -75,10 +86,10 @@ func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema
 				Field:                 fmt.Sprintf("$.metadata.fields[%d]", i),
 			})
 		}
-		attributes.SetColumns(schema, cols)
+		return cols, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func newClient(config *rest.Config) (*rest.RESTClient, error) {
