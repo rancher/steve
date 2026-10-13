@@ -187,7 +187,6 @@ func TestAfterUpsert(t *testing.T) {
 		client := NewMockTxClient(ctrl)
 		objKey := "key"
 		deleteIndicesStmt := NewMockStmt(ctrl)
-		addIndexStmt := NewMockStmt(ctrl)
 		dbName := "name"
 		indexer := &Indexer{
 			ctx:   context.Background(),
@@ -205,10 +204,7 @@ func TestAfterUpsert(t *testing.T) {
 		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
 		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
 		store.EXPECT().GetName().Return(dbName)
-		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?), (?, ?, ?)")).Return(addIndexStmt, nil)
-		client.EXPECT().Stmt(addIndexStmt).Return(addIndexStmt)
-		addIndexStmt.EXPECT().Exec("a", objKey, key, "b", objKey, key).Return(nil, nil)
-		addIndexStmt.EXPECT().Close().Return(nil)
+		client.EXPECT().Exec(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?), (?, ?, ?)"), "a", objKey, key, "b", objKey, key).Return(nil, nil)
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.Nil(t, err)
@@ -241,7 +237,6 @@ func TestAfterUpsert(t *testing.T) {
 		store := NewMockStore(ctrl)
 		client := NewMockTxClient(ctrl)
 		deleteIndicesStmt := NewMockStmt(ctrl)
-		addIndexStmt := NewMockStmt(ctrl)
 		objKey := "key"
 		dbName := "name"
 		indexer := &Indexer{
@@ -257,10 +252,7 @@ func TestAfterUpsert(t *testing.T) {
 		client.EXPECT().Stmt(indexer.deleteIndicesStmt).Return(deleteIndicesStmt)
 		deleteIndicesStmt.EXPECT().Exec(key).Return(nil, nil)
 		store.EXPECT().GetName().Return(dbName)
-		store.EXPECT().Prepare(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?)")).Return(addIndexStmt, nil)
-		client.EXPECT().Stmt(addIndexStmt).Return(addIndexStmt)
-		addIndexStmt.EXPECT().Exec("a", objKey, key).Return(nil, fmt.Errorf("error"))
-		addIndexStmt.EXPECT().Close().Return(nil)
+		client.EXPECT().Exec(fmt.Sprintf(addIndexFmt, dbName, "(?, ?, ?)"), "a", objKey, key).Return(nil, fmt.Errorf("error"))
 		testObject := testStoreObject{Id: "something", Val: "a"}
 		err := indexer.AfterUpsert(key, testObject, client)
 		assert.NotNil(t, err)
