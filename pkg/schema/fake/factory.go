@@ -24,6 +24,7 @@ import (
 type MockFactory struct {
 	ctrl     *gomock.Controller
 	recorder *MockFactoryMockRecorder
+	isgomock struct{}
 }
 
 // MockFactoryMockRecorder is the mock recorder for MockFactory.
@@ -44,59 +45,59 @@ func (m *MockFactory) EXPECT() *MockFactoryMockRecorder {
 }
 
 // AddTemplate mocks base method.
-func (m *MockFactory) AddTemplate(arg0 ...schema.Template) {
+func (m *MockFactory) AddTemplate(template ...schema.Template) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range template {
 		varargs = append(varargs, a)
 	}
 	m.ctrl.Call(m, "AddTemplate", varargs...)
 }
 
 // AddTemplate indicates an expected call of AddTemplate.
-func (mr *MockFactoryMockRecorder) AddTemplate(arg0 ...any) *gomock.Call {
+func (mr *MockFactoryMockRecorder) AddTemplate(template ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTemplate", reflect.TypeOf((*MockFactory)(nil).AddTemplate), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTemplate", reflect.TypeOf((*MockFactory)(nil).AddTemplate), template...)
 }
 
 // ByGVK mocks base method.
-func (m *MockFactory) ByGVK(arg0 schema0.GroupVersionKind) string {
+func (m *MockFactory) ByGVK(gvr schema0.GroupVersionKind) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ByGVK", arg0)
+	ret := m.ctrl.Call(m, "ByGVK", gvr)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
 // ByGVK indicates an expected call of ByGVK.
-func (mr *MockFactoryMockRecorder) ByGVK(arg0 any) *gomock.Call {
+func (mr *MockFactoryMockRecorder) ByGVK(gvr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByGVK", reflect.TypeOf((*MockFactory)(nil).ByGVK), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByGVK", reflect.TypeOf((*MockFactory)(nil).ByGVK), gvr)
 }
 
 // ByGVR mocks base method.
-func (m *MockFactory) ByGVR(arg0 schema0.GroupVersionResource) string {
+func (m *MockFactory) ByGVR(gvr schema0.GroupVersionResource) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ByGVR", arg0)
+	ret := m.ctrl.Call(m, "ByGVR", gvr)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
 // ByGVR indicates an expected call of ByGVR.
-func (mr *MockFactoryMockRecorder) ByGVR(arg0 any) *gomock.Call {
+func (mr *MockFactoryMockRecorder) ByGVR(gvr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByGVR", reflect.TypeOf((*MockFactory)(nil).ByGVR), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByGVR", reflect.TypeOf((*MockFactory)(nil).ByGVR), gvr)
 }
 
 // OnChange mocks base method.
-func (m *MockFactory) OnChange(arg0 context.Context, arg1 func()) {
+func (m *MockFactory) OnChange(ctx context.Context, cb func()) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnChange", arg0, arg1)
+	m.ctrl.Call(m, "OnChange", ctx, cb)
 }
 
 // OnChange indicates an expected call of OnChange.
-func (mr *MockFactoryMockRecorder) OnChange(arg0, arg1 any) *gomock.Call {
+func (mr *MockFactoryMockRecorder) OnChange(ctx, cb any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnChange", reflect.TypeOf((*MockFactory)(nil).OnChange), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnChange", reflect.TypeOf((*MockFactory)(nil).OnChange), ctx, cb)
 }
 
 // Schemas mocks base method.

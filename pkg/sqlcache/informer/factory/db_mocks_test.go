@@ -23,6 +23,7 @@ import (
 type MockClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientMockRecorder
+	isgomock struct{}
 }
 
 // MockClientMockRecorder is the mock recorder for MockClient.
@@ -43,17 +44,17 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // CloseStmt mocks base method.
-func (m *MockClient) CloseStmt(arg0 db.Closable) error {
+func (m *MockClient) CloseStmt(closable db.Closable) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloseStmt", arg0)
+	ret := m.ctrl.Call(m, "CloseStmt", closable)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CloseStmt indicates an expected call of CloseStmt.
-func (mr *MockClientMockRecorder) CloseStmt(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) CloseStmt(closable any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockClient)(nil).CloseStmt), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloseStmt", reflect.TypeOf((*MockClient)(nil).CloseStmt), closable)
 }
 
 // NewConnection mocks base method.
@@ -71,24 +72,24 @@ func (mr *MockClientMockRecorder) NewConnection() *gomock.Call {
 }
 
 // Prepare mocks base method.
-func (m *MockClient) Prepare(arg0 string) *sql.Stmt {
+func (m *MockClient) Prepare(stmt string) *sql.Stmt {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Prepare", arg0)
+	ret := m.ctrl.Call(m, "Prepare", stmt)
 	ret0, _ := ret[0].(*sql.Stmt)
 	return ret0
 }
 
 // Prepare indicates an expected call of Prepare.
-func (mr *MockClientMockRecorder) Prepare(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Prepare(stmt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockClient)(nil).Prepare), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockClient)(nil).Prepare), stmt)
 }
 
 // QueryForRows mocks base method.
-func (m *MockClient) QueryForRows(arg0 context.Context, arg1 transaction.Stmt, arg2 ...any) (*sql.Rows, error) {
+func (m *MockClient) QueryForRows(ctx context.Context, stmt transaction.Stmt, params ...any) (*sql.Rows, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, stmt}
+	for _, a := range params {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "QueryForRows", varargs...)
@@ -98,81 +99,81 @@ func (m *MockClient) QueryForRows(arg0 context.Context, arg1 transaction.Stmt, a
 }
 
 // QueryForRows indicates an expected call of QueryForRows.
-func (mr *MockClientMockRecorder) QueryForRows(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientMockRecorder) QueryForRows(ctx, stmt any, params ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, stmt}, params...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryForRows", reflect.TypeOf((*MockClient)(nil).QueryForRows), varargs...)
 }
 
 // ReadInt mocks base method.
-func (m *MockClient) ReadInt(arg0 db.Rows) (int, error) {
+func (m *MockClient) ReadInt(rows db.Rows) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadInt", arg0)
+	ret := m.ctrl.Call(m, "ReadInt", rows)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReadInt indicates an expected call of ReadInt.
-func (mr *MockClientMockRecorder) ReadInt(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) ReadInt(rows any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadInt", reflect.TypeOf((*MockClient)(nil).ReadInt), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadInt", reflect.TypeOf((*MockClient)(nil).ReadInt), rows)
 }
 
 // ReadObjects mocks base method.
-func (m *MockClient) ReadObjects(arg0 db.Rows, arg1 reflect.Type, arg2 bool) ([]any, error) {
+func (m *MockClient) ReadObjects(rows db.Rows, typ reflect.Type, shouldDecrypt bool) ([]any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadObjects", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ReadObjects", rows, typ, shouldDecrypt)
 	ret0, _ := ret[0].([]any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReadObjects indicates an expected call of ReadObjects.
-func (mr *MockClientMockRecorder) ReadObjects(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockClientMockRecorder) ReadObjects(rows, typ, shouldDecrypt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadObjects", reflect.TypeOf((*MockClient)(nil).ReadObjects), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadObjects", reflect.TypeOf((*MockClient)(nil).ReadObjects), rows, typ, shouldDecrypt)
 }
 
 // ReadStrings mocks base method.
-func (m *MockClient) ReadStrings(arg0 db.Rows) ([]string, error) {
+func (m *MockClient) ReadStrings(rows db.Rows) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadStrings", arg0)
+	ret := m.ctrl.Call(m, "ReadStrings", rows)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReadStrings indicates an expected call of ReadStrings.
-func (mr *MockClientMockRecorder) ReadStrings(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) ReadStrings(rows any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings", reflect.TypeOf((*MockClient)(nil).ReadStrings), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadStrings", reflect.TypeOf((*MockClient)(nil).ReadStrings), rows)
 }
 
 // Upsert mocks base method.
-func (m *MockClient) Upsert(arg0 transaction.Client, arg1 *sql.Stmt, arg2 string, arg3 any, arg4 bool) error {
+func (m *MockClient) Upsert(tx transaction.Client, stmt *sql.Stmt, key string, obj any, shouldEncrypt bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upsert", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "Upsert", tx, stmt, key, obj, shouldEncrypt)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upsert indicates an expected call of Upsert.
-func (mr *MockClientMockRecorder) Upsert(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Upsert(tx, stmt, key, obj, shouldEncrypt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockClient)(nil).Upsert), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockClient)(nil).Upsert), tx, stmt, key, obj, shouldEncrypt)
 }
 
 // WithTransaction mocks base method.
-func (m *MockClient) WithTransaction(arg0 context.Context, arg1 bool, arg2 db.WithTransactionFunction) error {
+func (m *MockClient) WithTransaction(ctx context.Context, forWriting bool, f db.WithTransactionFunction) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithTransaction", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "WithTransaction", ctx, forWriting, f)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WithTransaction indicates an expected call of WithTransaction.
-func (mr *MockClientMockRecorder) WithTransaction(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockClientMockRecorder) WithTransaction(ctx, forWriting, f any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockClient)(nil).WithTransaction), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockClient)(nil).WithTransaction), ctx, forWriting, f)
 }
