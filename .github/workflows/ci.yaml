@@ -19,10 +19,6 @@ jobs:
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
       with:
         go-version-file: 'go.mod'
-    - name: Install mockgen
-      run: go install go.uber.org/mock/mockgen@v0.6.0
-    - name: Install msgp
-      run: go install github.com/tinylib/msgp
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
       with:
