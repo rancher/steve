@@ -140,25 +140,9 @@ func (i *IntegrationSuite) readListTestConfig(testFile string) ListTestConfig {
 }
 
 func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTestConfig, baseURL string, csvWriter *csv.Writer) {
-	// Track continue token and revision across tests in this scenario
-	var lastContinueToken string
-	var lastRevision string
-
 	for _, test := range config.Tests {
 		i.Run(test.Description, func() {
-			query := test.Query
-
-			// Replace nondeterministic placeholders with actual values from previous responses
-			if strings.Contains(query, "nondeterministictoken") {
-				query = strings.Replace(query, "nondeterministictoken", lastContinueToken, 1)
-			}
-			if strings.Contains(query, "nondeterministicint") {
-				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
-			}
-
-			// Convert labelSelector/fieldSelector to filter format for the SQL cache
-			query = convertQueryForSQLCache(query)
-			url := buildURLRaw(baseURL, config.SchemaID, test.Namespace, query)
+			url := buildURLRaw(baseURL, config.SchemaID, test.Namespace, test.Query)
 			fmt.Println(url)
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -187,14 +171,6 @@ func (i *IntegrationSuite) testListScenario(ctx context.Context, config ListTest
 			var parsed Response
 			err = json.Unmarshal(bodyBytes, &parsed)
 			i.Require().NoError(err)
-
-			// Store continue token and revision for subsequent tests
-			if parsed.Continue != "" {
-				lastContinueToken = parsed.Continue
-			}
-			if parsed.Revision != "" {
-				lastRevision = parsed.Revision
-			}
 
 			// Save JSON response if csvWriter is provided
 			if csvWriter != nil {
@@ -228,43 +204,6 @@ func buildURLRaw(baseURL, schemaID, namespace, query string) string {
 		url += "?" + query
 	}
 	return url
-}
-
-// convertQueryForSQLCache converts labelSelector and fieldSelector params to filter format
-// This mirrors the logic in steve_api_test.go#L2661-L2681
-func convertQueryForSQLCache(query string) string {
-	parts := strings.Split(query, "&")
-	changed := false
-
-	for j, part := range parts {
-		if strings.HasPrefix(part, "labelSelector=") {
-			// labelSelector=test-label=2 -> filter=metadata.labels[test-label]=2
-			rest := strings.TrimPrefix(part, "labelSelector=")
-			eqIdx := strings.Index(rest, "=")
-			if eqIdx > 0 {
-				labelName := rest[:eqIdx]
-				labelValue := rest[eqIdx+1:]
-				parts[j] = fmt.Sprintf("filter=metadata.labels[%s]=%s", labelName, labelValue)
-				changed = true
-			}
-		} else if strings.HasPrefix(part, "fieldSelector=") {
-			// fieldSelector=metadata.namespace=test-ns-1 -> filter=metadata.namespace=test-ns-1
-			// fieldSelector=metadata.name=test1 -> filter=metadata.name=test1
-			rest := strings.TrimPrefix(part, "fieldSelector=")
-			eqIdx := strings.Index(rest, "=")
-			if eqIdx > 0 {
-				field := rest[:eqIdx]
-				value := rest[eqIdx+1:]
-				parts[j] = fmt.Sprintf("filter=%s=%s", field, value)
-				changed = true
-			}
-		}
-	}
-
-	if changed {
-		return strings.Join(parts, "&")
-	}
-	return query
 }
 
 type responseItem struct {
