@@ -153,24 +153,10 @@ func (i *IntegrationSuite) readSummaryTestConfig(testFile string) SummaryTestCon
 }
 
 func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config SummaryTestConfig, baseURL string, csvWriter *csv.Writer) {
-	// Track continue token and revision across tests in this scenario
-	var lastContinueToken string
-	var lastRevision string
-
 	for _, test := range config.Tests {
 		i.Run(test.Description, func() {
 			query := test.Query
 
-			// Replace nondeterministic placeholders with actual values from previous responses
-			if strings.Contains(query, "nondeterministictoken") {
-				query = strings.Replace(query, "nondeterministictoken", lastContinueToken, 1)
-			}
-			if strings.Contains(query, "nondeterministicint") {
-				query = strings.Replace(query, "nondeterministicint", lastRevision, 1)
-			}
-
-			// Convert labelSelector/fieldSelector to filter format for the SQL cache
-			query = convertQueryForSQLCache(query)
 			url := buildURLRaw(baseURL, config.SchemaID, test.Namespace, query)
 			fmt.Println(url)
 
@@ -203,14 +189,6 @@ func (i *IntegrationSuite) testSummaryScenario(ctx context.Context, config Summa
 			var parsed Response
 			err = json.Unmarshal(bodyBytes, &parsed)
 			i.Require().NoError(err)
-
-			// Store continue token and revision for subsequent tests
-			if parsed.Continue != "" {
-				lastContinueToken = parsed.Continue
-			}
-			if parsed.Revision != "" {
-				lastRevision = parsed.Revision
-			}
 
 			// Save JSON response if csvWriter is provided
 			if csvWriter != nil {
