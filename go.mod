@@ -33,17 +33,17 @@ require (
 	golang.org/x/sync v0.22.0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.16.2
-	k8s.io/api v0.32.1
-	k8s.io/apiextensions-apiserver v0.32.1
-	k8s.io/apimachinery v0.32.1
-	k8s.io/apiserver v0.32.1
-	k8s.io/client-go v0.32.1
-	k8s.io/component-base v0.32.1
+	k8s.io/api v0.32.13
+	k8s.io/apiextensions-apiserver v0.32.13
+	k8s.io/apimachinery v0.32.13
+	k8s.io/apiserver v0.32.13
+	k8s.io/client-go v0.32.13
+	k8s.io/component-base v0.32.13
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/klog v1.0.0
-	k8s.io/kube-aggregator v0.32.1
+	k8s.io/kube-aggregator v0.32.13
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
-	k8s.io/kubernetes v1.32.10
+	k8s.io/kubernetes v1.32.13
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	modernc.org/sqlite v1.38.2
 	sigs.k8s.io/controller-runtime v0.19.0
@@ -137,7 +137,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kms v0.32.1 // indirect
+	k8s.io/kms v0.32.13 // indirect
 	modernc.org/libc v1.66.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
