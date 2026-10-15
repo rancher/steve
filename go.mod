@@ -26,7 +26,7 @@ require (
 	github.com/rancher/remotedialer v0.3.5
 	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/sirupsen/logrus v1.9.4
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli v1.22.16
 	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/mock v0.5.2
@@ -107,7 +107,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
-	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.33 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.16 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0 // indirect
