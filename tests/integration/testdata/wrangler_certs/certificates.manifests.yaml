@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: crombie
+  namespace: default
+  labels:
+    test.cattle.io/certificates: harcourt
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: oppenheimer
+  namespace: default
+spec:
+  selfSigned: {}
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: failedissuances
+  namespace: default
+spec:
+  commonName: failedissuances
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oppenheimer
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: crombie
+status:
+  failedIssuanceAttempts: 3
+  conditions:
+  - type: Ready
+    status: "True"
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: healthy
+  namespace: default
+spec:
+  commonName: healthy
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oppenheimer
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: crombie
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: notActuallyHealthy
+  namespace: default
+spec:
+  commonName: notActuallyHealthy
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oppenheimer
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: crombie
+status:
+  conditions:
+  - type: Ready
+    status: "False"
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: badsecret
+  namespace: default
+spec:
+  commonName: failed
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: oppenheimer
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    rotationPolicy: Always
+    size: 2048
+  secretName: drapeau
+status:
+  conditions:
+  - type: Failed
+    status: "True"
+    message: "Issuing certificate as Secret does not exist"
+    
+---
