@@ -11,10 +11,17 @@ replace (
 	github.com/stretchr/testify => github.com/stretchr/testify v1.10.0
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
 	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
+	// Kubernetes v1.35.6 requires the matching v0.36.x modules for generated validation helpers.
+	k8s.io/api => k8s.io/api v0.36.5
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.5
+	k8s.io/apiserver => k8s.io/apiserver v0.36.5
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.5
+	k8s.io/client-go => k8s.io/client-go v0.36.5
+	k8s.io/component-base => k8s.io/component-base v0.36.5
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.36.5
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260414162039-ec9c827d403f
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
+	k8s.io/utils => k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 )
 
 require (
@@ -53,7 +60,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kube-aggregator v0.37.0
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad
-	k8s.io/kubernetes v1.36.5
+	k8s.io/kubernetes v1.35.6
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd
 	modernc.org/sqlite v1.50.0
 	sigs.k8s.io/controller-runtime v0.24.0
