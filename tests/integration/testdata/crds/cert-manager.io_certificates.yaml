@@ -201,6 +201,14 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              failedIssuanceAttempts:
+                description: |-
+                  The number of continuous failed issuance attempts up till now. This
+                  field gets removed (if set) on a successful issuance and gets set to
+                  1 if unset and an issuance has failed. If an issuance has failed, the
+                  delay till the next issuance will be calculated using formula
+                  time.Hour * 2 ^ (failedIssuanceAttempts - 1).
+                type: integer
               notAfter:
                 description: |-
                   The expiration time of the certificate stored in the secret named

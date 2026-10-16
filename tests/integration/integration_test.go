@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -143,6 +144,21 @@ func (i *IntegrationSuite) doDelete(ctx context.Context, obj *unstructured.Unstr
 		return fmt.Errorf("deleting %s/%s: %w", namespace, obj.GetName(), err)
 	}
 	return nil
+}
+
+// This is needed for some YAML where there's an integer field.
+// k8s go-clients want to see an int64, so we need to slosh the
+// data through a round-trip to convert int's to int64's.
+
+func (i *IntegrationSuite) normalizeTheObject(obj *unstructured.Unstructured) {
+	jsonBytes, err := json.Marshal(obj.Object)
+	i.Require().NoError(err)
+
+	normalized := map[string]any{}
+	err = json.Unmarshal(jsonBytes, &normalized)
+	i.Require().NoError(err)
+
+	obj.Object = normalized
 }
 
 type DoFunc func(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error
