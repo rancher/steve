@@ -6,8 +6,8 @@ tests:
   expected:
     state:
       error: true
-      name: failedissuances
-      message: "Resource failed issuing"
+      name: error
+      message: "Too many failed issuance-attempts"
       transitioning: false
 - description: "get healthy"
   user: ""
@@ -25,6 +25,6 @@ tests:
   expected:
     state:
       error: true
-      name: failed
+      name: error
       message: "Issuing certificate as Secret does not exist"
       transitioning: false

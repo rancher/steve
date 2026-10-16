@@ -66,10 +66,10 @@ status:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: notActuallyHealthy
+  name: notactuallyhealthy
   namespace: default
 spec:
-  commonName: notActuallyHealthy
+  commonName: notactuallyhealthy
   issuerRef:
     group: cert-manager.io
     kind: Issuer

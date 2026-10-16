@@ -16,11 +16,13 @@ import (
 	"github.com/rancher/steve/pkg/auth"
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apiserver/pkg/authentication/user"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 var (
@@ -31,17 +33,17 @@ var (
 type WranglerCertTestConfig struct {
 	SchemaID string `yaml:"schemaID"`
 	Tests    []struct {
-		Description    string              `yaml:"description"`
-		User           string              `yaml:"user"`
-		Query          string              `yaml:"query"`
-		Expected       struct {
+		Description string `yaml:"description"`
+		User        string `yaml:"user"`
+		Query       string `yaml:"query"`
+		Expected    struct {
 			State struct {
-				Error bool `yaml:"error"`
-				Name string `yaml:"name"`
-				Message string `yaml:"message"`
-				Transitioning bool `yaml:"transitioning"`
-			}  `yaml:"state"`
-		}  `yaml:"expected"`
+				Error         bool   `yaml:"error"`
+				Name          string `yaml:"name"`
+				Message       string `yaml:"message"`
+				Transitioning bool   `yaml:"transitioning"`
+			} `yaml:"state"`
+		} `yaml:"expected"`
 	} `yaml:"tests"`
 }
 
@@ -52,10 +54,8 @@ func (i *IntegrationSuite) TestWranglerCerts() {
 	gvrs := make(map[k8sschema.GroupVersionResource]struct{})
 	i.doManifest(ctx, manifestsFile, func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
 		gvrs[gvr] = struct{}{}
-		fmt.Fprintf(os.Stderr, "QQQ: TestWranglerCerts: -i.doApply\n")
 		i.normalizeTheObject(obj)
-		return nil
-		// return i.doApplyWithoutStatusUpdate(ctx, obj, gvr)
+		return i.doApplyWithoutStatusUpdate(ctx, obj, gvr)
 	})
 	defer i.doManifestReversed(ctx, manifestsFile, i.doDelete)
 
@@ -64,12 +64,19 @@ func (i *IntegrationSuite) TestWranglerCerts() {
 	i.T().Log(fmt.Sprintf("Waiting for certs to stabilize (%d seconds)...", timeToWait))
 	time.Sleep(time.Duration(timeToWait) * time.Second)
 
-	
-	i.runCertStateTest(ctx)
+	i.runCertStateTest(ctx, gvrs)
 }
 
+func (i *IntegrationSuite) doApplyWithoutStatusUpdate(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
+	namespace := obj.GetNamespace()
+	name := obj.GetName()
+	applyOpts := metav1.ApplyOptions{FieldManager: "integration-tests"}
+	logrus.Println("Applying without status-update", namespace, name)
+	_, err := i.client.Resource(gvr).Namespace(namespace).Apply(ctx, name, obj, applyOpts)
+	return err
+}
 
-func (i *IntegrationSuite) runCertStateTest(ctx context.Context) {
+func (i *IntegrationSuite) runCertStateTest(ctx context.Context, gvrs map[k8sschema.GroupVersionResource]struct{}) {
 
 	// Custom authenticator: use impersonation if header present, otherwise admin
 	impersonateOrAdmin := func(req *http.Request) (user.Info, bool, error) {
@@ -94,6 +101,12 @@ func (i *IntegrationSuite) runCertStateTest(ctx context.Context) {
 
 	httpServer := httptest.NewServer(steveHandler)
 	defer httpServer.Close()
+
+	// Wait for the cert schema (and any other applied types) to be registered before
+	// hitting the API - a fixed sleep isn't enough on a slow/cold cluster.
+	for gvr := range gvrs {
+		i.waitForSchema(httpServer.URL, gvr)
+	}
 
 	baseURL := httpServer.URL
 	defer i.maybeStopAndDebug(baseURL)
@@ -162,9 +175,6 @@ func (i *IntegrationSuite) testWranglerCertScenario(ctx context.Context, config 
 			i.Require().NoError(err)
 			defer resp.Body.Close()
 
-			if http.StatusOK != resp.StatusCode {
-				fmt.Fprintf(os.Stderr, "QQQ: status code %d on URL %s\n", resp.StatusCode, url)
-			}
 			i.Require().Equal(http.StatusOK, resp.StatusCode)
 
 			// Read full response body for JSON saving
@@ -172,15 +182,15 @@ func (i *IntegrationSuite) testWranglerCertScenario(ctx context.Context, config 
 			i.Require().NoError(err)
 
 			type Response struct {
-				Data     struct {
+				Data []struct {
 					Metadata struct {
 						State struct {
-							Error bool `json:"error"`
-							Name string `json:"name"`
-							Message string `json:"message"`
-							Transitioning bool `json:"transitioning"`
-						}  `json:"state"`
-					}  `json:"metadata"`
+							Error         bool   `json:"error"`
+							Name          string `json:"name"`
+							Message       string `json:"message"`
+							Transitioning bool   `json:"transitioning"`
+						} `json:"state"`
+					} `json:"metadata"`
 				} `json:"data"`
 			}
 			var parsed Response
@@ -197,8 +207,12 @@ func (i *IntegrationSuite) testWranglerCertScenario(ctx context.Context, config 
 				}
 			}
 
-			assert.Equal(i.T(), test.Expected, parsed)
+			assert.Equal(i.T(), 1, len(parsed.Data))
+			// Break down the fields so error messsages are easier to read...
+			assert.Equal(i.T(), test.Expected.State.Error, parsed.Data[0].Metadata.State.Error)
+			assert.Equal(i.T(), test.Expected.State.Name, parsed.Data[0].Metadata.State.Name)
+			assert.Equal(i.T(), test.Expected.State.Message, parsed.Data[0].Metadata.State.Message)
+			assert.Equal(i.T(), test.Expected.State.Transitioning, parsed.Data[0].Metadata.State.Transitioning)
 		})
 	}
 }
-
