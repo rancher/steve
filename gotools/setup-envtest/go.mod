@@ -1,6 +1,6 @@
 module github.com/rancher/steve/gotools/setup-envtest
 
-go 1.27.0
+go 1.27.2
 
 tool sigs.k8s.io/controller-runtime/tools/setup-envtest
 
