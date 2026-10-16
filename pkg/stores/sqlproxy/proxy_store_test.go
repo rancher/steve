@@ -2432,7 +2432,8 @@ func TestCacheForRetriesOnConcurrentReset(t *testing.T) {
 
 	cg.EXPECT().TableAdminClient(apiOp, apiSchema, "", &WarningBuffer{}).Return(ri, nil)
 	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
-		Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil }).
+		AnyTimes()
 
 	gomock.InOrder(
 		// First call races with a concurrent schema Stop() and should be retried, not failed.
@@ -2479,4 +2480,109 @@ func TestCacheForDoesNotRetryOnOtherErrors(t *testing.T) {
 
 	_, err := s.cacheFor(context.Background(), apiOp, apiSchema)
 	assert.Error(t, err)
+}
+
+func TestCacheForRetriesWithFreshSchemaOnErrCacheReset(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+	sc := NewMockSchemaCollection(gomock.NewController(t))
+	bloi := NewMockByOptionsLister(gomock.NewController(t))
+	c := &factory.Cache{ByOptionsLister: &informer.Informer{ByOptionsLister: bloi}}
+
+	s := &Store{
+		clientGetter:     cg,
+		cacheFactory:     cf,
+		transformBuilder: tb,
+		schemas:          sc,
+	}
+
+	apiOp := &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+
+	oldSchema := &types.APISchema{
+		Schema: &schemas.Schema{
+			ID: "gvk-id",
+			Attributes: map[string]interface{}{
+				"verbs":   []string{"list", "watch"},
+				"columns": []common.ColumnDefinition{{Field: ".spec.oldField"}},
+			},
+		},
+	}
+	attributes.SetGVK(oldSchema, gvk)
+
+	freshSchema := &types.APISchema{
+		Schema: &schemas.Schema{
+			ID: "gvk-id",
+			Attributes: map[string]interface{}{
+				"verbs":   []string{"list", "watch"},
+				"columns": []common.ColumnDefinition{{Field: ".spec.freshField"}},
+			},
+		},
+	}
+	attributes.SetGVK(freshSchema, gvk)
+
+	cg.EXPECT().TableAdminClient(apiOp, oldSchema, "", &WarningBuffer{}).Return(ri, nil)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil }).
+		AnyTimes()
+
+	// On retry, schema is looked up from s.schemas
+	sc.EXPECT().ByGVK(gvk).Return("gvk-id")
+	sc.EXPECT().Schema("gvk-id").Return(freshSchema)
+
+	gomock.InOrder(
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fields map[string]informer.IndexedField, _ any, _ any, _ any, _ any, _ schema2.GroupVersionKind, _ bool, _ bool, _ bool) (*factory.Cache, error) {
+				assert.Contains(t, fields, "spec.oldField")
+				return nil, fmt.Errorf("reset: %w", factory.ErrCacheReset)
+			}),
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, fields map[string]informer.IndexedField, _ any, _ any, _ any, _ any, _ schema2.GroupVersionKind, _ bool, _ bool, _ bool) (*factory.Cache, error) {
+				assert.Contains(t, fields, "spec.freshField")
+				assert.NotContains(t, fields, "spec.oldField")
+				return c, nil
+			}),
+	)
+
+	got, err := s.cacheFor(context.Background(), apiOp, oldSchema)
+	assert.NoError(t, err)
+	assert.Equal(t, c, got)
+}
+
+func TestCacheForFailsOnErrCacheResetWhenSchemaIsGone(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+	sc := NewMockSchemaCollection(gomock.NewController(t))
+
+	s := &Store{
+		clientGetter:     cg,
+		cacheFactory:     cf,
+		transformBuilder: tb,
+		schemas:          sc,
+	}
+
+	apiOp := &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+	apiSchema := &types.APISchema{
+		Schema: &schemas.Schema{
+			ID:         "gvk-id",
+			Attributes: map[string]interface{}{"verbs": []string{"list", "watch"}},
+		},
+	}
+	attributes.SetGVK(apiSchema, gvk)
+
+	cg.EXPECT().TableAdminClient(apiOp, apiSchema, "", &WarningBuffer{}).Return(ri, nil)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+	// The type was removed while we were waiting, so there's nothing left to build a cache for
+	sc.EXPECT().ByGVK(gvk).Return("")
+	cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, fmt.Errorf("reset: %w", factory.ErrCacheReset))
+
+	_, err := s.cacheFor(context.Background(), apiOp, apiSchema)
+	assert.ErrorContains(t, err, "schema no longer exists")
 }
