@@ -13,10 +13,10 @@ replace (
 	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
 	// Kubernetes v1.35.6 requires the matching v0.36.x modules for generated validation helpers.
 	k8s.io/api => k8s.io/api v0.36.5
-	k8s.io/apimachinery => k8s.io/apimachinery v0.36.5
-	k8s.io/apiserver => k8s.io/apiserver v0.36.5
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.5
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.5
+	k8s.io/apiserver => k8s.io/apiserver v0.36.5
 	k8s.io/client-go => k8s.io/client-go v0.36.5
 	k8s.io/component-base => k8s.io/component-base v0.36.5
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.36.5
@@ -93,15 +93,14 @@ require (
 	github.com/go-openapi/swag/cmdutils v0.27.1 // indirect
 	github.com/go-openapi/swag/conv v0.27.1 // indirect
 	github.com/go-openapi/swag/fileutils v0.27.1 // indirect
-	github.com/go-openapi/swag/jsonname v0.25.4 // indirect
 	github.com/go-openapi/swag/jsonutils v0.27.1 // indirect
 	github.com/go-openapi/swag/loading v0.27.1 // indirect
 	github.com/go-openapi/swag/mangling v0.27.1 // indirect
 	github.com/go-openapi/swag/netutils v0.27.1 // indirect
+	github.com/go-openapi/swag/pools v0.27.1 // indirect
 	github.com/go-openapi/swag/stringutils v0.27.1 // indirect
 	github.com/go-openapi/swag/typeutils v0.27.1 // indirect
 	github.com/go-openapi/swag/yamlutils v0.27.1 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/cel-go v0.30.0 // indirect
 	github.com/google/renameio/v2 v2.0.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
