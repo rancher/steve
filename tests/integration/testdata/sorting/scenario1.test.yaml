@@ -1,0 +1,14 @@
+schemaID: fruits.cattle.io.bananas
+tests:
+- query: sort=metadata.name
+  expected: [black, green, yellow]
+- query: sort=-metadata.name
+  expected: [yellow, green, black]
+- query: sort=number
+  expected: [green, black, yellow]
+- query: sort=-number
+  expected: [yellow, black, green]
+- query: sort=numberString
+  expected: [green, yellow, black]
+- query: sort=-numberString
+  expected: [black, yellow, green]

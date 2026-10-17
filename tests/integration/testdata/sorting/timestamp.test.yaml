@@ -1,0 +1,7 @@
+schemaID: timestamps.cattle.io.singlecols
+tests: []
+# FIXME: Disabled test because columns bug. See https://github.com/rancher/rancher/issues/52774.
+# - query: sort=metadata.fields[1]
+#   expected: [c, a, b]
+# - query: sort=-metadata.fields[1]
+#   expected: [c, a, b]
