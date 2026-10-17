@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/schema"
+	"github.com/rancher/steve/pkg/synthetic"
 	"github.com/rancher/steve/pkg/watchlist"
 	"github.com/rancher/wrangler/v3/pkg/merr"
 	"github.com/rancher/wrangler/v3/pkg/summary/client"
@@ -15,8 +16,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema2 "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -53,6 +56,7 @@ type clusterCache struct {
 	sync.RWMutex
 
 	ctx           context.Context
+	dynamicClient dynamic.Interface
 	summaryClient client.ExtendedInterface
 	watchers      map[schema2.GroupVersionKind]*watcher
 	workqueue     workqueue.DelayingInterface
@@ -65,6 +69,7 @@ type clusterCache struct {
 func NewClusterCache(ctx context.Context, dynamicClient dynamic.Interface) ClusterCache {
 	c := &clusterCache{
 		ctx:           ctx,
+		dynamicClient: dynamicClient,
 		summaryClient: client.NewForExtendedDynamicClient(dynamicClient),
 		watchers:      map[schema2.GroupVersionKind]*watcher{},
 		workqueue:     workqueue.NewNamedDelayingQueue("cluster-cache"),
@@ -73,23 +78,32 @@ func NewClusterCache(ctx context.Context, dynamicClient dynamic.Interface) Clust
 	return c
 }
 
+// listOnlyPollInterval is how often the cluster cache re-lists resources that
+// support "list" but not "watch" to keep their cached data current.
+const listOnlyPollInterval = 30 * time.Second
+
+// validSchema reports whether a schema can be cached. A schema must at least
+// support "list"; resources that also support "watch" are cached via a normal
+// informer, while list-only resources are cached via a polling watcher (see
+// schemaSupportsWatch).
 func validSchema(schema *types.APISchema) bool {
-	canList := false
-	canWatch := false
 	for _, verb := range attributes.Verbs(schema) {
-		switch verb {
-		case "list":
-			canList = true
-		case "watch":
-			canWatch = true
+		if verb == "list" {
+			return true
 		}
 	}
+	return false
+}
 
-	if !canList || !canWatch {
-		return false
+// schemaSupportsWatch reports whether the schema advertises the "watch" verb.
+// Schemas that do not are cached by polling instead of a server-side watch.
+func schemaSupportsWatch(schema *types.APISchema) bool {
+	for _, verb := range attributes.Verbs(schema) {
+		if verb == "watch" {
+			return true
+		}
 	}
-
-	return true
+	return false
 }
 
 func (h *clusterCache) addResourceEventHandler(gvk schema2.GroupVersionKind, informer cache.SharedIndexInformer) {
@@ -147,23 +161,33 @@ func (h *clusterCache) OnSchemas(schemas *schema.Collection) error {
 			continue
 		}
 
-		opts := &client.Options{
-			Schema: schema.Schema,
-		}
-		summaryClient := h.summaryClient
-		if watchlist.Disabled(schema) {
-			// Non-whitelisted aggregated API: disable watch-list (fall back to LIST+WATCH).
-			summaryClient = &noWatchListClient{ExtendedInterface: h.summaryClient}
-		}
-		summaryInformer := informer.NewFilteredSummaryInformerWithOptions(summaryClient, gvr, opts, metav1.NamespaceAll, 2*time.Hour,
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, nil)
 		ctx, cancel := context.WithCancel(h.ctx)
+		var sharedInformer cache.SharedIndexInformer
+		if schemaSupportsWatch(schema) {
+			opts := &client.Options{
+				Schema: schema.Schema,
+			}
+			summaryClient := h.summaryClient
+			if watchlist.Disabled(schema) {
+				// Non-whitelisted aggregated API: disable watch-list (fall back to LIST+WATCH).
+				summaryClient = &noWatchListClient{ExtendedInterface: h.summaryClient}
+			}
+			summaryInformer := informer.NewFilteredSummaryInformerWithOptions(summaryClient, gvr, opts, metav1.NamespaceAll, 2*time.Hour,
+				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, nil)
+			sharedInformer = summaryInformer.Informer()
+		} else {
+			// Resource supports "list" but not "watch" (e.g. some CRDs that only
+			// expose get/list/create/delete). A normal informer cannot watch it,
+			// so synthesize watch events by polling to keep the cache current.
+			logrus.Infof("Polling metadata for %s (no watch verb)", gvk)
+			sharedInformer = h.newListOnlyInformer(ctx, gvk, gvr)
+		}
 		w := &watcher{
 			ctx:      ctx,
 			cancel:   cancel,
 			gvk:      gvk,
 			gvr:      gvr,
-			informer: summaryInformer.Informer(),
+			informer: sharedInformer,
 		}
 		h.watchers[gvk] = w
 		toWait = append(toWait, w)
@@ -317,5 +341,41 @@ type noWatchListClient struct {
 }
 
 func (n *noWatchListClient) IsWatchListSemanticsUnSupported() bool {
+	return true
+}
+
+// newListOnlyInformer builds a dynamic informer for a resource that supports
+// "list" but not "watch". It stores *unstructured.Unstructured objects and
+// synthesizes Added/Modified/Deleted events by periodically re-listing, so the
+// cluster cache (and consumers such as counts) stay populated for these
+// resources.
+func (h *clusterCache) newListOnlyInformer(ctx context.Context, gvk schema2.GroupVersionKind, gvr schema2.GroupVersionResource) cache.SharedIndexInformer {
+	resourceClient := h.dynamicClient.Resource(gvr)
+	example := &unstructured.Unstructured{}
+	example.SetGroupVersionKind(gvk)
+	lw := &noWatchListListWatcher{
+		ListWatch: &cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return resourceClient.List(ctx, options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				watchCtx, cancel := context.WithCancel(ctx)
+				return synthetic.NewSyntheticWatcher(watchCtx, cancel, gvk).Watch(resourceClient, options, listOnlyPollInterval)
+			},
+		},
+	}
+	return cache.NewSharedIndexInformer(lw, example, 2*time.Hour,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+}
+
+// noWatchListListWatcher wraps a ListWatch so its reflector disables watch-list
+// (via IsWatchListSemanticsUnSupported) and falls back to LIST+WATCH. This keeps
+// the reflector's initial LIST seeding the store immediately, instead of waiting
+// for the synthetic watcher's first poll to emit an initial-sync bookmark.
+type noWatchListListWatcher struct {
+	*cache.ListWatch
+}
+
+func (n *noWatchListListWatcher) IsWatchListSemanticsUnSupported() bool {
 	return true
 }
