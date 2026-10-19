@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -21,21 +22,22 @@ var (
 )
 
 func main() {
-	app := cli.NewApp()
-	app.Name = "steve"
-	app.Version = version.FriendlyVersion()
-	app.Usage = ""
-	app.Flags = append(
-		stevecli.Flags(&config),
-		debug.Flags(&debugconfig)...)
-	app.Action = run
+	cmd := &cli.Command{
+		Name:    "steve",
+		Version: version.FriendlyVersion(),
+		Usage:   "",
+		Flags: append(
+			stevecli.Flags(&config),
+			debug.Flags(&debugconfig)...),
+		Action: run,
+	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		logrus.Fatal(err)
 	}
 }
 
-func run(_ *cli.Context) error {
+func run(_ context.Context, _ *cli.Command) error {
 	ctx := signals.SetupSignalContext()
 	debugconfig.MustSetupDebug()
 	s, err := config.ToServer(ctx)

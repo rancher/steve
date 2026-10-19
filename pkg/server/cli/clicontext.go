@@ -86,12 +86,12 @@ func Flags(config *Config) []cli.Flag {
 	flags := []cli.Flag{
 		&cli.StringFlag{
 			Name:        "kubeconfig",
-			EnvVars:     []string{"KUBECONFIG"},
+			Sources:     cli.EnvVars("KUBECONFIG"),
 			Destination: &config.KubeConfig,
 		},
 		&cli.StringFlag{
 			Name:        "context",
-			EnvVars:     []string{"CONTEXT"},
+			Sources:     cli.EnvVars("CONTEXT"),
 			Destination: &config.Context,
 		},
 		&cli.StringFlag{
