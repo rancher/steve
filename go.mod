@@ -43,7 +43,7 @@ require (
 	go.uber.org/mock v0.6.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sync v0.23.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
@@ -54,7 +54,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.34.1
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
-	k8s.io/kubernetes v1.33.6
+	k8s.io/kubernetes v1.34.12
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	modernc.org/sqlite v1.40.1
 	sigs.k8s.io/controller-runtime v0.21.0
