@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/rancher/steve/pkg/auth"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -52,22 +52,22 @@ func Flags(config *WebhookConfig) []cli.Flag {
 	return []cli.Flag{
 		&cli.BoolFlag{
 			Name:        "webhook-auth",
-			EnvVars:     []string{"WEBHOOK_AUTH"},
+			Sources:     cli.EnvVars("WEBHOOK_AUTH"),
 			Destination: &config.WebhookAuthentication,
 		},
 		&cli.StringFlag{
 			Name:        "webhook-kubeconfig",
-			EnvVars:     []string{"WEBHOOK_KUBECONFIG"},
+			Sources:     cli.EnvVars("WEBHOOK_KUBECONFIG"),
 			Destination: &config.WebhookKubeconfig,
 		},
 		&cli.StringFlag{
 			Name:        "webhook-url",
-			EnvVars:     []string{"WEBHOOK_URL"},
+			Sources:     cli.EnvVars("WEBHOOK_URL"),
 			Destination: &config.WebhookURL,
 		},
 		&cli.IntFlag{
 			Name:        "webhook-cache-ttl",
-			EnvVars:     []string{"WEBHOOK_CACHE_TTL"},
+			Sources:     cli.EnvVars("WEBHOOK_CACHE_TTL"),
 			Destination: &config.CacheTTLSeconds,
 		},
 	}

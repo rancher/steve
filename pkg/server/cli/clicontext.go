@@ -12,7 +12,7 @@ import (
 	"github.com/rancher/steve/pkg/ui"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/ratelimit"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
@@ -86,12 +86,12 @@ func Flags(config *Config) []cli.Flag {
 	flags := []cli.Flag{
 		&cli.StringFlag{
 			Name:        "kubeconfig",
-			EnvVars:     []string{"KUBECONFIG"},
+			Sources:     cli.EnvVars("KUBECONFIG"),
 			Destination: &config.KubeConfig,
 		},
 		&cli.StringFlag{
 			Name:        "context",
-			EnvVars:     []string{"CONTEXT"},
+			Sources:     cli.EnvVars("CONTEXT"),
 			Destination: &config.Context,
 		},
 		&cli.StringFlag{
