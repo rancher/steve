@@ -325,6 +325,10 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationDefault() {
 		t.Run(test.name, func(t *testing.T) {
 			httpClient := http.Client{
 				Transport: &http.Transport{
+					// A new connection per attempt: a connection made before the
+					// server picked up the client CA never sends the client cert,
+					// and would keep returning 401 for every retry.
+					DisableKeepAlives: true,
 					TLSClientConfig: &tls.Config{
 						InsecureSkipVerify: true,
 						Certificates:       test.certs,
@@ -411,6 +415,7 @@ func (s *ExtensionAPIServerSuite) TestAuthenticationUnion() {
 
 	httpClient := http.Client{
 		Transport: &http.Transport{
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 				Certificates:       []tls.Certificate{certificate},
