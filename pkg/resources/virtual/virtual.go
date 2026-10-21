@@ -7,8 +7,6 @@ import (
 	"time"
 
 	rescommon "github.com/rancher/steve/pkg/resources/common"
-	"github.com/rancher/steve/pkg/resources/virtual/acmechallenges"
-	"github.com/rancher/steve/pkg/resources/virtual/certificates"
 	"github.com/rancher/steve/pkg/resources/virtual/clusters"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/rancher/steve/pkg/resources/virtual/dates"
@@ -69,13 +67,6 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 			},
 		}
 		converters = append(converters, multiValueConverter.Transform)
-
-	case rescommon.CertManagerCertificateGVK:
-		// v1/cert-manager.io.certificates
-		converters = append(converters, certificates.TransformCertificate)
-	case rescommon.AcmeCertManagerChallengeGVK:
-		// v1/acme.cert-manager.io.challenges
-		converters = append(converters, acmechallenges.TransformChallenge)
 	}
 
 	// Detecting if we need to convert date fields
