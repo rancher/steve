@@ -1,6 +1,6 @@
 module github.com/rancher/steve/gotools/mockgen
 
-go 1.26.0
+go 1.26.10
 
 tool go.uber.org/mock/mockgen
 
