@@ -151,26 +151,55 @@ func (l *ListOptionIndexer) buildClauseFromProjectsOrNamespaces(orFilters sqltyp
 }
 
 func (l *ListOptionIndexer) checkRevision(lo *sqltypes.ListOptions) error {
-	l.lock.RLock()
-	latestRV := l.latestRV
-	l.lock.RUnlock()
+	if len(lo.Revision) == 0 {
+		return nil
+	}
 
-	if len(lo.Revision) > 0 {
-		currentRevision, err := strconv.ParseInt(latestRV, 10, 64)
-		if err != nil {
-			return err
-		}
+	currentRevision, err := strconv.ParseInt(l.latestResourceVersion(), 10, 64)
+	if err != nil {
+		return err
+	}
 
-		requestRevision, err := strconv.ParseInt(lo.Revision, 10, 64)
-		if err != nil {
-			return err
-		}
+	requestRevision, err := strconv.ParseInt(lo.Revision, 10, 64)
+	if err != nil {
+		return err
+	}
 
-		if currentRevision < requestRevision {
-			return ErrUnknownRevision
-		}
+	if currentRevision < requestRevision {
+		return ErrUnknownRevision
 	}
 	return nil
+}
+
+// latestResourceVersion returns the highest revision at which the cache can
+// serve a consistent view. It reconciles latestRV, which is updated per watch
+// event, with the store's last sync resourceVersion, which is the only value
+// set to the *collection* resourceVersion on a full relist (Store.Replace).
+//
+// During a relist every object is re-added, firing a watch event for each and
+// leaving latestRV at the resourceVersion of whichever object happened to be
+// processed last -- an arbitrary revision at or below the real collection
+// resourceVersion. Without this reconciliation a later request for a valid,
+// higher revision fails checkRevision with ErrUnknownRevision and never recovers
+// until an unrelated change bumps latestRV. See rancher/rancher#56187.
+func (l *ListOptionIndexer) latestResourceVersion() string {
+	l.lock.RLock()
+	latest := l.latestRV
+	l.lock.RUnlock()
+
+	syncRV := l.LastStoreSyncResourceVersion()
+	latestNum, latestErr := strconv.ParseInt(latest, 10, 64)
+	syncNum, syncErr := strconv.ParseInt(syncRV, 10, 64)
+	switch {
+	case latestErr != nil:
+		return syncRV
+	case syncErr != nil:
+		return latest
+	case syncNum > latestNum:
+		return syncRV
+	default:
+		return latest
+	}
 }
 
 func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
