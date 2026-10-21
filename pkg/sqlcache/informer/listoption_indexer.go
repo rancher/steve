@@ -286,13 +286,7 @@ func NewListOptionIndexer(ctx context.Context, s Store, opts ListOptionIndexerOp
 }
 
 func (l *ListOptionIndexer) GetLatestResourceVersion() []string {
-	var latestRV []string
-
-	l.lock.RLock()
-	latestRV = []string{l.latestRV}
-	l.lock.RUnlock()
-
-	return latestRV
+	return []string{l.latestResourceVersion()}
 }
 
 func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, eventsCh chan<- watch.Event) error {
@@ -890,11 +884,7 @@ func (l *ListOptionIndexer) executeQuery(ctx context.Context, queryInfo *QueryIn
 		continueToken = fmt.Sprintf("%d", offset+limit)
 	}
 
-	l.lock.RLock()
-	latestRV := l.latestRV
-	l.lock.RUnlock()
-
-	return toUnstructuredList(items, latestRV), total, continueToken, nil
+	return toUnstructuredList(items, l.latestResourceVersion()), total, continueToken, nil
 }
 
 func logLongQuery(elapsed time.Duration, query string, params []any) {

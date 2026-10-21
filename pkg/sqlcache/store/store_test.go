@@ -691,6 +691,51 @@ func TestReplace(t *testing.T) {
 		assert.Nil(t, err)
 	},
 	})
+	tests = append(tests, testCase{description: "Replace re-adds objects in input order", test: func(t *testing.T, shouldEncrypt bool) {
+		c, txC := SetupMockDB(t)
+		store := SetupStore(t, c, shouldEncrypt)
+		stmt := NewMockStmt(gomock.NewController(t))
+
+		// Objects are intentionally not in key-sorted order; Replace must
+		// preserve this exact order when re-adding them (regression for
+		// rancher/rancher#56187, where map iteration shuffled the order).
+		objs := []testStoreObject{
+			{Id: "c", Val: "3"},
+			{Id: "a", Val: "1"},
+			{Id: "b", Val: "2"},
+		}
+
+		txC.EXPECT().Stmt(store.deleteAllStmt).Return(stmt)
+		stmt.EXPECT().Exec()
+
+		var addOrder []string
+		store.RegisterAfterAdd(func(key string, _ any, _ db.TxClient) error {
+			addOrder = append(addOrder, key)
+			return nil
+		})
+
+		expectedObj := getExpectedObj(shouldEncrypt)
+		for _, obj := range objs {
+			c.EXPECT().Serialize(obj, shouldEncrypt).Return(expectedObj, nil)
+			c.EXPECT().Upsert(txC, store.upsertStmt, obj.Id, expectedObj)
+		}
+
+		c.EXPECT().WithTransaction(gomock.Any(), true, gomock.Any()).Return(nil).Do(
+			func(ctx context.Context, shouldEncrypt bool, f db.WithTransactionFunction) {
+				if err := f(txC); err != nil {
+					t.Fail()
+				}
+			})
+
+		input := make([]any, len(objs))
+		for i := range objs {
+			input[i] = objs[i]
+		}
+		err := store.Replace(input, "999")
+		assert.Nil(t, err)
+		assert.Equal(t, []string{"c", "a", "b"}, addOrder)
+	},
+	})
 	tests = append(tests, testCase{description: "Replace with no DB client errors and no items", test: func(t *testing.T, shouldEncrypt bool) {
 		c, txC := SetupMockDB(t)
 		store := SetupStore(t, c, shouldEncrypt)

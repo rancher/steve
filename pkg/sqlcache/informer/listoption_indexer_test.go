@@ -1051,6 +1051,79 @@ func TestWatchResourceVersion(t *testing.T) {
 	}
 }
 
+func TestReplaceRevisionConsistency(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
+	parentCtx := context.Background()
+
+	opts := ListOptionIndexerOptions{
+		IsNamespaced: true,
+	}
+	loi, dbPath, err := makeListOptionIndexer(parentCtx, gvk, opts, false, emptyNamespaceList)
+	defer cleanTempFiles(dbPath)
+	assert.NoError(t, err)
+
+	// Objects as delivered by the informer's ListWatch: sorted by ascending
+	// resourceVersion. Every object's revision is below the collection revision.
+	const collectionRV = "500"
+	objectRVs := []string{"110", "125", "140", "155", "170", "185", "200"}
+	objects := make([]any, 0, len(objectRVs))
+	for i, rv := range objectRVs {
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(gvk)
+		name := fmt.Sprintf("obj-%d", i)
+		obj.SetName(name)
+		obj.SetNamespace("default")
+		obj.SetResourceVersion(rv)
+		obj.Object["id"] = "default/" + name
+		objects = append(objects, obj)
+	}
+
+	err = loi.Replace(objects, collectionRV)
+	assert.NoError(t, err)
+
+	// The cache must advertise the collection revision from the relist, not an
+	// arbitrary per-object revision.
+	assert.Equal(t, []string{collectionRV}, loi.GetLatestResourceVersion())
+
+	// A list that supplies any revision up to the collection revision must
+	// succeed rather than fail with ErrUnknownRevision.
+	for _, rv := range []string{objectRVs[0], objectRVs[len(objectRVs)-1], collectionRV} {
+		list, _, _, _, listErr := loi.ListByOptions(parentCtx, &sqltypes.ListOptions{Revision: rv}, []partition.Partition{{All: true}}, "")
+		if assert.NoError(t, listErr, "list at revision %s should not error", rv) {
+			assert.Equal(t, collectionRV, list.GetResourceVersion())
+		}
+	}
+
+	// A watcher rewound to the first replaced object's revision must observe the
+	// remaining objects in ascending revision order (never a higher revision
+	// followed by a lower one).
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+	eventsCh := make(chan watch.Event, 100)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- loi.Watch(ctx, WatchOptions{ResourceVersion: objectRVs[0]}, eventsCh)
+	}()
+
+	var gotRVs []string
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+loop:
+	for range objectRVs[1:] {
+		select {
+		case ev := <-eventsCh:
+			gotRVs = append(gotRVs, ev.Object.(*unstructured.Unstructured).GetResourceVersion())
+		case <-timer.C:
+			break loop
+		}
+	}
+	cancel()
+	<-errCh
+
+	assert.Equal(t, objectRVs[1:], gotRVs)
+	assert.IsIncreasing(t, gotRVs)
+}
+
 func TestNonNumberResourceVersion(t *testing.T) {
 	ctx := context.Background()
 	gvk := corev1.SchemeGroupVersion.WithKind("TestKind")
