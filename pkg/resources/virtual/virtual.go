@@ -76,6 +76,10 @@ func (t *TransformBuilder) GetTransformFunc(gvk schema.GroupVersionKind, columns
 	case rescommon.AcmeCertManagerChallengeGVK:
 		// v1/acme.cert-manager.io.challenges
 		converters = append(converters, acmechallenges.TransformChallenge)
+	default:
+		if gvk.Group == "cert-manager.io" {
+			converters = append(converters, certificates.TransformCertManagerStatus)
+		}
 	}
 
 	// Detecting if we need to convert date fields

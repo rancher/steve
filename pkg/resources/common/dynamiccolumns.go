@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/apiserver/pkg/types"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/wrangler/v3/pkg/ratelimit"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -59,11 +60,14 @@ func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema
 
 	obj, err := r.Do(ctx).Get()
 	if err != nil {
-		attributes.SetTable(schema, false)
+		if apierrors.IsNotAcceptable(err) || apierrors.IsMethodNotSupported(err) {
+			attributes.SetTable(schema, false)
+		}
 		return nil
 	}
 	t, ok := obj.(*metav1.Table)
 	if !ok {
+		attributes.SetTable(schema, false)
 		return nil
 	}
 
@@ -76,6 +80,8 @@ func (d *DynamicColumns) SetColumns(ctx context.Context, schema *types.APISchema
 			})
 		}
 		attributes.SetColumns(schema, cols)
+	} else {
+		attributes.SetColumns(schema, []ColumnDefinition{})
 	}
 
 	return nil
