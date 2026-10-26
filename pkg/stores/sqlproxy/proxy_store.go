@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/apiserver/pkg/apierror"
@@ -1331,25 +1332,44 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	}
 
 	gvk := attributes.GVK(apiSchema)
-	// TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
-	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
-	fields, cols := getFieldAndColInfo(apiSchema, gvk)
-	// Merge type-specific fields into map
-	for k, v := range getFieldForGVK(gvk) {
-		fields[k] = v
-	}
-
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
-	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(apiSchema)
 
 	// A concurrent schema/column definition change can reset gvk's cache (see
 	// factory.ErrCacheReset) right as we're waiting for it to become ready, canceling our
 	// wait. That's a transient race, not a real failure, and the cache is immediately usable
 	// again once Stop() returns - so retry a few times instead of failing the request.
 	const maxCacheResetRetries = 3
+	const cacheResetRetryDelay = 25 * time.Millisecond
 	var inf *factory.Cache
 	for attempt := 0; attempt <= maxCacheResetRetries; attempt++ {
+		if attempt > 0 {
+			// Stop() cancels the informer's context before it takes the lock held by an in-flight creation, so an
+			// immediate retry can win the lock and fail on the still-canceled context. Give Stop() time to finish.
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("cachefor %v: %w", gvk, ctx.Err())
+			case <-time.After(time.Duration(attempt) * cacheResetRetryDelay):
+			}
+			// The schema we were given predates the change that reset the cache, so use the current one.
+			if s.schemas != nil {
+				id := s.schemas.ByGVK(gvk)
+				if id == "" {
+					return nil, fmt.Errorf("cachefor %v: schema no longer exists", gvk)
+				}
+				if freshSchema := s.schemas.Schema(id); freshSchema != nil {
+					apiSchema = freshSchema
+				}
+			}
+		}
+
+		fields, cols := getFieldAndColInfo(apiSchema, gvk)
+		for k, v := range getFieldForGVK(gvk) {
+			fields[k] = v
+		}
+
+		transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
+		tableClient := &tablelistconvert.Client{ResourceInterface: client}
+		ns := attributes.Namespaced(apiSchema)
+
 		inf, err = s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema), watchlist.Disabled(apiSchema))
 		if err == nil || !errors.Is(err, factory.ErrCacheReset) {
 			break
