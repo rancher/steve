@@ -298,13 +298,37 @@ func (l *ListOptionIndexer) Watch(ctx context.Context, opts WatchOptions, events
 		found := r.Rewind(func(v *event) bool {
 			return v.Object.GetResourceVersion() == targetRV
 		})
-		if !found {
+		switch {
+		case found:
+			// Discard the target object, as that's actually the last known resource version, we need to send the following ones
+			if _, err := r.Read(ctx); err != nil {
+				return err
+			}
+		case l.isCollectionResourceVersion(targetRV):
+			// targetRV is not itself an event in the log but is at or above the
+			// collection resourceVersion recorded by the last full relist
+			// (Store.Replace). list results advertise that collection revision
+			// (see latestResourceVersion), so a client that lists and then
+			// watches at the advertised revision lands here. The client is
+			// caught up, so rewind to the most recent event at or below targetRV
+			// and stream everything after it (the post-relist changes) instead
+			// of failing with ErrTooOld. See rancher/rancher#56187.
+			found = r.Rewind(func(v *event) bool {
+				return resourceVersionAtOrBelow(v.Object.GetResourceVersion(), targetRV)
+			})
+			if found {
+				if _, err := r.Read(ctx); err != nil {
+					return err
+				}
+			} else if !l.eventLog.IsEmpty() {
+				// The log holds only events newer than targetRV: the relist
+				// burst was evicted, so the client is genuinely too far behind.
+				return ErrTooOld
+			}
+			// else: the log is empty, so there is nothing to replay. The reader
+			// is already positioned at the tip and will stream future events.
+		default:
 			return ErrTooOld
-		}
-
-		// Discard the target object, as that's actually the last known resource version, we need to send the following ones
-		if _, err := r.Read(ctx); err != nil {
-			return err
 		}
 	}
 

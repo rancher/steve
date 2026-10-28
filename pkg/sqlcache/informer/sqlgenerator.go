@@ -202,6 +202,27 @@ func (l *ListOptionIndexer) latestResourceVersion() string {
 	}
 }
 
+// isCollectionResourceVersion reports whether targetRV is at or above the
+// collection resourceVersion recorded by the last full relist (Store.Replace).
+// Such a revision is advertised by list results (see latestResourceVersion) but
+// is not itself an event in the watch event log, so an exact-match watch rewind
+// for it never succeeds even though the client is fully caught up.
+func (l *ListOptionIndexer) isCollectionResourceVersion(targetRV string) bool {
+	return resourceVersionAtOrBelow(l.LastStoreSyncResourceVersion(), targetRV)
+}
+
+// resourceVersionAtOrBelow reports whether resource version a is less than or
+// equal to b. Both must parse as int64 resource versions; it returns false if
+// either does not.
+func resourceVersionAtOrBelow(a, b string) bool {
+	an, aerr := strconv.ParseInt(a, 10, 64)
+	bn, berr := strconv.ParseInt(b, 10, 64)
+	if aerr != nil || berr != nil {
+		return false
+	}
+	return an <= bn
+}
+
 func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 	partitions []partition.Partition,
 	namespace string,
