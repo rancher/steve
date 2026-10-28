@@ -98,6 +98,9 @@ func validSchema(schema *types.APISchema) bool {
 // schemaSupportsWatch reports whether the schema advertises the "watch" verb.
 // Schemas that do not are cached by polling instead of a server-side watch.
 func schemaSupportsWatch(schema *types.APISchema) bool {
+	if isForcedListOnly(attributes.GVK(schema)) {
+		return false
+	}
 	for _, verb := range attributes.Verbs(schema) {
 		if verb == "watch" {
 			return true

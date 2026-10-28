@@ -3,12 +3,15 @@ package tests
 import (
 	"context"
 	"net/http/httptest"
+	"path/filepath"
 	"time"
 
 	"github.com/rancher/steve/pkg/auth"
+	"github.com/rancher/steve/pkg/clustercache"
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -20,6 +23,8 @@ var (
 		Resource: "carrots",
 	}
 	carrotSchemaID = "vegetables.cattle.io.carrot"
+
+	testdataCountListOnlyDir = filepath.Join("testdata", "count_list_only")
 )
 
 // countSubscribeEvent is specific to COUNT events which have a different Data structure
@@ -325,6 +330,116 @@ collectEvents:
 	cancel()
 	// Give cleanup goroutines time to finish
 	time.Sleep(100 * time.Millisecond)
+}
+
+// TestCountIncludesListOnlyResources verifies that resources which support
+// "list" but not "watch" are populated in the cluster cache and therefore
+// surface in /v1/count - including as new instances appear.
+//
+// Such resources (eg: Kasten K10's aggregated actions.kio.kasten.io) cannot be
+// driven by a normal informer, so steve builds a dynamic informer whose
+// WatchFunc is a *synthetic watcher*: it periodically LISTs the resource behind
+// the scenes and emits the diff as Added/Modified/Deleted events, keeping the
+// cluster cache (and therefore counts) current without a server-side watch (see
+// pkg/clustercache newListOnlyInformer).
+//
+// Before the fix, clustercache.validSchema() required both "list" AND "watch",
+// so no informer was ever created for list-only resources and their /v1/count
+// entry was always 0. After the fix they are cached via the synthetic watcher
+// and the count matches what the apiserver reports.
+//
+// No resource in a bare cluster is both list-only and controllable (CRDs always
+// advertise "watch"; componentstatuses/metrics can't have instances created),
+// so - mirroring TestOwnershipCountMatchesList, which simulates rancher's
+// extension apiserver rather than standing one up - this test takes a CRD it
+// controls (Banana) and asks the cluster cache to treat its GVK as list-only
+// via clustercache.ForceListOnly. That drives Banana through exactly the
+// synthetic-watch path the aggregated/K10 case uses, while letting the test
+// create instances and assert the exact count.
+func (i *IntegrationSuite) TestCountIncludesListOnlyResources() {
+	ctx, cancel := context.WithTimeout(i.T().Context(), 3*time.Minute)
+	defer cancel()
+
+	// Treat Banana as list-only for the duration of this test only, so the
+	// override can't leak into other tests sharing the same schema.
+	clustercache.ForceListOnly(bananaGVK)
+	defer clustercache.UnforceListOnly(bananaGVK)
+
+	authMiddleware := auth.ToMiddleware(auth.AuthenticatorFunc(auth.AlwaysAdmin))
+	steveHandler, err := server.New(ctx, i.restCfg, &server.Options{
+		SQLCacheFactoryOptions: factory.CacheFactoryOptions{
+			GCInterval:  15 * time.Minute,
+			GCKeepCount: 1000,
+			UseTempDir:  true,
+		},
+		AuthMiddleware: authMiddleware,
+	})
+	i.Require().NoError(err)
+
+	httpServer := httptest.NewServer(steveHandler)
+	defer httpServer.Close()
+
+	baseURL := httpServer.URL
+	defer i.maybeStopAndDebug(baseURL)
+
+	// Seed a known population of bananas from the scenario file. Its header
+	// declares the schema ID the count is keyed under; the expected count is
+	// simply the number of banana objects applied.
+	scenario := filepath.Join(testdataCountListOnlyDir, "bananas.test.yaml")
+	var header struct {
+		SchemaID string `yaml:"schemaID"`
+	}
+	bananaGVR := k8sschema.GroupVersionResource{Group: bananaGVK.Group, Version: bananaGVK.Version, Resource: "bananas"}
+	seeded := 0
+	i.doManifestWithHeader(ctx, scenario,
+		func(_ context.Context, h map[string]any) error {
+			return mapToObj(h, &header)
+		},
+		func(ctx context.Context, obj *unstructured.Unstructured, gvr k8sschema.GroupVersionResource) error {
+			seeded++
+			return i.doApply(ctx, obj, gvr)
+		},
+	)
+	defer i.doManifestReversed(ctx, scenario, i.doDelete)
+
+	i.Require().NotEmpty(header.SchemaID, "scenario %s declared no schemaID", scenario)
+	i.Require().NotZero(seeded, "scenario %s seeded no bananas", scenario)
+	i.waitForSchema(baseURL, bananaGVR)
+
+	// The cluster cache seeds list-only resources from the reflector's initial
+	// LIST (see noWatchListListWatcher), so the count converges quickly, before
+	// the first synthetic poll interval elapses.
+	i.Require().EventuallyWithT(func(c *assert.CollectT) {
+		count, ok := i.getCountFor(c, baseURL, "", header.SchemaID)
+		assert.True(c, ok, "%s should appear in /v1/count (list-only resource must be cached)", header.SchemaID)
+		assert.Equal(c, seeded, count, "%s count should equal the seeded bananas", header.SchemaID)
+	}, 30*time.Second, 500*time.Millisecond, "initial list-only count did not converge")
+
+	// Create one more banana. Because the resource is treated as list-only,
+	// there is no server-side watch to deliver this event - the count can only
+	// catch up when the synthetic watcher next re-lists. This is what actually
+	// exercises the polling path the fix adds, rather than just the one-time
+	// seeding LIST above.
+	const extraName = "banana-list-only-extra"
+	extra := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "fruits.cattle.io/v1",
+		"kind":       "Banana",
+		"metadata":   map[string]any{"name": extraName},
+	}}
+	_, err = i.client.Resource(bananaGVR).Apply(ctx, extraName, extra, metav1.ApplyOptions{FieldManager: "integration-tests"})
+	i.Require().NoError(err, "creating extra banana")
+	defer func() {
+		deleteCtx, deleteCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer deleteCancel()
+		_ = i.client.Resource(bananaGVR).Delete(deleteCtx, extraName, metav1.DeleteOptions{})
+	}()
+
+	// Allow a couple of poll intervals for the synthetic watcher to pick it up.
+	i.Require().EventuallyWithT(func(c *assert.CollectT) {
+		count, ok := i.getCountFor(c, baseURL, "", header.SchemaID)
+		assert.True(c, ok, "%s should still appear in /v1/count", header.SchemaID)
+		assert.Equal(c, seeded+1, count, "synthetic re-list should pick up the new banana")
+	}, 90*time.Second, time.Second, "list-only count did not reflect the new banana")
 }
 
 // eventContainsSchemaID checks if a COUNT change event contains the given schema ID
