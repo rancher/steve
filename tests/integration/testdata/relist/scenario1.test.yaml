@@ -1,0 +1,48 @@
+# Regression scenario for rancher/rancher#56187: after the sqlite (vai) cache
+# performs its initial full relist (Store.Replace), the revision it advertises
+# must be the collection revision, and a list supplying that revision must not
+# fail with "unknown revision".
+#
+# The target type is a quiet CRD (Banana) that nothing in the cluster mutates,
+# so the cache's per-object revision watermark stays put after the sync.
+listPath: fruits.cattle.io.bananas
+group: fruits.cattle.io
+version: v1
+resource: bananas
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-relist-0
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-relist-1
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-relist-2
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-relist-3
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-relist-4
+---
+# Unrelated trailing write. Because etcd revisions are globally monotonic and
+# this object is applied after every Banana, it advances the cluster's global
+# revision past all of them. The collection revision the informer then syncs at
+# is strictly greater than any Banana's own revision -- which is what makes the
+# "unknown revision" regression deterministic (the buggy code advertised a
+# Banana revision below it, so requesting the collection revision returned 400).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: relist-revision-bump
+  namespace: default
