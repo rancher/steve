@@ -477,29 +477,39 @@ func (s *Store) Get(obj any) (item any, exists bool, err error) {
 
 // Replace will delete the contents of the Store, using instead the given list
 func (s *Store) Replace(objects []any, resourceVersion string) error {
-	objectMap := map[string]any{}
-
+	// Preserve the order of the incoming list. The informer's ListWatch sorts a
+	// relist by ascending resourceVersion so that watchers derived from this
+	// Store observe changes in a consistent, monotonic order. Iterating a map
+	// here would shuffle that order and emit watch events (and their revisions)
+	// out of order. See rancher/rancher#56187.
+	keys := make([]string, 0, len(objects))
+	objectMap := make(map[string]any, len(objects))
 	for _, object := range objects {
 		key, err := s.keyFunc(object)
 		if err != nil {
 			return err
 		}
+		if _, exists := objectMap[key]; !exists {
+			keys = append(keys, key)
+		}
 		objectMap[key] = object
 	}
-	err := s.replaceByKey(objectMap)
+	err := s.replaceByKey(keys, objectMap)
 	if err != nil {
 		log.Errorf("Error in Store.Replace for type %v: %v", s.name, err)
 		return err
 	}
 	s.setLastSyncRV(resourceVersion)
-	for key := range objectMap {
+	for _, key := range keys {
 		s.checkUpdateExternalInfo(key)
 	}
 	return nil
 }
 
-// replaceByKey will delete the contents of the Store, using instead the given key to obj map
-func (s *Store) replaceByKey(objects map[string]any) error {
+// replaceByKey will delete the contents of the Store, using instead the given key to obj map.
+// keys determines the order in which objects are re-added (and in which their after-add
+// hooks, including watch-event notifications, fire).
+func (s *Store) replaceByKey(keys []string, objects map[string]any) error {
 	serializedObjects := make(map[string]db.SerializedObject, len(objects))
 	for key, value := range objects {
 		serialized, err := s.Serialize(value, s.shouldEncrypt)
@@ -517,7 +527,8 @@ func (s *Store) replaceByKey(objects map[string]any) error {
 			return err
 		}
 
-		for key, obj := range objects {
+		for _, key := range keys {
+			obj := objects[key]
 			if err := s.Upsert(txC, s.upsertStmt, key, serializedObjects[key]); err != nil {
 				return err
 			}

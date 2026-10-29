@@ -65,6 +65,14 @@ func (b *CircularBuffer[T]) Write(v T) error {
 	return nil
 }
 
+// IsEmpty reports whether nothing has ever been written to the buffer.
+func (b *CircularBuffer[T]) IsEmpty() bool {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+
+	return b.sequence == 0
+}
+
 // Close marks the buffer as closed, so readers will no longer block on reading.
 // Readers can still consume remaining items in the buffer, after which they'll receive an ErrBufferClosed error.
 func (b *CircularBuffer[T]) Close() {
