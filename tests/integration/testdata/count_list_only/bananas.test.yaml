@@ -1,0 +1,35 @@
+# Scenario: list-only resources are cached and show up in /v1/count.
+#
+# Some resources support "list" but not "watch" - for example Kasten K10's
+# aggregated actions.kio.kasten.io. A normal informer cannot watch these, so
+# steve caches them with a synthetic watcher that periodically re-lists the
+# resource behind the scenes (see pkg/clustercache newListOnlyInformer and
+# pkg/synthetic). That keeps the cluster cache - and therefore /v1/count -
+# populated for them.
+#
+# No resource in a bare cluster is both list-only and controllable: CRDs always
+# advertise "watch", and the genuinely list-only types (componentstatuses,
+# metrics.k8s.io) can't have instances created on demand. So the test asks the
+# cluster cache to treat the Banana CRD's GVK as list-only (via
+# clustercache.ForceListOnly) and then uses the bananas below as the known
+# population to assert the count against.
+#
+# The header's schemaID is the key the banana count is reported under in
+# /v1/count. The expected count is simply the number of Banana objects in this
+# file.
+schemaID: fruits.cattle.io.banana
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-list-only-1
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-list-only-2
+---
+apiVersion: fruits.cattle.io/v1
+kind: Banana
+metadata:
+  name: banana-list-only-3
