@@ -1,4 +1,9 @@
-package informer
+// Package synthetic provides a watch.Interface implementation that synthesizes
+// watch events by periodically listing a resource. It lets resources that
+// support "list" but not "watch" (for example CRDs that only expose
+// get/list/create/delete verbs) be consumed by informers and other watch
+// clients that expect a LIST+WATCH source.
+package synthetic
 
 import (
 	"context"
@@ -14,6 +19,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+// SyntheticWatcher is a watch.Interface that emits Added/Modified/Deleted events
+// derived from the differences between successive List calls.
 type SyntheticWatcher struct {
 	resultChan   chan watch.Event
 	stopChan     chan struct{}
@@ -24,7 +31,10 @@ type SyntheticWatcher struct {
 	gvk          schema.GroupVersionKind
 }
 
-func newSyntheticWatcher(context context.Context, cancel context.CancelFunc, gvk schema.GroupVersionKind) *SyntheticWatcher {
+// NewSyntheticWatcher creates a SyntheticWatcher for the given GroupVersionKind.
+// The provided cancel function is invoked when the watcher stops or its context
+// is done.
+func NewSyntheticWatcher(context context.Context, cancel context.CancelFunc, gvk schema.GroupVersionKind) *SyntheticWatcher {
 	return &SyntheticWatcher{
 		stopChan:   make(chan struct{}),
 		doneChan:   make(chan struct{}),
@@ -35,7 +45,9 @@ func newSyntheticWatcher(context context.Context, cancel context.CancelFunc, gvk
 	}
 }
 
-func (rw *SyntheticWatcher) watch(client dynamic.ResourceInterface, options metav1.ListOptions, interval time.Duration) (*SyntheticWatcher, error) {
+// Watch starts polling client.List every interval and returns the
+// SyntheticWatcher as a watch.Interface.
+func (rw *SyntheticWatcher) Watch(client dynamic.ResourceInterface, options metav1.ListOptions, interval time.Duration) (*SyntheticWatcher, error) {
 	go rw.receive(client, options, interval)
 	return rw, nil
 }
@@ -175,6 +187,7 @@ func (rw *SyntheticWatcher) Stop() {
 	}
 }
 
+// Done returns a channel that is closed when the watcher has fully stopped.
 func (rw *SyntheticWatcher) Done() <-chan struct{} {
 	return rw.doneChan
 }
