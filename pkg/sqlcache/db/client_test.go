@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -680,6 +683,89 @@ func Test_client_serialization(t *testing.T) {
 			if diff := cmp.Diff(testObject, dest); diff != "" {
 				t.Errorf("Deserialize(...): -want, +got:\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestNaturalKey(t *testing.T) {
+	pad := func(digits string) string {
+		return strings.Repeat("0", naturalKeyDigits-len(digits)) + digits
+	}
+	tests := []struct {
+		name     string
+		input    driver.Value
+		expected driver.Value
+	}{
+		{name: "empty string", input: "", expected: ""},
+		{name: "no digits", input: "nginx", expected: "nginx"},
+		{name: "trailing number", input: "sort-repro-2", expected: "sort-repro-" + pad("2")},
+		{name: "number in the middle", input: "pod-10-test", expected: "pod-" + pad("10") + "-test"},
+		{name: "leading number", input: "10-pod", expected: pad("10") + "-pod"},
+		{name: "only digits", input: "123", expected: pad("123")},
+		{name: "several numbers", input: "v1.10.0", expected: "v" + pad("1") + "." + pad("10") + "." + pad("0")},
+		{name: "leading zeros are kept", input: "pod-007", expected: "pod-" + pad("007")},
+		{name: "run of exactly the pad width is unchanged", input: "a" + strings.Repeat("9", naturalKeyDigits), expected: "a" + strings.Repeat("9", naturalKeyDigits)},
+		{name: "run longer than the pad width is unchanged", input: "a" + strings.Repeat("9", naturalKeyDigits+5), expected: "a" + strings.Repeat("9", naturalKeyDigits+5)},
+		{name: "multi-byte characters are kept", input: "pöd-2", expected: "pöd-" + pad("2")},
+		{name: "byte slice", input: []byte("pod-2"), expected: "pod-" + pad("2")},
+		{name: "nil is returned unchanged", input: nil, expected: nil},
+		{name: "integer is returned unchanged", input: int64(42), expected: int64(42)},
+		{name: "float is returned unchanged", input: 4.2, expected: 4.2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := naturalKey(nil, []driver.Value{tt.input})
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestNaturalKeyOrder(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected []string
+	}{
+		{
+			name:     "statefulset ordinals",
+			expected: []string{"sort-repro-0", "sort-repro-1", "sort-repro-2", "sort-repro-9", "sort-repro-10", "sort-repro-11", "sort-repro-19", "sort-repro-100"},
+		},
+		{
+			name:     "number in the middle",
+			expected: []string{"pod-1-test", "pod-2-test", "pod-10-test"},
+		},
+		{
+			name:     "several numbers, earlier numbers decide first",
+			expected: []string{"pod-1-test-2", "pod-1-test-10", "pod-2-test-1", "pod-10-test-1"},
+		},
+		{
+			name:     "versions",
+			expected: []string{"v1.2.0", "v1.9.0", "v1.10.0", "v2.0.0"},
+		},
+		{
+			name:     "text still decides when numbers are equal",
+			expected: []string{"app-1", "app-2", "web-1", "web-2"},
+		},
+		{
+			name:     "prefix without number sorts first",
+			expected: []string{"pod", "pod-1", "pod-2", "pod-10"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			keys := make(map[string]string, len(tt.expected))
+			for _, name := range tt.expected {
+				key, err := naturalKey(nil, []driver.Value{name})
+				assert.NoError(t, err)
+				keys[name] = key.(string)
+			}
+			got := make([]string, len(tt.expected))
+			for i := range tt.expected {
+				// reverse so the input isn't already in the expected order
+				got[i] = tt.expected[len(tt.expected)-1-i]
+			}
+			sort.SliceStable(got, func(i, j int) bool { return keys[got[i]] < keys[got[j]] })
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
