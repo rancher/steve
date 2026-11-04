@@ -106,7 +106,7 @@ func TestWatch(t *testing.T) {
 			gvk := attributes.GVK(testSchema)
 			newGVK := attributes.GVK(testNewSchema)
 			fakeCache.AddSummaryObj(makeSummarizedObject(gvk, "testName1", "testNs", "1"))
-			counts.Register(testSchemas, fakeCache)
+			counts.Register(testSchemas, fakeCache, nil)
 
 			// next, get the channel our results will be delivered on
 			countSchema := testSchemas.LookupSchema("count")
@@ -337,7 +337,7 @@ func BenchmarkWatchOnChange(b *testing.B) {
 			for i := 0; i < numNamespaces; i++ {
 				fakeCache.AddSummaryObj(makeSummarizedObject(gvk, "obj", fmt.Sprintf("ns-%d", i), "1"))
 			}
-			counts.Register(testSchemas, fakeCache)
+			counts.Register(testSchemas, fakeCache, nil)
 
 			countSchema := testSchemas.LookupSchema("count")
 			resChannel, err := countSchema.Store.Watch(testOp, nil, types.WatchRequest{})
