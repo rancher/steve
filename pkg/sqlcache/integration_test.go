@@ -170,32 +170,6 @@ func createMCIOProject(ctx context.Context, client dynamic.ResourceInterface, gv
 	return err
 }
 
-func createPCIO(ctx context.Context, client dynamic.ResourceInterface, gvr k8sschema.GroupVersionResource, name, thisTestLabel, clusterName string) error {
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": gvr.Group + "/" + gvr.Version,
-			"kind":       "Cluster",
-			"metadata": map[string]interface{}{
-				"name":      name,
-				"namespace": defaultTestNamespace,
-				"labels": map[string]interface{}{
-					testLabel: thisTestLabel,
-				},
-			},
-		},
-	}
-	newObj, err := client.Create(ctx, obj, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	unstructured.SetNestedField(newObj.Object, clusterName, "status", "clusterName")
-	unstructured.SetNestedField(newObj.Object, true, "status", "ready")
-	// This call is needed to get the above status fields stored in the object
-	// PCIO CRDs have subresources, so we call `client.UpdateStatus` instead of `client.Update`
-	_, err = client.UpdateStatus(ctx, newObj, metav1.UpdateOptions{})
-	return err
-}
-
 func (i *IntegrationSuite) createNamespace(ctx context.Context, name string, thisTestLabel string, projectLabel string) error {
 	obj := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
