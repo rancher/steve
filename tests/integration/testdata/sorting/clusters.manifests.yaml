@@ -1,0 +1,109 @@
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: kigali
+status:
+  allocatable:
+    cpu: "7000m"
+    memory: "900Ki"
+    pods: "17"
+  conditions:
+  - type: Ready
+    status: "True"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: rwanda
+  namespace: default
+status:
+  clusterName: "kigali"
+  ready: true
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: luanda
+status:
+  allocatable:
+    cpu: "14250m"
+    memory: "2610Ki"
+    pods: "11"
+  conditions:
+  - type: Ready
+    status: "True"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: angola
+  namespace: default
+status:
+  clusterName: "luanda"
+  ready: true
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: gaborone
+status:
+  allocatable:
+    cpu: "98m"
+    memory: "12Mi"
+    pods: "14"
+  conditions:
+  - type: Ready
+    status: "True"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: botswana
+  namespace: default
+status:
+  clusterName: "gaborone"
+  ready: true
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: gitega
+status:
+  allocatable:
+    cpu: "325m"
+    memory: "4Mi"
+    pods: "8"
+  conditions:
+  - type: Ready
+    status: "True"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: burundi
+  namespace: default
+status:
+  clusterName: "gitega"
+  ready: true
+---
+apiVersion: management.cattle.io/v3
+kind: Cluster
+metadata:
+  name: bamako
+status:
+  allocatable:
+    cpu: "700m"
+    memory: "1200Ki"
+    pods: "20"
+  conditions:
+  - type: Ready
+    status: "True"
+---
+apiVersion: provisioning.cattle.io/v1
+kind: Cluster
+metadata:
+  name: mali
+  namespace: default
+status:
+  clusterName: "bamako"
+  ready: true
