@@ -305,13 +305,11 @@ func Test_byID(t *testing.T) {
 									Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 								},
 								"binaryData": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "BinaryData contains the binary data. Each key must consist of alphanumeric characters, '-', '_' or '.'. BinaryData can contain byte sequences that are not in the UTF-8 range. The keys stored in BinaryData must not overlap with the ones in the Data field, this is enforced during validation process. Using this field will require 1.10+ apiserver and kubelet.",
 								},
 								"data": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "Data contains the configuration data. Each key must consist of alphanumeric characters, '-', '_' or '.'. Values with non-UTF-8 byte sequences must use the BinaryData field. The keys stored in Data must not overlap with the keys in the BinaryData field, this is enforced during validation process.",
 								},
 								"immutable": {
@@ -323,8 +321,7 @@ func Test_byID(t *testing.T) {
 						"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
 							ResourceFields: map[string]definitionField{
 								"annotations": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "annotations of the resource",
 								},
 								"name": {
@@ -393,8 +390,7 @@ func Test_byID(t *testing.T) {
 						"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
 							ResourceFields: map[string]definitionField{
 								"annotations": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "annotations of the resource",
 								},
 								"name": {
@@ -443,8 +439,7 @@ func Test_byID(t *testing.T) {
 						"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
 							ResourceFields: map[string]definitionField{
 								"annotations": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "annotations of the resource",
 								},
 								"name": {
@@ -517,8 +512,7 @@ func Test_byID(t *testing.T) {
 						"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
 							ResourceFields: map[string]definitionField{
 								"annotations": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "annotations of the resource",
 								},
 								"name": {
@@ -566,8 +560,7 @@ func Test_byID(t *testing.T) {
 						"io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
 							ResourceFields: map[string]definitionField{
 								"annotations": {
-									Type:        "map",
-									SubType:     "string",
+									Type:        "map[string]",
 									Description: "annotations of the resource",
 								},
 								"name": {
