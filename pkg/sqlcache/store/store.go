@@ -172,15 +172,7 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 	for _, labelDep := range externalUpdateInfo.ExternalLabelDependencies {
 		rawGetStmt := labelDep.Query()
 
-		getStmt, err := s.Prepare(rawGetStmt)
-		if err != nil {
-			if !isDBError(err) {
-				logrus.Infof("Error preparing statement for table %s, key %s: %v", labelDep.TargetGVK, key, err)
-			}
-			continue
-		}
-		rows, err := s.QueryForRows(s.ctx, getStmt)
-		getStmt.Close()
+		rows, err := tx.Query(s.ctx, rawGetStmt)
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", labelDep.TargetGVK, key, err)
@@ -198,22 +190,13 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
-			ignoreUpdate, err := s.overrideCheck(labelDep.TargetFinalFieldName, labelDep.SourceGVK, sourceKey, finalTargetValue)
+			ignoreUpdate, err := s.overrideCheck(tx, labelDep.TargetFinalFieldName, labelDep.SourceGVK, sourceKey, finalTargetValue)
 			if ignoreUpdate || err != nil {
 				continue
 			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				labelDep.SourceGVK, labelDep.TargetFinalFieldName)
-			err = func() error {
-				preparedStmt, err := s.Prepare(rawStmt)
-				if err != nil {
-					return err
-				}
-				defer preparedStmt.Close()
-				_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
-				return err
-			}()
-			if err != nil {
+			if _, err := tx.Exec(rawStmt, finalTargetValue, sourceKey); err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
 			}
@@ -232,14 +215,7 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 			nonLabelDep.TargetFinalFieldName)
 		// TODO: Try to fold the two blocks together
 
-		rows, err := func() (db.Rows, error) {
-			getStmt, err := s.Prepare(rawGetStmt)
-			if err != nil {
-				return nil, err
-			}
-			defer getStmt.Close()
-			return s.QueryForRows(s.ctx, getStmt)
-		}()
+		rows, err := tx.Query(s.ctx, rawGetStmt)
 		if err != nil {
 			if !isDBError(err) {
 				logrus.Infof("Error getting external info for table %s, key %s: %v", nonLabelDep.TargetGVK, key, err)
@@ -257,22 +233,13 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 		for _, innerResult := range result {
 			sourceKey := innerResult[0]
 			finalTargetValue := innerResult[1]
-			ignoreUpdate, err := s.overrideCheck(nonLabelDep.TargetFinalFieldName, nonLabelDep.SourceGVK, sourceKey, finalTargetValue)
+			ignoreUpdate, err := s.overrideCheck(tx, nonLabelDep.TargetFinalFieldName, nonLabelDep.SourceGVK, sourceKey, finalTargetValue)
 			if ignoreUpdate || err != nil {
 				continue
 			}
 			rawStmt := fmt.Sprintf(`UPDATE "%s_fields" SET "%s" = ? WHERE key = ?`,
 				nonLabelDep.SourceGVK, nonLabelDep.TargetFinalFieldName)
-			err = func() error {
-				preparedStmt, err := s.Prepare(rawStmt)
-				if err != nil {
-					return err
-				}
-				defer preparedStmt.Close()
-				_, err = tx.Stmt(preparedStmt).Exec(finalTargetValue, sourceKey)
-				return err
-			}()
-			if err != nil {
+			if _, err := tx.Exec(rawStmt, finalTargetValue, sourceKey); err != nil {
 				logrus.Infof("Error running %s(%s, %s): %s", rawStmt, finalTargetValue, sourceKey, err)
 				continue
 			}
@@ -288,17 +255,10 @@ func (s *Store) updateExternalInfo(tx db.TxClient, key string, externalUpdateInf
 }
 
 // If the new value will change a non-empty current value, return [true, error:nil]
-func (s *Store) overrideCheck(finalFieldName, sourceGVK, sourceKey, finalTargetValue string) (bool, error) {
+func (s *Store) overrideCheck(tx db.TxClient, finalFieldName, sourceGVK, sourceKey, finalTargetValue string) (bool, error) {
 	rawGetValueStmt := fmt.Sprintf(`SELECT f."%s" FROM  "%s_fields" f WHERE f.key = ?`,
 		finalFieldName, sourceGVK)
-	rows, err := func() (db.Rows, error) {
-		getValueStmt, err := s.Prepare(rawGetValueStmt)
-		if err != nil {
-			return nil, err
-		}
-		defer getValueStmt.Close()
-		return s.QueryForRows(s.ctx, getValueStmt, sourceKey)
-	}()
+	rows, err := tx.Query(s.ctx, rawGetValueStmt, sourceKey)
 	if err != nil {
 		logrus.Debugf("Checking the field, got error %s", err)
 		return false, err
