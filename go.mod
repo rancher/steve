@@ -1,8 +1,6 @@
 module github.com/rancher/steve
 
-go 1.27.0
-
-toolchain go1.27.3
+go 1.27.3
 
 replace (
 	github.com/crewjam/saml => github.com/rancher/saml v0.4.14
@@ -25,19 +23,19 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.24.0
-	github.com/rancher/apiserver v0.10.1
+	github.com/rancher/apiserver v0.10.2
 	github.com/rancher/dynamiclistener v0.10.0-rc.1
 	github.com/rancher/kubernetes-provider-detector v0.1.6-0.20240606163014-fcae75779379
 	github.com/rancher/lasso v0.2.10
-	github.com/rancher/norman v0.10.1
-	github.com/rancher/remotedialer v0.6.1
-	github.com/rancher/wrangler/v3 v3.8.0-rc.1
+	github.com/rancher/norman v0.10.2
+	github.com/rancher/remotedialer v0.6.2
+	github.com/rancher/wrangler/v3 v3.8.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	github.com/tinylib/msgp v1.6.5
 	github.com/urfave/cli/v3 v3.14.0
 	go.uber.org/mock v0.6.0
-	go.yaml.in/yaml/v3 v3.0.5
+	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/sync v0.24.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
