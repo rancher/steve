@@ -10,9 +10,16 @@ replace (
 	// This is needed because github.com/google/gnostic-models v0.70 uses go.yaml.in
 	gopkg.in/yaml.v3 => go.yaml.in/yaml/v3 v3.0.1
 	// And these are needed because k8s.io/* v0.33 uses gnostic-models v0.69
+	k8s.io/api => k8s.io/api v0.36.6
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.6
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.6
+	k8s.io/apiserver => k8s.io/apiserver v0.36.6
+	k8s.io/client-go => k8s.io/client-go v0.36.6
+	k8s.io/component-base => k8s.io/component-base v0.36.6
+	k8s.io/kms => k8s.io/kms v0.36.6
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.36.6
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260414162039-ec9c827d403f
+	k8s.io/streaming => k8s.io/streaming v0.36.6
 )
 
 require (
