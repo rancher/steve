@@ -385,14 +385,19 @@ func (l *ListOptionIndexer) compileQuery(lo *sqltypes.ListOptions,
 					if err != nil {
 						return nil, err
 					}
-					if sortDirective.SortAsIP {
-						fieldEntry = fmt.Sprintf("inet_aton(%s)", fieldEntry)
-					}
 					direction := "ASC"
 					if sortDirective.Order == sqltypes.DESC {
 						direction = "DESC"
 					}
-					filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("%s COLLATE NOCASE %s", fieldEntry, direction))
+					if sortDirective.SortAsIP {
+						filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("inet_aton(%s) COLLATE NOCASE %s", fieldEntry, direction))
+					} else if smartJoin(fields) == "metadata.name" {
+						// order numbers in names numerically, e.g. "pod-2" before "pod-10",
+						// then by the raw name so names with equal keys, e.g. "pod-1" and "pod-01", keep a stable order
+						filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("natural_key(%s) COLLATE NOCASE %s, %s %s", fieldEntry, direction, fieldEntry, direction))
+					} else {
+						filterComponents.orderByClauses = append(filterComponents.orderByClauses, fmt.Sprintf("%s COLLATE NOCASE %s", fieldEntry, direction))
+					}
 				}
 			}
 		} else if l.namespaced {
