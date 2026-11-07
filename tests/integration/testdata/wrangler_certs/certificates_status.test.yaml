@@ -1,0 +1,30 @@
+schemaID: cert-manager.io.certificates
+tests:
+- description: "get failedissuances"
+  user: ""
+  query: "filter=metadata.name=failedissuances"
+  expected:
+    state:
+      error: true
+      name: error
+      message: "Too many failed issuance-attempts"
+      transitioning: false
+- description: "get healthy"
+  user: ""
+  query: "filter=metadata.name=healthy"
+  expected:
+    state:
+      error: false
+      name: active
+      message: "Resource is Ready"
+      transitioning: false
+
+- description: "get badsecret"
+  user: ""
+  query: "filter=metadata.name=badsecret"
+  expected:
+    state:
+      error: true
+      name: error
+      message: "Issuing certificate as Secret does not exist"
+      transitioning: false
