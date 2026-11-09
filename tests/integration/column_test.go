@@ -13,6 +13,7 @@ import (
 	rescommon "github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/server"
 	"github.com/rancher/steve/pkg/sqlcache/informer/factory"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -87,51 +88,70 @@ func (i *IntegrationSuite) testColumnsScenario(ctx context.Context, scenario str
 				url = fmt.Sprintf("%s?%s", url, test.Query)
 			}
 			fmt.Println(url)
-			resp, err := http.Get(url)
-			i.Require().NoError(err)
-			defer resp.Body.Close()
 
-			i.Require().Equal(http.StatusOK, resp.StatusCode)
+			i.Require().EventuallyWithT(func(c *assert.CollectT) {
+				resp, err := http.Get(url)
+				if !assert.NoError(c, err) {
+					return
+				}
+				defer resp.Body.Close()
 
-			type Response struct {
-				Data []struct {
-					Metadata struct {
-						Fields []any `json:"fields"`
-					} `json:"metadata"`
-				} `json:"data"`
-			}
-			var parsed Response
-			err = json.NewDecoder(resp.Body).Decode(&parsed)
-			i.Require().NoError(err)
+				if !assert.Equal(c, http.StatusOK, resp.StatusCode) {
+					return
+				}
 
-			i.Require().Len(parsed.Data, len(test.Expected))
+				type Response struct {
+					Data []struct {
+						Metadata struct {
+							Fields []any `json:"fields"`
+						} `json:"metadata"`
+					} `json:"data"`
+				}
+				var parsed Response
+				if !assert.NoError(c, json.NewDecoder(resp.Body).Decode(&parsed)) {
+					return
+				}
 
-			var table [][]any
-			for _, row := range parsed.Data {
-				table = append(table, row.Metadata.Fields)
-			}
+				if !assert.Len(c, parsed.Data, len(test.Expected)) {
+					return
+				}
 
-			for row := range test.Expected {
-				i.Require().Len(table[row], len(test.Expected[row]))
-				for fieldIndex := range test.Expected[row] {
-					field := test.Expected[row][fieldIndex]
-					switch field {
-					case "$duration":
-						_, err := rescommon.ParseHumanReadableDuration(fmt.Sprintf("%v", table[row][fieldIndex]))
-						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
-						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
-					case "$timestamp":
-						_, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", table[row][fieldIndex]))
-						i.Require().NoError(err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex])
-						test.Expected[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
-					case "$skip":
-						// Sometimes you just don't care what the value is
-						test.Expected[row][fieldIndex] = table[row][fieldIndex]
+				var table [][]any
+				for _, row := range parsed.Data {
+					table = append(table, row.Metadata.Fields)
+				}
+
+				expectedCopy := make([][]any, len(test.Expected))
+				for row := range test.Expected {
+					expectedCopy[row] = make([]any, len(test.Expected[row]))
+					copy(expectedCopy[row], test.Expected[row])
+					if !assert.Len(c, table[row], len(expectedCopy[row])) {
+						return
+					}
+					for fieldIndex := range expectedCopy[row] {
+						field := expectedCopy[row][fieldIndex]
+						switch field {
+						case "$duration":
+							_, err := rescommon.ParseHumanReadableDuration(fmt.Sprintf("%v", table[row][fieldIndex]))
+							if !assert.NoError(c, err, "expected duration (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex]) {
+								return
+							}
+							expectedCopy[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
+						case "$timestamp":
+							_, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", table[row][fieldIndex]))
+							if !assert.NoError(c, err, "expected timestamp (row:%d, col:%d) but got: %s", row, fieldIndex, table[row][fieldIndex]) {
+								return
+							}
+							expectedCopy[row][fieldIndex] = fmt.Sprintf("%v", table[row][fieldIndex])
+						case "$skip":
+							// Sometimes you just don't care what the value is
+							expectedCopy[row][fieldIndex] = table[row][fieldIndex]
+						}
 					}
 				}
-			}
 
-			i.Require().Equal(test.Expected, table)
+				assert.Equal(c, expectedCopy, table)
+			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
 }
