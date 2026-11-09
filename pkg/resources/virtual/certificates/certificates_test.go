@@ -8,115 +8,433 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func cond(typ, status string) interface{} {
-	return map[string]interface{}{"type": typ, "status": status}
-}
-
-func newCert(status map[string]interface{}) *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "cert-manager.io/v1",
-		"kind":       "Certificate",
-		"metadata":   map[string]interface{}{"name": "c", "namespace": "ns"},
-		"status":     status,
-	}}
+type certTestType struct {
+	name           string
+	input          any
+	wantOutput     any
+	wantError      bool
+	errorSubstring string
 }
 
 func TestTransformCertificate(t *testing.T) {
-	ts := func(d time.Duration) string { return time.Now().Add(d).Format(time.RFC3339) }
-	day := 24 * time.Hour
-
-	tests := []struct {
-		name      string
-		status    map[string]interface{}
-		wantState string
-		wantErr   bool
-	}{
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+	tomorrow := now.AddDate(0, 0, 1)
+	tests := []certTestType{
 		{
-			name:    "no conditions",
-			status:  map[string]interface{}{},
-			wantErr: true,
-		},
-		{
-			name:      "ready",
-			status:    map[string]interface{}{"conditions": []interface{}{cond("Ready", "True")}},
-			wantState: "active",
-		},
-		{
-			name: "ready, far from expiry",
-			status: map[string]interface{}{
-				"conditions":  []interface{}{cond("Ready", "True")},
-				"notAfter":    ts(90 * day),
-				"renewalTime": ts(60 * day),
+			name: "no conditions",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "no conditions",
+						"namespace": "fredasFarmNamespace",
+					},
+					"status": map[string]interface{}{},
+					"id":     "fredasFarmNamespace/no conditions",
+				},
 			},
-			wantState: "active",
+			wantError:      true,
+			errorSubstring: "failed to find status.conditions block in certificate \"no conditions\"",
 		},
 		{
-			name: "notAfter within 30 days, renewalTime still in future (7d cert, 1d renewBefore)",
-			status: map[string]interface{}{
-				"conditions":  []interface{}{cond("Ready", "True")},
-				"notAfter":    ts(7 * day),
-				"renewalTime": ts(6 * day),
+			name: "cert about to expire",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "isGood",
+						"namespace": "wallysFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "valid",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{"type": "Ready"},
+						},
+						"notAfter":    tomorrow.Format(time.RFC3339),
+						"notBefore":   yesterday.Format(time.RFC3339),
+						"renewalTime": tomorrow.Format(time.RFC3339),
+					},
+					"id": "wallysFarmNamespace/isGood",
+				},
 			},
-			wantState: "expiring",
-		},
-		{
-			name: "renewalTime passed",
-			status: map[string]interface{}{
-				"conditions":  []interface{}{cond("Ready", "True")},
-				"notAfter":    ts(90 * day),
-				"renewalTime": ts(-day),
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "isGood",
+						"namespace": "wallysFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "expiring",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{"type": "Ready"},
+						},
+						"notAfter":    tomorrow.Format(time.RFC3339),
+						"notBefore":   yesterday.Format(time.RFC3339),
+						"renewalTime": tomorrow.Format(time.RFC3339),
+					},
+					"id": "wallysFarmNamespace/isGood",
+				},
 			},
-			wantState: "expiring",
 		},
 		{
-			name: "expired beats ready",
-			status: map[string]interface{}{
-				"conditions": []interface{}{cond("Ready", "True")},
-				"notAfter":   ts(-day),
+			name: "condition says ready is false",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "saysReadyIsFalse",
+						"namespace": "wallysFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "valid",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"reason":        "Ready is 'false'",
+								"status":        "False",
+								"transitioning": false,
+								"type":          "Ready",
+							},
+						},
+					},
+					"id": "wallysFarmNamespace/saysReadyIsFalse",
+				},
 			},
-			wantState: "expired",
-		},
-		{
-			name:      "issuing",
-			status:    map[string]interface{}{"conditions": []interface{}{cond("Ready", "False"), cond("Issuing", "True")}},
-			wantState: "in-progress",
-		},
-		{
-			name:      "issuing false is ignored",
-			status:    map[string]interface{}{"conditions": []interface{}{cond("Ready", "True"), cond("Issuing", "False")}},
-			wantState: "active",
-		},
-		{
-			name:      "ready false",
-			status:    map[string]interface{}{"conditions": []interface{}{cond("Ready", "False")}},
-			wantState: "error",
-		},
-		{
-			name: "failed issuance attempts",
-			status: map[string]interface{}{
-				"conditions":             []interface{}{cond("Ready", "True")},
-				"failedIssuanceAttempts": int64(3),
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "saysReadyIsFalse",
+						"namespace": "wallysFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "error",
+							"error": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"reason":        "Ready is 'false'",
+								"status":        "False",
+								"transitioning": false,
+								"type":          "Ready",
+							},
+						},
+					},
+					"id": "wallysFarmNamespace/saysReadyIsFalse",
+				},
 			},
-			wantState: "error",
 		},
 		{
-			name:      "no ready condition",
-			status:    map[string]interface{}{"conditions": []interface{}{cond("Other", "True")}},
-			wantState: "pending",
+			name: "failedIssuanceAttempts > 0 => error",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "severalFailedIssuanceAttempts",
+						"namespace": "carlsFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "valid",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"reason":        "Ready is 'false'",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready",
+							},
+						},
+						"failedIssuanceAttempts": int64(3),
+					},
+					"id": "carlsFarmNamespace/severalFailedIssuanceAttempts",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "severalFailedIssuanceAttempts",
+						"namespace": "carlsFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "error",
+							"error": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"reason":        "Ready is 'false'",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready",
+							},
+						},
+						"failedIssuanceAttempts": int64(3),
+					},
+					"id": "carlsFarmNamespace/severalFailedIssuanceAttempts",
+				},
+			},
+		},
+		{
+			name: "issuing message => in-progress",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "isGood",
+						"namespace": "joonsFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "valid",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Issuing certificate as Secret does not exist",
+								"reason":        "DoesNotExist",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready",
+							},
+							map[string]interface{}{"type": "Issuing", "status": "True"},
+						},
+					},
+					"id": "joonsFarmNamespace/isGood",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "isGood",
+						"namespace": "joonsFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "in-progress",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Issuing certificate as Secret does not exist",
+								"reason":        "DoesNotExist",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready",
+							},
+							map[string]interface{}{"type": "Issuing", "status": "True"},
+						},
+					},
+					"id": "joonsFarmNamespace/isGood",
+				},
+			},
+		},
+		{
+			name: "is good, no timestamps",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "isGood",
+						"namespace": "joonsFarmNamespace",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "joonsFarmNamespace/isGood",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "isGood",
+						"namespace": "joonsFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "active",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+					},
+					"id": "joonsFarmNamespace/isGood",
+				},
+			},
+		},
+		{
+			name: "has expired",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "hasExprired",
+						"namespace": "beakersFarmNamespace",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+						"notAfter": yesterday.Format(time.RFC3339),
+					},
+					"id": "beakersFarmNamespace/hasExprired",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "hasExprired",
+						"namespace": "beakersFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "expired",
+							"error": true,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+						"notAfter": yesterday.Format(time.RFC3339),
+					},
+					"id": "beakersFarmNamespace/hasExprired",
+				},
+			},
+		},
+		{
+			name: "is about to expire",
+			input: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "willExpire",
+						"namespace": "beakersFarmNamespace",
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+						"renewalTime": yesterday.Format(time.RFC3339),
+						"notAfter":    tomorrow.Format(time.RFC3339),
+					},
+					"id": "beakersFarmNamespace/willExpire",
+				},
+			},
+			wantOutput: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "cert-manager.io/v1",
+					"kind":       "Certificate",
+					"metadata": map[string]interface{}{
+						"name":      "willExpire",
+						"namespace": "beakersFarmNamespace",
+						"state": map[string]interface{}{
+							"name":  "expiring",
+							"error": false,
+						},
+					},
+					"status": map[string]interface{}{
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"error":         false,
+								"message":       "Ready",
+								"status":        "True",
+								"transitioning": false,
+								"type":          "Ready", // this is a lie
+							},
+						},
+						"renewalTime": yesterday.Format(time.RFC3339),
+						"notAfter":    tomorrow.Format(time.RFC3339),
+					},
+					"id": "beakersFarmNamespace/willExpire",
+				},
+			},
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			out, err := TransformCertificate(newCert(test.status))
-			if test.wantErr {
-				require.Error(t, err)
-				return
+			var output interface{}
+			var err error
+			raw, ok := test.input.(*unstructured.Unstructured)
+			if ok && raw.GetKind() == "Certificate" && raw.GetAPIVersion() == "cert-manager.io/v1" {
+				output, err = TransformCertificate(raw)
+			} else {
+				output = raw
+				err = nil
 			}
-			require.NoError(t, err)
-			name, _, _ := unstructured.NestedString(out.Object, "metadata", "state", "name")
-			isErr, _, _ := unstructured.NestedBool(out.Object, "metadata", "state", "error")
-			require.Equal(t, test.wantState, name)
-			require.Equal(t, test.wantState == "error" || test.wantState == "expired", isErr)
+			if test.wantError {
+				require.Error(t, err)
+				if test.errorSubstring != "" {
+					require.Contains(t, err.Error(), test.errorSubstring)
+				}
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.wantOutput, output)
+			}
 		})
 	}
 }
