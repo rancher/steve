@@ -11,6 +11,8 @@ import (
 	"github.com/rancher/steve/pkg/accesscontrol"
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common/formatters"
+	"github.com/rancher/steve/pkg/resources/virtual/acmechallenges"
+	"github.com/rancher/steve/pkg/resources/virtual/certificates"
 	"github.com/rancher/steve/pkg/resources/virtual/common"
 	"github.com/sirupsen/logrus"
 
@@ -153,6 +155,16 @@ func formatter(summarycache common.SummaryCache, asl accesscontrol.AccessSetLook
 				"message":       strings.Join(s.Message, ":"),
 			}, "metadata", "state")
 			data.PutValue(unstr.Object, rel, "metadata", "relationships")
+
+			// The generic summary above overwrites the state computed by the virtual
+			// transforms used for the sql cache, so recompute it for these types to keep
+			// the returned state in sync with what is indexed for sort and filter.
+			switch gvk {
+			case CertManagerCertificateGVK:
+				_, _ = certificates.TransformCertificate(unstr)
+			case AcmeCertManagerChallengeGVK:
+				_, _ = acmechallenges.TransformChallenge(unstr)
+			}
 
 			summary.NormalizeConditions(unstr)
 
