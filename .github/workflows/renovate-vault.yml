@@ -2,14 +2,6 @@ name: Renovate
 on:
   workflow_dispatch:
     inputs:
-      logLevel:
-        description: "Override default log level"
-        required: false
-        default: info
-        type: choice
-        options:
-          - info
-          - debug
       overrideSchedule:
         description: "Override all schedules"
         required: false
@@ -37,9 +29,8 @@ on:
         default: "null"
         type: string
 
-  # Run twice in the early morning (UTC) for initial and follow up steps (create pull request and merge)
   schedule:
-    - cron: '30 4,6 * * *'
+    - cron: '30 6 * * 1-5'
 
 permissions: {}
 
@@ -54,7 +45,6 @@ jobs:
     # so that scheduled cron runs (where github.event.inputs is null) safely default.
     with:
       configMigration: ${{ github.event.inputs.configMigration || 'true' }}
-      logLevel: ${{ github.event.inputs.logLevel || 'info' }}
       overrideSchedule: ${{ github.event.inputs.overrideSchedule || 'false' }}
       renovateConfig: ${{ github.event.inputs.renovateConfig || '.github/renovate.json' }}
       minimumReleaseAge: ${{ github.event.inputs.minimumReleaseAge || 'null' }}
