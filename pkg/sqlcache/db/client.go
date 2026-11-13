@@ -536,6 +536,7 @@ func (c *client) NewConnection(useTempDir bool) (string, error) {
 	sqlite.RegisterDeterministicScalarFunction("hasBarredValue", 2, hasBarredValue)
 	sqlite.RegisterDeterministicScalarFunction("inet_aton", 1, inetAtoN)
 	sqlite.RegisterDeterministicScalarFunction("memoryInBytes", 1, memoryInBytes)
+	sqlite.RegisterDeterministicScalarFunction("natural_key", 1, naturalKey)
 	c.conn = &connection{sqlDB}
 	return dbPath, nil
 }
@@ -637,6 +638,43 @@ func inetAtoN(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, e
 		return int64(0), nil
 	}
 	return int64(binary.BigEndian.Uint64(ipAs16)), nil
+}
+
+// naturalKeyDigits is the width every run of digits is left-padded to by naturalKey
+const naturalKeyDigits = 20
+
+// naturalKey returns its string argument with every run of digits left-padded with zeros,
+// so that comparing results as text gives numeric order for the numbers they contain,
+// e.g. "pod-2" -> "pod-00000000000000000002" sorts before "pod-10" -> "pod-00000000000000000010".
+// Runs longer than naturalKeyDigits are kept as they are. Non-string arguments are returned unchanged.
+func naturalKey(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	var s string
+	switch argTyped := args[0].(type) {
+	case string:
+		s = argTyped
+	case []byte:
+		s = string(argTyped)
+	default:
+		return args[0], nil
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		if s[i] < '0' || s[i] > '9' {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		start := i
+		for i < len(s) && '0' <= s[i] && s[i] <= '9' {
+			i++
+		}
+		if pad := naturalKeyDigits - (i - start); pad > 0 {
+			b.WriteString(strings.Repeat("0", pad))
+		}
+		b.WriteString(s[start:i])
+	}
+	return b.String(), nil
 }
 
 // Convert a string representation of memory to a float giving the number of bytes

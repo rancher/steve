@@ -2558,6 +2558,103 @@ SELECT DISTINCT o.object, o.objectnonce, o.dekid FROM "something" o
 	})
 
 	tests = append(tests, testCase{
+		description: "TestConstructQuery: sort on metadata.name uses natural_key in both directions",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.ASC,
+					},
+					{
+						Fields: []string{"metadata", "queryField1"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    FALSE
+  ORDER BY natural_key(f."metadata.name") COLLATE NOCASE ASC, f."metadata.name" ASC, f."metadata.queryField1" COLLATE NOCASE ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: descending sort on metadata.name uses natural_key",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  sqltypes.DESC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    FALSE
+  ORDER BY natural_key(f."metadata.name") COLLATE NOCASE DESC, f."metadata.name" DESC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: ip() sort on metadata.name uses inet_aton, not natural_key",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields:   []string{"metadata", "name"},
+						Order:    sqltypes.ASC,
+						SortAsIP: true,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    FALSE
+  ORDER BY inet_aton(f."metadata.name") COLLATE NOCASE ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+
+	tests = append(tests, testCase{
+		description: "TestConstructQuery: sort on a field ending in name other than metadata.name does not use natural_key",
+		listOptions: sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "namespace"},
+						Order:  sqltypes.ASC,
+					},
+				},
+			},
+		},
+		partitions: []partition.Partition{},
+		ns:         "",
+		expectedStmt: `SELECT o.object, o.objectnonce, o.dekid FROM "something" o
+  JOIN "something_fields" f ON o.key = f.key
+  WHERE
+    FALSE
+  ORDER BY f."metadata.namespace" COLLATE NOCASE ASC`,
+		expectedStmtArgs: []any{},
+		expectedErr:      nil,
+	})
+
+	tests = append(tests, testCase{
 		description: "TestConstructQuery: sort can ip-convert a label field",
 		listOptions: sqltypes.ListOptions{
 			SortList: sqltypes.SortList{
@@ -3767,6 +3864,165 @@ func TestUserDefinedInetToAnonFunction(t *testing.T) {
 			assert.Equal(t, test.expectedTotal, total)
 			require.Nil(t, summary)
 			assert.Equal(t, test.expectedContToken, contToken)
+		})
+	}
+}
+
+func TestSortByNameNaturalOrder(t *testing.T) {
+	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
+	ctx := context.Background()
+
+	type testCase struct {
+		description   string
+		names         []string
+		listOptions   sqltypes.ListOptions
+		expectedNames []string
+		expectedTotal int
+	}
+	sortByName := func(order sqltypes.SortOrder, pagination sqltypes.Pagination) sqltypes.ListOptions {
+		return sqltypes.ListOptions{
+			SortList: sqltypes.SortList{
+				SortDirectives: []sqltypes.Sort{
+					{
+						Fields: []string{"metadata", "name"},
+						Order:  order,
+					},
+				},
+			},
+			Pagination: pagination,
+		}
+	}
+	var statefulSetPods []string
+	for i := range 20 {
+		statefulSetPods = append(statefulSetPods, fmt.Sprintf("sort-repro-%d", i))
+	}
+	reversed := func(names []string) []string {
+		res := slices.Clone(names)
+		slices.Reverse(res)
+		return res
+	}
+
+	tests := []testCase{
+		{
+			description:   "statefulset pods sort by ordinal ascending",
+			names:         statefulSetPods,
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: statefulSetPods,
+			expectedTotal: 20,
+		},
+		{
+			description:   "statefulset pods sort by ordinal descending",
+			names:         statefulSetPods,
+			listOptions:   sortByName(sqltypes.DESC, sqltypes.Pagination{}),
+			expectedNames: reversed(statefulSetPods),
+			expectedTotal: 20,
+		},
+		{
+			description:   "first page holds the lowest ordinals",
+			names:         statefulSetPods,
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{PageSize: 5, Page: 1}),
+			expectedNames: []string{"sort-repro-0", "sort-repro-1", "sort-repro-2", "sort-repro-3", "sort-repro-4"},
+			expectedTotal: 20,
+		},
+		{
+			description:   "second page continues in ordinal order",
+			names:         statefulSetPods,
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{PageSize: 5, Page: 2}),
+			expectedNames: []string{"sort-repro-5", "sort-repro-6", "sort-repro-7", "sort-repro-8", "sort-repro-9"},
+			expectedTotal: 20,
+		},
+		{
+			description:   "number in the middle of the name",
+			names:         []string{"pod-10-test", "pod-2-test", "pod-1-test"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: []string{"pod-1-test", "pod-2-test", "pod-10-test"},
+			expectedTotal: 3,
+		},
+		{
+			description:   "several numbers in the name",
+			names:         []string{"pod-10-test-1", "pod-1-test-10", "pod-2-test-1", "pod-1-test-2"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: []string{"pod-1-test-2", "pod-1-test-10", "pod-2-test-1", "pod-10-test-1"},
+			expectedTotal: 4,
+		},
+		{
+			description:   "names from different workloads stay grouped by prefix",
+			names:         []string{"web-10", "db-2", "web-2", "db-10", "db-1", "web-1"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: []string{"db-1", "db-2", "db-10", "web-1", "web-2", "web-10"},
+			expectedTotal: 6,
+		},
+		{
+			description:   "names with equal keys are ordered by raw name ascending",
+			names:         []string{"pod-2", "pod-1", "pod-01"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: []string{"pod-01", "pod-1", "pod-2"},
+			expectedTotal: 3,
+		},
+		{
+			description:   "names with equal keys are ordered by raw name descending",
+			names:         []string{"pod-01", "pod-1", "pod-2"},
+			listOptions:   sortByName(sqltypes.DESC, sqltypes.Pagination{}),
+			expectedNames: []string{"pod-2", "pod-1", "pod-01"},
+			expectedTotal: 3,
+		},
+		{
+			description:   "names with equal keys at a page boundary: first page",
+			names:         []string{"pod-1", "pod-01", "pod-2"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{PageSize: 1, Page: 1}),
+			expectedNames: []string{"pod-01"},
+			expectedTotal: 3,
+		},
+		{
+			description:   "names with equal keys at a page boundary: second page",
+			names:         []string{"pod-1", "pod-01", "pod-2"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{PageSize: 1, Page: 2}),
+			expectedNames: []string{"pod-1"},
+			expectedTotal: 3,
+		},
+		{
+			description:   "sorting stays case-insensitive",
+			names:         []string{"pod-10", "Pod-2", "POD-1"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: []string{"POD-1", "Pod-2", "pod-10"},
+			expectedTotal: 3,
+		},
+		{
+			description:   "names without numbers keep alphabetical order",
+			names:         []string{"nginx", "apache", "Redis"},
+			listOptions:   sortByName(sqltypes.ASC, sqltypes.Pagination{}),
+			expectedNames: []string{"apache", "nginx", "Redis"},
+			expectedTotal: 3,
+		},
+	}
+	t.Parallel()
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			opts := ListOptionIndexerOptions{
+				IsNamespaced: true,
+			}
+			loi, dbPath, err := makeListOptionIndexer(ctx, gvk, opts, false, emptyNamespaceList)
+			defer cleanTempFiles(dbPath)
+			require.NoError(t, err)
+
+			for _, name := range test.names {
+				obj := &unstructured.Unstructured{
+					Object: map[string]any{
+						"metadata": map[string]any{
+							"name":      name,
+							"namespace": "default",
+						},
+					},
+				}
+				obj.SetGroupVersionKind(gvk)
+				require.NoError(t, loi.Add(obj))
+			}
+
+			list, total, _, _, err := loi.ListByOptions(ctx, &test.listOptions, []partition.Partition{{All: true}}, "")
+			require.NoError(t, err)
+			assert.Equal(t, test.expectedNames, stringsFromULIst(list))
+			assert.Equal(t, test.expectedTotal, total)
 		})
 	}
 }
