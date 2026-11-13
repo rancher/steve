@@ -46,25 +46,40 @@ func TestAugmentPod(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPod(tc.envVars)
+			containerCount := len(p.Spec.Containers)
+			initContainerCount := len(p.Spec.InitContainers)
+
 			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
 			podOpts := &PodOptions{ImageOverride: tc.imageOverride}
 			pod := impersonator.augmentPod(p, nil, &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "s"}}, podOpts)
+			assert.Len(t, pod.Spec.Containers, containerCount, "expected no new containers")
+			augmentedInitContainers := pod.Spec.InitContainers[initContainerCount:]
 
 			assert.Len(t, pod.Spec.Volumes, len(p.Spec.Volumes)+4, "expected four new volumes")
-			if len(tc.envVars) != 0 {
-				assert.Len(t, pod.Spec.Containers[0].VolumeMounts, len(p.Spec.Containers[0].VolumeMounts)+1, "expected kubeconfig volume to be mounted")
-				assert.Len(t, pod.Spec.InitContainers, len(p.Spec.InitContainers)+1, "expected an init container to be created")
-				if tc.imageOverride != "" {
-					assert.Equal(t, pod.Spec.InitContainers[len(pod.Spec.InitContainers)-1].Image, tc.imageOverride, "expected image to be the one received as parameter")
-				} else {
-					assert.Equal(t, pod.Spec.InitContainers[len(pod.Spec.InitContainers)-1].Image, impersonator.imageName(), "expected image to be the impersonator image")
+			t.Run("init-kubeconfig", func(t *testing.T) {
+				if len(tc.envVars) == 0 {
+					assert.Len(t, augmentedInitContainers, 1, "expected only the proxy container")
+					return
 				}
-				assert.Equal(t, pod.Spec.InitContainers[len(pod.Spec.InitContainers)-1].SecurityContext.RunAsUser, &zero, "expected init container to run as user zero")
-				assert.Equal(t, pod.Spec.InitContainers[len(pod.Spec.InitContainers)-1].SecurityContext.RunAsGroup, &zero, "expected init container to run as group zero")
-			} else {
-				assert.Len(t, pod.Spec.InitContainers, len(p.Spec.InitContainers), "expected no init container to be created")
-			}
-			assert.Equal(t, pod.Spec.Containers[len(pod.Spec.Containers)-1].Name, "proxy", "expected the container proxy to be created")
+				kubeconfigInitContainer := augmentedInitContainers[0]
+				assert.Equal(t, "init-kubeconfig-volume", kubeconfigInitContainer.Name, "expected the container proxy to be created")
+
+				assert.Len(t, pod.Spec.Containers[0].VolumeMounts, len(p.Spec.Containers[0].VolumeMounts)+1, "expected kubeconfig volume to be mounted")
+				if tc.imageOverride != "" {
+					assert.Equal(t, tc.imageOverride, kubeconfigInitContainer.Image, "expected image to be the one received as parameter")
+				} else {
+					assert.Equal(t, impersonator.imageName(), kubeconfigInitContainer.Image, "expected image to be the impersonator image")
+				}
+				assert.Equal(t, kubeconfigInitContainer.SecurityContext.RunAsUser, &zero, "expected init container to run as user zero")
+				assert.Equal(t, kubeconfigInitContainer.SecurityContext.RunAsGroup, &zero, "expected init container to run as group zero")
+			})
+
+			t.Run("proxy", func(t *testing.T) {
+				// proxy container is always added at the end
+				proxyInitContainer := augmentedInitContainers[len(augmentedInitContainers)-1]
+				assert.Equal(t, "proxy", proxyInitContainer.Name, "expected the container proxy to be created")
+				assert.Equal(t, "Always", string(*proxyInitContainer.RestartPolicy), "expected the container proxy to be created")
+			})
 		})
 	}
 }
@@ -183,17 +198,12 @@ func TestAugmentPodNonRoot(t *testing.T) {
 
 			impersonator := New("", nil, time.Minute, func() string { return "rancher/shell:v0.1.22" })
 			pod := impersonator.augmentPod(p, nil, &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "s"}}, tc.podOptions)
+			augmentedInitContainers := pod.Spec.InitContainers[len(p.Spec.InitContainers):]
 
-			// Check init container exists
-			assert.GreaterOrEqual(t, len(pod.Spec.InitContainers), 1, "expected one init container")
-			var initContainer v1.Container
-			for _, c := range pod.Spec.InitContainers {
-				if c.Name == "init-kubeconfig-volume" {
-					initContainer = c
-					break
-				}
-			}
-			assert.NotNil(t, initContainer, "expected init container")
+			// Check init containers exists
+			assert.Len(t, augmentedInitContainers, 2, "expected one init container")
+			initContainer := augmentedInitContainers[0]
+			assert.Equal(t, "init-kubeconfig-volume", initContainer.Name)
 
 			// Check init container SecurityContext
 			if tc.expectRootInit {
@@ -213,7 +223,7 @@ func TestAugmentPodNonRoot(t *testing.T) {
 			}
 
 			// Check proxy container
-			proxyContainer := pod.Spec.Containers[len(pod.Spec.Containers)-1]
+			proxyContainer := augmentedInitContainers[1]
 			assert.Equal(t, "proxy", proxyContainer.Name, "expected proxy container")
 
 			// Check proxy SecurityContext
