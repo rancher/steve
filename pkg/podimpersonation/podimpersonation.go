@@ -727,10 +727,11 @@ func (s *PodImpersonation) augmentPod(pod *v1.Pod, sa *v1.ServiceAccount, secret
 		}
 	}
 
-	pod.Spec.Containers = append(pod.Spec.Containers, v1.Container{
+	pod.Spec.InitContainers = append(pod.Spec.InitContainers, v1.Container{
 		Name:            "proxy",
 		Image:           image,
 		ImagePullPolicy: v1.PullIfNotPresent,
+		RestartPolicy:   new(v1.ContainerRestartPolicyAlways),
 		Env: []v1.EnvVar{
 			{
 				Name:  "KUBECONFIG",
