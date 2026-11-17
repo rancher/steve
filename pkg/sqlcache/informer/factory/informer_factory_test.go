@@ -528,3 +528,34 @@ func TestCacheFor(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) { test.test(t) })
 	}
 }
+
+func TestCacheForInformerCreationCanceledByStop(t *testing.T) {
+	dbClient := NewMockClient(gomock.NewController(t))
+	dynamicClient := NewMockResourceInterface(gomock.NewController(t))
+	gvk := schema.GroupVersionKind{}
+
+	// Simulates Stop() canceling gi.ctx while CacheFor holds gi.mutex to create the informer.
+	newInformer := func(ctx context.Context, _ dynamic.ResourceInterface, _ map[string]informer.IndexedField, _ *sqltypes.ExternalGVKUpdates, _ *sqltypes.ExternalGVKUpdates, _ cache.TransformFunc, _ schema.GroupVersionKind, _ db.Client, _ bool, _ bool, _ bool, _ bool, _ int) (*informer.Informer, error) {
+		f := ctx
+		<-f.Done()
+		return nil, fmt.Errorf("transaction: begin tx: %w", f.Err())
+	}
+	f := &CacheFactory{
+		dbClient:    dbClient,
+		newInformer: newInformer,
+		informers:   map[schema.GroupVersionKind]*guardedInformer{},
+	}
+	f.ctx, f.cancel = context.WithCancel(context.Background())
+	defer f.cancel()
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		f.informersMutex.Lock()
+		gi := f.informers[gvk]
+		f.informersMutex.Unlock()
+		gi.cancel()
+	}()
+
+	_, err := f.CacheFor(context.Background(), nil, nil, nil, nil, dynamicClient, gvk, false, true, false)
+	assert.ErrorIs(t, err, ErrCacheReset)
+}
