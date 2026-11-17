@@ -2415,10 +2415,12 @@ func TestCacheForRetriesOnConcurrentReset(t *testing.T) {
 	bloi := NewMockByOptionsLister(gomock.NewController(t))
 	c := &factory.Cache{ByOptionsLister: &informer.Informer{ByOptionsLister: bloi}}
 
+	sc := NewMockSchemaCollection(gomock.NewController(t))
 	s := &Store{
 		clientGetter:     cg,
 		cacheFactory:     cf,
 		transformBuilder: tb,
+		schemas:          sc,
 	}
 
 	apiOp := &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}
@@ -2429,6 +2431,7 @@ func TestCacheForRetriesOnConcurrentReset(t *testing.T) {
 	}
 	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
 	attributes.SetGVK(apiSchema, gvk)
+	sc.EXPECT().Schema(gomock.Any()).Return(apiSchema).AnyTimes()
 
 	cg.EXPECT().TableAdminClient(apiOp, apiSchema, "", &WarningBuffer{}).Return(ri, nil)
 	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, nil).
@@ -2479,4 +2482,61 @@ func TestCacheForDoesNotRetryOnOtherErrors(t *testing.T) {
 
 	_, err := s.cacheFor(context.Background(), apiOp, apiSchema)
 	assert.Error(t, err)
+}
+
+func TestCacheConfigChanged(t *testing.T) {
+	mk := func(cols []common.ColumnDefinition, paths map[string]string) *types.APISchema {
+		s := &types.APISchema{Schema: &schemas.Schema{}}
+		attributes.SetColumns(s, cols)
+		attributes.SetCRDJSONPathParsers(s, paths)
+		return s
+	}
+	age := []common.ColumnDefinition{{TableColumnDefinition: metav1.TableColumnDefinition{Name: "Age", Type: "date"}, Field: "$.metadata.fields[1]"}}
+	foo := []common.ColumnDefinition{{TableColumnDefinition: metav1.TableColumnDefinition{Name: "Foo", Type: "string"}, Field: "$.metadata.fields[1]"}}
+	agePath := map[string]string{"Age": "{.metadata.creationTimestamp}"}
+	fooPath := map[string]string{"Foo": "{.foo}"}
+
+	assert.False(t, cacheConfigChanged(mk(age, agePath), mk(age, agePath)))
+	assert.True(t, cacheConfigChanged(mk(age, agePath), mk(foo, fooPath)))
+	assert.True(t, cacheConfigChanged(mk(age, agePath), mk(age, fooPath)))
+}
+
+func TestCacheForResetsWhenSchemaConfigChanged(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+	sc := NewMockSchemaCollection(gomock.NewController(t))
+	bloi := NewMockByOptionsLister(gomock.NewController(t))
+	c := &factory.Cache{ByOptionsLister: &informer.Informer{ByOptionsLister: bloi}}
+
+	s := &Store{clientGetter: cg, cacheFactory: cf, transformBuilder: tb, schemas: sc}
+
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+	mk := func(col string) *types.APISchema {
+		sch := &types.APISchema{Schema: &schemas.Schema{ID: "some.gvk", Attributes: map[string]interface{}{
+			"verbs": []string{"list", "watch"},
+		}}}
+		attributes.SetGVK(sch, gvk)
+		attributes.SetColumns(sch, []common.ColumnDefinition{{TableColumnDefinition: metav1.TableColumnDefinition{Name: col}, Field: "$.metadata.fields[1]"}})
+		return sch
+	}
+	oldSchema, newSchema := mk("Age"), mk("Foo")
+	sc.EXPECT().Schema("some.gvk").Return(newSchema).AnyTimes()
+
+	cg.EXPECT().TableAdminClient(gomock.Any(), gomock.Any(), "", gomock.Any()).Return(ri, nil).Times(2)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, gomock.Any()).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil }).Times(2)
+
+	// The informer built with the old schema is released, reset, then rebuilt with the new schema.
+	gomock.InOrder(
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).Return(c, nil),
+		cf.EXPECT().DoneWithCache(c),
+		cf.EXPECT().Stop(gvk).Return(nil),
+		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).Return(c, nil),
+	)
+
+	got, err := s.cacheFor(context.Background(), &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}, oldSchema)
+	assert.NoError(t, err)
+	assert.Equal(t, c, got)
 }

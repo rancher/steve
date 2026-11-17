@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -1319,7 +1320,37 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 	return inf, doneCache, nil
 }
 
+// cacheFor returns the cache for apiSchema's GVK. A schema refresh can race with a request that
+// resolved its schema just before the refresh: such a request can create the informer, after the
+// refresh already reset it, using the old columns/transform. Nothing would reset the informer again,
+// so it would stay stale. To handle this, if the schema in use is no longer current and its cache
+// configuration differs from the current one, release the cache, reset the GVK and retry.
 func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
+	const maxStaleRetries = 3
+	for attempt := 0; ; attempt++ {
+		inf, err := s.cacheForSchema(ctx, apiOp, apiSchema)
+		if err != nil || attempt >= maxStaleRetries || s.schemas == nil {
+			return inf, err
+		}
+		latest := s.schemas.Schema(apiSchema.ID)
+		if latest == nil || latest == apiSchema || !cacheConfigChanged(apiSchema, latest) {
+			return inf, nil
+		}
+		s.cacheFactory.DoneWithCache(inf)
+		if err := s.Reset(attributes.GVK(apiSchema)); err != nil {
+			return nil, fmt.Errorf("reset stale cache for %s: %w", apiSchema.ID, err)
+		}
+		apiSchema = latest
+	}
+}
+
+// cacheConfigChanged returns true if the two schemas would build different informers.
+func cacheConfigChanged(a, b *types.APISchema) bool {
+	return !reflect.DeepEqual(common.GetColumnDefinitions(a), common.GetColumnDefinitions(b)) ||
+		!reflect.DeepEqual(attributes.CRDJSONPathExpressions(a), attributes.CRDJSONPathExpressions(b))
+}
+
+func (s *Store) cacheForSchema(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
 	if !canList(apiSchema) {
 		return nil, apierror.NewAPIError(validation.MethodNotAllowed, fmt.Sprintf("resource %s is not a listable resource", apiSchema.ID))
 	}
