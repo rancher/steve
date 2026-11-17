@@ -249,6 +249,11 @@ func (f *CacheFactory) initializeInformerLocked(gi *guardedInformer, fields map[
 	// search for "func NewInformer(ctx"
 	i, err := f.newInformer(gi.ctx, client, fields, externalUpdateInfo, selfUpdateInfo, transform, gvk, f.dbClient, shouldEncrypt, namespaced, watchable, disableWatchList, f.gcKeepCount)
 	if err != nil {
+		if gi.ctx.Err() != nil {
+			// A concurrent Stop() canceled gi.ctx before it could take gi.mutex; the cache is reusable
+			// once Stop() returns, so let the caller retry.
+			return fmt.Errorf("cache context canceled while creating informer for %v: %w: %w", gvk, ErrCacheReset, err)
+		}
 		log.Errorf("creating informer for %v: %v", gvk, err)
 		return err
 	}
