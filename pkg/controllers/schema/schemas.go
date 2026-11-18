@@ -26,8 +26,11 @@ import (
 )
 
 var (
-	listPool        = semaphore.NewWeighted(10)
-	typeNameChanges = map[string]string{
+	listPool = semaphore.NewWeighted(10)
+	// maxStaleColumnRetries bounds how many times in a row a refresh is re-queued because the API server still
+	// serves printer columns that differ from the CRD.
+	maxStaleColumnRetries = 20
+	typeNameChanges       = map[string]string{
 		"extensions.v1beta1.ingress": "networking.k8s.io.v1beta1.ingress",
 	}
 )
@@ -50,6 +53,7 @@ type handler struct {
 	apiServiceCache v1.APIServiceCache
 	ssar            authorizationv1client.SelfSubjectAccessReviewInterface
 	handler         SchemasHandlerFunc
+	staleRetries    int
 }
 
 func Register(ctx context.Context,
@@ -196,12 +200,52 @@ func (h *handler) refreshAll(ctx context.Context) error {
 		return err
 	}
 
+	// A CRD update reaches the API server's serving handler asynchronously, so the Table columns fetched above can
+	// still be the old ones. Nothing else would trigger another refresh, leaving schemas stale.
+	if staleColumns(filteredSchemas) && h.staleRetries < maxStaleColumnRetries {
+		h.staleRetries++
+		h.queueRefresh()
+	} else {
+		h.staleRetries = 0
+	}
+
 	h.schemas.Reset(filteredSchemas)
 	if h.handler != nil {
 		return h.handler.OnSchemas(h.schemas)
 	}
 
 	return nil
+}
+
+// staleColumns reports whether any CRD schema has Table columns that don't match the printer columns of its CRD.
+func staleColumns(schemas map[string]*types.APISchema) bool {
+	for _, schema := range schemas {
+		if !attributes.IsCRD(schema) {
+			continue
+		}
+		cols, ok := attributes.Columns(schema).([]common.ColumnDefinition)
+		if !ok {
+			continue
+		}
+		expected := attributes.CRDJSONPathParsers(schema)
+		if len(expected) == 0 {
+			continue
+		}
+
+		actual := make(map[string]struct{}, len(cols))
+		for _, col := range cols {
+			actual[col.Name] = struct{}{}
+		}
+		if len(actual) != len(expected) {
+			return true
+		}
+		for name := range expected {
+			if _, ok := actual[name]; !ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func preferredTypeExists(schema *types.APISchema, schemas map[string]*types.APISchema) bool {
