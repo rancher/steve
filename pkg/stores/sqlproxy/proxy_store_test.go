@@ -2501,7 +2501,21 @@ func TestCacheConfigChanged(t *testing.T) {
 	assert.True(t, cacheConfigChanged(mk(age, agePath), mk(age, fooPath)))
 }
 
-func TestCacheForResetsWhenSchemaConfigChanged(t *testing.T) {
+func newCacheSchema(id, col string, gvk schema2.GroupVersionKind) *types.APISchema {
+	sch := &types.APISchema{Schema: &schemas.Schema{ID: id, Attributes: map[string]interface{}{
+		"verbs": []string{"list", "watch"},
+	}}}
+	attributes.SetGVK(sch, gvk)
+	attributes.SetColumns(sch, []common.ColumnDefinition{{
+		TableColumnDefinition: metav1.TableColumnDefinition{Name: col},
+		Field:                 "$.metadata.fields[1]",
+	}})
+	return sch
+}
+
+// A schema refresh landing while the informer is being built leaves the informer configured from
+// the old schema, so cacheFor must reset the GVK and rebuild it.
+func TestCacheForResetsWhenSchemaChangesDuringBuild(t *testing.T) {
 	cg := NewMockClientGetter(gomock.NewController(t))
 	cf := NewMockCacheFactory(gomock.NewController(t))
 	ri := NewMockResourceInterface(gomock.NewController(t))
@@ -2511,24 +2525,20 @@ func TestCacheForResetsWhenSchemaConfigChanged(t *testing.T) {
 	c := &factory.Cache{ByOptionsLister: &informer.Informer{ByOptionsLister: bloi}}
 
 	s := &Store{clientGetter: cg, cacheFactory: cf, transformBuilder: tb, schemas: sc}
-
 	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
-	mk := func(col string) *types.APISchema {
-		sch := &types.APISchema{Schema: &schemas.Schema{ID: "some.gvk", Attributes: map[string]interface{}{
-			"verbs": []string{"list", "watch"},
-		}}}
-		attributes.SetGVK(sch, gvk)
-		attributes.SetColumns(sch, []common.ColumnDefinition{{TableColumnDefinition: metav1.TableColumnDefinition{Name: col}, Field: "$.metadata.fields[1]"}})
-		return sch
-	}
-	oldSchema, newSchema := mk("Age"), mk("Foo")
-	sc.EXPECT().Schema("some.gvk").Return(newSchema).AnyTimes()
+	oldSchema := newCacheSchema("some.gvk", "Age", gvk)
+	newSchema := newCacheSchema("some.gvk", "Foo", gvk)
 
 	cg.EXPECT().TableAdminClient(gomock.Any(), gomock.Any(), "", gomock.Any()).Return(ri, nil).Times(2)
 	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, gomock.Any()).
 		Return(func(obj interface{}) (interface{}, error) { return obj, nil }).Times(2)
 
-	// The informer built with the old schema is released, reset, then rebuilt with the new schema.
+	gomock.InOrder(
+		sc.EXPECT().Schema("some.gvk").Return(oldSchema), // configuration read before the build
+		sc.EXPECT().Schema("some.gvk").Return(newSchema), // a refresh landed during the build
+		sc.EXPECT().Schema("some.gvk").Return(newSchema), // retry: configuration read
+		sc.EXPECT().Schema("some.gvk").Return(newSchema), // retry: still current, keep the cache
+	)
 	gomock.InOrder(
 		cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).Return(c, nil),
 		cf.EXPECT().DoneWithCache(c),
@@ -2537,6 +2547,34 @@ func TestCacheForResetsWhenSchemaConfigChanged(t *testing.T) {
 	)
 
 	got, err := s.cacheFor(context.Background(), &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}, oldSchema)
+	assert.NoError(t, err)
+	assert.Equal(t, c, got)
+}
+
+// A request carrying a schema copy that predates a refresh must not reset a cache that was already
+// rebuilt from the current schema, otherwise every in-flight request would reset the same GVK.
+func TestCacheForDoesNotResetForStaleRequestSchema(t *testing.T) {
+	cg := NewMockClientGetter(gomock.NewController(t))
+	cf := NewMockCacheFactory(gomock.NewController(t))
+	ri := NewMockResourceInterface(gomock.NewController(t))
+	tb := NewMockTransformBuilder(gomock.NewController(t))
+	sc := NewMockSchemaCollection(gomock.NewController(t))
+	bloi := NewMockByOptionsLister(gomock.NewController(t))
+	c := &factory.Cache{ByOptionsLister: &informer.Informer{ByOptionsLister: bloi}}
+
+	s := &Store{clientGetter: cg, cacheFactory: cf, transformBuilder: tb, schemas: sc}
+	gvk := schema2.GroupVersionKind{Group: "some", Version: "test", Kind: "gvk"}
+	staleRequestSchema := newCacheSchema("some.gvk", "Age", gvk)
+	currentSchema := newCacheSchema("some.gvk", "Foo", gvk)
+
+	sc.EXPECT().Schema("some.gvk").Return(currentSchema).Times(2)
+	cg.EXPECT().TableAdminClient(gomock.Any(), gomock.Any(), "", gomock.Any()).Return(ri, nil)
+	tb.EXPECT().GetTransformFunc(gvk, gomock.Any(), false, gomock.Any()).
+		Return(func(obj interface{}) (interface{}, error) { return obj, nil })
+	// Exactly one CacheFor, and no Stop: the cache is already built from the current schema.
+	cf.EXPECT().CacheFor(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gvk, gomock.Any(), gomock.Any(), gomock.Any()).Return(c, nil)
+
+	got, err := s.cacheFor(context.Background(), &types.APIRequest{Request: &http.Request{URL: &url.URL{}}}, staleRequestSchema)
 	assert.NoError(t, err)
 	assert.Equal(t, c, got)
 }
