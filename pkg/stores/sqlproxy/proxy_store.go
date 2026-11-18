@@ -1339,9 +1339,18 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	const maxStaleRetries = 3
 	for attempt := 0; ; attempt++ {
 		cfgSchema := s.currentSchema(apiSchema)
+		if cfgSchema != apiSchema && cacheConfigChanged(apiSchema, cfgSchema) {
+			logrus.Infof("schema %s: request carries an older schema than the collection, configuring the cache from the collection", apiSchema.ID)
+		}
 		inf, err := s.cacheForSchema(ctx, apiOp, apiSchema, cfgSchema)
-		if err != nil || attempt >= maxStaleRetries {
+		if err != nil {
 			return inf, err
+		}
+		if attempt >= maxStaleRetries {
+			if latest := s.currentSchema(apiSchema); latest != cfgSchema && cacheConfigChanged(cfgSchema, latest) {
+				logrus.Warnf("schema %s still changing after %d resets, returning a possibly stale cache", apiSchema.ID, attempt)
+			}
+			return inf, nil
 		}
 		latest := s.currentSchema(apiSchema)
 		if latest == cfgSchema || !cacheConfigChanged(cfgSchema, latest) {
