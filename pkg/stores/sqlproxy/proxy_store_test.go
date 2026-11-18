@@ -2485,20 +2485,16 @@ func TestCacheForDoesNotRetryOnOtherErrors(t *testing.T) {
 }
 
 func TestCacheConfigChanged(t *testing.T) {
-	mk := func(cols []common.ColumnDefinition, paths map[string]string) *types.APISchema {
+	mk := func(cols []common.ColumnDefinition) *types.APISchema {
 		s := &types.APISchema{Schema: &schemas.Schema{}}
 		attributes.SetColumns(s, cols)
-		attributes.SetCRDJSONPathParsers(s, paths)
 		return s
 	}
 	age := []common.ColumnDefinition{{TableColumnDefinition: metav1.TableColumnDefinition{Name: "Age", Type: "date"}, Field: "$.metadata.fields[1]"}}
 	foo := []common.ColumnDefinition{{TableColumnDefinition: metav1.TableColumnDefinition{Name: "Foo", Type: "string"}, Field: "$.metadata.fields[1]"}}
-	agePath := map[string]string{"Age": "{.metadata.creationTimestamp}"}
-	fooPath := map[string]string{"Foo": "{.foo}"}
 
-	assert.False(t, cacheConfigChanged(mk(age, agePath), mk(age, agePath)))
-	assert.True(t, cacheConfigChanged(mk(age, agePath), mk(foo, fooPath)))
-	assert.True(t, cacheConfigChanged(mk(age, agePath), mk(age, fooPath)))
+	assert.False(t, cacheConfigChanged(mk(age), mk(age)))
+	assert.True(t, cacheConfigChanged(mk(age), mk(foo)))
 }
 
 func newCacheSchema(id, col string, gvk schema2.GroupVersionKind) *types.APISchema {

@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -1369,9 +1369,9 @@ func (s *Store) currentSchema(apiSchema *types.APISchema) *types.APISchema {
 }
 
 // cacheConfigChanged reports whether the two schemas would produce differently configured caches.
+// It uses the same column comparison as schematracker, which decides when a GVK gets reset.
 func cacheConfigChanged(a, b *types.APISchema) bool {
-	return !reflect.DeepEqual(common.GetColumnDefinitions(a), common.GetColumnDefinitions(b)) ||
-		!reflect.DeepEqual(attributes.CRDJSONPathExpressions(a), attributes.CRDJSONPathExpressions(b))
+	return !slices.Equal(common.GetColumnDefinitions(a), common.GetColumnDefinitions(b))
 }
 
 // cacheForSchema builds (or fetches) the cache for apiSchema's GVK, configured from cfgSchema.

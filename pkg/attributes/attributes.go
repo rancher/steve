@@ -207,15 +207,6 @@ func SetCRDJSONPathParsers(s *types.APISchema, columns map[string]string) {
 	s.Attributes["crdJSONPathParsers"] = columns
 }
 
-// CRDJSONPathExpressions returns the raw JSONPath expressions, by column name, set with SetCRDJSONPathParsers.
-func CRDJSONPathExpressions(s *types.APISchema) map[string]string {
-	if s.Attributes == nil {
-		return nil
-	}
-	cols, _ := s.Attributes["crdJSONPathParsers"].(map[string]string)
-	return cols
-}
-
 func CRDJSONPathParsers(s *types.APISchema) map[string]*jsonpath.JSONPath {
 	if s.Attributes == nil {
 		return nil
