@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/steve/pkg/attributes"
 	"github.com/rancher/steve/pkg/resources/common"
 	"github.com/rancher/steve/pkg/schema"
+	"github.com/sirupsen/logrus"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -49,6 +50,9 @@ func (s *SchemaTracker) OnSchemas(schemas *schema.Collection) error {
 		knownSchemas[gvk] = cols
 
 		oldCols, exists := s.knownSchemas[gvk]
+		if gvk.Group == "refresh.cattle.io" {
+			logrus.Infof("schematracker: %s known=%v columns=%v (%s)", gvk.Kind, exists, columnNames(cols), columnDiff(oldCols, cols))
+		}
 		if exists {
 			if !slices.Equal(cols, oldCols) {
 				needsReset[gvk] = struct{}{}
@@ -75,4 +79,19 @@ func (s *SchemaTracker) OnSchemas(schemas *schema.Collection) error {
 
 	s.knownSchemas = knownSchemas
 	return retErr
+}
+
+func columnNames(cols []common.ColumnDefinition) []string {
+	names := make([]string, 0, len(cols))
+	for _, c := range cols {
+		names = append(names, c.Name+"="+c.Field)
+	}
+	return names
+}
+
+func columnDiff(old, cur []common.ColumnDefinition) string {
+	if slices.Equal(old, cur) {
+		return "unchanged"
+	}
+	return "changed"
 }
