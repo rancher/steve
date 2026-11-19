@@ -10,22 +10,12 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    env:
-      GOLANG_CI_LINT_VERSION: v2.15.0
+    container: ghcr.io/rancher/ci-image/go1.27:1.27.4
     steps:
-    - name : Checkout repository
-      # https://github.com/actions/checkout/releases/tag/v4.1.1
+    - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - name: Install Go
-      # https://github.com/actions/setup-go/releases/tag/v5.0.0
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: 'go.mod'
-    - name: Install golangci-lint
-      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-      with:
-        version: ${{ env.GOLANG_CI_LINT_VERSION }}
-        install-only: true
+    - name: Git safe directory
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Install env-test
       run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20260324065417-8c5081a9b6ba
     - name: Build
