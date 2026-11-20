@@ -10,7 +10,7 @@ COMMIT=$(echo $FULLTAG | cut -d- -f3)
 if [[ -n "${NUM:-}" ]] ; then
     VERSION=$VERSION-$NUM
 fi
-if [[ -z "${COMMIT:-}" ]] then
+if [[ -z "${COMMIT:-}" ]]; then
    COMMIT=$(git rev-parse --short HEAD)
 fi
 
