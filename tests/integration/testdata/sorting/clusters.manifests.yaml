@@ -92,7 +92,7 @@ metadata:
   name: bamako
 status:
   allocatable:
-    cpu: "700m"
+    cpu: "7"
     memory: "1200Ki"
     pods: "20"
   conditions:
