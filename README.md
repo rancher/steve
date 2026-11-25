@@ -891,10 +891,8 @@ all requests in the table test.
 
 #### Integration tests
 
-Integration tests for the steve API are located among the [rancher integration
-tests](ihttps://github.com/rancher/rancher/tree/release/v2.8/tests/v2/integration/steveapi).
-See the documentation included there for running the tests and using them to
-generate API documentation.
+New integration tests for the steve API are located in the `tests/` directory.
+Refer to [tests/integration/README.md](./tests/integration/README.md) for documentation on running and adding these tests.
 
 ## Running Tests
 
