@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -1319,7 +1320,71 @@ func (s *Store) cacheForWithDeps(ctx context.Context, apiOp *types.APIRequest, a
 	return inf, doneCache, nil
 }
 
+// cacheFor returns the cache for apiSchema's GVK.
+//
+// A schema refresh (eg: a CRD's printer columns changing) resets that GVK's informer. A request
+// that resolved its schema just before the refresh can then create the informer *after* the reset
+// already ran, so the informer is built from the old columns and nothing resets it again: it stays
+// stale until the next refresh. Two things prevent that here:
+//
+//   - the cache is configured from the schema currently registered in the collection rather than
+//     from the (possibly older) copy carried by the request, so a late request cannot downgrade an
+//     informer that was already built from a newer schema;
+//   - the configuration is compared against the collection again once the informer exists. If a
+//     refresh landed in between, the cache is released, the GVK is reset and we retry.
+//
+// Only the cache configuration comes from the collection; the request is still served according to
+// the schema it carries.
 func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema *types.APISchema) (*factory.Cache, error) {
+	const maxStaleRetries = 3
+	for attempt := 0; ; attempt++ {
+		cfgSchema := s.currentSchema(apiSchema)
+		if cfgSchema != apiSchema && cacheConfigChanged(apiSchema, cfgSchema) {
+			logrus.Infof("schema %s: request carries an older schema than the collection, configuring the cache from the collection", apiSchema.ID)
+		}
+		inf, err := s.cacheForSchema(ctx, apiOp, apiSchema, cfgSchema)
+		if err != nil {
+			return inf, err
+		}
+		if attempt >= maxStaleRetries {
+			if latest := s.currentSchema(apiSchema); latest != cfgSchema && cacheConfigChanged(cfgSchema, latest) {
+				logrus.Warnf("schema %s still changing after %d resets, returning a possibly stale cache", apiSchema.ID, attempt)
+			}
+			return inf, nil
+		}
+		latest := s.currentSchema(apiSchema)
+		if latest == cfgSchema || !cacheConfigChanged(cfgSchema, latest) {
+			return inf, nil
+		}
+		logrus.Infof("schema %s changed while its cache was being built, resetting the cache", apiSchema.ID)
+		s.cacheFactory.DoneWithCache(inf)
+		if err := s.Reset(attributes.GVK(apiSchema)); err != nil {
+			return nil, fmt.Errorf("reset stale cache for %s: %w", apiSchema.ID, err)
+		}
+	}
+}
+
+// currentSchema returns the schema currently registered for apiSchema's ID. It falls back to
+// apiSchema when the collection doesn't know that ID, which is the case for the synthetic schemas
+// built in cacheForWithDeps.
+func (s *Store) currentSchema(apiSchema *types.APISchema) *types.APISchema {
+	if s.schemas == nil {
+		return apiSchema
+	}
+	if latest := s.schemas.Schema(apiSchema.ID); latest != nil {
+		return latest
+	}
+	return apiSchema
+}
+
+// cacheConfigChanged reports whether the two schemas would produce differently configured caches.
+// It uses the same column comparison as schematracker, which decides when a GVK gets reset.
+func cacheConfigChanged(a, b *types.APISchema) bool {
+	return !slices.Equal(common.GetColumnDefinitions(a), common.GetColumnDefinitions(b))
+}
+
+// cacheForSchema builds (or fetches) the cache for apiSchema's GVK, configured from cfgSchema.
+func (s *Store) cacheForSchema(ctx context.Context, apiOp *types.APIRequest, apiSchema, cfgSchema *types.APISchema) (*factory.Cache, error) {
 	if !canList(apiSchema) {
 		return nil, apierror.NewAPIError(validation.MethodNotAllowed, fmt.Sprintf("resource %s is not a listable resource", apiSchema.ID))
 	}
@@ -1333,15 +1398,15 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	gvk := attributes.GVK(apiSchema)
 	// TODO: All this field information is only needed when `s.cf.CacheFor` needs to build the tables.
 	// We should instead pass in a function to return the needed field info, rather than calculate it every time.
-	fields, cols := getFieldAndColInfo(apiSchema, gvk)
+	fields, cols := getFieldAndColInfo(cfgSchema, gvk)
 	// Merge type-specific fields into map
 	for k, v := range getFieldForGVK(gvk) {
 		fields[k] = v
 	}
 
-	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(apiSchema), attributes.CRDJSONPathParsers(apiSchema))
+	transformFunc := s.transformBuilder.GetTransformFunc(gvk, cols, attributes.IsCRD(cfgSchema), attributes.CRDJSONPathParsers(cfgSchema))
 	tableClient := &tablelistconvert.Client{ResourceInterface: client}
-	ns := attributes.Namespaced(apiSchema)
+	ns := attributes.Namespaced(cfgSchema)
 
 	// A concurrent schema/column definition change can reset gvk's cache (see
 	// factory.ErrCacheReset) right as we're waiting for it to become ready, canceling our
@@ -1350,7 +1415,7 @@ func (s *Store) cacheFor(ctx context.Context, apiOp *types.APIRequest, apiSchema
 	const maxCacheResetRetries = 3
 	var inf *factory.Cache
 	for attempt := 0; attempt <= maxCacheResetRetries; attempt++ {
-		inf, err = s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(apiSchema), watchlist.Disabled(apiSchema))
+		inf, err = s.cacheFactory.CacheFor(ctx, fields, externalGVKDependencies[gvk], selfGVKDependencies[gvk], transformFunc, tableClient, gvk, ns, controllerschema.IsListWatchable(cfgSchema), watchlist.Disabled(cfgSchema))
 		if err == nil || !errors.Is(err, factory.ErrCacheReset) {
 			break
 		}
